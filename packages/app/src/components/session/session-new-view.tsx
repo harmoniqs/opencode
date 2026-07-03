@@ -4,6 +4,7 @@ import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
+import { startPrompt as startPromptWith } from "@/utils/start-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
 import { Logo, Mark } from "@opencode-ai/ui/logo"
@@ -23,20 +24,8 @@ export function NewSessionView(props: NewSessionViewProps) {
   const language = useLanguage()
   const prompt = usePrompt()
 
-  // amicode: starter chips — set the composer draft through the prompt
-  // context (the submit button's blank() gate reads the same store), then
-  // click the composer's own submit button so the REAL handleSubmit runs
-  // (worktree resolution, session.create, navigation, optimistic UI).
-  // Degradation: if no enabled submit button is found, the text stays
-  // pre-filled and the editor is focused — user hits Enter.
-  const startPrompt = (text: string) => {
-    prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
-    requestAnimationFrame(() => {
-      const button = document.querySelector<HTMLButtonElement>('[data-action="prompt-submit"]:not([disabled])')
-      if (button) button.click()
-      else document.querySelector<HTMLElement>('[data-component="prompt-input"]')?.focus()
-    })
-  }
+  // amicode: starter chips — see utils/start-prompt.ts for the mechanism.
+  const startPrompt = (text: string) => startPromptWith(prompt, text)
 
   const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
   const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
