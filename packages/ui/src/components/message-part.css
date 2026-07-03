@@ -841,6 +841,8 @@
     flex: 1;
     min-height: 0;
     padding: 8px 8px 0;
+    /* amicode: Amico accent treatment (display-only) */
+    border-left: 3px solid var(--v2-icon-icon-accent);
   }
 
   [data-slot="question-header"] {
