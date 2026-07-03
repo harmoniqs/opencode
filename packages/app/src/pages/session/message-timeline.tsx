@@ -17,6 +17,7 @@ import { useNavigate } from "@solidjs/router"
 import { useMutation } from "@tanstack/solid-query"
 import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
+import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
 import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
@@ -1579,6 +1580,8 @@ export function MessageTimeline(props: {
                 )}
               </Show>
             </div>
+            {/* amicode: L3 entity rail (renders only when the session has amicode_* parts) */}
+            <AmicodeEntityRail messages={sessionMessages()} partsFor={getMsgParts} />
           </div>
         </Show>
         <Show when={scrollRoot()}>
