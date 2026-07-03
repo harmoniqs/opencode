@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { latestAssistantMessageID, parseAskInput } from "./ask"
+import { hasUserReplyAfter, parseAskInput } from "./ask"
 
 describe("parseAskInput", () => {
   test("parses a well-formed ask input", () => {
@@ -26,22 +26,91 @@ describe("parseAskInput", () => {
     expect(parseAskInput({ question: "q", options: [] })).toBeUndefined()
     expect(parseAskInput({ question: "q", options: [1, "", "  "] })).toBeUndefined()
   })
-})
 
-describe("latestAssistantMessageID", () => {
-  test("returns the lexicographically last assistant message id (ULID order)", () => {
+  test("accepts valid details aligned with options", () => {
     expect(
-      latestAssistantMessageID([
-        { id: "msg_a", role: "assistant" },
-        { id: "msg_c", role: "assistant" },
-        { id: "msg_z", role: "user" },
-        { id: "msg_b", role: "assistant" },
-      ]),
-    ).toBe("msg_c")
+      parseAskInput({
+        question: "Which integrator?",
+        options: ["Bilinear", "Spline"],
+        details: ["PWC exponential — robust default", "Piccolissimo — lower initial violation"],
+      }),
+    ).toEqual({
+      question: "Which integrator?",
+      options: ["Bilinear", "Spline"],
+      details: ["PWC exponential — robust default", "Piccolissimo — lower initial violation"],
+    })
   })
 
-  test("ignores non-assistant and malformed entries", () => {
-    expect(latestAssistantMessageID([{ id: "msg_z", role: "user" }, { id: "" , role: "assistant" }])).toBeUndefined()
-    expect(latestAssistantMessageID([])).toBeUndefined()
+  test("details length mismatch is treated as absent, card still parses", () => {
+    expect(parseAskInput({ question: "q", options: ["a", "b"], details: ["only one"] })).toEqual({
+      question: "q",
+      options: ["a", "b"],
+    })
+  })
+
+  test("non-string details are treated as absent, card still parses", () => {
+    expect(parseAskInput({ question: "q", options: ["a", "b"], details: ["ok", 7] })).toEqual({
+      question: "q",
+      options: ["a", "b"],
+    })
+    expect(parseAskInput({ question: "q", options: ["a"], details: "not-an-array" })).toEqual({
+      question: "q",
+      options: ["a"],
+    })
+  })
+
+  test("details stay aligned with their option through invalid-option filtering", () => {
+    expect(
+      parseAskInput({ question: "q", options: ["a", "", "b"], details: ["da", "dropped", "db"] }),
+    ).toEqual({
+      question: "q",
+      options: ["a", "b"],
+      details: ["da", "db"],
+    })
+  })
+})
+
+describe("hasUserReplyAfter", () => {
+  test("assistant messages after the ask do NOT lock the card", () => {
+    expect(
+      hasUserReplyAfter(
+        [
+          { id: "msg_b", role: "assistant" }, // the card's message
+          { id: "msg_c", role: "assistant" }, // streamed text after the ask
+          { id: "msg_d", role: "assistant" },
+        ],
+        "msg_b",
+      ),
+    ).toBe(false)
+  })
+
+  test("a user message later in ULID order locks the card", () => {
+    expect(
+      hasUserReplyAfter(
+        [
+          { id: "msg_b", role: "assistant" },
+          { id: "msg_c", role: "user" },
+        ],
+        "msg_b",
+      ),
+    ).toBe(true)
+  })
+
+  test("user messages earlier than the card do not lock it", () => {
+    expect(
+      hasUserReplyAfter(
+        [
+          { id: "msg_a", role: "user" }, // the prompt that triggered the ask
+          { id: "msg_b", role: "assistant" },
+        ],
+        "msg_b",
+      ),
+    ).toBe(false)
+  })
+
+  test("malformed ids and empty inputs are safe", () => {
+    expect(hasUserReplyAfter([], "msg_b")).toBe(false)
+    expect(hasUserReplyAfter([{ id: "", role: "user" }], "msg_b")).toBe(false)
+    expect(hasUserReplyAfter([{ id: "msg_z", role: "user" }], "")).toBe(false)
   })
 })

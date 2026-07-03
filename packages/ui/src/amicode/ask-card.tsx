@@ -1,12 +1,15 @@
-import { For, createSignal } from "solid-js"
+import { For, Show, createSignal } from "solid-js"
 import { amicodeAskBridge } from "./ask-bridge"
 import type { AskInput } from "./ask"
 
 // AMICODE: question card for amicode_ask tool parts — question text + one
-// button per option. Click submits the option string as the user's next chat
-// message through the ask bridge, then locks the card. Buttons are also
-// disabled when the part is not in the LAST assistant message (stale
-// questions must not submit) or when no bridge is registered.
+// button per option (with optional dim detail line under each label). Click
+// submits the option string as the user's next chat message through the ask
+// bridge, then locks the card. Buttons are also disabled once the user has
+// replied AFTER this card's message (assistant text streamed after the ask
+// does NOT lock it — live-demo fix 2026-07-03), or when no bridge is
+// registered. Display label is AMICO (the persona); component/data-*
+// identifiers stay amicode-*.
 
 export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
   const [picked, setPicked] = createSignal<string | undefined>(undefined)
@@ -15,7 +18,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
     if (picked()) return false
     const bridge = amicodeAskBridge()
     if (!bridge || !props.messageID) return false
-    return bridge.lastAssistantMessageID() === props.messageID
+    return !bridge.hasUserReplyAfter(props.messageID)
   }
 
   const submit = (option: string) => {
@@ -60,7 +63,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
       </div>
       <div style={{ display: "flex", "flex-wrap": "wrap", gap: "6px" }}>
         <For each={props.ask.options}>
-          {(option) => (
+          {(option, index) => (
             <button
               type="button"
               data-slot="amicode-ask-option"
@@ -68,6 +71,11 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
               disabled={!active()}
               onClick={() => submit(option)}
               style={{
+                "display": "flex",
+                "flex-direction": "column",
+                "align-items": "flex-start",
+                "gap": "2px",
+                "text-align": "left",
                 "border":
                   picked() === option
                     ? "1px solid var(--v2-icon-icon-accent)"
@@ -82,7 +90,21 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
                 "opacity": active() || picked() === option ? "1" : "0.55",
               }}
             >
-              {option}
+              <span>{option}</span>
+              <Show when={props.ask.details?.[index()]}>
+                {(detail) => (
+                  <span
+                    data-slot="amicode-ask-option-detail"
+                    style={{
+                      "font-size": "11px",
+                      "line-height": "14px",
+                      "color": "var(--v2-text-text-faint)",
+                    }}
+                  >
+                    {detail()}
+                  </span>
+                )}
+              </Show>
             </button>
           )}
         </For>

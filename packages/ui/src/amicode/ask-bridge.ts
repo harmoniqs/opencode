@@ -9,7 +9,10 @@ import { createSignal } from "solid-js"
 
 export interface AskBridge {
   send: (text: string) => void
-  lastAssistantMessageID: () => string | undefined
+  // True when a USER message exists later (ULID order) than the given message
+  // — i.e. the question has already been answered. Assistant messages after
+  // the ask must not lock the card.
+  hasUserReplyAfter: (messageID: string) => boolean
 }
 
 const [current, setCurrent] = createSignal<AskBridge | undefined>(undefined)

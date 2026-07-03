@@ -1,6 +1,6 @@
 import { For, Show, createMemo, onCleanup } from "solid-js"
 import { RAIL_STAGES, type RailStage, chipTextFromSummary, railStage } from "./stage"
-import { latestAssistantMessageID } from "./ask"
+import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
 
 // AMICODE Layer-3 entity rail: one compact sticky row per session view showing
@@ -32,7 +32,7 @@ export function AmicodeEntityRail(props: {
   if (props.onAsk) {
     const dispose = registerAmicodeAskBridge({
       send: (text) => props.onAsk?.(text),
-      lastAssistantMessageID: () => latestAssistantMessageID(props.messages),
+      hasUserReplyAfter: (messageID) => hasUserReplyAfter(props.messages, messageID),
     })
     onCleanup(dispose)
   }
