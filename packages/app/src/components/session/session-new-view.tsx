@@ -3,7 +3,9 @@ import { DateTime } from "luxon"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { useLanguage } from "@/context/language"
+import { usePrompt } from "@/context/prompt"
 import { Icon } from "@opencode-ai/ui/icon"
+import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
 import { Logo, Mark } from "@opencode-ai/ui/logo"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
 
@@ -19,6 +21,22 @@ export function NewSessionView(props: NewSessionViewProps) {
   const sync = useSync()
   const sdk = useSDK()
   const language = useLanguage()
+  const prompt = usePrompt()
+
+  // amicode: starter chips — set the composer draft through the prompt
+  // context (the submit button's blank() gate reads the same store), then
+  // click the composer's own submit button so the REAL handleSubmit runs
+  // (worktree resolution, session.create, navigation, optimistic UI).
+  // Degradation: if no enabled submit button is found, the text stays
+  // pre-filled and the editor is focused — user hits Enter.
+  const startPrompt = (text: string) => {
+    prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+    requestAnimationFrame(() => {
+      const button = document.querySelector<HTMLButtonElement>('[data-action="prompt-submit"]:not([disabled])')
+      if (button) button.click()
+      else document.querySelector<HTMLElement>('[data-component="prompt-input"]')?.focus()
+    })
+  }
 
   const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
   const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
@@ -57,6 +75,8 @@ export function NewSessionView(props: NewSessionViewProps) {
             {/* amicode: brand wordmark replaces the localized headline — brand marks don't translate */}
             <Logo class="w-56 max-w-full" />
           </div>
+          {/* amicode: getting-started block (tagline + how-it-works + starter chips) */}
+          <AmicodeGettingStarted onStart={startPrompt} />
           <div class="w-full flex flex-col gap-4 items-center">
             <div class="flex items-start justify-center gap-3 min-h-5">
               <div class="text-12-medium text-text-weak select-text leading-5 min-w-0 max-w-160 break-words text-center">
