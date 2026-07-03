@@ -193,14 +193,18 @@ function readStoredLocale() {
   }
 }
 
-const warm = readStoredLocale() ?? detectLocale()
+// amicode (L1 family): default locale is "en" instead of detectLocale() —
+// only en.ts is branded tonight. An explicit stored preference still wins.
+// REVERT CONDITION: restore `?? detectLocale()` here and in init() below once
+// the non-English locales are branded.
+const warm = readStoredLocale() ?? "en"
 if (warm !== "en") void loadDict(warm)
 
 export const { use: useLanguage, provider: LanguageProvider } = createSimpleContext({
   name: "Language",
   gate: false,
   init: (props: { locale?: Locale }) => {
-    const initial = props.locale ?? readStoredLocale() ?? detectLocale()
+    const initial = props.locale ?? readStoredLocale() ?? "en" // amicode: see comment above `warm`
     const [store, setStore, _, ready] = persisted(
       Persist.global("language", ["language.v1"]),
       createStore({
