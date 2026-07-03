@@ -94,7 +94,7 @@ export function AmicodeEntityRail(props: {
             "flex-shrink": "0",
           }}
         >
-          AMICODE
+          AMICO
         </span>
         <For each={RAIL_STAGES}>
           {(stage) => (

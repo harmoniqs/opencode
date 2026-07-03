@@ -53,7 +53,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string }) {
             "color": "var(--v2-text-text-accent)",
           }}
         >
-          AMICODE
+          AMICO
         </span>
         <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}>Question</span>

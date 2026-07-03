@@ -41,7 +41,7 @@ function Chip(props: { tool: string; status?: string }) {
           "color": "var(--v2-text-text-accent)",
         }}
       >
-        AMICODE
+        AMICO
       </span>
       <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
       <span data-slot="amicode-card-stage" style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}>
