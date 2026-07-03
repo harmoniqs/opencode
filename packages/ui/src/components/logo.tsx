@@ -1,23 +1,40 @@
 import { type ComponentProps } from "solid-js"
 
-// AMICODE branding: Mark/Splash render the amico face (from amicode
-// packages/extension/media/amico.svg); Logo renders the AMICODE wordmark.
-// Component names, props, and data-component hooks are kept identical to stock.
+// AMICODE branding v2: Mark/Splash render the "digi" Harmoniqs H-robot
+// (canonical source also lives at amicode:packages/extension/media/amico.svg,
+// kept in sync manually); Logo renders the AMICODE wordmark. Component names,
+// props, and data-component hooks are kept identical to stock. The robot body
+// follows currentColor; the display rect + glyphs are fixed brand colors.
+// viewBox is 64:56 (8:7, not square) — see logo.css aspect-ratio.
 
-const Face = (props: { stroke: string }) => (
-  <g
-    stroke={props.stroke}
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    fill="none"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8 11c1.5 -2 6.5 -2 8 0" />
-    <path d="M9 15c1 1 5 1 6 0" />
-    <circle cx="9.5" cy="9.5" r="0.6" fill={props.stroke} stroke="none" />
-    <circle cx="14.5" cy="9.5" r="0.6" fill={props.stroke} stroke="none" />
-  </g>
+const Robot = () => (
+  <>
+    <path fill="currentColor" d="M2 2h16v14h28V2h16v52H46V40H18v14H2Z" />
+    <rect x="9" y="19" width="46" height="18" fill="#0A0A0A" />
+    <g fill="#FFF676">
+      <rect x="17" y="21" width="2" height="2" />
+      <rect x="15" y="23" width="2" height="2" />
+      <rect x="13" y="25" width="2" height="2" />
+      <rect x="15" y="27" width="2" height="2" />
+      <rect x="17" y="29" width="2" height="2" />
+      <rect x="21" y="21" width="6" height="2" />
+      <rect x="21" y="23" width="2" height="6" />
+      <rect x="25" y="23" width="2" height="6" />
+      <rect x="21" y="29" width="6" height="2" />
+      <rect x="29" y="21" width="2" height="10" />
+      <rect x="33" y="21" width="2" height="10" />
+      <rect x="37" y="21" width="6" height="2" />
+      <rect x="37" y="23" width="2" height="6" />
+      <rect x="41" y="23" width="2" height="6" />
+      <rect x="37" y="29" width="6" height="2" />
+      <rect x="45" y="21" width="2" height="2" />
+      <rect x="47" y="23" width="2" height="2" />
+      <rect x="49" y="25" width="2" height="2" />
+      <rect x="47" y="27" width="2" height="2" />
+      <rect x="45" y="29" width="2" height="2" />
+      <polygon points="28,33 36,33 34,36 30,36" />
+    </g>
+  </>
 )
 
 export const Mark = (props: { class?: string }) => {
@@ -25,11 +42,11 @@ export const Mark = (props: { class?: string }) => {
     <svg
       data-component="logo-mark"
       classList={{ [props.class ?? ""]: !!props.class }}
-      viewBox="0 0 24 24"
-      fill="none"
+      viewBox="0 0 64 56"
       xmlns="http://www.w3.org/2000/svg"
+      style={{ color: "var(--icon-strong-base)" }}
     >
-      <Face stroke="var(--icon-strong-base)" />
+      <Robot />
     </svg>
   )
 }
@@ -40,11 +57,11 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
       ref={props.ref}
       data-component="logo-splash"
       classList={{ [props.class ?? ""]: !!props.class }}
-      viewBox="0 0 24 24"
-      fill="none"
+      viewBox="0 0 64 56"
       xmlns="http://www.w3.org/2000/svg"
+      style={{ color: "var(--icon-strong-base)" }}
     >
-      <Face stroke="var(--icon-strong-base)" />
+      <Robot />
     </svg>
   )
 }
