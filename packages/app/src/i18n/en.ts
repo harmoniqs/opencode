@@ -681,6 +681,11 @@ export const dict = {
   "status.popover.tab.lsp": "LSP",
   "status.popover.tab.plugins": "Plugins",
   "status.popover.action.manageServers": "Manage servers",
+  "status.popover.tab.vaults": "Vaults",
+  "status.popover.action.manageVaults": "Manage vaults",
+  "dialog.vaults.empty": "No vaults mounted",
+  "dialog.vaults.retry": "Retry",
+  "dialog.vaults.fetchFailed": "Could not reach the server for vault status",
 
   "session.share.popover.title": "Publish on web",
   "session.share.popover.description.shared":

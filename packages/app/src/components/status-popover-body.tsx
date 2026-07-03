@@ -5,7 +5,7 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { showToast } from "@/utils/toast"
 import { useNavigate } from "@solidjs/router"
-import { type Accessor, createEffect, createMemo, For, type JSXElement, onCleanup, Show } from "solid-js"
+import { type Accessor, createEffect, createMemo, createResource, For, type JSXElement, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { ServerHealthIndicator, ServerRow } from "@/components/server/server-row"
 import { useLanguage } from "@/context/language"
@@ -16,6 +16,15 @@ import { type ServerHealth } from "@/utils/server-health"
 import { useGlobal } from "@/context/global"
 import { useSettings } from "@/context/settings"
 import { useMcpToggle } from "@/context/mcp"
+import {
+  AmicodeVaultsTab,
+  AMICODE_MANAGE_VAULTS_PROMPT,
+  parseVaultsResponse,
+  type VaultsView,
+} from "@opencode-ai/ui/amicode-vaults-tab"
+import { usePrompt } from "@/context/prompt"
+import { startPrompt } from "@/utils/start-prompt"
+import { authTokenFromCredentials } from "@/utils/server"
 
 const pluginEmptyMessage = (value: string, file: string): JSXElement => {
   const parts = value.split(file)
@@ -248,7 +257,7 @@ function ServerStatusList(props: { state: ServerStatusState }) {
   )
 }
 
-export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
+export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: () => void }) {
   const sync = useSync()
   const global = useGlobal()
   const server = useServer()
@@ -290,6 +299,41 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const pluginCount = createMemo(() => plugins().length)
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
 
+  // amicode: Vaults tab — fetched per-active-server when the popover opens
+  // (source flips truthy on open / server switch → refetch; closed keeps the
+  // last value, stale-while-revalidate).
+  const prompt = usePrompt()
+  const [vaultsRaw, { refetch: refetchVaults }] = createResource(
+    () => (props.shown() && server.current ? ServerConnection.key(server.current) : undefined),
+    async () => {
+      const conn = server.current
+      if (!conn) return undefined
+      const headers: Record<string, string> = {}
+      if (conn.http.password)
+        headers.Authorization = `Basic ${authTokenFromCredentials({
+          username: conn.http.username,
+          password: conn.http.password,
+        })}`
+      const res = await fetch(new URL("/amicode/vaults", conn.http.url), { headers })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return (await res.json()) as unknown
+    },
+  )
+  const vaultsView = createMemo<VaultsView | undefined>(() => {
+    if (vaultsRaw.error) return { ok: false, mounts: [], error: language.t("dialog.vaults.fetchFailed") }
+    const raw = vaultsRaw()
+    if (raw === undefined) return undefined
+    return parseVaultsResponse(raw)
+  })
+  const vaultsCount = () => {
+    const view = vaultsView()
+    return view?.ok ? view.mounts.length : 0
+  }
+  const onManageVaults = () => {
+    props.onClose?.()
+    startPrompt(prompt, AMICODE_MANAGE_VAULTS_PROMPT)
+  }
+
   return (
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
       <Tabs
@@ -318,6 +362,10 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           <Tabs.Trigger value="plugins" data-slot="tab" class="text-12-regular">
             {pluginCount() > 0 ? `${pluginCount()} ` : ""}
             {language.t("status.popover.tab.plugins")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="vaults" data-slot="tab" class="text-12-regular">
+            {vaultsCount() > 0 ? `${vaultsCount()} ` : ""}
+            {language.t("status.popover.tab.vaults")}
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -494,6 +542,22 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                   )}
                 </For>
               </Show>
+            </div>
+          </div>
+        </Tabs.Content>
+
+        <Tabs.Content value="vaults">
+          <div class="flex flex-col px-2 pb-2">
+            <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+              <AmicodeVaultsTab
+                view={vaultsView()}
+                emptyLabel={language.t("dialog.vaults.empty")}
+                retryLabel={language.t("dialog.vaults.retry")}
+                onRetry={refetchVaults}
+              />
+              <Button variant="secondary" class="mt-3 self-start h-8 px-3 py-1.5" onClick={onManageVaults}>
+                {language.t("status.popover.action.manageVaults")}
+              </Button>
             </div>
           </div>
         </Tabs.Content>
