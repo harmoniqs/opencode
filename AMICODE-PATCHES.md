@@ -105,7 +105,15 @@ Deliberately left stock (and why):
 - Storybook/stories files — dev-only, not in the served app.
 - desktop-menu.ts:203 "OpenCode Documentation" [desktop] — the link target IS opencode.ai/docs; relabeling would misattribute upstream docs.
 
+## Branded binary (v1.17.3 + L1, built 2026-07-03)
+
+Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.ts --single --skip-install` in packages/opencode, `~/.bun/bin` on PATH).
+
+- Binary: `~/harmoniqs/opencode/dist/opencode-local` (copy of `packages/opencode/dist/opencode-linux-x64/bin/opencode`)
+- sha256: `930fd0457d9ffb389027ca23d09cc0b1ab9d6aaa1a2022864dc8e1b748d3c5f4`
+- Verify (serve --port 14096): `GET /` → 200 with `<title>Amicode</title>` + `href="/amico.svg"`; `GET /amico.svg` → 200 image/svg+xml 441 B; main JS `/assets/index-CeQonklQ.js`: `AMICODE` ×1 (wordmark; WordmarkV2 lives in the lazy session chunk), `Amicode` ×31 (i18n/meta); `POST /session {}` → 200 session object, version 1.17.3 (no functional regression); `/site.webmanifest` → name/short_name Amicode. (`/health` is SPA fallback at this tag — not a health check.)
+
 ## Patch stack
 
 1. `4e20def26e` — amicode: build fixes for local v1.17.3 reproduction (AMICODE-PATCHES.md, bun.lock ghostty-web drift)
-2. (this commit) — amicode: L1 branding — AMICODE wordmark, logo, accent. Files: packages/app/index.html, packages/ui/src/assets/favicon/{amico.svg,site.webmanifest}, packages/app/public/amico.svg (symlink), packages/ui/src/components/{favicon.tsx,logo.tsx,logo.css}, packages/ui/src/v2/components/wordmark-v2.tsx, packages/ui/src/theme/context.tsx, packages/ui/src/theme/themes/oc-2.json, packages/app/src/i18n/en.ts, packages/app/src/desktop-menu.ts, packages/app/src/wsl/settings-model.ts. User-visible strings/assets ONLY — no identifier, config-key, env-var, or API renames.
+2. `c566a17db7` — amicode: L1 branding — AMICODE wordmark, logo, accent. Files: packages/app/index.html, packages/ui/src/assets/favicon/{amico.svg,site.webmanifest}, packages/app/public/amico.svg (symlink), packages/ui/src/components/{favicon.tsx,logo.tsx,logo.css}, packages/ui/src/v2/components/wordmark-v2.tsx, packages/ui/src/theme/context.tsx, packages/ui/src/theme/themes/oc-2.json, packages/app/src/i18n/en.ts, packages/app/src/desktop-menu.ts, packages/app/src/wsl/settings-model.ts. User-visible strings/assets ONLY — no identifier, config-key, env-var, or API renames.
