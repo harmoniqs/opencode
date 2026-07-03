@@ -73,3 +73,39 @@ PATH="$HOME/.bun/bin:$PATH" OPENCODE_VERSION=1.17.3 bun run script/build.ts --si
   catch → **reverse-proxies https://app.opencode.ai** instead. So run-from-source does NOT
   serve local app assets; only the compiled binary embeds them. (Env kill-switch:
   `disableEmbeddedWebUi` → proxy mode.)
+
+## Branding map (v1.17.3)
+
+User-visible brand sites in the served web app (packages/app + packages/ui), enumerated at tag v1.17.3.
+Format: file:line — string/asset — replacement. [desktop] = ships only in the Electron desktop app, not the served web app.
+
+| # | site | current | replacement |
+|---|------|---------|-------------|
+| 1 | packages/app/index.html:6 | `<title>OpenCode</title>` | `<title>Amicode</title>` |
+| 2 | packages/app/index.html:8 | svg favicon `/favicon-v3.svg` | `/amico.svg` (new brand asset) |
+| 3 | packages/ui/src/assets/favicon/site.webmanifest:2-3 (symlinked as packages/app/public/site.webmanifest) | `name`/`short_name` "OpenCode" | "Amicode" |
+| 4 | packages/ui/src/assets/favicon/amico.svg (new; symlinked as packages/app/public/amico.svg, matching the repo's favicon symlink pattern) | (new) | favicon: brand-accent disc `#FFF676` + amico face (from amicode `packages/extension/media/amico.svg`, on-accent `#000`) |
+| 5 | packages/ui/src/components/favicon.tsx:10 | `apple-mobile-web-app-title` "OpenCode" | "Amicode" (+ svg icon Link `/amico.svg`) |
+| 6 | packages/ui/src/components/logo.tsx | `Logo` = OPENCODE letterform SVG; `Mark`/`Splash` = "O" mark | `Logo` → AMICODE wordmark text; `Mark`/`Splash` → amico face (inlined from amico.svg). Rendered at: home.tsx:1151 (watermark), pages/error.tsx:281, session-side-panel.tsx, session-new-view.tsx, app.tsx (loading splash) |
+| 7 | packages/ui/src/v2/components/wordmark-v2.tsx | OPENCODE glyph SVG | AMICODE wordmark text (rendered on session-new-design-view.tsx new-session screen) |
+| 8 | packages/ui/src/theme/context.tsx:72 | theme display label `opencode: "OpenCode"` | `"Amicode"` (key `opencode` untouched — storage/config contract) |
+| 9 | packages/app/src/i18n/en.ts | 30 brand mentions ("…models in OpenCode", "OpenCode Desktop", update/error/settings copy) | "Amicode" (29 sites; "OpenCode Zen" kept, see below) |
+| 10 | packages/app/src/desktop-menu.ts:75 [desktop] | menu label "OpenCode" | "Amicode" |
+| 11 | packages/app/src/wsl/settings-model.ts:17-18 [desktop, Windows/WSL] | "Install OpenCode"/"Update OpenCode" | "Install/Update Amicode" |
+| 13 | packages/ui/src/components/logo.css | `[data-component="logo-mark"]` aspect-ratio 4/5 (old 16x20 viewBox) | aspect-ratio 1/1 (new square amico mark) |
+| 12 | packages/ui/src/theme/themes/oc-2.json (default theme) | accent tokens `v2-{background,text,icon}-*accent*` = blue-600/700 (light), blue-400/300 (dark) | Harmoniqs accent `#FFF676` (brand.css `--color-accent`): dark text/icon/bg-accent → `#FFF676`, hover `#FFFA9E`; light bg-accent → `#FFF676`, light text/icon-accent → derived dark shades `#857A00` / hover `#6B6200` (raw `#FFF676` is unreadable on light bg) |
+
+Deliberately left stock (and why):
+- 25 non-English app locales + all ui locales brand strings — demo is English; en.ts is the default/fallback dictionary; bulk-editing translations is churn without review.
+- "OpenCode Zen" (app en.ts:139) and "OpenCode Go" (ui en.ts:58) — proper names of the external commercial model-gateway services the binary still connects to; renaming would misrepresent a third-party service.
+- Shiki syntax-theme name "OpenCode" (ui context/marked.tsx, ui pierre/worker.ts, ui pierre/index.ts) — cross-module string identifier, not user-visible; partial rename breaks code highlighting.
+- Font names "OpenCode Sans/Mono" — CSS font-family identifiers.
+- Binary icon assets (favicon-96x96-v3.png, favicon-v3.ico, apple-touch-icon-v3.png, web-app-manifest-*.png, social-share.png) — need image regeneration tooling; svg favicon takes precedence in modern browsers. Morning follow-up.
+- All internal identifiers: `opencode-titlebar-*` DOM ids, `opencode-*` localStorage keys, `OPENCODE_*` env vars, config keys, API/SDK strings, `@opencode-ai/*` imports, `oc-theme-preload-script` id (the server CSP hash regex in packages/opencode/src/server/shared/ui.ts matches this exact id).
+- Storybook/stories files — dev-only, not in the served app.
+- desktop-menu.ts:203 "OpenCode Documentation" [desktop] — the link target IS opencode.ai/docs; relabeling would misattribute upstream docs.
+
+## Patch stack
+
+1. `4e20def26e` — amicode: build fixes for local v1.17.3 reproduction (AMICODE-PATCHES.md, bun.lock ghostty-web drift)
+2. (this commit) — amicode: L1 branding — AMICODE wordmark, logo, accent. Files: packages/app/index.html, packages/ui/src/assets/favicon/{amico.svg,site.webmanifest}, packages/app/public/amico.svg (symlink), packages/ui/src/components/{favicon.tsx,logo.tsx,logo.css}, packages/ui/src/v2/components/wordmark-v2.tsx, packages/ui/src/theme/context.tsx, packages/ui/src/theme/themes/oc-2.json, packages/app/src/i18n/en.ts, packages/app/src/desktop-menu.ts, packages/app/src/wsl/settings-model.ts. User-visible strings/assets ONLY — no identifier, config-key, env-var, or API renames.

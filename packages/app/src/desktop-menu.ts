@@ -72,7 +72,7 @@ export type DesktopMenu = {
 export const DESKTOP_MENU: DesktopMenu[] = [
   {
     id: "app",
-    label: "OpenCode",
+    label: "Amicode",
     platforms: ["macos"],
     items: [
       { type: "item", role: "about" },
