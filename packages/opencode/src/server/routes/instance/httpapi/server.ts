@@ -58,6 +58,7 @@ import { Worktree } from "@/worktree"
 import { Workspace } from "@/control-plane/workspace"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
+import * as AmicodeVaults from "@/server/amicode/vaults"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -175,6 +176,17 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
   Layer.provide(authOnlyRouterLayer),
 )
 
+// amicode: Vaults panel tab data source — relays `amico-vault status --json`.
+// Raw route outside the declared API surface (same idiom + auth as /doc).
+// AmicodeVaults.status() never rejects — failures come back as JSON bodies.
+const amicodeVaultsRoute = HttpRouter.use((router) =>
+  router.add("GET", "/amicode/vaults", () =>
+    Effect.promise(() => AmicodeVaults.status()).pipe(
+      Effect.map((body) => HttpServerResponse.text(body, { contentType: "application/json" })),
+    ),
+  ),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -203,6 +215,7 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
+    amicodeVaultsRoute,
     uiRoute,
   ).pipe(
     Layer.provide([
