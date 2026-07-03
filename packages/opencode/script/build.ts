@@ -134,6 +134,29 @@ const targets = singleFlag
     })
   : allTargets
 
+// amicode: optional explicit target filter, e.g.
+//   OPENCODE_BUILD_TARGETS="opencode-linux-x64,opencode-darwin-arm64" bun run script/build.ts
+// Matches the constructed artifact names; unset -> stock behavior.
+const requestedTargets = (process.env.OPENCODE_BUILD_TARGETS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean)
+const buildTargets = requestedTargets.length
+  ? allTargets.filter((item) =>
+      requestedTargets.includes(
+        [
+          pkg.name,
+          item.os === "win32" ? "windows" : item.os,
+          item.arch,
+          item.avx2 === false ? "baseline" : undefined,
+          item.abi === undefined ? undefined : item.abi,
+        ]
+          .filter(Boolean)
+          .join("-"),
+      ),
+    )
+  : targets
+
 await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
@@ -142,7 +165,7 @@ if (!skipInstall) {
   await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
   await $`bun install --os="*" --cpu="*" @ff-labs/fff-bun@${pkg.dependencies["@ff-labs/fff-bun"]}`
 }
-for (const item of targets) {
+for (const item of buildTargets) {
   const name = [
     pkg.name,
     // changing to win32 flags npm for some reason
