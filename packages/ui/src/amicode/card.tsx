@@ -1,14 +1,18 @@
-import { createMemo } from "solid-js"
+import { Show, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
+import { parseAskInput } from "./ask"
+import { AmicodeAskCard } from "./ask-card"
 
 // AMICODE Layer-2 renderer slot: compact one-line chip for amicode_* tool-call
-// parts. The raw tool return is agent-directed text (instructions for the
-// MODEL, not the human), so it is deliberately NOT rendered here — the durable
-// human-facing state lives in the entity rail (./entity-rail.tsx).
-// The only touch to stock code is the dispatch branch in
-// ../components/message-part.tsx (see AMICODE-PATCHES.md).
+// parts, except amicode_ask which renders an interactive question card (from
+// the part's INPUT args; malformed input falls back to the chip). The raw tool
+// return is agent-directed text (instructions for the MODEL, not the human),
+// so it is deliberately NOT rendered — the durable human-facing state lives in
+// the entity rail (./entity-rail.tsx). The only touches to stock code are the
+// dispatch branch + messageID prop in ../components/message-part.tsx
+// (see AMICODE-PATCHES.md).
 
-export function AmicodeToolCard(props: { tool: string; status?: string }) {
+function Chip(props: { tool: string; status?: string }) {
   const stage = createMemo(() => amicodeStage(props.tool))
   const running = () => props.status === "pending" || props.status === "running"
 
@@ -47,5 +51,20 @@ export function AmicodeToolCard(props: { tool: string; status?: string }) {
         {running() ? "running…" : props.status === "completed" ? "updated ✓" : (props.status ?? "")}
       </span>
     </div>
+  )
+}
+
+export function AmicodeToolCard(props: {
+  tool: string
+  status?: string
+  input?: Record<string, any>
+  messageID?: string
+}) {
+  const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
+
+  return (
+    <Show when={ask()} fallback={<Chip tool={props.tool} status={props.status} />}>
+      {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}
+    </Show>
   )
 }

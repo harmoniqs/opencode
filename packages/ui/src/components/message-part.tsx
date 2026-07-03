@@ -1431,6 +1431,8 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               component={render()}
               input={input()}
               tool={part().tool}
+              // amicode: L2 family — ask-card staleness guard needs the part's message id
+              messageID={part().messageID}
               sessionID={part().sessionID}
               metadata={partMetadata()}
               // @ts-expect-error

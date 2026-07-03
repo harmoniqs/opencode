@@ -1,11 +1,17 @@
-import { For, Show, createMemo } from "solid-js"
+import { For, Show, createMemo, onCleanup } from "solid-js"
 import { RAIL_STAGES, type RailStage, chipTextFromSummary, railStage } from "./stage"
+import { latestAssistantMessageID } from "./ask"
+import { registerAmicodeAskBridge } from "./ask-bridge"
 
 // AMICODE Layer-3 entity rail: one compact sticky row per session view showing
 // the LATEST System / Formulation / Run state, derived client-side from the
 // session's amicode_* tool parts. Renders nothing until the session contains
 // at least one amicode_* tool part (keeps non-amicode sessions stock).
 // Mounted from the session timeline's sticky header (see AMICODE-PATCHES.md).
+// When the app passes onAsk (the prompt send path), the rail also registers
+// the ask bridge that powers AmicodeAskCard buttons; the rail is the one
+// amicode component the app mounts with session data, so it doubles as the
+// bridge host. Bridge unregisters on unmount (stale views can't submit).
 
 interface RailPartState {
   status?: string
@@ -19,9 +25,17 @@ interface RailPart {
 }
 
 export function AmicodeEntityRail(props: {
-  messages: readonly { id: string }[]
+  messages: readonly { id: string; role?: string }[]
   partsFor: (messageID: string) => readonly RailPart[] | undefined
+  onAsk?: (text: string) => void
 }) {
+  if (props.onAsk) {
+    const dispose = registerAmicodeAskBridge({
+      send: (text) => props.onAsk?.(text),
+      lastAssistantMessageID: () => latestAssistantMessageID(props.messages),
+    })
+    onCleanup(dispose)
+  }
   const derived = createMemo(() => {
     const latest: Partial<Record<RailStage, { text?: string; status?: string }>> = {}
     let any = false

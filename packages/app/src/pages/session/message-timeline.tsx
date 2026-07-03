@@ -1580,8 +1580,16 @@ export function MessageTimeline(props: {
                 )}
               </Show>
             </div>
-            {/* amicode: L3 entity rail (renders only when the session has amicode_* parts) */}
-            <AmicodeEntityRail messages={sessionMessages()} partsFor={getMsgParts} />
+            {/* amicode: L3 entity rail (renders only when the session has amicode_* parts) + ask bridge */}
+            <AmicodeEntityRail
+              messages={sessionMessages()}
+              partsFor={getMsgParts}
+              onAsk={(text) => {
+                const id = sessionID()
+                if (!id) return
+                void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+              }}
+            />
           </div>
         </Show>
         <Show when={scrollRoot()}>
