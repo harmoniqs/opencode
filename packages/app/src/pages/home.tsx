@@ -1,3 +1,4 @@
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { batch, createEffect, createMemo, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
@@ -5,7 +6,6 @@ import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -845,7 +845,7 @@ function HomeSessionSearch(props: {
                   when={!props.loading}
                   fallback={
                     <div class="flex items-center justify-center px-4 py-3 text-v2-text-text-muted [font-weight:440]">
-                      <Spinner class="size-4" />
+                      <AmicoSpinner class="size-4" />
                     </div>
                   }
                 >

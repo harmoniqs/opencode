@@ -1,3 +1,4 @@
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { useNavigate, useParams } from "@solidjs/router"
 import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -10,7 +11,6 @@ import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
@@ -99,7 +99,7 @@ const WorkspaceHeader = (props: {
   <div class="flex items-center gap-1 min-w-0 flex-1">
     <div class="flex items-center justify-center shrink-0 size-6">
       <Show when={props.busy()} fallback={<Icon name="branch" size="small" />}>
-        <Spinner class="size-[15px]" />
+        <AmicoSpinner class="size-[15px]" />
       </Show>
     </div>
     <span class="text-14-medium text-text-base shrink-0">

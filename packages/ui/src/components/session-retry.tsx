@@ -1,9 +1,9 @@
+import { AmicoSpinner } from "../amicode/spinner"
 import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { useI18n } from "../context/i18n"
 import { Card } from "./card"
 import { Tooltip } from "./tooltip"
-import { Spinner } from "./spinner"
 
 export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
   const i18n = useI18n()
@@ -55,7 +55,7 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
       <div data-slot="session-turn-retry">
         <Card variant="error" class="error-card">
           <div class="flex items-start gap-2">
-            <Spinner class="size-4 mt-0.5" />
+            <AmicoSpinner class="size-4 mt-0.5" />
             <div class="min-w-0">
               <Show when={truncated()} fallback={<div data-slot="session-turn-retry-message">{message()}</div>}>
                 <Tooltip value={retry()?.message ?? ""} placement="top">

@@ -1,8 +1,8 @@
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { Avatar } from "@opencode-ai/ui/avatar"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { A, useParams } from "@solidjs/router"
@@ -63,7 +63,7 @@ export const ProjectIcon = (props: {
       </Show>
       <Show when={props.working}>
         <div class="absolute bottom-px right-px size-3 rounded-full bg-background-base z-10 flex items-center justify-center">
-          <Spinner class="size-[9px]" />
+          <AmicoSpinner class="size-[9px]" />
         </div>
       </Show>
     </div>
@@ -121,7 +121,7 @@ const SessionRow = (props: {
         >
           <Switch>
             <Match when={props.isWorking()}>
-              <Spinner class="size-[15px]" />
+              <AmicoSpinner class="size-[15px]" />
             </Match>
             <Match when={props.hasPermissions()}>
               <div class="size-1.5 rounded-full bg-surface-warning-strong" />

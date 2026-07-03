@@ -1,10 +1,10 @@
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AppIcon } from "@opencode-ai/ui/app-icon"
 import { Button } from "@opencode-ai/ui/button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Keybind } from "@opencode-ai/ui/keybind"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@/utils/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
@@ -359,7 +359,7 @@ export function SessionHeader() {
                             >
                               <div class="flex size-5 shrink-0 items-center justify-center [&_[data-component=app-icon]]:size-5">
                                 <Show when={opening()} fallback={<AppIcon id={current().icon} />}>
-                                  <Spinner class="size-3.5" style={{ color: tint() ?? "var(--icon-base)" }} />
+                                  <AmicoSpinner class="size-3.5" style={{ color: tint() ?? "var(--icon-base)" }} />
                                 </Show>
                               </div>
                             </Button>

@@ -1,3 +1,4 @@
+import { AmicoSpinner } from "../amicode/spinner"
 import {
   Component,
   createEffect,
@@ -50,7 +51,6 @@ import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/core/ut
 import { checksum } from "@opencode-ai/core/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
-import { Spinner } from "./spinner"
 import { TextShimmer } from "./text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
@@ -1838,7 +1838,7 @@ ToolRegistry.register({
           <div data-slot="basic-tool-tool-info-main">
             <Show when={running()}>
               <span data-component="task-tool-spinner" style={{ color: tone() ?? "var(--icon-interactive-base)" }}>
-                <Spinner />
+                <AmicoSpinner style={{ width: "16px", height: "14px" }} />
               </span>
             </Show>
             <span data-component="task-tool-title" style={{ color: tone() ?? "var(--text-strong)" }}>
