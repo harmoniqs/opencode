@@ -35,6 +35,7 @@ import { useFileComponent } from "../context/file"
 import { useDialog } from "../context/dialog"
 import { type UiI18n, useI18n } from "../context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
+import { AmicodeToolCard } from "../amicode/card"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
 import { Collapsible } from "./collapsible"
@@ -1388,7 +1389,10 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
     return taskId()
   })
 
-  const render = createMemo(() => ToolRegistry.render(part().tool) ?? GenericTool)
+  // amicode: L2 renderer slot — amicode_* tools get the Amicode card (sole stock-code touch)
+  const render = createMemo(() =>
+    /^amicode_/.test(part().tool) ? AmicodeToolCard : (ToolRegistry.render(part().tool) ?? GenericTool),
+  )
   const controlledOpen = () => (props.onToolOpenChange ? (props.toolOpen ?? props.defaultOpen) : undefined)
   const handleToolOpenChange = (open: boolean) => props.onToolOpenChange?.(open)
 
