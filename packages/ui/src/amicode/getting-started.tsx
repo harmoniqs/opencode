@@ -6,6 +6,9 @@ import { For } from "solid-js"
 // app-side and arrives via onStart (same pattern as the entity rail's onAsk).
 // Copy is en-only by design, consistent with the default-locale-en patch.
 
+// TODO(repertoire-chips): these become data — one chip per installed+entitled
+// score (name/outcome/duration from SCORE.md frontmatter) once the server
+// exposes the compiled repertoire; static, feature-diverse set until then.
 export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
     label: "Design a pulse — walk me through it",
@@ -14,6 +17,14 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
     label: "Optimize an X gate on my transmon",
     prompt: "optimize an X gate on my transmon — defaults are fine, ask me only what you need",
+  },
+  {
+    label: "Resume my pulse design",
+    prompt: "resume my pulse design where we left off",
+  },
+  {
+    label: "Warm-start from my last pulse",
+    prompt: "warm-start a new solve from my most recent pulse",
   },
   {
     label: "What can Amicode do?",
