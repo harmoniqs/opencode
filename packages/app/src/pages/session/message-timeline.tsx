@@ -17,6 +17,7 @@ import { useNavigate } from "@solidjs/router"
 import { useMutation } from "@tanstack/solid-query"
 import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
 import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
@@ -35,7 +36,6 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { InlineInput } from "@opencode-ai/ui/inline-input"
-import { Spinner } from "@opencode-ai/ui/spinner"
 import { SessionRetry } from "@opencode-ai/ui/session-retry"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
@@ -1354,7 +1354,8 @@ export function MessageTimeline(props: {
                         class="transition-opacity duration-200 ease-out"
                         classList={{ "opacity-0": workingStatus() === "hiding" }}
                       >
-                        <Spinner class="size-4" style={{ color: tint() ?? "var(--icon-interactive-base)" }} />
+                        {/* amicode: H-glyph working spinner (stock Spinner import kept for other sites) */}
+                        <AmicoSpinner class="size-4" style={{ color: tint() ?? "var(--icon-interactive-base)" }} />
                       </div>
                     </Show>
                   </div>
