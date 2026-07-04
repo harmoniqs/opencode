@@ -59,6 +59,7 @@ import { Workspace } from "@/control-plane/workspace"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
+import * as AmicodeProblems from "@/server/amicode/problems"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -187,6 +188,33 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
   ),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 
+// amicode: Problem-UI data sources (spec B). Raw routes outside the declared
+// API surface (same idiom + auth as /doc and /amicode/vaults). The response
+// builders never reject — failures come back as ok:false JSON bodies.
+// request.url is RELATIVE here; the base-argument URL form is the repo idiom
+// (see handlers/pty.ts:190, middleware/authorization.ts).
+const amicodeProblemsRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/amicode/problems", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeProblems.problemsResponse(), { contentType: "application/json" }),
+      ),
+    )
+    yield* router.add("GET", "/amicode/problem", (request) =>
+      Effect.sync(() => {
+        const slug = new URL(request.url, "http://localhost").searchParams.get("slug") ?? undefined
+        return HttpServerResponse.text(AmicodeProblems.problemResponse(slug), { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("GET", "/amicode/run-status", (request) =>
+      Effect.sync(() => {
+        const slug = new URL(request.url, "http://localhost").searchParams.get("slug") ?? undefined
+        return HttpServerResponse.text(AmicodeProblems.runStatusResponse(slug), { contentType: "application/json" })
+      }),
+    )
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -216,6 +244,7 @@ export function createRoutes(
     serverRoutes,
     docRoute,
     amicodeVaultsRoute,
+    amicodeProblemsRoute,
     uiRoute,
   ).pipe(
     Layer.provide([
