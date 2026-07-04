@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { problemsBody, problemBody, synthesizeProblems, synthesizeProblem } from "@/server/amicode/problems"
+import { problemsBody, problemBody, runStatusBody, synthesizeProblems, synthesizeProblem } from "@/server/amicode/problems"
 
 let root: string
 beforeEach(() => {
@@ -138,6 +138,47 @@ describe("problemBody", () => {
     expect(JSON.parse(problemBody(root, "c")).score_stages).toEqual([])
     rmSync(path.join(root, "score_manifest.json"))
     expect(JSON.parse(problemBody(root, "b")).score_stages).toEqual([])
+  })
+})
+
+describe("runStatusBody", () => {
+  function seedRun(runsRoot: string, lab: string, id: string, opts: { finished?: boolean; result?: string; log?: string }) {
+    const dir = path.join(runsRoot, lab, id)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, "run.toml"), `run_id = "${id}"\nlab = "${lab}"\n`)
+    if (opts.finished) writeFileSync(path.join(dir, "FINISHED"), "")
+    if (opts.result !== undefined) writeFileSync(path.join(dir, "result.toml"), opts.result)
+    if (opts.log !== undefined) writeFileSync(path.join(dir, "run.log"), opts.log)
+  }
+
+  test("finished / solving / failed derivation per run ref", () => {
+    const runs = mkdtempSync(path.join(tmpdir(), "amicode-runs-"))
+    seedProblem("x-gate", {
+      runs: [
+        { run_id: "r-done", lab: "default", tier: "vetted", recorded: "t" },
+        { run_id: "r-live", lab: "default", recorded: "t" },
+        { run_id: "r-dead", lab: "default", recorded: "t" },
+      ],
+    })
+    seedRun(runs, "default", "r-done", { finished: true, result: "fidelity = 0.9998\niterations = 60\n" })
+    seedRun(runs, "default", "r-live", { log: "noise\nAMICODE_ITER iter=12 f=3.2e-02 inf_pr=1e-9\n" })
+    seedRun(runs, "default", "r-dead", { finished: true }) // FINISHED but no result.toml
+    const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.runs).toEqual([
+      { run_id: "r-done", status: "finished", fidelity: 0.9998, iteration: 60 },
+      { run_id: "r-live", status: "solving", fidelity: 0.032, iteration: 12 },
+      { run_id: "r-dead", status: "failed", fidelity: null, iteration: null },
+    ])
+    rmSync(runs, { recursive: true, force: true })
+  })
+  test("missing run dir → solving with nulls; unknown slug → not_found", () => {
+    const runs = mkdtempSync(path.join(tmpdir(), "amicode-runs-"))
+    seedProblem("x-gate", { runs: [{ run_id: "r-gone", lab: "default", recorded: "t" }] })
+    const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
+    expect(parsed.runs).toEqual([{ run_id: "r-gone", status: "solving", fidelity: null, iteration: null }])
+    expect(JSON.parse(runStatusBody(root, runs, "zz")).error).toStartWith("not_found:")
+    rmSync(runs, { recursive: true, force: true })
   })
 })
 

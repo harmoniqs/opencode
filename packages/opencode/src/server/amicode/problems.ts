@@ -171,3 +171,84 @@ export function problemBody(root: string, slug: string | undefined): string {
     return synthesizeProblem("bad_json", String(err))
   }
 }
+
+// --- run-status (lightweight live readout; spec: run-dir contract polling, permanently) ---
+
+function tomlScalar(text: string, key: string): number | null {
+  const match = text.match(new RegExp(`^${key}\\s*=\\s*([0-9eE+.\\-]+)\\s*$`, "m"))
+  if (!match) return null
+  const value = Number(match[1])
+  return Number.isFinite(value) ? value : null
+}
+
+function lastIterLine(log: string): { iteration: number | null; fidelity: number | null } {
+  // AMICODE_ITER iter=12 f=3.2e-02 …  (f is the objective ≈ infidelity; the
+  // chip shows F = 1 - f — that derivation lives client-side in problem.ts)
+  const lines = log.split("\n")
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const match = lines[i].match(/^AMICODE_ITER\s+iter=(\d+)\s+f=([0-9eE+.\-]+)/)
+    if (match) return { iteration: Number(match[1]), fidelity: Number(match[2]) }
+  }
+  return { iteration: null, fidelity: null }
+}
+
+export function runStatusBody(root: string, runs: string, slug: string | undefined): string {
+  if (!existsSync(root)) return synthesizeRunStatus("no_problems_dir", `${root} does not exist`)
+  const resolved = slug ?? activeSlug(root) ?? undefined
+  if (!resolved || !existsSync(path.join(root, resolved, "problem.json")))
+    return synthesizeRunStatus(`not_found:${resolved ?? ""}`, "no such problem workspace")
+  let refs: any[] = []
+  try {
+    const parsed: any = readJson(path.join(root, resolved, "runs.json"))
+    if (Array.isArray(parsed?.runs)) refs = parsed.runs
+  } catch {
+    /* absent/corrupt runs.json → empty list, not an error */
+  }
+  const out = refs.map((ref) => {
+    const dir = path.join(runs, String(ref.lab ?? "default"), String(ref.run_id ?? ""))
+    if (existsSync(path.join(dir, "FINISHED"))) {
+      try {
+        const result = readFileSync(path.join(dir, "result.toml"), "utf8")
+        const fidelity = tomlScalar(result, "fidelity")
+        if (fidelity === null) throw new Error("no fidelity")
+        return { run_id: ref.run_id, status: "finished", fidelity, iteration: tomlScalar(result, "iterations") }
+      } catch {
+        return { run_id: ref.run_id, status: "failed", fidelity: null, iteration: null }
+      }
+    }
+    let live = { iteration: null as number | null, fidelity: null as number | null }
+    try {
+      live = lastIterLine(readFileSync(path.join(dir, "run.log"), "utf8"))
+    } catch {
+      /* not started yet */
+    }
+    return { run_id: ref.run_id, status: "solving", fidelity: live.fidelity, iteration: live.iteration }
+  })
+  return JSON.stringify({ ok: true, runs: out, error: null })
+}
+
+// --- cached entrypoints for the routes (never reject; body is a JSON string) ---
+
+const caches = new Map<string, { at: number; body: string }>()
+function cached(key: string, ttlMs: number, build: () => string, synth: (c: string, d: string) => string): string {
+  const hit = caches.get(key)
+  if (hit && Date.now() - hit.at < ttlMs) return hit.body
+  let body: string
+  try {
+    body = build()
+  } catch (err) {
+    body = synth("bad_output", String(err))
+  }
+  caches.set(key, { at: Date.now(), body })
+  return body
+}
+
+export function problemsResponse(): string {
+  return cached("problems", 10_000, () => problemsBody(problemsRoot()), synthesizeProblems)
+}
+export function problemResponse(slug: string | undefined): string {
+  return cached(`problem:${slug ?? "@active"}`, 10_000, () => problemBody(problemsRoot(), slug), synthesizeProblem)
+}
+export function runStatusResponse(slug: string | undefined): string {
+  return cached(`run-status:${slug ?? "@active"}`, 1_000, () => runStatusBody(problemsRoot(), runsRoot(), slug), synthesizeRunStatus)
+}
