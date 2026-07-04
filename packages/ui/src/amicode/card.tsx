@@ -2,24 +2,30 @@ import { Show, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
+import { parseDiffSentinel, receiptText } from "./receipt"
+import { openAmicodeEntity } from "./ui-bridge"
 
-// AMICODE Layer-2 renderer slot: compact one-line chip for amicode_* tool-call
-// parts, except amicode_ask which renders an interactive question card (from
-// the part's INPUT args; malformed input falls back to the chip). The raw tool
-// return is agent-directed text (instructions for the MODEL, not the human),
-// so it is deliberately NOT rendered — the durable human-facing state lives in
-// the entity rail (./entity-rail.tsx). The only touches to stock code are the
-// dispatch branch + messageID prop in ../components/message-part.tsx
-// (see AMICODE-PATCHES.md).
+// AMICODE Layer-2 renderer slot: one-line DIFF RECEIPT for amicode_* tool-call
+// parts (parsed from the AMICODE_DIFF sentinel — spec B), falling back to the
+// legacy status chip when no sentinel parses (old sessions keep rendering);
+// amicode_ask still renders the interactive question card. The raw tool return
+// is agent-directed text and is deliberately NOT rendered — durable state
+// lives in the problem rail (./entity-rail.tsx). Receipt click opens the
+// entity view through the ui-bridge (no-op until the rail registers it).
 
-function Chip(props: { tool: string; status?: string }) {
+function Chip(props: { tool: string; status?: string; output?: string }) {
   const stage = createMemo(() => amicodeStage(props.tool))
   const running = () => props.status === "pending" || props.status === "running"
+  const sentinel = createMemo(() => (props.status === "completed" ? parseDiffSentinel(props.output) : undefined))
 
   return (
     <div
       data-component="amicode-card"
       data-tool={props.tool}
+      onClick={() => {
+        const parsed = sentinel()
+        if (parsed) openAmicodeEntity(parsed.entity, parsed.seq)
+      }}
       style={{
         "display": "flex",
         "align-items": "baseline",
@@ -32,6 +38,7 @@ function Chip(props: { tool: string; status?: string }) {
         "padding": "4px 12px",
         "font-size": "12px",
         "line-height": "16px",
+        "cursor": sentinel() ? "pointer" : "default",
       }}
     >
       <span
@@ -44,12 +51,37 @@ function Chip(props: { tool: string; status?: string }) {
         AMICO
       </span>
       <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
-      <span data-slot="amicode-card-stage" style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}>
-        {stage()}
-      </span>
-      <span data-slot="amicode-card-status" style={{ color: "var(--v2-text-text-muted)" }}>
-        {running() ? "running…" : props.status === "completed" ? "updated ✓" : (props.status ?? "")}
-      </span>
+      <Show
+        when={sentinel()}
+        fallback={
+          <>
+            <span
+              data-slot="amicode-card-stage"
+              style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}
+            >
+              {stage()}
+            </span>
+            <span data-slot="amicode-card-status" style={{ color: "var(--v2-text-text-muted)" }}>
+              {running() ? "running…" : props.status === "completed" ? "updated ✓" : (props.status ?? "")}
+            </span>
+          </>
+        }
+      >
+        {(value) => (
+          <span
+            data-slot="amicode-card-receipt"
+            style={{
+              "color": "var(--v2-text-text-base)",
+              "min-width": "0",
+              "overflow": "hidden",
+              "text-overflow": "ellipsis",
+              "white-space": "nowrap",
+            }}
+          >
+            {receiptText(value())}
+          </span>
+        )}
+      </Show>
     </div>
   )
 }
@@ -58,12 +90,13 @@ export function AmicodeToolCard(props: {
   tool: string
   status?: string
   input?: Record<string, any>
+  output?: string // passed by message-part.tsx's Dynamic (already wired)
   messageID?: string
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
 
   return (
-    <Show when={ask()} fallback={<Chip tool={props.tool} status={props.status} />}>
+    <Show when={ask()} fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
       {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}
     </Show>
   )
