@@ -19,8 +19,8 @@ export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
           dominant-baseline="central"
           textLength="700"
           lengthAdjust="spacingAndGlyphs"
-          font-family="var(--font-family-mono, ui-monospace, monospace)"
-          font-weight="700"
+          font-family="'Racing Sans One', var(--font-family-mono, ui-monospace, monospace)"
+          font-weight="400"
           font-size="112"
           fill="currentColor"
         >

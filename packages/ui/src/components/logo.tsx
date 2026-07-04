@@ -81,8 +81,8 @@ export const Logo = (props: { class?: string }) => {
         dominant-baseline="central"
         textLength="230"
         lengthAdjust="spacingAndGlyphs"
-        font-family="var(--font-family-mono, ui-monospace, monospace)"
-        font-weight="700"
+        font-family="'Racing Sans One', var(--font-family-mono, ui-monospace, monospace)"
+        font-weight="400"
         font-size="36"
         fill="var(--icon-base)"
       >
