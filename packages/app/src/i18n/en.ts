@@ -686,6 +686,13 @@ export const dict = {
   "dialog.vaults.empty": "No vaults mounted",
   "dialog.vaults.retry": "Retry",
   "dialog.vaults.fetchFailed": "Could not reach the server for vault status",
+  "amicode.retry": "Retry",
+  "amicode.unavailable": "status unavailable",
+  "amicode.fetchFailed": "Could not reach the server for problem status",
+  "amicode.editInChat": "Edit in chat",
+  "amicode.problems.title": "AMICO · Problems",
+  "amicode.problems.open": "Open",
+  "amicode.problems.new": "New problem",
 
   "session.share.popover.title": "Publish on web",
   "session.share.popover.description.shared":

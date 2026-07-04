@@ -1,6 +1,7 @@
 import {
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
   Index,
@@ -19,6 +20,8 @@ import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { AmicodeEntityView, entityLabel, parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
+import { AmicodeProblemSwitcher, parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
@@ -65,6 +68,10 @@ import { useServerSDK } from "@/context/server-sdk"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
+import { useServer } from "@/context/server"
+import { usePrompt } from "@/context/prompt"
+import { startPrompt, draftPrompt } from "@/utils/start-prompt"
+import { amicodeGet } from "@/utils/amicode-fetch"
 import { useSync } from "@/context/sync"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { messageAgentColor } from "@/utils/agent"
@@ -295,6 +302,76 @@ export function MessageTimeline(props: {
   const language = useLanguage()
   const { params, sessionKey } = useSessionKey()
   const platform = usePlatform()
+
+  // amicode: problem-UI wiring (spec B) — the app owns transport (per-active-
+  // server Basic auth via amicodeGet) + the ring-2 dialogs; the rail owns its
+  // own resource/polling. Dialog resources are gated on open signals, cleared
+  // in dialog.show's onClose so a reopen refetches.
+  const server = useServer()
+  const prompt = usePrompt()
+  const [switcherOpen, setSwitcherOpen] = createSignal(false)
+  const [entityViewOpen, setEntityViewOpen] = createSignal(false)
+  const [problemsRaw, { refetch: refetchProblems }] = createResource(
+    () => (switcherOpen() ? 1 : undefined),
+    () => amicodeGet(server.current, "/amicode/problems"),
+  )
+  const problemsView = createMemo(() => {
+    if (problemsRaw.error) return parseProblemsResponse({ ok: false, error: language.t("amicode.fetchFailed") })
+    const raw = problemsRaw.latest
+    return raw === undefined ? undefined : parseProblemsResponse(raw)
+  })
+  const [problemRaw, { refetch: refetchProblem }] = createResource(
+    () => (entityViewOpen() ? 1 : undefined),
+    () => amicodeGet(server.current, "/amicode/problem"),
+  )
+  const problemView = createMemo(() => {
+    if (problemRaw.error) return parseProblemResponse({ ok: false, error: language.t("amicode.fetchFailed") })
+    const raw = problemRaw.latest
+    return raw === undefined ? undefined : parseProblemResponse(raw)
+  })
+  const openEntityView = (kind: string, seq?: number) => {
+    setEntityViewOpen(true)
+    dialog.show(
+      () => (
+        <Dialog title={`AMICO · ${entityLabel(kind)}`} fit>
+          <AmicodeEntityView
+            view={problemView()}
+            kind={kind}
+            anchorSeq={seq}
+            onDraftPrompt={(text) => {
+              dialog.close()
+              draftPrompt(prompt, text)
+            }}
+            onRetry={() => void refetchProblem()}
+            retryLabel={language.t("amicode.retry")}
+            editLabel={language.t("amicode.editInChat")}
+          />
+        </Dialog>
+      ),
+      () => setEntityViewOpen(false),
+    )
+  }
+  const openSwitcher = () => {
+    setSwitcherOpen(true)
+    dialog.show(
+      () => (
+        <Dialog title={language.t("amicode.problems.title")} fit>
+          <AmicodeProblemSwitcher
+            view={problemsView()}
+            onStartPrompt={(text) => {
+              dialog.close()
+              startPrompt(prompt, text)
+            }}
+            onRetry={() => void refetchProblems()}
+            retryLabel={language.t("amicode.retry")}
+            openLabel={language.t("amicode.problems.open")}
+            newLabel={language.t("amicode.problems.new")}
+          />
+        </Dialog>
+      ),
+      () => setSwitcherOpen(false),
+    )
+  }
 
   let virtualizer: VirtualizerHandle | undefined
   const sessionID = createMemo(() => params.id)
@@ -1581,10 +1658,16 @@ export function MessageTimeline(props: {
                 )}
               </Show>
             </div>
-            {/* amicode: L3 entity rail (renders only when the session has amicode_* parts) + ask bridge */}
+            {/* amicode: problem-header rail (renders only when the session has amicode_* parts) + ask/ui bridges */}
             <AmicodeEntityRail
               messages={sessionMessages()}
               partsFor={getMsgParts}
+              fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
+              fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
+              onOpenEntity={openEntityView}
+              onOpenSwitcher={openSwitcher}
+              retryLabel={language.t("amicode.retry")}
+              unavailableLabel={language.t("amicode.unavailable")}
               onAsk={(text) => {
                 const id = sessionID()
                 if (!id) return

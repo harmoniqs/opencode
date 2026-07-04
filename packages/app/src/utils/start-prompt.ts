@@ -19,3 +19,14 @@ export function startPrompt(prompt: PromptContext, text: string) {
     else document.querySelector<HTMLElement>('[data-component="prompt-input"]')?.focus()
   })
 }
+
+/** Draft-only variant (spec B): prefill the composer and focus it WITHOUT
+ *  submitting — used by per-field "Edit in chat" where the user completes the
+ *  value first. This is startPrompt's no-submit-button fallback branch,
+ *  promoted to a deliberate action. */
+export function draftPrompt(prompt: PromptContext, text: string) {
+  prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLElement>('[data-component="prompt-input"]')?.focus()
+  })
+}

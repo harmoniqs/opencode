@@ -1,10 +1,13 @@
-import { Show, createMemo } from "solid-js"
+import { Show, createMemo, createResource } from "solid-js"
 import { DateTime } from "luxon"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
+import { useServer } from "@/context/server"
 import { startPrompt as startPromptWith } from "@/utils/start-prompt"
+import { amicodeGet } from "@/utils/amicode-fetch"
+import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { Icon } from "@opencode-ai/ui/icon"
 import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
 import { Logo, Mark } from "@opencode-ai/ui/logo"
@@ -26,6 +29,21 @@ export function NewSessionView(props: NewSessionViewProps) {
 
   // amicode: starter chips — see utils/start-prompt.ts for the mechanism.
   const startPrompt = (text: string) => startPromptWith(prompt, text)
+
+  // amicode: Resume verb (spec B) — fetched once per view; renders only when a
+  // non-archived problem workspace exists (no empty chrome). Fetch failure →
+  // undefined → no Resume chip; the start screen stays stock.
+  const server = useServer()
+  const [problemsRaw] = createResource(() => amicodeGet(server.current, "/amicode/problems").catch(() => undefined))
+  const resumeProblem = createMemo(() => {
+    const raw = problemsRaw()
+    if (raw === undefined) return undefined
+    const view = parseProblemsResponse(raw)
+    if (!view.ok) return undefined
+    const open = view.problems.filter((p) => p.status !== "archived")
+    if (open.length === 0) return undefined
+    return [...open].sort((a, b) => (b.recorded ?? "").localeCompare(a.recorded ?? ""))[0]
+  })
 
   const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
   const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
@@ -65,7 +83,14 @@ export function NewSessionView(props: NewSessionViewProps) {
             <Logo class="w-56 max-w-full" />
           </div>
           {/* amicode: getting-started block (tagline + how-it-works + starter chips) */}
-          <AmicodeGettingStarted onStart={startPrompt} />
+          <AmicodeGettingStarted
+            onStart={startPrompt}
+            resumeName={resumeProblem()?.name}
+            onResume={() => {
+              const name = resumeProblem()?.name
+              if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
+            }}
+          />
           <div class="w-full flex flex-col gap-4 items-center">
             <div class="flex items-start justify-center gap-3 min-h-5">
               <div class="text-12-medium text-text-weak select-text leading-5 min-w-0 max-w-160 break-words text-center">

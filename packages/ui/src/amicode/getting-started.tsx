@@ -18,10 +18,9 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
     label: "Optimize an X gate on my transmon",
     prompt: "optimize an X gate on my transmon — defaults are fine, ask me only what you need",
   },
-  {
-    label: "Resume my pulse design",
-    prompt: "resume my pulse design where we left off",
-  },
+  // NOTE(spec B): the static "Resume my pulse design" chip was replaced by the
+  // conditional resumeName-driven chip below — Resume renders only when a
+  // problem workspace actually exists (no empty chrome).
   {
     label: "Warm-start from my last pulse",
     prompt: "warm-start a new solve from my most recent pulse",
@@ -34,7 +33,12 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
 
 const STEPS = ["① Describe your system", "② Watch the solve live", "③ Send to hardware & calibrate"]
 
-export function AmicodeGettingStarted(props: { onStart: (prompt: string) => void }) {
+export function AmicodeGettingStarted(props: {
+  onStart: (prompt: string) => void
+  // spec B: Resume verb — set only when a problem workspace exists (no empty chrome)
+  resumeName?: string
+  onResume?: () => void
+}) {
   return (
     <div
       data-component="amicode-getting-started"
@@ -98,6 +102,25 @@ export function AmicodeGettingStarted(props: { onStart: (prompt: string) => void
             </button>
           )}
         </For>
+        {props.resumeName && props.onResume && (
+          <button
+            type="button"
+            data-slot="amicode-gs-resume"
+            onClick={() => props.onResume?.()}
+            style={{
+              "border": "1px solid var(--v2-icon-icon-accent)",
+              "border-radius": "6px",
+              "background": "var(--v2-background-bg-layer-02)",
+              "color": "var(--v2-text-text-base)",
+              "padding": "4px 12px",
+              "font-size": "12px",
+              "line-height": "16px",
+              "cursor": "pointer",
+            }}
+          >
+            Resume “{props.resumeName}”
+          </button>
+        )}
       </div>
     </div>
   )
