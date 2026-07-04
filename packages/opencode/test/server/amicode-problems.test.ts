@@ -1,0 +1,157 @@
+import { describe, expect, test, beforeEach, afterEach } from "bun:test"
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { problemsBody, problemBody, synthesizeProblems, synthesizeProblem } from "@/server/amicode/problems"
+
+let root: string
+beforeEach(() => {
+  root = mkdtempSync(path.join(tmpdir(), "amicode-problems-"))
+})
+afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+function seedProblem(
+  slug: string,
+  extra?: {
+    score?: unknown
+    entities?: Record<string, unknown>
+    events?: unknown[]
+    runs?: unknown[]
+    interviewScoreId?: string
+  },
+) {
+  const dir = path.join(root, slug)
+  mkdirSync(path.join(dir, "entities"), { recursive: true })
+  writeFileSync(
+    path.join(dir, "problem.json"),
+    JSON.stringify({
+      name: slug.toUpperCase(),
+      slug,
+      created: "2026-07-03T00:00:00Z",
+      status: "designing",
+      recorded: "2026-07-03T01:00:00Z",
+      ...(extra?.score ? { score: extra.score } : {}),
+    }),
+  )
+  for (const [kind, body] of Object.entries(extra?.entities ?? {}))
+    writeFileSync(path.join(dir, "entities", `${kind}.json`), JSON.stringify(body))
+  if (extra?.events)
+    writeFileSync(path.join(dir, "events.jsonl"), extra.events.map((e) => JSON.stringify(e)).join("\n") + "\n")
+  if (extra?.runs) writeFileSync(path.join(dir, "runs.json"), JSON.stringify({ runs: extra.runs }))
+  if (extra?.interviewScoreId)
+    writeFileSync(
+      path.join(dir, "interview_state.json"),
+      JSON.stringify({ score_id: extra.interviewScoreId, score_version: 3 }),
+    )
+}
+
+const MANIFEST = {
+  manifest: {
+    id: "pulse-designer",
+    version: 3,
+    stages: [
+      { id: "platform" },
+      { id: "model", emits: ["system"] },
+      { id: "formulate", emits: ["formulation"] },
+      { id: "solve", emits: ["run", "pulse"] },
+      { id: "hardware", emits: ["device_session"] },
+    ],
+  },
+}
+
+describe("problemsBody", () => {
+  test("lists problems with active slug and entity kinds", () => {
+    seedProblem("x-gate", { entities: { system: { platform: "transmon" } } })
+    seedProblem("cz-gate")
+    writeFileSync(path.join(root, "active"), "x-gate\n")
+    const parsed = JSON.parse(problemsBody(root))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.active).toBe("x-gate")
+    const slugs = parsed.problems.map((p: any) => p.slug).sort()
+    expect(slugs).toEqual(["cz-gate", "x-gate"])
+    const xg = parsed.problems.find((p: any) => p.slug === "x-gate")
+    expect(xg).toMatchObject({
+      name: "X-GATE",
+      status: "designing",
+      recorded: "2026-07-03T01:00:00Z",
+      entity_kinds: ["system"],
+    })
+  })
+  test("missing root synthesizes no_problems_dir in the same shape", () => {
+    const parsed = JSON.parse(problemsBody(path.join(root, "nope")))
+    expect(parsed).toMatchObject({ ok: false, active: null, problems: [] })
+    expect(parsed.error).toStartWith("no_problems_dir")
+  })
+  test("a dir with unparseable problem.json is skipped, not fatal", () => {
+    seedProblem("good")
+    mkdirSync(path.join(root, "bad"))
+    writeFileSync(path.join(root, "bad", "problem.json"), "{nope")
+    const parsed = JSON.parse(problemsBody(root))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.problems.map((p: any) => p.slug)).toEqual(["good"])
+  })
+})
+
+describe("problemBody", () => {
+  test("returns problem + entities + events window + runs", () => {
+    const events = Array.from({ length: 60 }, (_, i) => ({ seq: i + 1, ts: "t", entity: "system", action: "updated" }))
+    seedProblem("x-gate", {
+      entities: { system: { platform: "transmon", levels: 4 } },
+      events,
+      runs: [{ run_id: "r1", lab: "default", tier: "vetted", recorded: "t" }],
+    })
+    writeFileSync(path.join(root, "active"), "x-gate")
+    const parsed = JSON.parse(problemBody(root, undefined)) // undefined slug → active
+    expect(parsed.ok).toBe(true)
+    expect(parsed.problem.slug).toBe("x-gate")
+    expect(parsed.entities.system.levels).toBe(4)
+    expect(parsed.events).toHaveLength(50) // last-50 window
+    expect(parsed.events[0].seq).toBe(11) // oldest retained
+    expect(parsed.events[49].seq).toBe(60)
+    expect(parsed.runs).toEqual([{ run_id: "r1", lab: "default", tier: "vetted", recorded: "t" }])
+  })
+  test("unknown slug → not_found synthesized", () => {
+    seedProblem("x-gate")
+    const parsed = JSON.parse(problemBody(root, "zz"))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toStartWith("not_found:")
+  })
+  test("corrupt entity sidecar → bad_json:<file> synthesized", () => {
+    seedProblem("x-gate")
+    writeFileSync(path.join(root, "x-gate", "entities", "system.json"), "{nope")
+    const parsed = JSON.parse(problemBody(root, "x-gate"))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toStartWith("bad_json")
+  })
+  test("score_stages resolves through interview_state when problem.score is absent", () => {
+    writeFileSync(path.join(root, "score_manifest.json"), JSON.stringify(MANIFEST))
+    seedProblem("x-gate", { interviewScoreId: "pulse-designer" })
+    const parsed = JSON.parse(problemBody(root, "x-gate"))
+    expect(parsed.score_stages).toEqual(["system", "formulation", "run", "pulse", "device_session"])
+  })
+  test("score id mismatch / missing manifest / no score id → []", () => {
+    seedProblem("a", { interviewScoreId: "other-score" })
+    seedProblem("b", { interviewScoreId: "pulse-designer" }) // manifest removed below
+    seedProblem("c") // no score anywhere
+    writeFileSync(path.join(root, "score_manifest.json"), JSON.stringify(MANIFEST))
+    expect(JSON.parse(problemBody(root, "a")).score_stages).toEqual([])
+    expect(JSON.parse(problemBody(root, "c")).score_stages).toEqual([])
+    rmSync(path.join(root, "score_manifest.json"))
+    expect(JSON.parse(problemBody(root, "b")).score_stages).toEqual([])
+  })
+})
+
+describe("synthesize", () => {
+  test("both synthesizers emit their full success shape with ok:false", () => {
+    expect(JSON.parse(synthesizeProblems("x", "d"))).toEqual({ ok: false, active: null, problems: [], error: "x: d" })
+    expect(JSON.parse(synthesizeProblem("x", "d"))).toEqual({
+      ok: false,
+      problem: null,
+      entities: {},
+      score_stages: [],
+      events: [],
+      runs: [],
+      error: "x: d",
+    })
+  })
+})
