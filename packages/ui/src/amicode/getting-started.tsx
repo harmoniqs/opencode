@@ -9,6 +9,9 @@ import { For } from "solid-js"
 // TODO(repertoire-chips): these become data — one chip per installed+entitled
 // score (name/outcome/duration from SCORE.md frontmatter) once the server
 // exposes the compiled repertoire; static, feature-diverse set until then.
+// The set spans the lifetime: onboard (first run routes any chip into the
+// overture) → design with memory/recommendations → warm-start from the pulse
+// bank → go fast with Veloce.
 export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
     label: "Design a pulse — walk me through it",
@@ -16,22 +19,29 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   },
   {
     label: "Optimize an X gate on my transmon",
-    prompt: "optimize an X gate on my transmon — defaults are fine, ask me only what you need",
+    prompt: "optimize an X gate on my transmon — use what you know from my history",
   },
   // NOTE(spec B): the static "Resume my pulse design" chip was replaced by the
   // conditional resumeName-driven chip below — Resume renders only when a
   // problem workspace actually exists (no empty chrome).
   {
-    label: "Warm-start from my last pulse",
-    prompt: "warm-start a new solve from my most recent pulse",
+    label: "Warm-start from my pulse bank",
+    prompt: "warm-start a new solve from my pulse bank",
   },
   {
-    label: "What can Amicode do?",
-    prompt: "what can Amicode do?",
+    label: "Go fast with Veloce",
+    prompt: "turn on Veloce — auto-accept your high-confidence recommendations, and still confirm before any solve",
+  },
+  {
+    label: "What can Amico do?",
+    prompt: "what can Amico do?",
   },
 ]
 
-const STEPS = ["① Describe your system", "② Watch the solve live", "③ Send to hardware & calibrate"]
+// The lifetime arc, not just the per-pulse loop: Amico gets to know your setup
+// (session zero), designs with recommendations drawn from your history, then
+// helps you take it to hardware.
+const STEPS = ["① Get set up — your system & lab", "② Design & optimize, with your history", "③ Verify & tune on hardware"]
 
 export function AmicodeGettingStarted(props: {
   onStart: (prompt: string) => void
@@ -55,7 +65,8 @@ export function AmicodeGettingStarted(props: {
         data-slot="amicode-gs-tagline"
         style={{ "font-size": "13px", "line-height": "18px", "color": "var(--v2-text-text-base)" }}
       >
-        Pulse design, from conversation to calibrated waveform.
+        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a pulse-design copilot who remembers your work and gets faster the more you build together.{" "}
+        <span style={{ "font-style": "italic" }}>Andiamo.</span>
       </div>
       <div
         data-slot="amicode-gs-steps"
