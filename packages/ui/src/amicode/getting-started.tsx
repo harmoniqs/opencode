@@ -1,4 +1,4 @@
-import { For } from "solid-js"
+import { For, Show } from "solid-js"
 
 // AMICODE: start-screen getting-started block — tagline, how-it-works row,
 // and starter chips that submit their prompt as the first message of a new
@@ -48,6 +48,9 @@ export function AmicodeGettingStarted(props: {
   // spec B: Resume verb — set only when a problem workspace exists (no empty chrome)
   resumeName?: string
   onResume?: () => void
+  // amicode: the compact new-session layout hides the how-it-works steps (tagline
+  // + chips only). Defaults on so the classic NewSessionView is unchanged.
+  showSteps?: boolean
 }) {
   return (
     <div
@@ -67,21 +70,23 @@ export function AmicodeGettingStarted(props: {
       >
         Pulse design, from conversation to calibrated waveform.
       </div>
-      <div
-        data-slot="amicode-gs-steps"
-        style={{
-          "display": "flex",
-          "flex-wrap": "wrap",
-          "justify-content": "center",
-          "column-gap": "16px",
-          "row-gap": "4px",
-          "font-size": "12px",
-          "line-height": "16px",
-          "color": "var(--v2-text-text-faint)",
-        }}
-      >
-        <For each={STEPS}>{(step) => <span style={{ "white-space": "nowrap" }}>{step}</span>}</For>
-      </div>
+      <Show when={props.showSteps ?? true}>
+        <div
+          data-slot="amicode-gs-steps"
+          style={{
+            "display": "flex",
+            "flex-wrap": "wrap",
+            "justify-content": "center",
+            "column-gap": "16px",
+            "row-gap": "4px",
+            "font-size": "12px",
+            "line-height": "16px",
+            "color": "var(--v2-text-text-faint)",
+          }}
+        >
+          <For each={STEPS}>{(step) => <span style={{ "white-space": "nowrap" }}>{step}</span>}</For>
+        </div>
+      </Show>
       <div
         data-slot="amicode-gs-starters"
         style={{
