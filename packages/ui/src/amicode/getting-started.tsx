@@ -65,8 +65,7 @@ export function AmicodeGettingStarted(props: {
         data-slot="amicode-gs-tagline"
         style={{ "font-size": "13px", "line-height": "18px", "color": "var(--v2-text-text-base)" }}
       >
-        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a pulse-design copilot who remembers your work and gets faster the more you build together.{" "}
-        <span style={{ "font-style": "italic" }}>Andiamo.</span>
+        Pulse design, from conversation to calibrated waveform.
       </div>
       <div
         data-slot="amicode-gs-steps"
