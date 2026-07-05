@@ -80,7 +80,6 @@ export default function NewSessionPage() {
               gettingStarted={
                 <AmicodeGettingStarted
                   onStart={startPrompt}
-                  showSteps={false}
                   resumeName={resumeProblem()?.name}
                   onResume={() => {
                     const name = resumeProblem()?.name

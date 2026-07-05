@@ -38,10 +38,8 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   },
 ]
 
-// The lifetime arc, not just the per-pulse loop: Amico gets to know your setup
-// (session zero), designs with recommendations drawn from your history, then
-// helps you take it to hardware.
-const STEPS = ["① Get set up — your system & lab", "② Design & optimize, with your history", "③ Verify & tune on hardware"]
+// The three-beat arc of a pulse-design session, from setup to hardware.
+const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Execute and tune on hardware"]
 
 export function AmicodeGettingStarted(props: {
   onStart: (prompt: string) => void
@@ -66,9 +64,10 @@ export function AmicodeGettingStarted(props: {
     >
       <div
         data-slot="amicode-gs-tagline"
-        style={{ "font-size": "13px", "line-height": "18px", "color": "var(--v2-text-text-base)" }}
+        style={{ "font-size": "14px", "line-height": "20px", "color": "var(--v2-text-text-base)" }}
       >
-        Pulse design, from conversation to calibrated waveform.
+        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a plucky pal for quantum computing practitioners.{" "}
+        <span style={{ "font-style": "italic" }}>Andiamo.</span>
       </div>
       <Show when={props.showSteps ?? true}>
         <div
