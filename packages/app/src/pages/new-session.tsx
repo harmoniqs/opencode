@@ -12,6 +12,7 @@ import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
 import { createSessionComposerState, SessionComposerRegion } from "@/pages/session/composer"
+import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
 
 /**
  * The `/new-session` draft page. Unlike `session.tsx`, this only renders the prompt
@@ -29,6 +30,10 @@ export default function NewSessionPage() {
   let inputRef: HTMLDivElement | undefined
 
   const composer = createSessionComposerState()
+
+  // amicode: register the Amico ops commands here too — the draft page has no
+  // palette, so restart/update-memory are reachable via their direct keybinds.
+  useAmicodeCommands()
 
   // amicode: starter chips fill this page's composer and submit (start-prompt.ts).
   const startPrompt = (text: string) => startPromptWith(prompt, text)

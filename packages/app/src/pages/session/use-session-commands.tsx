@@ -572,58 +572,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
-  // amicode: ops commands that bridge to the VS Code extension host. Shown only
-  // when running inside the Amicode webview (framed). Each posts a message that
-  // chat_panel.ts relays to an ALLOWLISTED vscode command — so you can restart
-  // the server / update memory / manage a run straight from the in-app palette
-  // (cmd+shift+p) without leaving for VS Code's own palette. en-only by design.
-  const inAmicode = () => typeof window !== "undefined" && window.self !== window.top
-  const amicodeCommand = withCategory("Amico")
-  const postAmicode = (command: string) => {
-    try {
-      window.parent?.postMessage({ source: "amicode", kind: "command", command }, "*")
-    } catch {}
-  }
-  const amicodeCmds = (): CommandOption[] =>
-    inAmicode()
-      ? [
-          amicodeCommand({
-            id: "amicode.restartServer",
-            title: "Restart Amico server",
-            description: "Relaunch the opencode server — picks up a rebuilt binary",
-            onSelect: () => postAmicode("amicode.restartServer"),
-          }),
-          amicodeCommand({
-            id: "amicode.distillNow",
-            title: "Update my memory now",
-            description: "Run the background distiller over recent work",
-            onSelect: () => postAmicode("amicode.distillNow"),
-          }),
-          amicodeCommand({
-            id: "amicode.stopRun",
-            title: "Stop current solve",
-            onSelect: () => postAmicode("amicode.stopRun"),
-          }),
-          amicodeCommand({
-            id: "amicode.savePulse",
-            title: "Save pulse from current run",
-            onSelect: () => postAmicode("amicode.savePulse"),
-          }),
-          amicodeCommand({
-            id: "amicode.openRunDir",
-            title: "Open current run directory",
-            onSelect: () => postAmicode("amicode.openRunDir"),
-          }),
-          amicodeCommand({
-            id: "amicode.openInspector",
-            title: "Open run inspector",
-            onSelect: () => postAmicode("amicode.openInspector"),
-          }),
-        ]
-      : []
-
   command.register("session", () => [
-    ...amicodeCmds(),
     ...sessionCmds(),
     ...shareCmds(),
     ...fileCmds(),

@@ -62,6 +62,7 @@ import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
+import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
@@ -915,6 +916,7 @@ export default function Page() {
     focusInput,
     review: reviewTab,
   })
+  useAmicodeCommands()
 
   const openReviewFile = createOpenReviewFile({
     showAllFiles,
