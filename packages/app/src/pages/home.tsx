@@ -395,7 +395,7 @@ function HomeDesign() {
 
   return (
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
-      <div class="mx-auto flex w-full h-full max-w-[1080px] flex-col gap-6 px-6 pt-14 pb-16">
+      <div class="mx-auto flex w-full h-full max-w-[1080px] flex-col gap-6 px-6 pt-14 pb-6">
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
         <div class="grid min-h-0 flex-[1] gap-8 md:grid-cols-[280px_minmax(0,720px)]">
         <HomeProjectColumn
@@ -488,25 +488,21 @@ function HomeDesign() {
           </ScrollView>
         </section>
         </div>
-        {/* Cards: full width across, ~2/3 */}
-        <div class="min-h-0 flex-[2]">
-          <ScrollView class="h-full min-h-0">
-            <div class="pt-1">
-              <AmicodeHomeCards
-                profile={profileView()}
-                starters={AMICODE_STARTERS}
-                onStart={startWithPrompt}
-                onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
-                resumeName={resumeProblem()?.name}
-                resumeMeta={resumeMeta()}
-                onResume={() => {
-                  const name = resumeProblem()?.name
-                  if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
-                }}
-                onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
-              />
-            </div>
-          </ScrollView>
+        {/* Cards: full width across, sized to content so they never scroll */}
+        <div class="shrink-0 pt-1">
+          <AmicodeHomeCards
+            profile={profileView()}
+            starters={AMICODE_STARTERS}
+            onStart={startWithPrompt}
+            onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
+            resumeName={resumeProblem()?.name}
+            resumeMeta={resumeMeta()}
+            onResume={() => {
+              const name = resumeProblem()?.name
+              if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+            }}
+            onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+          />
         </div>
       </div>
     </div>
