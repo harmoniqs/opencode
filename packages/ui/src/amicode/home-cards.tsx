@@ -1,0 +1,616 @@
+import { For, Show, createMemo, type JSX } from "solid-js"
+import { Mark } from "../components/logo"
+
+// AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
+// and useful practitioner info on). Two identity heroes — MEET AMICO (who your
+// pal is + what it can do) and ABOUT YOU (your profile, earned stats, and the
+// live "Amico remembers" trust surface) — over a row of action cards. All
+// presentation: the app owns fetching (/amicode/profile, /amicode/problems,
+// /amicode/run-status) and passes data + callbacks. Inline styles on v2 tokens,
+// matching the entity-rail/getting-started convention → dark/light correct.
+// en-only by design, consistent with the default-locale-en patch.
+
+// ---------------------------------------------------------------------------
+// profile response shape + parser (mirrors ./problem.ts's parse discipline:
+// one success schema, tolerant of missing fields, never throws)
+// ---------------------------------------------------------------------------
+export interface ProfileStats {
+  problems: number
+  runs: number
+  best_fidelity: number | null
+  banked: number
+  since: string | null
+}
+export interface ProfileYou {
+  name: string
+  affiliation: string | null
+  focus: string | null
+  avatar: string | null
+  platforms: string[]
+  stats: ProfileStats
+  remembers: { title: string; detail: string }[]
+}
+export type ProfileView = { ok: true; you: ProfileYou } | { ok: false; error: string }
+
+export function parseProfileResponse(raw: unknown): ProfileView {
+  const r = raw as any
+  if (!r || typeof r !== "object" || r.ok !== true || !r.you) {
+    return { ok: false, error: typeof r?.error === "string" ? r.error : "unavailable" }
+  }
+  const you = r.you
+  const stats = you.stats ?? {}
+  return {
+    ok: true,
+    you: {
+      name: typeof you.name === "string" ? you.name : "Practitioner",
+      affiliation: typeof you.affiliation === "string" ? you.affiliation : null,
+      focus: typeof you.focus === "string" ? you.focus : null,
+      avatar: typeof you.avatar === "string" ? you.avatar : null,
+      platforms: Array.isArray(you.platforms) ? you.platforms.filter((p: unknown) => typeof p === "string") : [],
+      stats: {
+        problems: Number(stats.problems) || 0,
+        runs: Number(stats.runs) || 0,
+        best_fidelity: typeof stats.best_fidelity === "number" ? stats.best_fidelity : null,
+        banked: Number(stats.banked) || 0,
+        since: typeof stats.since === "string" ? stats.since : null,
+      },
+      remembers: Array.isArray(you.remembers)
+        ? you.remembers
+            .filter((m: any) => m && typeof m.title === "string" && m.title.trim())
+            .map((m: any) => ({ title: String(m.title), detail: String(m.detail ?? m.title) }))
+        : [],
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// display helpers
+// ---------------------------------------------------------------------------
+const PLATFORM_DISPLAY: Record<string, string> = {
+  rydberg: "neutral atoms",
+  transmon: "transmon",
+  "cavity-transmon": "cavity-QED",
+  "spin qubits": "spin qubits",
+  fluxonium: "fluxonium",
+  ions: "trapped ions",
+  bosonic: "bosonic",
+}
+function platformName(key: string): string {
+  return PLATFORM_DISPLAY[key] ?? key
+}
+function derivedFocus(platforms: string[]): string {
+  const top = platforms.slice(0, 2).map(platformName)
+  if (top.length === 0) return "quantum control"
+  return `${top.join(" & ")} pulse design`
+}
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return "?"
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+function fidelity(value: number | null): string {
+  if (value === null) return "—"
+  if (value >= 1) return "1.0"
+  return value.toFixed(5)
+}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+function sinceLabel(iso: string | null): string | undefined {
+  if (!iso) return undefined
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return undefined
+  const month = MONTHS[Number(m[2]) - 1] ?? m[2]
+  const day = Number(m[3])
+  const started = Date.parse(iso)
+  const label = `since ${month} ${day}`
+  if (Number.isNaN(started)) return label
+  const days = Math.max(0, Math.round((Date.now() - started) / 86_400_000))
+  if (days <= 0) return `${label} · today`
+  return `${label} · ${days} day${days === 1 ? "" : "s"}`
+}
+
+// ---------------------------------------------------------------------------
+// primitives
+// ---------------------------------------------------------------------------
+const CARD: JSX.CSSProperties = {
+  "display": "flex",
+  "flex-direction": "column",
+  "min-width": "0",
+  "border": "1px solid var(--v2-border-border-base)",
+  "border-radius": "10px",
+  "background": "var(--v2-background-bg-layer-01)",
+  "padding": "14px 16px",
+}
+const HERO_CARD: JSX.CSSProperties = { ...CARD, "border-left": "3px solid var(--v2-icon-icon-accent)" }
+const EYEBROW: JSX.CSSProperties = {
+  "font-size": "10px",
+  "font-weight": "700",
+  "letter-spacing": "0.1em",
+  "text-transform": "uppercase",
+  "color": "var(--v2-text-text-faint)",
+}
+const DIVIDER: JSX.CSSProperties = { "height": "1px", "background": "var(--v2-border-border-base)", "margin": "12px 0" }
+
+function Bullet(props: { children: JSX.Element; title?: string }) {
+  return (
+    <div
+      title={props.title}
+      style={{
+        "display": "flex",
+        "gap": "6px",
+        "align-items": "baseline",
+        "min-width": "0",
+        "font-size": "12px",
+        "line-height": "18px",
+        "color": "var(--v2-text-text-base)",
+      }}
+    >
+      <span style={{ color: "var(--v2-text-text-accent)", "flex-shrink": "0" }}>›</span>
+      <span style={{ "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+        {props.children}
+      </span>
+    </div>
+  )
+}
+
+function PrimaryButton(props: { children: JSX.Element; onClick: () => void; slot?: string }) {
+  return (
+    <button
+      type="button"
+      data-slot={props.slot}
+      onClick={() => props.onClick()}
+      style={{
+        "align-self": "flex-start",
+        "border": "1px solid var(--v2-icon-icon-accent)",
+        "border-radius": "6px",
+        "background": "var(--v2-background-bg-layer-02)",
+        "color": "var(--v2-text-text-base)",
+        "padding": "5px 12px",
+        "font-size": "12px",
+        "line-height": "16px",
+        "cursor": "pointer",
+      }}
+    >
+      {props.children}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// MEET AMICO — static identity + capabilities (the H-bot's home)
+// ---------------------------------------------------------------------------
+const AMICO_CAN = [
+  "design pulses from a conversation",
+  "optimize for fidelity, speed, or robustness",
+  "warm-start from your pulse bank",
+  "tune & calibrate on real hardware",
+]
+
+function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
+  return (
+    <div data-component="amicode-card-meet" style={HERO_CARD}>
+      <div style={EYEBROW}>Meet Amico</div>
+      <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
+        <Mark class="w-12 h-auto shrink-0" />
+        <div style={{ "min-width": "0" }}>
+          <div style={{ "font-size": "18px", "font-weight": "600", "color": "var(--v2-text-text-base)" }}>Amico</div>
+          <div style={{ "font-size": "12px", "line-height": "16px", "color": "var(--v2-text-text-muted)" }}>
+            your plucky pal for quantum control
+          </div>
+          <div style={{ "font-size": "11px", "line-height": "16px", "color": "var(--v2-text-text-faint)" }}>
+            powered by the Piccolo engine
+          </div>
+        </div>
+      </div>
+      <div style={DIVIDER} />
+      <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
+        I can help you
+      </div>
+      <div style={{ "display": "flex", "flex-direction": "column", "gap": "3px", "margin-bottom": "12px" }}>
+        <For each={AMICO_CAN}>{(line) => <Bullet>{line}</Bullet>}</For>
+      </div>
+      <PrimaryButton slot="amicode-card-meet-cta" onClick={() => props.onStart("what can Amico do?")}>
+        What can Amico do?
+      </PrimaryButton>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ABOUT YOU — profile, earned stats, live "Amico remembers"
+// ---------------------------------------------------------------------------
+function Avatar(props: { name: string; src: string | null }) {
+  return (
+    <Show
+      when={props.src}
+      fallback={
+        <div
+          style={{
+            "width": "44px",
+            "height": "44px",
+            "flex-shrink": "0",
+            "border-radius": "10px",
+            "background": "var(--v2-background-bg-layer-03)",
+            "color": "var(--v2-text-text-muted)",
+            "display": "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "font-size": "15px",
+            "font-weight": "600",
+            "letter-spacing": "0.02em",
+          }}
+        >
+          {initials(props.name)}
+        </div>
+      }
+    >
+      {(src) => (
+        <img
+          src={src()}
+          alt={props.name}
+          style={{ "width": "44px", "height": "44px", "border-radius": "10px", "object-fit": "cover", "flex-shrink": "0" }}
+        />
+      )}
+    </Show>
+  )
+}
+
+function Stat(props: { value: string; label: string }) {
+  return (
+    <div style={{ "display": "flex", "flex-direction": "column", "gap": "1px", "min-width": "0" }}>
+      <span
+        style={{
+          "font-size": "16px",
+          "font-weight": "600",
+          "color": "var(--v2-text-text-base)",
+          "font-variant-numeric": "tabular-nums",
+          "line-height": "20px",
+        }}
+      >
+        {props.value}
+      </span>
+      <span style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)", "line-height": "12px" }}>
+        {props.label}
+      </span>
+    </div>
+  )
+}
+
+function AboutYouCard(props: {
+  view: ProfileView | undefined
+  onEdit: () => void
+  onStart: (prompt: string) => void
+}) {
+  const you = createMemo(() => (props.view?.ok ? props.view.you : undefined))
+  const focusLine = createMemo(() => {
+    const y = you()
+    if (!y) return ""
+    const focus = y.focus ?? derivedFocus(y.platforms)
+    return y.affiliation ? `${y.affiliation} · ${focus}` : focus
+  })
+  const fresh = createMemo(() => {
+    const y = you()
+    return !!y && y.stats.problems === 0 && y.stats.runs === 0
+  })
+
+  return (
+    <div data-component="amicode-card-you" style={HERO_CARD}>
+      <div style={{ "display": "flex", "align-items": "center", "justify-content": "space-between" }}>
+        <div style={EYEBROW}>About you</div>
+        <Show when={you()}>
+          <button
+            type="button"
+            data-slot="amicode-card-you-edit"
+            title="Edit profile in chat"
+            onClick={() => props.onEdit()}
+            style={{
+              "background": "none",
+              "border": "none",
+              "cursor": "pointer",
+              "color": "var(--v2-text-text-faint)",
+              "font-size": "12px",
+              "padding": "0",
+              "line-height": "1",
+            }}
+          >
+            ✎
+          </button>
+        </Show>
+      </div>
+
+      <Show
+        when={you()}
+        fallback={
+          <div style={{ "margin-top": "10px", "font-size": "12px", "color": "var(--v2-text-text-faint)" }}>
+            {props.view && !props.view.ok ? "Profile unavailable." : "Loading…"}
+          </div>
+        }
+      >
+        {(y) => (
+          <>
+            <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
+              <Avatar name={y().name} src={y().avatar} />
+              <div style={{ "min-width": "0" }}>
+                <div
+                  style={{
+                    "font-size": "16px",
+                    "font-weight": "600",
+                    "color": "var(--v2-text-text-base)",
+                    "overflow": "hidden",
+                    "text-overflow": "ellipsis",
+                    "white-space": "nowrap",
+                  }}
+                >
+                  {y().name}
+                </div>
+                <div
+                  style={{
+                    "font-size": "12px",
+                    "line-height": "16px",
+                    "color": "var(--v2-text-text-muted)",
+                    "overflow": "hidden",
+                    "text-overflow": "ellipsis",
+                    "white-space": "nowrap",
+                  }}
+                >
+                  {focusLine()}
+                </div>
+                <Show when={y().platforms.length > 0}>
+                  <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)", "margin-top": "1px" }}>
+                    <For each={y().platforms.slice(0, 3)}>
+                      {(p, i) => (
+                        <span>
+                          {i() > 0 ? "  " : ""}◇ {platformName(p)}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <Show
+              when={!fresh()}
+              fallback={
+                <>
+                  <div style={DIVIDER} />
+                  <div style={{ "font-size": "12px", "color": "var(--v2-text-text-muted)", "margin-bottom": "8px" }}>
+                    No solves yet — tell Amico what you're working on and it'll start remembering.
+                  </div>
+                  <PrimaryButton
+                    slot="amicode-card-you-firstrun"
+                    onClick={() => props.onStart("help me set up my first pulse-design problem")}
+                  >
+                    Get started →
+                  </PrimaryButton>
+                </>
+              }
+            >
+              <div style={DIVIDER} />
+              <div
+                style={{
+                  "display": "grid",
+                  "grid-template-columns": "repeat(4, minmax(0, 1fr))",
+                  "gap": "8px",
+                }}
+              >
+                <Stat value={String(y().stats.problems)} label="problems" />
+                <Stat value={String(y().stats.runs)} label="runs" />
+                <Stat value={fidelity(y().stats.best_fidelity)} label="best F" />
+                <Stat value={String(y().stats.banked)} label="banked" />
+              </div>
+
+              <Show when={y().remembers.length > 0}>
+                <div style={DIVIDER} />
+                <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
+                  Amico remembers
+                </div>
+                <div style={{ "display": "flex", "flex-direction": "column", "gap": "3px" }}>
+                  <For each={y().remembers}>{(m) => <Bullet title={m.detail}>{m.title}</Bullet>}</For>
+                </div>
+              </Show>
+
+              <Show when={sinceLabel(y().stats.since)}>
+                {(label) => (
+                  <div style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)", "margin-top": "10px" }}>
+                    {label()}
+                  </div>
+                )}
+              </Show>
+            </Show>
+          </>
+        )}
+      </Show>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// action cards
+// ---------------------------------------------------------------------------
+function ActionCard(props: {
+  eyebrow: string
+  slot: string
+  onClick?: () => void
+  children: JSX.Element
+}) {
+  return (
+    <div
+      data-component="amicode-action-card"
+      data-slot={props.slot}
+      onClick={() => props.onClick?.()}
+      style={{
+        ...CARD,
+        "gap": "6px",
+        "cursor": props.onClick ? "pointer" : "default",
+        "min-height": "88px",
+      }}
+    >
+      <div style={EYEBROW}>{props.eyebrow}</div>
+      {props.children}
+    </div>
+  )
+}
+
+const CARD_TITLE: JSX.CSSProperties = {
+  "font-size": "13px",
+  "font-weight": "600",
+  "color": "var(--v2-text-text-base)",
+  "overflow": "hidden",
+  "text-overflow": "ellipsis",
+  "white-space": "nowrap",
+}
+const CARD_SUB: JSX.CSSProperties = {
+  "font-size": "11px",
+  "color": "var(--v2-text-text-muted)",
+  "overflow": "hidden",
+  "text-overflow": "ellipsis",
+  "white-space": "nowrap",
+}
+const SPARK_W = 96
+const SPARK_H = 22
+function Sparkline(props: { values: number[] }) {
+  const path = createMemo(() => {
+    const v = props.values
+    if (v.length < 2) return undefined
+    const min = Math.min(...v)
+    const max = Math.max(...v)
+    const span = max - min || 1
+    const step = SPARK_W / (v.length - 1)
+    return v
+      .map((y, i) => {
+        const px = (i * step).toFixed(1)
+        const py = (SPARK_H - 2 - ((y - min) / span) * (SPARK_H - 4)).toFixed(1)
+        return `${i === 0 ? "M" : "L"}${px},${py}`
+      })
+      .join(" ")
+  })
+  return (
+    <Show when={path()}>
+      {(d) => (
+        <svg width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} style={{ "flex-shrink": "0" }}>
+          <path d={d()} fill="none" stroke="var(--v2-icon-icon-accent)" stroke-width="1.5" stroke-linejoin="round" />
+        </svg>
+      )}
+    </Show>
+  )
+}
+
+export interface HomeLiveRun {
+  name?: string
+  iteration?: number | null
+  fidelity?: number | null
+  series?: number[]
+}
+
+export function AmicodeHomeCards(props: {
+  profile: ProfileView | undefined
+  starters: readonly { label: string; prompt: string }[]
+  onStart: (prompt: string) => void
+  onEditProfile: () => void
+  // Jump back in
+  resumeName?: string
+  resumeMeta?: string
+  onResume?: () => void
+  // Now solving
+  liveRun?: HomeLiveRun
+  onOpenLiveRun?: () => void
+  // Pulse bank
+  onWarmStart?: () => void
+}) {
+  const stats = createMemo(() => (props.profile?.ok ? props.profile.you.stats : undefined))
+  return (
+    <div data-component="amicode-home-cards" style={{ "display": "flex", "flex-direction": "column", "gap": "12px" }}>
+      <div
+        style={{
+          "display": "grid",
+          "grid-template-columns": "repeat(2, minmax(0, 1fr))",
+          "gap": "12px",
+        }}
+      >
+        <MeetAmicoCard onStart={props.onStart} />
+        <AboutYouCard view={props.profile} onEdit={props.onEditProfile} onStart={props.onStart} />
+      </div>
+
+      <div
+        style={{
+          "display": "grid",
+          "grid-template-columns": "repeat(auto-fit, minmax(150px, 1fr))",
+          "gap": "8px",
+        }}
+      >
+        {/* Jump back in */}
+        <Show when={props.resumeName}>
+          <ActionCard eyebrow="Jump back in" slot="amicode-card-resume" onClick={props.onResume}>
+            <div style={CARD_TITLE}>{props.resumeName}</div>
+            <Show when={props.resumeMeta}>
+              <div style={CARD_SUB}>{props.resumeMeta}</div>
+            </Show>
+            <div style={{ "font-size": "11px", "color": "var(--v2-text-text-accent)", "margin-top": "auto" }}>
+              Resume →
+            </div>
+          </ActionCard>
+        </Show>
+
+        {/* Now solving */}
+        <Show when={props.liveRun}>
+          {(run) => (
+            <ActionCard eyebrow="Now solving" slot="amicode-card-live" onClick={props.onOpenLiveRun}>
+              <div style={CARD_TITLE}>{run().name ?? "current run"}</div>
+              <div style={{ "display": "flex", "align-items": "center", "gap": "8px", "min-width": "0" }}>
+                <span style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
+                  iter {run().iteration ?? "—"} · F {fidelity(run().fidelity ?? null)}
+                </span>
+              </div>
+              <div style={{ "margin-top": "auto" }}>
+                <Sparkline values={run().series ?? []} />
+              </div>
+            </ActionCard>
+          )}
+        </Show>
+
+        {/* Pulse bank */}
+        <Show when={(stats()?.banked ?? 0) > 0}>
+          <ActionCard eyebrow="Pulse bank" slot="amicode-card-bank" onClick={props.onWarmStart}>
+            <div style={CARD_TITLE}>
+              {stats()!.banked} pulse{stats()!.banked === 1 ? "" : "s"} banked
+            </div>
+            <div style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
+              best F {fidelity(stats()!.best_fidelity)}
+            </div>
+            <div style={{ "font-size": "11px", "color": "var(--v2-text-text-accent)", "margin-top": "auto" }}>
+              Warm-start →
+            </div>
+          </ActionCard>
+        </Show>
+
+        {/* Start something */}
+        <ActionCard eyebrow="Start something" slot="amicode-card-start">
+          <div style={{ "display": "flex", "flex-wrap": "wrap", "gap": "5px", "margin-top": "2px" }}>
+            <For each={props.starters}>
+              {(starter) => (
+                <button
+                  type="button"
+                  data-slot="amicode-card-start-chip"
+                  onClick={() => props.onStart(starter.prompt)}
+                  style={{
+                    "border": "1px solid var(--v2-border-border-base)",
+                    "border-radius": "6px",
+                    "background": "var(--v2-background-bg-layer-02)",
+                    "color": "var(--v2-text-text-base)",
+                    "padding": "3px 9px",
+                    "font-size": "11px",
+                    "line-height": "15px",
+                    "cursor": "pointer",
+                  }}
+                >
+                  {starter.label}
+                </button>
+              )}
+            </For>
+          </div>
+        </ActionCard>
+      </div>
+    </div>
+  )
+}

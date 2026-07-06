@@ -1,6 +1,6 @@
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { batch, createEffect, createMemo, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
+import { batch, createEffect, createMemo, createResource, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
@@ -47,6 +47,11 @@ import { useSettings } from "@/context/settings"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
+import { amicodeGet } from "@/utils/amicode-fetch"
+import { AmicodeHomeCards, parseProfileResponse } from "@opencode-ai/ui/amicode-home-cards"
+import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
+import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
+import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -196,6 +201,57 @@ function HomeDesign() {
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
   const groups = createMemo(() => groupSessions(records(), language))
+  const tabs = useTabs()
+
+  // amicode: home-card data. All read from the focused server's /amicode/* raw
+  // routes (~/.amico). Each degrades to undefined on failure so a card simply
+  // doesn't render (no empty chrome) rather than erroring the whole page.
+  const [profileRaw] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/profile").catch(() => undefined),
+  )
+  const profileView = createMemo(() => {
+    const raw = profileRaw()
+    return raw === undefined ? undefined : parseProfileResponse(raw)
+  })
+  const [problemsRaw] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/problems").catch(() => undefined),
+  )
+  const resumeProblem = createMemo(() => {
+    const raw = problemsRaw()
+    if (raw === undefined) return undefined
+    const view = parseProblemsResponse(raw)
+    if (!view.ok) return undefined
+    const open = view.problems.filter((p) => p.status !== "archived")
+    if (open.length === 0) return undefined
+    return [...open].sort((a, b) => (b.recorded ?? "").localeCompare(a.recorded ?? ""))[0]
+  })
+  const [resumeDetailRaw] = createResource(
+    () => resumeProblem()?.slug,
+    (slug) => amicodeGet(focusedServer(), `/amicode/problem?slug=${encodeURIComponent(slug)}`).catch(() => undefined),
+  )
+  const resumeMeta = createMemo(() => {
+    const raw = resumeDetailRaw()
+    if (raw === undefined) return undefined
+    const view = parseProblemResponse(raw) as { ok: boolean; entities?: Record<string, any> }
+    if (!view.ok || !view.entities) return undefined
+    const parts = [
+      view.entities.system?.platform,
+      view.entities.formulation?.target,
+      view.entities.formulation?.objective,
+    ].filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    return parts.length > 0 ? parts.join(" · ") : undefined
+  })
+
+  function startWithPrompt(prompt: string) {
+    const project = newSessionProject()
+    if (!project) {
+      openNewSession()
+      return
+    }
+    tabs.newDraft({ server: server.key, directory: project.worktree }, prompt)
+  }
 
   function setSelection(next: HomeProjectSelection) {
     batch(() => {
@@ -387,6 +443,23 @@ function HomeDesign() {
           />
           <ScrollView class="mt-3 min-h-0 flex-1">
             <div class="pt-3 flex flex-col gap-6">
+              <div class="px-4">
+                <AmicodeHomeCards
+                  profile={profileView()}
+                  starters={AMICODE_STARTERS}
+                  onStart={startWithPrompt}
+                  onEditProfile={() =>
+                    startWithPrompt("update my profile — my name, affiliation, and what I work on")
+                  }
+                  resumeName={resumeProblem()?.name}
+                  resumeMeta={resumeMeta()}
+                  onResume={() => {
+                    const name = resumeProblem()?.name
+                    if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+                  }}
+                  onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+                />
+              </div>
               <Show
                 when={!sessionLoad.isLoading}
                 fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}

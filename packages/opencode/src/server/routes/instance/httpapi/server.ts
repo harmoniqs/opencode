@@ -60,6 +60,7 @@ import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors
 import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeProblems from "@/server/amicode/problems"
+import * as AmicodeProfile from "@/server/amicode/profile"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -211,6 +212,11 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
         const slug = new URL(request.url, "http://localhost").searchParams.get("slug") ?? undefined
         return HttpServerResponse.text(AmicodeProblems.runStatusResponse(slug), { contentType: "application/json" })
       }),
+    )
+    yield* router.add("GET", "/amicode/profile", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeProfile.profileResponse(), { contentType: "application/json" }),
+      ),
     )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
