@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js"
+import { AmicodeTagline } from "./tagline"
 
 // AMICODE: start-screen getting-started block — tagline, how-it-works row,
 // and starter chips that submit their prompt as the first message of a new
@@ -66,7 +67,7 @@ export function AmicodeGettingStarted(props: {
         data-slot="amicode-gs-tagline"
         style={{ "font-size": "14px", "line-height": "20px", "color": "var(--v2-text-text-base)" }}
       >
-        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a plucky pal for quantum computing practitioners. Andiamo.
+        <AmicodeTagline />
       </div>
       <div
         data-slot="amicode-gs-byline"

@@ -195,7 +195,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         <div style={{ "min-width": "0" }}>
           <div style={{ "font-size": "18px", "font-weight": "600", "color": "var(--v2-text-text-base)" }}>Amico</div>
           <div style={{ "font-size": "12px", "line-height": "16px", "color": "var(--v2-text-text-muted)" }}>
-            your plucky pal for quantum control
+            Your friendly Quantum Computing Agent
           </div>
           <div style={{ "font-size": "11px", "line-height": "16px", "color": "var(--v2-text-text-faint)" }}>
             powered by the Piccolo engine
