@@ -5,7 +5,7 @@
 // success shape (ok:false + "code: detail" error) so the web app parses one
 // schema per route and the endpoints never reject. Pure body-builders take
 // injectable roots for tests; the cached entrypoints bind the real dirs.
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 
@@ -227,6 +227,152 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
   return JSON.stringify({ ok: true, runs: out, error: null })
 }
 
+// --- run-series (spec C: inline run window — iteration curve + latest pulse +
+// log tail for one run dir). Same never-reject discipline. The client derives
+// F = 1 - f; we ship the raw objective f so one convention lives in one place. ---
+
+const SERIES_MAX_POINTS = 160
+const TAIL_LINES = 8
+
+export function synthesizeRunSeries(code: string, detail: string): string {
+  return JSON.stringify({ ok: false, run: null, error: `${code}: ${detail}` })
+}
+
+/** Resolve a run dir from run_id (+ optional lab). Without a lab, scan labs for
+ *  the first `<runsRoot>/<lab>/<run>` that exists — run_ids are effectively unique. */
+function resolveRunDir(runsRoot: string, run: string, lab: string | undefined): string | null {
+  if (lab) {
+    const dir = path.join(runsRoot, lab, run)
+    return existsSync(dir) ? dir : null
+  }
+  if (!existsSync(runsRoot)) return null
+  for (const entry of readdirSync(runsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = path.join(runsRoot, entry.name, run)
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
+
+/** Start time embedded in the run_id: r20260705-193722Z-… → epoch ms (UTC). */
+function runIdStartMs(runId: string): number | null {
+  const m = runId.match(/r(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})Z/)
+  if (!m) return null
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]))
+}
+
+function downsample<T>(points: T[], max: number): T[] {
+  if (points.length <= max) return points
+  const out: T[] = []
+  const step = (points.length - 1) / (max - 1)
+  for (let i = 0; i < max; i++) out.push(points[Math.round(i * step)]!)
+  out[out.length - 1] = points[points.length - 1]! // always keep the last point
+  return out
+}
+
+function parsePulseMeta(log: string): { drives: number; knots: number; labels: string[] } | null {
+  const m = log.match(/^AMICODE_PULSE_META\s+drives=(\d+)\s+knots=(\d+)\s+labels=([^\n]*)$/m)
+  if (!m) return null
+  const labels = [...m[3].matchAll(/"([^"]*)"/g)].map((x) => x[1])
+  return { drives: Number(m[1]), knots: Number(m[2]), labels }
+}
+
+function parseLastPulse(log: string): { iter: number; dt: number; values: number[] } | null {
+  const lines = log.split("\n")
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/^AMICODE_PULSE\s+iter=(\d+)\s+dt=([0-9eE+.\-]+)\s+a=(.+)$/)
+    if (m) {
+      const values = m[3].split(",").map(Number).filter((v) => Number.isFinite(v))
+      return { iter: Number(m[1]), dt: Number(m[2]), values }
+    }
+  }
+  return null
+}
+
+export function runSeriesBody(runsRoot: string, run: string | undefined, lab: string | undefined): string {
+  if (!run || run.trim() === "") return synthesizeRunSeries("bad_request", "missing run id")
+  if (!existsSync(runsRoot)) return synthesizeRunSeries("no_runs_dir", `${runsRoot} does not exist`)
+  const dir = resolveRunDir(runsRoot, run, lab)
+  if (!dir) return synthesizeRunSeries(`not_found:${run}`, "no such run dir")
+
+  let log = ""
+  try {
+    log = readFileSync(path.join(dir, "run.log"), "utf8")
+  } catch {
+    /* run.log may not exist yet (queued) → empty series */
+  }
+
+  const iters: { iter: number; f: number }[] = []
+  for (const line of log.split("\n")) {
+    const m = line.match(/^AMICODE_ITER\s+iter=(\d+)\s+f=([0-9eE+.\-]+)/)
+    if (!m) continue
+    const f = Number(m[2])
+    if (Number.isFinite(f)) iters.push({ iter: Number(m[1]), f })
+  }
+  const series = downsample(iters, SERIES_MAX_POINTS)
+  const bestF = iters.length ? Math.min(...iters.map((p) => p.f)) : null
+  const lastIter = iters.length ? iters[iters.length - 1] : null
+
+  const finished = existsSync(path.join(dir, "FINISHED"))
+  let status = "solving"
+  let fidelity: number | null = null
+  let iteration: number | null = lastIter?.iter ?? null
+  if (finished) {
+    try {
+      const result = readFileSync(path.join(dir, "result.toml"), "utf8")
+      fidelity = tomlScalar(result, "fidelity")
+      const it = tomlScalar(result, "iterations")
+      if (it !== null) iteration = it
+      status = fidelity === null ? "failed" : "finished"
+    } catch {
+      status = "failed"
+    }
+  }
+  // DONE line: authoritative fidelity even before the FINISHED sentinel lands.
+  if (fidelity === null) {
+    const done = log.match(/^DONE\s+fidelity=([0-9eE+.\-]+)/m)
+    if (done) {
+      fidelity = Number(done[1])
+      if (status === "solving") status = "finished"
+    }
+  }
+
+  const pulse = parseLastPulse(log)
+  const pulseMeta = parsePulseMeta(log)
+  const tail = log
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .slice(-TAIL_LINES)
+
+  const startMs = runIdStartMs(run)
+  let endMs: number | null = null
+  try {
+    endMs = statSync(path.join(dir, finished ? "FINISHED" : "run.log")).mtimeMs
+  } catch {
+    /* no file to stat → no elapsed */
+  }
+  const elapsedMs = startMs !== null && endMs !== null ? Math.max(0, Math.round(endMs - startMs)) : null
+
+  return JSON.stringify({
+    ok: true,
+    run: {
+      run_id: run,
+      lab: lab ?? path.basename(path.dirname(dir)),
+      status,
+      iteration,
+      fidelity,
+      best_f: bestF,
+      last_f: lastIter?.f ?? null,
+      elapsed_ms: elapsedMs,
+      series,
+      pulse: pulse ? { iter: pulse.iter, dt: pulse.dt, values: pulse.values } : null,
+      pulse_meta: pulseMeta,
+      tail,
+    },
+    error: null,
+  })
+}
+
 // --- cached entrypoints for the routes (never reject; body is a JSON string) ---
 
 const caches = new Map<string, { at: number; body: string }>()
@@ -251,4 +397,12 @@ export function problemResponse(slug: string | undefined): string {
 }
 export function runStatusResponse(slug: string | undefined): string {
   return cached(`run-status:${slug ?? "@active"}`, 1_000, () => runStatusBody(problemsRoot(), runsRoot(), slug), synthesizeRunStatus)
+}
+export function runSeriesResponse(run: string | undefined, lab: string | undefined): string {
+  return cached(
+    `run-series:${lab ?? "@scan"}:${run ?? ""}`,
+    1_000,
+    () => runSeriesBody(runsRoot(), run, lab),
+    synthesizeRunSeries,
+  )
 }

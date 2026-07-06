@@ -1,9 +1,28 @@
-import { Show, createMemo } from "solid-js"
+import { Match, Show, Switch, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseDiffSentinel, receiptText } from "./receipt"
 import { openAmicodeEntity } from "./ui-bridge"
+import { RunWindow } from "./run-window"
+
+// spec C: when an amicode_solve recorded a run_dir, its sentinel carries the
+// path (well under the 120-char truncation cap) — extract lab/run_id from the
+// last two segments so the part renders a live run window instead of a chip.
+function runRefFromOutput(output: unknown): { run: string; lab?: string } | undefined {
+  const sentinel = parseDiffSentinel(output)
+  if (!sentinel || sentinel.entity !== "run") return undefined
+  for (const [key, entry] of Object.entries(sentinel.diff)) {
+    if (!/run_dir$/.test(key)) continue
+    const value = entry.to
+    if (typeof value !== "string" || value.trim() === "" || value.endsWith("…")) continue
+    const parts = value.replace(/\/+$/, "").split("/")
+    const run = parts[parts.length - 1]
+    const lab = parts[parts.length - 2]
+    if (run) return { run, lab }
+  }
+  return undefined
+}
 
 // AMICODE Layer-2 renderer slot: one-line DIFF RECEIPT for amicode_* tool-call
 // parts (parsed from the AMICODE_DIFF sentinel — spec B), falling back to the
@@ -94,10 +113,12 @@ export function AmicodeToolCard(props: {
   messageID?: string
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
+  const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
 
   return (
-    <Show when={ask()} fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
-      {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}
-    </Show>
+    <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
+      <Match when={ask()}>{(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}</Match>
+      <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
+    </Switch>
   )
 }

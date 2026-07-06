@@ -45,6 +45,7 @@ export function AmicodeEntityRail(props: {
   partsFor: (messageID: string) => readonly RailPart[] | undefined
   fetchProblem: () => Promise<unknown>
   fetchRunStatus: () => Promise<unknown>
+  fetchRunSeries?: (run: string, lab?: string) => Promise<unknown>
   onOpenEntity: (kind: string, seq?: number) => void
   onOpenSwitcher: () => void
   onAsk?: (text: string) => void
@@ -61,6 +62,7 @@ export function AmicodeEntityRail(props: {
   const disposeUiBridge = registerAmicodeUiBridge({
     openEntity: (kind, seq) => props.onOpenEntity(kind, seq),
     openSwitcher: () => props.onOpenSwitcher(),
+    fetchRunSeries: props.fetchRunSeries,
   })
   onCleanup(disposeUiBridge)
 

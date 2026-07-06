@@ -48,7 +48,8 @@ import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet } from "@/utils/amicode-fetch"
-import { AmicodeHomeCards, parseProfileResponse } from "@opencode-ai/ui/amicode-home-cards"
+import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
+import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
 import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
@@ -242,6 +243,58 @@ function HomeDesign() {
       view.entities.formulation?.objective,
     ].filter((v): v is string => typeof v === "string" && v.trim() !== "")
     return parts.length > 0 ? parts.join(" · ") : undefined
+  })
+
+  // amicode (spec C): "Now solving" — light live readout of the active problem's
+  // in-flight run. Polls run-status + run-series only while a run is solving; the
+  // interval self-terminates once status leaves "solving". All failures collapse
+  // to undefined so the card simply doesn't render.
+  const [runStatusRaw, { refetch: refetchRunStatus }] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/run-status").catch(() => undefined),
+  )
+  const solvingRun = createMemo(() => {
+    const raw = runStatusRaw()
+    if (typeof raw !== "object" || raw === null) return undefined
+    const view = raw as { ok?: boolean; runs?: any[] }
+    if (view.ok !== true || !Array.isArray(view.runs)) return undefined
+    const solving = view.runs.find((r) => r && typeof r.run_id === "string" && r.status === "solving")
+    if (!solving) return undefined
+    return {
+      runId: solving.run_id as string,
+      iteration: typeof solving.iteration === "number" ? solving.iteration : null,
+      fidelity: typeof solving.fidelity === "number" ? solving.fidelity : null,
+    }
+  })
+  const solvingRunId = createMemo(() => solvingRun()?.runId)
+  const [runSeriesRaw, { refetch: refetchRunSeries }] = createResource(
+    () => solvingRunId(),
+    (runId) => amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
+  )
+  const liveRun = createMemo<HomeLiveRun | undefined>(() => {
+    const solving = solvingRun()
+    if (!solving) return undefined
+    const raw = runSeriesRaw()
+    const view = raw === undefined ? undefined : parseRunSeriesResponse(raw)
+    const run = view?.ok ? view.run : undefined
+    // convergence curve = log10 of the objective (spans orders of magnitude)
+    const series = run ? run.series.map((p) => Math.log10(Math.max(p.f, 1e-12))) : []
+    const derivedF =
+      run?.fidelity ?? (run && run.lastF !== null && run.lastF < 1 ? 1 - run.lastF : solving.fidelity)
+    return {
+      name: resumeProblem()?.name,
+      iteration: run?.iteration ?? solving.iteration,
+      fidelity: derivedF,
+      series,
+    }
+  })
+  createEffect(() => {
+    if (!solvingRunId()) return
+    const timer = setInterval(() => {
+      void refetchRunStatus()
+      void refetchRunSeries()
+    }, 2500)
+    onCleanup(() => clearInterval(timer))
   })
 
   function startWithPrompt(prompt: string) {
@@ -502,6 +555,11 @@ function HomeDesign() {
               if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
             }}
             onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+            liveRun={liveRun()}
+            onOpenLiveRun={() => {
+              const name = resumeProblem()?.name
+              if (name) startWithPrompt(`Open the problem "${name}" and show me the running solve`)
+            }}
           />
         </div>
       </div>

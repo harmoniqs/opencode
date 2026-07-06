@@ -1685,6 +1685,12 @@ export function MessageTimeline(props: {
               partsFor={getMsgParts}
               fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
               fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
+              fetchRunSeries={(run, lab) =>
+                amicodeGet(
+                  server.current,
+                  `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
+                )
+              }
               onOpenEntity={openEntityView}
               onOpenSwitcher={openSwitcher}
               retryLabel={language.t("amicode.retry")}

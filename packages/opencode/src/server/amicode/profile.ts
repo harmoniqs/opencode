@@ -199,8 +199,24 @@ function readNote(file: string): { name?: string; description?: string; type?: s
   return out
 }
 
+// Gentle re-rank for "Amico remembers": a practitioner opening the home screen
+// cares about control/workflow guidance, not ops/infra housekeeping. Boost notes
+// that read as pulse-design/workflow feedback; sink ops-flavored ones. Not a hard
+// filter — a low score still surfaces if nothing better exists.
+const CONTROL_TERMS =
+  /pulse|fidelity|\bgate\b|solve|optimi|calibrat|integrator|trajector|duration|robust|free[-\s]?phase|parameter|benchmark|latex|\bmath\b|hamiltonian|rydberg|transmon|\batom|qubit|\bdrive|leakage|spline|warm[-\s]?start|derive|\btest\b|jacobian|hessian/i
+const OPS_TERMS =
+  /vault|slack|cron|deprecat|dataroom|visionroom|mount|publish|origin|\bgit\b|plugin|armonia|\bops\b|automat|self[-\s]?dm|broadcast|terraform|resolver|\bsync\b/i
+function rememberScore(note: { name?: string; description?: string }): number {
+  const hay = `${note.name ?? ""} ${note.description ?? ""}`
+  let score = 0
+  if (CONTROL_TERMS.test(hay)) score += 2
+  if (OPS_TERMS.test(hay)) score -= 2
+  return score
+}
+
 /** LIVE "Amico remembers": behavioral (feedback) + identity (user) notes from
- *  the first memory dir that has any, newest first, capped. */
+ *  the first memory dir that has any, ranked by relevance then recency, capped. */
 function remembers(dirs: string[], limit: number): { title: string; detail: string }[] {
   for (const dir of dirs) {
     if (!existsSync(dir)) continue
@@ -226,7 +242,7 @@ function remembers(dirs: string[], limit: number): { title: string; detail: stri
       .filter((x): x is { note: NonNullable<ReturnType<typeof readNote>>; mtime: number } => !!x)
       .filter((x) => x.note.type === "feedback" || x.note.type === "user")
     if (notes.length === 0) continue
-    notes.sort((a, b) => b.mtime - a.mtime)
+    notes.sort((a, b) => rememberScore(b.note) - rememberScore(a.note) || b.mtime - a.mtime)
     return notes.slice(0, limit).map((x) => ({
       title: (x.note.description ?? x.note.name ?? "").trim(),
       detail: (x.note.description ?? "").trim(),
