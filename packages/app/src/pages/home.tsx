@@ -279,8 +279,9 @@ function HomeDesign() {
     const run = view?.ok ? view.run : undefined
     // convergence curve = log10 of the objective (spans orders of magnitude)
     const series = run ? run.series.map((p) => Math.log10(Math.max(p.f, 1e-12))) : []
-    const derivedF =
-      run?.fidelity ?? (run && run.lastF !== null && run.lastF < 1 ? 1 - run.lastF : solving.fidelity)
+    // Only show F once it's a valid fidelity (final, or 1 - f with f < 1). Early
+    // in a solve the objective f ≫ 1, so leave F blank rather than misleading.
+    const derivedF = run?.fidelity ?? (run && run.lastF !== null && run.lastF < 1 ? 1 - run.lastF : null)
     return {
       name: resumeProblem()?.name,
       iteration: run?.iteration ?? solving.iteration,
