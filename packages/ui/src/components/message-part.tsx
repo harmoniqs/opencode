@@ -532,6 +532,11 @@ export type PartGroup =
       type: "context"
       refs: PartRef[]
     }
+  | {
+      key: string
+      type: "shell"
+      refs: PartRef[]
+    }
 
 function sameRef(a: PartRef, b: PartRef) {
   return a.messageID === b.messageID && a.partID === b.partID
@@ -545,7 +550,8 @@ function sameGroup(a: PartGroup, b: PartGroup) {
     if (b.type !== "part") return false
     return sameRef(a.ref, b.ref)
   }
-  if (b.type !== "context") return false
+  // context | shell — both carry refs
+  if (b.type === "part") return false
   if (a.refs.length !== b.refs.length) return false
   return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
 }
@@ -559,45 +565,67 @@ export function sameGroups(a: readonly PartGroup[] | undefined, b: readonly Part
 
 export function groupParts(parts: { messageID: string; part: PartType }[]) {
   const result: PartGroup[] = []
-  let start = -1
+  // At most one run is open at a time: a part is context-group, shell-group, or
+  // a standalone part. Context collapses at any length (matches read/grep); shell
+  // collapses only at ≥2 consecutive commands, so a lone command stays a full card.
+  let contextStart = -1
+  let shellStart = -1
 
-  const flush = (end: number) => {
-    if (start < 0) return
-    const first = parts[start]
-    const last = parts[end]
-    if (!first || !last) {
-      start = -1
-      return
-    }
+  const pushPart = (item: { messageID: string; part: PartType }) => {
     result.push({
-      key: `context:${first.part.id}`,
-      type: "context",
-      refs: parts.slice(start, end + 1).map((item) => ({
-        messageID: item.messageID,
-        partID: item.part.id,
-      })),
+      key: `part:${item.messageID}:${item.part.id}`,
+      type: "part",
+      ref: { messageID: item.messageID, partID: item.part.id },
     })
-    start = -1
+  }
+
+  const flushContext = (end: number) => {
+    if (contextStart < 0) return
+    const slice = parts.slice(contextStart, end + 1)
+    const first = slice[0]
+    if (first)
+      result.push({
+        key: `context:${first.part.id}`,
+        type: "context",
+        refs: slice.map((item) => ({ messageID: item.messageID, partID: item.part.id })),
+      })
+    contextStart = -1
+  }
+
+  const flushShell = (end: number) => {
+    if (shellStart < 0) return
+    const slice = parts.slice(shellStart, end + 1)
+    const first = slice[0]
+    if (first) {
+      if (slice.length >= 2)
+        result.push({
+          key: `shell:${first.part.id}`,
+          type: "shell",
+          refs: slice.map((item) => ({ messageID: item.messageID, partID: item.part.id })),
+        })
+      else pushPart(first)
+    }
+    shellStart = -1
   }
 
   parts.forEach((item, index) => {
     if (isContextGroupTool(item.part)) {
-      if (start < 0) start = index
+      flushShell(index - 1)
+      if (contextStart < 0) contextStart = index
       return
     }
-
-    flush(index - 1)
-    result.push({
-      key: `part:${item.messageID}:${item.part.id}`,
-      type: "part",
-      ref: {
-        messageID: item.messageID,
-        partID: item.part.id,
-      },
-    })
+    if (isShellGroupTool(item.part)) {
+      flushContext(index - 1)
+      if (shellStart < 0) shellStart = index
+      return
+    }
+    flushContext(index - 1)
+    flushShell(index - 1)
+    pushPart(item)
   })
 
-  flush(parts.length - 1)
+  flushContext(parts.length - 1)
+  flushShell(parts.length - 1)
   return result
 }
 
@@ -693,6 +721,28 @@ export function AssistantParts(props: {
                 )
               })()}
             </Match>
+            <Match when={entryType() === "shell"}>
+              {(() => {
+                const parts = createMemo(
+                  () => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "shell") return emptyTools
+                    return entry.refs
+                      .map((ref) => part().get(ref.messageID)?.get(ref.partID))
+                      .filter((part): part is ToolPart => !!part && isShellGroupTool(part))
+                  },
+                  emptyTools,
+                  { equals: same },
+                )
+                const busy = createMemo(() => props.working && last() === entryAccessor().key)
+
+                return (
+                  <Show when={parts().length > 0}>
+                    <ShellToolGroup parts={parts()} busy={busy()} />
+                  </Show>
+                )
+              })()}
+            </Match>
             <Match when={entryType() === "part"}>
               {(() => {
                 const message = createMemo(() => {
@@ -730,6 +780,21 @@ export function AssistantParts(props: {
 
 function isContextGroupTool(part: PartType): part is ToolPart {
   return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
+}
+
+function isShellGroupTool(part: PartType): part is ToolPart {
+  return part.type === "tool" && part.tool === "bash"
+}
+
+// One-line command for a bash part's row in the shell group (prefer the actual
+// command, fall back to title/description; first line only).
+function shellCommandText(part: ToolPart): string {
+  const input = (part.state.input ?? {}) as Record<string, unknown>
+  const command = typeof input.command === "string" ? input.command : undefined
+  const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title : undefined
+  const description = typeof input.description === "string" ? input.description : undefined
+  const raw = command ?? title ?? description ?? "command"
+  return raw.split("\n")[0]!.trim()
 }
 
 function contextToolDetail(part: ToolPart): string | undefined {
@@ -908,6 +973,27 @@ export function AssistantMessageDisplay(props: {
                 )
               })()}
             </Match>
+            <Match when={entryType() === "shell"}>
+              {(() => {
+                const parts = createMemo(
+                  () => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "shell") return emptyTools
+                    return entry.refs
+                      .map((ref) => part().get(ref.partID))
+                      .filter((part): part is ToolPart => !!part && isShellGroupTool(part))
+                  },
+                  emptyTools,
+                  { equals: same },
+                )
+
+                return (
+                  <Show when={parts().length > 0}>
+                    <ShellToolGroup parts={parts()} />
+                  </Show>
+                )
+              })()}
+            </Match>
             <Match when={entryType() === "part"}>
               {(() => {
                 const item = createMemo(() => {
@@ -1026,6 +1112,88 @@ export function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean; onS
                               <For each={trigger().args}>
                                 {(arg) => <span data-slot="basic-tool-tool-arg">{arg}</span>}
                               </For>
+                            </Show>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
+          </Index>
+        </div>
+      </Collapsible.Content>
+    </Collapsible>
+  )
+}
+
+// AMICODE (spec B): consecutive bash commands collapse into one row so a long
+// run of shell calls doesn't dominate the timeline. Mirrors ContextToolGroup's
+// markup (reuses its CSS slots) with a shell label + per-command list. A lone
+// command never reaches here — groupParts leaves it as a full bash card.
+export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSizeChange?: () => void }) {
+  const [open, setOpen] = createSignal(false)
+  const pending = createMemo(
+    () =>
+      !!props.busy || props.parts.some((part) => part.state.status === "pending" || part.state.status === "running"),
+  )
+  const count = createMemo(() => props.parts.length)
+  const handleOpenChange = (value: boolean) => {
+    setOpen(value)
+    props.onSizeChange?.()
+  }
+
+  return (
+    <Collapsible
+      open={open()}
+      onOpenChange={handleOpenChange}
+      variant="ghost"
+      class="tool-collapsible"
+      data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
+    >
+      <Collapsible.Trigger>
+        <div data-component="context-tool-group-trigger">
+          <span
+            data-slot="context-tool-group-title"
+            class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
+          >
+            <span data-slot="context-tool-group-label" class="shrink-0">
+              <ToolStatusTitle active={pending()} activeText="Working in shell" doneText="Worked in shell" split={false} />
+            </span>
+            <span
+              data-slot="context-tool-group-summary"
+              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
+            >
+              {count()} {count() === 1 ? "command" : "commands"}
+            </span>
+          </span>
+          <Collapsible.Arrow />
+        </div>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
+        <div data-component="context-tool-group-list">
+          <Index each={props.parts}>
+            {(partAccessor) => {
+              const cmd = createMemo(() => shellCommandText(partAccessor()))
+              const running = createMemo(
+                () => partAccessor().state.status === "pending" || partAccessor().state.status === "running",
+              )
+              const errored = createMemo(() => partAccessor().state.status === "error")
+              return (
+                <div data-slot="context-tool-group-item">
+                  <div data-component="tool-trigger">
+                    <div data-slot="basic-tool-tool-trigger-content">
+                      <div data-slot="basic-tool-tool-info">
+                        <div data-slot="basic-tool-tool-info-structured">
+                          <div data-slot="basic-tool-tool-info-main">
+                            <span data-slot="basic-tool-tool-title" class="font-mono">
+                              <TextShimmer text={cmd()} active={running()} />
+                            </span>
+                            <Show when={errored()}>
+                              <span data-slot="basic-tool-tool-subtitle" style={{ color: "var(--v2-state-fg-danger)" }}>
+                                failed
+                              </span>
                             </Show>
                           </div>
                         </div>

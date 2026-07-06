@@ -26,6 +26,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
   ContextToolGroup,
+  ShellToolGroup,
   Message,
   MessageDivider,
   Part as MessagePart,
@@ -1102,6 +1103,26 @@ export function MessageTimeline(props: {
 
       return (
         <ContextToolGroup
+          parts={parts()}
+          busy={
+            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
+          }
+          onSizeChange={measureTimeline}
+        />
+      )
+    }
+
+    if (row().group.type === "shell") {
+      const parts = createMemo(() => {
+        const group = row().group
+        if (group.type !== "shell") return emptyTools
+        return group.refs
+          .map((ref) => getMsgPart(ref.messageID, ref.partID))
+          .filter((part): part is ToolPart => part?.type === "tool")
+      })
+
+      return (
+        <ShellToolGroup
           parts={parts()}
           busy={
             workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
