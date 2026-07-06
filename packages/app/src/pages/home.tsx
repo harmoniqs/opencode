@@ -452,7 +452,7 @@ function HomeDesign() {
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
       <div class="mx-auto flex w-full h-full max-w-[1080px] flex-col gap-6 px-6 pt-14 pb-6">
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
-        <div class="grid min-h-0 flex-[1] gap-8 md:grid-cols-[280px_minmax(0,720px)]">
+        <div class="grid min-h-[96px] flex-[1] gap-8 md:grid-cols-[280px_minmax(0,720px)]">
         <HomeProjectColumn
           projects={projects()}
           selected={state.selection}
@@ -544,7 +544,7 @@ function HomeDesign() {
         </section>
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
-        <div class="relative z-[1] shrink-0 pt-1">
+        <div class="relative z-[1] min-h-0 shrink overflow-y-auto pt-1">
           <AmicodeHomeCards
             profile={profileView()}
             starters={AMICODE_STARTERS}
@@ -743,7 +743,11 @@ function HomeProjectList(props: {
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
   language: ReturnType<typeof useLanguage>
 }) {
+  // amicode: a single project is auto-focused, so its row under the brand
+  // block is pure clutter (a stray "A amicode"). The list only renders once
+  // there is an actual CHOICE; add-project stays in the header either way.
   return (
+    <Show when={props.projects.length > 1}>
     <div class="flex min-w-0 flex-col gap-1">
       <For each={props.projects}>
         {(project) => (
@@ -765,6 +769,7 @@ function HomeProjectList(props: {
         )}
       </For>
     </div>
+    </Show>
   )
 }
 
