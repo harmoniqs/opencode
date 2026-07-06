@@ -395,7 +395,9 @@ function HomeDesign() {
 
   return (
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
-      <div class="mx-auto grid w-full h-full max-w-[1080px] gap-8 px-6 pb-16 md:grid-cols-[280px_minmax(0,720px)]">
+      <div class="mx-auto flex w-full h-full max-w-[1080px] flex-col gap-6 px-6 pt-14 pb-16">
+        {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
+        <div class="grid min-h-0 flex-[1] gap-8 md:grid-cols-[280px_minmax(0,720px)]">
         <HomeProjectColumn
           projects={projects()}
           selected={state.selection}
@@ -421,7 +423,7 @@ function HomeDesign() {
         />
 
         <section
-          class="min-h-0 min-w-0 flex-1 flex flex-col pt-12"
+          class="min-h-0 min-w-0 flex flex-col"
           aria-label={language.t("sidebar.project.recentSessions")}
         >
           <HomeSessionSearch
@@ -482,26 +484,30 @@ function HomeDesign() {
                   </For>
                 </Show>
               </Show>
-              <div class="px-4">
-                <AmicodeHomeCards
-                  profile={profileView()}
-                  starters={AMICODE_STARTERS}
-                  onStart={startWithPrompt}
-                  onEditProfile={() =>
-                    startWithPrompt("update my profile — my name, affiliation, and what I work on")
-                  }
-                  resumeName={resumeProblem()?.name}
-                  resumeMeta={resumeMeta()}
-                  onResume={() => {
-                    const name = resumeProblem()?.name
-                    if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
-                  }}
-                  onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
-                />
-              </div>
             </div>
           </ScrollView>
         </section>
+        </div>
+        {/* Cards: full width across, ~2/3 */}
+        <div class="min-h-0 flex-[2]">
+          <ScrollView class="h-full min-h-0">
+            <div class="pt-1">
+              <AmicodeHomeCards
+                profile={profileView()}
+                starters={AMICODE_STARTERS}
+                onStart={startWithPrompt}
+                onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
+                resumeName={resumeProblem()?.name}
+                resumeMeta={resumeMeta()}
+                onResume={() => {
+                  const name = resumeProblem()?.name
+                  if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+                }}
+                onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+              />
+            </div>
+          </ScrollView>
+        </div>
       </div>
     </div>
   )
@@ -526,7 +532,7 @@ function HomeProjectColumn(props: {
   const dialog = useDialog()
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
-    <aside class="flex min-w-0 flex-col md:pt-[52px] mt-14 gap-4" aria-label={props.language.t("home.projects")}>
+    <aside class="flex min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
       <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
         <div class={HOME_SECTION_LABEL}>{props.language.t("home.projects")}</div>
         <Show when={global.servers.list().length === 1}>
