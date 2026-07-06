@@ -501,7 +501,6 @@ function taskSession(
     .sort((a, b) => (b.time.created ?? 0) - (a.time.created ?? 0))[0]?.id
 }
 
-const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
 const HIDDEN_TOOLS = new Set(["todowrite"])
 
 function list<T>(value: T[] | undefined | null, fallback: T[]) {
@@ -516,118 +515,17 @@ function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
   return a.every((x, i) => x === b[i])
 }
 
-export type PartRef = {
-  messageID: string
-  partID: string
-}
-
-export type PartGroup =
-  | {
-      key: string
-      type: "part"
-      ref: PartRef
-    }
-  | {
-      key: string
-      type: "context"
-      refs: PartRef[]
-    }
-  | {
-      key: string
-      type: "shell"
-      refs: PartRef[]
-    }
-
-function sameRef(a: PartRef, b: PartRef) {
-  return a.messageID === b.messageID && a.partID === b.partID
-}
-
-function sameGroup(a: PartGroup, b: PartGroup) {
-  if (a === b) return true
-  if (a.key !== b.key) return false
-  if (a.type !== b.type) return false
-  if (a.type === "part") {
-    if (b.type !== "part") return false
-    return sameRef(a.ref, b.ref)
-  }
-  // context | shell — both carry refs
-  if (b.type === "part") return false
-  if (a.refs.length !== b.refs.length) return false
-  return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
-}
-
-export function sameGroups(a: readonly PartGroup[] | undefined, b: readonly PartGroup[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((item, i) => sameGroup(item, b[i]!))
-}
-
-export function groupParts(parts: { messageID: string; part: PartType }[]) {
-  const result: PartGroup[] = []
-  // At most one run is open at a time: a part is context-group, shell-group, or
-  // a standalone part. Context collapses at any length (matches read/grep); shell
-  // collapses only at ≥2 consecutive commands, so a lone command stays a full card.
-  let contextStart = -1
-  let shellStart = -1
-
-  const pushPart = (item: { messageID: string; part: PartType }) => {
-    result.push({
-      key: `part:${item.messageID}:${item.part.id}`,
-      type: "part",
-      ref: { messageID: item.messageID, partID: item.part.id },
-    })
-  }
-
-  const flushContext = (end: number) => {
-    if (contextStart < 0) return
-    const slice = parts.slice(contextStart, end + 1)
-    const first = slice[0]
-    if (first)
-      result.push({
-        key: `context:${first.part.id}`,
-        type: "context",
-        refs: slice.map((item) => ({ messageID: item.messageID, partID: item.part.id })),
-      })
-    contextStart = -1
-  }
-
-  const flushShell = (end: number) => {
-    if (shellStart < 0) return
-    const slice = parts.slice(shellStart, end + 1)
-    const first = slice[0]
-    if (first) {
-      if (slice.length >= 2)
-        result.push({
-          key: `shell:${first.part.id}`,
-          type: "shell",
-          refs: slice.map((item) => ({ messageID: item.messageID, partID: item.part.id })),
-        })
-      else pushPart(first)
-    }
-    shellStart = -1
-  }
-
-  parts.forEach((item, index) => {
-    if (isContextGroupTool(item.part)) {
-      flushShell(index - 1)
-      if (contextStart < 0) contextStart = index
-      return
-    }
-    if (isShellGroupTool(item.part)) {
-      flushContext(index - 1)
-      if (shellStart < 0) shellStart = index
-      return
-    }
-    flushContext(index - 1)
-    flushShell(index - 1)
-    pushPart(item)
-  })
-
-  flushContext(parts.length - 1)
-  flushShell(parts.length - 1)
-  return result
-}
+// Grouping primitives live in ./message-part-groups (pure, unit-tested); re-export
+// the public names so `@opencode-ai/ui/message-part` stays the stable import path.
+export {
+  groupParts,
+  sameGroups,
+  isContextGroupTool,
+  isShellGroupTool,
+  type PartGroup,
+  type PartRef,
+} from "./message-part-groups"
+import { groupParts, sameGroups, isContextGroupTool, isShellGroupTool, type PartGroup } from "./message-part-groups"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
@@ -776,14 +674,6 @@ export function AssistantParts(props: {
       }}
     </Index>
   )
-}
-
-function isContextGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
-}
-
-function isShellGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && part.tool === "bash"
 }
 
 // One-line command for a bash part's row in the shell group (prefer the actual
