@@ -443,23 +443,6 @@ function HomeDesign() {
           />
           <ScrollView class="mt-3 min-h-0 flex-1">
             <div class="pt-3 flex flex-col gap-6">
-              <div class="px-4">
-                <AmicodeHomeCards
-                  profile={profileView()}
-                  starters={AMICODE_STARTERS}
-                  onStart={startWithPrompt}
-                  onEditProfile={() =>
-                    startWithPrompt("update my profile — my name, affiliation, and what I work on")
-                  }
-                  resumeName={resumeProblem()?.name}
-                  resumeMeta={resumeMeta()}
-                  onResume={() => {
-                    const name = resumeProblem()?.name
-                    if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
-                  }}
-                  onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
-                />
-              </div>
               <Show
                 when={!sessionLoad.isLoading}
                 fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
@@ -499,6 +482,23 @@ function HomeDesign() {
                   </For>
                 </Show>
               </Show>
+              <div class="px-4">
+                <AmicodeHomeCards
+                  profile={profileView()}
+                  starters={AMICODE_STARTERS}
+                  onStart={startWithPrompt}
+                  onEditProfile={() =>
+                    startWithPrompt("update my profile — my name, affiliation, and what I work on")
+                  }
+                  resumeName={resumeProblem()?.name}
+                  resumeMeta={resumeMeta()}
+                  onResume={() => {
+                    const name = resumeProblem()?.name
+                    if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+                  }}
+                  onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+                />
+              </div>
             </div>
           </ScrollView>
         </section>
