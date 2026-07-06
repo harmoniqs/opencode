@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
+import { readTerminalState, displayStatus } from "./run-terminal"
 
 /** Same env override the amicode plugin honors (test + grant point align). */
 export function problemsRoot(): string {
@@ -206,15 +207,12 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
   }
   const out = refs.map((ref) => {
     const dir = path.join(runs, String(ref.lab ?? "default"), String(ref.run_id ?? ""))
-    if (existsSync(path.join(dir, "FINISHED"))) {
-      try {
-        const result = readFileSync(path.join(dir, "result.toml"), "utf8")
-        const fidelity = tomlScalar(result, "fidelity")
-        if (fidelity === null) throw new Error("no fidelity")
-        return { run_id: ref.run_id, status: "finished", fidelity, iteration: tomlScalar(result, "iterations") }
-      } catch {
-        return { run_id: ref.run_id, status: "failed", fidelity: null, iteration: null }
-      }
+    // ONE-SPINE (amicode #84): terminal state via the shared contract reader —
+    // FINISHED's status field decides (a failed run with a result.toml is NOT
+    // "finished"); torn FINISHED = still solving (re-poll); user-stop → "stopped".
+    const terminal = readTerminalState(dir)
+    if (terminal) {
+      return { run_id: ref.run_id, status: displayStatus(terminal.status), fidelity: terminal.fidelity, iteration: terminal.iterations }
     }
     let live = { iteration: null as number | null, fidelity: null as number | null }
     try {
@@ -313,28 +311,23 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   const bestF = iters.length ? Math.min(...iters.map((p) => p.f)) : null
   const lastIter = iters.length ? iters[iters.length - 1] : null
 
-  const finished = existsSync(path.join(dir, "FINISHED"))
+  // ONE-SPINE (amicode #84): terminal state via the shared contract reader.
+  // FINISHED (the orchestrator's verdict) is the only terminal authority; its
+  // status field decides; torn FINISHED = keep polling; user-stop → "stopped".
   let status = "solving"
   let fidelity: number | null = null
   let iteration: number | null = lastIter?.iter ?? null
-  if (finished) {
-    try {
-      const result = readFileSync(path.join(dir, "result.toml"), "utf8")
-      fidelity = tomlScalar(result, "fidelity")
-      const it = tomlScalar(result, "iterations")
-      if (it !== null) iteration = it
-      status = fidelity === null ? "failed" : "finished"
-    } catch {
-      status = "failed"
-    }
+  const terminal = readTerminalState(dir, log)
+  if (terminal) {
+    status = displayStatus(terminal.status)
+    fidelity = terminal.fidelity
+    if (terminal.iterations !== null) iteration = terminal.iterations
   }
-  // DONE line: authoritative fidelity even before the FINISHED sentinel lands.
-  if (fidelity === null) {
+  // DONE line: a pre-FINISHED fidelity HINT only (the sentinel may lag the
+  // script by a beat) — it never decides status; that's FINISHED's job.
+  if (fidelity === null && status === "solving") {
     const done = log.match(/^DONE\s+fidelity=([0-9eE+.\-]+)/m)
-    if (done) {
-      fidelity = Number(done[1])
-      if (status === "solving") status = "finished"
-    }
+    if (done) fidelity = Number(done[1])
   }
 
   const pulse = parseLastPulse(log)
@@ -347,7 +340,7 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   const startMs = runIdStartMs(run)
   let endMs: number | null = null
   try {
-    endMs = statSync(path.join(dir, finished ? "FINISHED" : "run.log")).mtimeMs
+    endMs = statSync(path.join(dir, terminal ? "FINISHED" : "run.log")).mtimeMs
   } catch {
     /* no file to stat → no elapsed */
   }
