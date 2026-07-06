@@ -7,7 +7,7 @@ import { MarkedProvider } from "@opencode-ai/ui/context/marked"
 import { File } from "@opencode-ai/ui/file"
 import { Font } from "@opencode-ai/ui/font"
 import { Splash } from "@opencode-ai/ui/logo"
-import { ThemeProvider } from "@opencode-ai/ui/theme/context"
+import { ThemeProvider, useTheme } from "@opencode-ai/ui/theme/context"
 import { MetaProvider } from "@solidjs/meta"
 import { type BaseRouterProps, Navigate, Route, Router, useParams, useSearchParams } from "@solidjs/router"
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
@@ -227,6 +227,22 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
   )
 }
 
+
+/** amicode: live theme bridge for the VS Code webview host. The extension
+ *  forwards editor theme changes as window messages (outer relay → iframe);
+ *  route them through the existing setColorScheme so everything re-themes. */
+function AmicodeThemeBridge() {
+  const theme = useTheme()
+  const onMsg = (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; colorScheme?: string } | undefined
+    if (d?.source !== "amicode" || d.kind !== "theme") return
+    if (d.colorScheme === "light" || d.colorScheme === "dark") theme.setColorScheme(d.colorScheme)
+  }
+  window.addEventListener("message", onMsg)
+  onCleanup(() => window.removeEventListener("message", onMsg))
+  return null
+}
+
 export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
   return (
     <MetaProvider>
@@ -236,6 +252,7 @@ export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
           void window.api?.setTitlebar?.({ mode })
         }}
       >
+        <AmicodeThemeBridge />
         <LanguageProvider locale={props.locale}>
           <UiI18nBridge>
             <ErrorBoundary
