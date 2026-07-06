@@ -47,12 +47,13 @@ import { useSettings } from "@/context/settings"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
-import { amicodeGet } from "@/utils/amicode-fetch"
+import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
 import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
+import { Mark } from "@opencode-ai/ui/logo"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -207,7 +208,7 @@ function HomeDesign() {
   // amicode: home-card data. All read from the focused server's /amicode/* raw
   // routes (~/.amico). Each degrades to undefined on failure so a card simply
   // doesn't render (no empty chrome) rather than erroring the whole page.
-  const [profileRaw] = createResource(
+  const [profileRaw, { refetch: refetchProfile }] = createResource(
     () => state.selection.server,
     () => amicodeGet(focusedServer(), "/amicode/profile").catch(() => undefined),
   )
@@ -549,6 +550,14 @@ function HomeDesign() {
             starters={AMICODE_STARTERS}
             onStart={startWithPrompt}
             onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
+            onSaveProfile={async (fields) => {
+              // In-place save (About-You card): identity fields ride query
+              // params on the raw POST route; refetch renders the saved state.
+              const q = new URLSearchParams()
+              for (const [k, v] of Object.entries(fields)) if (v !== undefined) q.set(k, v)
+              await amicodePost(focusedServer(), `/amicode/profile?${q.toString()}`)
+              await refetchProfile()
+            }}
             resumeName={resumeProblem()?.name}
             resumeMeta={resumeMeta()}
             onResume={() => {
@@ -589,7 +598,15 @@ function HomeProjectColumn(props: {
   return (
     <aside class="flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
       <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
-        <div class={HOME_SECTION_LABEL}>{props.language.t("home.projects")}</div>
+        {/* amicode: brand block replaces the bare "Projects" label — the lone
+            letter-avatar project row underneath read as a stray "A amicode". */}
+        <div class="flex min-w-0 items-center gap-2">
+          <Mark class="size-4 shrink-0" />
+          <div class="min-w-0">
+            <div class={HOME_SECTION_LABEL}>Amicode</div>
+            <div style={{ "font-size": "10px", "line-height": "12px", color: "var(--v2-text-text-faint)" }}>by Harmoniqs</div>
+          </div>
+        </div>
         <Show when={global.servers.list().length === 1}>
           <IconButtonV2
             data-action="home-add-project"

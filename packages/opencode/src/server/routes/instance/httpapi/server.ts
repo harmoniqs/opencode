@@ -226,6 +226,18 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
         HttpServerResponse.text(AmicodeProfile.profileResponse(), { contentType: "application/json" }),
       ),
     )
+    // In-place profile save (About-You card). Same raw-route idiom as the GETs:
+    // editable identity fields ride query params (small strings; keeps the
+    // handler body-free like every other amicode route). Returns the fresh
+    // profile JSON so the card can render the saved state without a second GET.
+    yield* router.add("POST", "/amicode/profile", (request) =>
+      Effect.sync(() => {
+        const params = new URL(request.url, "http://localhost").searchParams
+        const field = (k: string) => (params.has(k) ? (params.get(k) ?? "") : undefined)
+        const body = AmicodeProfile.saveProfile({ name: field("name"), affiliation: field("affiliation"), focus: field("focus") })
+        return HttpServerResponse.text(body, { contentType: "application/json" })
+      }),
+    )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 

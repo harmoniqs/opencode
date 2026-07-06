@@ -11,7 +11,7 @@
 // before the interview fills a profile in. "Amico remembers" is sourced LIVE
 // from the memory notes (feedback/user type) — the trust surface that makes the
 // friend persona real.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { problemsRoot, runsRoot } from "./problems"
@@ -249,6 +249,32 @@ function remembers(dirs: string[], limit: number): { title: string; detail: stri
     }))
   }
   return []
+}
+
+/** In-place profile save (About-You card inline editing). Merges ONLY the
+ *  editable identity fields into ~/.amico/profile.json (derived fields —
+ *  platforms/stats/remembers — are computed, never stored), invalidates the
+ *  response cache, and returns the fresh profile JSON. */
+export function saveProfile(fields: { name?: string; affiliation?: string; focus?: string }): string {
+  const fp = profileFile()
+  let current: any = {}
+  try {
+    if (existsSync(fp)) current = JSON.parse(readFileSync(fp, "utf8")) ?? {}
+  } catch {
+    current = {}
+  }
+  for (const key of ["name", "affiliation", "focus"] as const) {
+    const v = fields[key]
+    if (typeof v === "string") {
+      const t = v.trim()
+      if (t === "") delete current[key]
+      else current[key] = t
+    }
+  }
+  mkdirSync(path.dirname(fp), { recursive: true })
+  writeFileSync(fp, JSON.stringify(current, null, 2) + "\n")
+  cache = undefined   // next profileResponse() re-reads
+  return profileResponse()
 }
 
 export function profileBody(input: {

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type JSX } from "solid-js"
+import { For, Show, createMemo, type JSX, createSignal } from "solid-js"
 import { Mark } from "../components/logo"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
@@ -279,9 +279,41 @@ function Stat(props: { value: string; label: string }) {
 function AboutYouCard(props: {
   view: ProfileView | undefined
   onEdit: () => void
+  onSave?: (fields: { name?: string; affiliation?: string; focus?: string }) => Promise<void>
   onStart: (prompt: string) => void
 }) {
   const you = createMemo(() => (props.view?.ok ? props.view.you : undefined))
+  // In-place editing (replaces the edit-in-chat flow when onSave is wired):
+  // the pencil toggles a small form over the identity fields; Save posts and
+  // the card re-renders from the refetched profile.
+  const [editing, setEditing] = createSignal(false)
+  const [saving, setSaving] = createSignal(false)
+  const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "" })
+  const beginEdit = () => {
+    const y = you()
+    setDraft({ name: y?.name ?? "", affiliation: y?.affiliation ?? "", focus: y?.focus ?? "" })
+    setEditing(true)
+  }
+  const save = async () => {
+    if (!props.onSave) return
+    setSaving(true)
+    try {
+      await props.onSave(draft())
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+  const FIELD: JSX.CSSProperties = {
+    "width": "100%",
+    "box-sizing": "border-box",
+    "background": "var(--v2-background-bg-layer-02, transparent)",
+    "border": "1px solid var(--v2-border-border-base)",
+    "border-radius": "6px",
+    "padding": "4px 8px",
+    "font-size": "12px",
+    "color": "var(--v2-text-text-base)",
+  }
   const focusLine = createMemo(() => {
     const y = you()
     if (!y) return ""
@@ -301,8 +333,8 @@ function AboutYouCard(props: {
           <button
             type="button"
             data-slot="amicode-card-you-edit"
-            title="Edit profile in chat"
-            onClick={() => props.onEdit()}
+            title={props.onSave ? (editing() ? "Cancel editing" : "Edit profile") : "Edit profile in chat"}
+            onClick={() => (props.onSave ? (editing() ? setEditing(false) : beginEdit()) : props.onEdit())}
             style={{
               "background": "none",
               "border": "none",
@@ -341,7 +373,17 @@ function AboutYouCard(props: {
                     "white-space": "nowrap",
                   }}
                 >
-                  {y().name}
+                  <Show when={!editing()} fallback={
+                    <input
+                      data-slot="amicode-you-name"
+                      style={FIELD}
+                      value={draft().name}
+                      placeholder="Name"
+                      onInput={(e) => setDraft({ ...draft(), name: e.currentTarget.value })}
+                    />
+                  }>
+                    {y().name}
+                  </Show>
                 </div>
                 <div
                   style={{
@@ -353,7 +395,47 @@ function AboutYouCard(props: {
                     "white-space": "nowrap",
                   }}
                 >
-                  {focusLine()}
+                  <Show when={!editing()} fallback={
+                    <div style={{ "display": "flex", "flex-direction": "column", "gap": "4px", "margin-top": "4px" }}>
+                      <input
+                        data-slot="amicode-you-affiliation"
+                        style={FIELD}
+                        value={draft().affiliation}
+                        placeholder="Affiliation (e.g. Harmoniqs)"
+                        onInput={(e) => setDraft({ ...draft(), affiliation: e.currentTarget.value })}
+                      />
+                      <input
+                        data-slot="amicode-you-focus"
+                        style={FIELD}
+                        value={draft().focus}
+                        placeholder="What you work on"
+                        onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
+                      />
+                      <div style={{ "display": "flex", "gap": "8px", "align-items": "center" }}>
+                        <button
+                          type="button"
+                          data-slot="amicode-you-save"
+                          disabled={saving()}
+                          onClick={() => void save()}
+                          style={{
+                            "background": "var(--v2-icon-icon-accent)",
+                            "color": "var(--v2-background-bg-base, #000)",
+                            "border": "none",
+                            "border-radius": "6px",
+                            "padding": "4px 10px",
+                            "font-size": "12px",
+                            "font-weight": "600",
+                            "cursor": saving() ? "wait" : "pointer",
+                          }}
+                        >
+                          {saving() ? "Saving…" : "Save"}
+                        </button>
+                        <span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>
+                      </div>
+                    </div>
+                  }>
+                    {focusLine()}
+                  </Show>
                 </div>
                 <Show when={y().platforms.length > 0}>
                   <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)", "margin-top": "1px" }}>
@@ -508,6 +590,7 @@ export function AmicodeHomeCards(props: {
   starters: readonly { label: string; prompt: string }[]
   onStart: (prompt: string) => void
   onEditProfile: () => void
+  onSaveProfile?: (fields: { name?: string; affiliation?: string; focus?: string }) => Promise<void>
   // Jump back in
   resumeName?: string
   resumeMeta?: string
@@ -529,7 +612,7 @@ export function AmicodeHomeCards(props: {
         }}
       >
         <MeetAmicoCard onStart={props.onStart} />
-        <AboutYouCard view={props.profile} onEdit={props.onEditProfile} onStart={props.onStart} />
+        <AboutYouCard view={props.profile} onEdit={props.onEditProfile} onSave={props.onSaveProfile} onStart={props.onStart} />
       </div>
 
       <div

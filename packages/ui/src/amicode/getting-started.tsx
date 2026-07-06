@@ -66,8 +66,13 @@ export function AmicodeGettingStarted(props: {
         data-slot="amicode-gs-tagline"
         style={{ "font-size": "14px", "line-height": "20px", "color": "var(--v2-text-text-base)" }}
       >
-        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a plucky pal for quantum computing practitioners.{" "}
-        <span style={{ "font-style": "italic" }}>Andiamo.</span>
+        <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span> — a plucky pal for quantum computing practitioners. Andiamo.
+      </div>
+      <div
+        data-slot="amicode-gs-byline"
+        style={{ "font-size": "11px", "line-height": "14px", "color": "var(--v2-text-text-faint)", "margin-top": "-8px" }}
+      >
+        By Harmoniqs
       </div>
       <Show when={props.showSteps ?? true}>
         <div
