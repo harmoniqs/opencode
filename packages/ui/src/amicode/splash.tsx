@@ -2,7 +2,7 @@ import { createSignal, onCleanup, onMount } from "solid-js"
 import { Mark } from "../components/logo"
 
 // amicode: boot splash — the Mark above a mono line of Piccolo code typing
-// itself in and backspacing out (the harmoniqs.co motif). Shown only while the
+// itself in and backspacing out (the harmoniqs.ai motif). Shown only while the
 // app boots, so timings run brisk; v2 tokens keep it dark/light correct.
 
 const CODE_LINES = [

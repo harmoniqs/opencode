@@ -5,7 +5,7 @@ import { Mark } from "../components/logo"
 // webview iframe); plain-browser contexts fall back to window.open.
 
 const LINKS: { label: string; url: string }[] = [
-  { label: "harmoniqs.co", url: "https://www.harmoniqs.co" },
+  { label: "harmoniqs.ai", url: "https://www.harmoniqs.ai" },
   { label: "Piccolo.jl", url: "https://github.com/harmoniqs/Piccolo.jl" },
   { label: "GitHub", url: "https://github.com/harmoniqs" },
 ]
@@ -30,7 +30,7 @@ export function AmicodeFooter() {
     >
       <button
         type="button"
-        onClick={() => openExternal("https://www.harmoniqs.co")}
+        onClick={() => openExternal("https://www.harmoniqs.ai")}
         style={{
           "display": "inline-flex", "align-items": "center", "gap": "8px",
           "background": "none", "border": "none", "cursor": "pointer", "padding": "0",
