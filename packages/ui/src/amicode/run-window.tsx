@@ -48,6 +48,7 @@ function linePath(ys: number[]): string | undefined {
 function statusColor(status: string): string {
   if (status === "finished") return "var(--v2-state-fg-success)"
   if (status === "failed") return "var(--v2-state-fg-danger)"
+  if (status === "stalled") return "var(--v2-state-fg-warning)" // wedged (OOM?) — not blue: must not read as live
   return "var(--v2-text-text-accent)" // solving
 }
 

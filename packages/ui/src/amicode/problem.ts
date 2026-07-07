@@ -40,7 +40,7 @@ export type ProblemView = {
 }
 export type RunStatusView = {
   runId: string
-  status: "solving" | "finished" | "failed"
+  status: "solving" | "finished" | "failed" | "stalled"
   fidelity: number | null
   iteration: number | null
 }
@@ -147,7 +147,7 @@ export function parseRunStatusResponse(raw: unknown): RunStatusView[] {
     .filter(
       (entry) =>
         typeof entry.run_id === "string" &&
-        (entry.status === "solving" || entry.status === "finished" || entry.status === "failed"),
+        (entry.status === "solving" || entry.status === "finished" || entry.status === "failed" || entry.status === "stalled"),
     )
     .map(
       (entry): RunStatusView => ({
@@ -250,6 +250,8 @@ export function runChipText(statuses: RunStatusView[]): string | undefined {
     return `F=${formatFidelity(finished.fidelity)}${iter}`
   }
   if (finished) return "finished"
+  const stalled = [...statuses].reverse().find((s) => s.status === "stalled")
+  if (stalled) return stalled.iteration !== null ? `stalled · iter ${stalled.iteration}` : "stalled"
   return "failed"
 }
 

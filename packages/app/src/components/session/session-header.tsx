@@ -25,6 +25,11 @@ import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
+
+// AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
+// noise here ("No MCPs configured"). Hidden, not deleted — the trigger slot is
+// where a solver-health panel (server/Julia env/runs dir) belongs later.
+const AMICODE_HIDE_STATUS_POPOVER = true
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 
@@ -439,7 +444,7 @@ export function SessionHeader() {
                     </div>
                   </Show>
                   <div class="flex items-center gap-1">
-                    <Show when={status()}>
+                    <Show when={!AMICODE_HIDE_STATUS_POPOVER && status()}>
                       <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
                         <StatusPopover />
                       </Tooltip>
@@ -531,7 +536,7 @@ type SessionHeaderV2ActionsState = {
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
   return (
     <div class="flex items-center gap-2">
-      <Show when={props.state.statusVisible}>
+      <Show when={!AMICODE_HIDE_STATUS_POPOVER && props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
