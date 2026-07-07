@@ -55,7 +55,10 @@ describe("parseRunSeriesResponse", () => {
 
   test("drops non-finite series/pulse points defensively", () => {
     const view = parseRunSeriesResponse(
-      okRun({ series: [{ iter: 0, f: 1 }, { iter: 1, f: Number.NaN }, { foo: 1 }], pulse: { iter: 1, dt: 0.2, values: [1, "x", 3] } }),
+      okRun({
+        series: [{ iter: 0, f: 1 }, { iter: 1, f: Number.NaN }, { foo: 1 }],
+        pulse: { iter: 1, dt: 0.2, values: [1, "x", 3] },
+      }),
     )
     expect(view.ok).toBe(true)
     if (!view.ok) return

@@ -61,7 +61,11 @@ export function AmicodeEntityView(props: {
       <Show
         when={props.view}
         fallback={
-          <div class="h-8 rounded-md animate-pulse" style={{ background: "var(--v2-background-bg-layer-02)" }} aria-hidden />
+          <div
+            class="h-8 rounded-md animate-pulse"
+            style={{ background: "var(--v2-background-bg-layer-02)" }}
+            aria-hidden
+          />
         }
       >
         {(view) => (
@@ -177,7 +181,10 @@ export function AmicodeEntityView(props: {
                         <div class="flex items-center gap-2 min-w-0">
                           <span
                             class="text-11-regular font-mono px-1 rounded shrink-0"
-                            style={{ background: "var(--v2-background-bg-layer-02)", color: "var(--v2-text-text-muted)" }}
+                            style={{
+                              background: "var(--v2-background-bg-layer-02)",
+                              color: "var(--v2-text-text-muted)",
+                            }}
                           >
                             #{event.seq}
                           </span>

@@ -16,7 +16,9 @@
   try {
     var q = new URLSearchParams(location.search).get("colorScheme")
     if (q === "light" || q === "dark") localStorage.setItem("opencode-color-scheme", q)
-  } catch (e) { /* storage unavailable — keep defaults */ }
+  } catch (e) {
+    /* storage unavailable — keep defaults */
+  }
 
   var scheme = localStorage.getItem("opencode-color-scheme") || "system"
   var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)

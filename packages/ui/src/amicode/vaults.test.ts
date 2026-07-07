@@ -67,12 +67,23 @@ describe("parseVaultsResponse", () => {
   test("tolerant mount entries: missing/mistyped fields never throw", () => {
     const view = parseVaultsResponse({
       ok: true,
-      mounts: [{}, { id: "a", warnings: "not-a-list" }, { id: "b", kind: 7, writable: "yes", last_sync: "unknown" }, null],
+      mounts: [
+        {},
+        { id: "a", warnings: "not-a-list" },
+        { id: "b", kind: 7, writable: "yes", last_sync: "unknown" },
+        null,
+      ],
       error: null,
     })
     expect(view.ok).toBe(true)
     expect(view.mounts).toHaveLength(4)
-    expect(view.mounts[0]).toEqual({ id: "(unknown)", kind: undefined, writable: undefined, lastSync: "—", warnings: [] })
+    expect(view.mounts[0]).toEqual({
+      id: "(unknown)",
+      kind: undefined,
+      writable: undefined,
+      lastSync: "—",
+      warnings: [],
+    })
     expect(view.mounts[1].warnings).toEqual([])
     expect(view.mounts[2]).toEqual({ id: "b", kind: undefined, writable: undefined, lastSync: "—", warnings: [] })
   })

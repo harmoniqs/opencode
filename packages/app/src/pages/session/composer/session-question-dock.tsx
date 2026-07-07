@@ -440,14 +440,14 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
                 "line-height": "14px",
                 "font-weight": "700",
                 "letter-spacing": "0.08em",
-                "color": "var(--v2-text-text-accent)",
+                color: "var(--v2-text-text-accent)",
               }}
             >
               AMICO{" "}
-              <span style={{ "color": "var(--v2-text-text-faint)", "letter-spacing": "normal", "font-weight": "400" }}>
+              <span style={{ color: "var(--v2-text-text-faint)", "letter-spacing": "normal", "font-weight": "400" }}>
                 ·
               </span>{" "}
-              <span style={{ "color": "var(--v2-text-text-base)", "letter-spacing": "normal", "font-weight": "600" }}>
+              <span style={{ color: "var(--v2-text-text-base)", "letter-spacing": "normal", "font-weight": "600" }}>
                 Question
               </span>
             </div>
