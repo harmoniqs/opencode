@@ -452,9 +452,9 @@ function HomeDesign() {
 
   return (
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
-      <div class="mx-auto flex w-full h-full max-w-[1440px] flex-col gap-6 px-8 pt-10 pb-6">
+      <div data-slot="amicode-home-shell" class="mx-auto flex w-full h-full max-w-[1440px] flex-col gap-6 px-8 pt-10 pb-6">
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
-        <div class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]">
+        <div data-slot="amicode-home-band" class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]">
         <HomeProjectColumn
           projects={projects()}
           selected={state.selection}

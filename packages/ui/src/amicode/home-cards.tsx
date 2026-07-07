@@ -864,6 +864,32 @@ export interface HomeLiveRun {
   series?: number[]
 }
 
+
+// ---------------------------------------------------------------------------
+// height compaction — the home page must fit ONE screen on a laptop (no box
+// scrolling; scrolling is a phone affordance). Cards style inline, so these
+// overrides need !important; thresholds are the WEBVIEW height (editor chrome
+// already spent), not the display's.
+// ---------------------------------------------------------------------------
+const COMPACT_CSS = `
+@media (max-height: 880px) {
+  [data-slot="amicode-home-shell"] { padding-top: 16px !important; gap: 14px !important; }
+  [data-slot="amicode-home-band"] { max-height: 250px !important; }
+  [data-component="amicode-home-cards"] { gap: 8px !important; }
+  [data-component="amicode-card-meet"], [data-component="amicode-card-you"] { padding: 10px 14px !important; }
+  [data-component="amicode-card-meet"] svg { width: 36px !important; }
+  [data-component="amicode-action-card"] { padding: 10px 12px !important; }
+  [data-slot="amicode-card-meet-cta"] { padding: 8px 16px !important; font-size: 13px !important; }
+  [data-component="amicode-footer"] { padding-top: 6px !important; }
+}
+@media (max-height: 760px) {
+  [data-slot="amicode-home-shell"] { padding-top: 8px !important; gap: 8px !important; padding-bottom: 10px !important; }
+  [data-slot="amicode-home-band"] { max-height: 180px !important; }
+  [data-component="amicode-card-meet"], [data-component="amicode-card-you"] { padding: 8px 12px !important; }
+  [data-slot="amicode-card-meet-cta"] { padding: 6px 14px !important; }
+}
+`
+
 export function AmicodeHomeCards(props: {
   profile: ProfileView | undefined
   starters: readonly { label: string; prompt: string }[]
@@ -883,6 +909,7 @@ export function AmicodeHomeCards(props: {
   const stats = createMemo(() => (props.profile?.ok ? props.profile.you.stats : undefined))
   return (
     <div data-component="amicode-home-cards" style={{ "display": "flex", "flex-direction": "column", "gap": "12px" }}>
+      <style>{COMPACT_CSS}</style>
       <div
         style={{
           "display": "grid",
