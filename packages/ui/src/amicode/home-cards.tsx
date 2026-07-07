@@ -362,8 +362,23 @@ function AboutYouCard(props: {
     }, 200)
   }
   const pickInstitution = (sug: { name: string; domain: string; logo: string }) => {
+    // Instant: favicon-based mark. Then upgrade async to the Wikipedia page
+    // image — institutions carry high-res (often SVG) logos there, which is
+    // what makes this render LinkedIn-crisp instead of favicon-blurry.
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
+    fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&titles=${encodeURIComponent(sug.name)}&prop=pageimages&piprop=original`,
+    )
+      .then((r) => (r.ok ? r.json() : undefined))
+      .then((j: any) => {
+        const page = Object.values(j?.query?.pages ?? {})[0] as any
+        const orig = page?.original?.source
+        if (typeof orig === "string" && /\.(svg|png|jpe?g|webp)$/i.test(orig) && draft().affiliation === sug.name) {
+          setDraft({ ...draft(), affiliation_logo: orig })
+        }
+      })
+      .catch(() => { /* favicon mark stands */ })
   }
 
   const openExternal = (url: string) => {
