@@ -351,14 +351,32 @@ function isJsonSchemaDefinition(value: unknown): value is JSONSchema7Definition 
   return typeof value === "boolean" || (typeof value === "object" && value !== null && !Array.isArray(value))
 }
 
-function legacyJsonSchema(entries: [string, unknown][]): JSONSchema7 {
-  const properties = Object.fromEntries(
-    entries.filter((entry): entry is [string, JSONSchema7Definition] => isJsonSchemaDefinition(entry[1])),
-  )
+export function legacyJsonSchema(entries: [string, unknown][]): JSONSchema7 {
+  // AMICODE: nullable-union normalization. Legacy tool args declare optional
+  // fields as `type: ["array","null"]` ("pass null to skip"). Passed through
+  // verbatim, Gemini's adapter turns that union into an any_of whose array
+  // branch has no `items` (items stays a sibling) — Google rejects the whole
+  // function declaration and EVERY turn on a Gemini model dies with an
+  // APIError (empty reply). Strip the "null" and mark the field optional
+  // instead — the singular-typed schema every provider accepts.
+  const properties: Record<string, JSONSchema7Definition> = {}
+  const required: string[] = []
+  for (const [key, raw] of entries) {
+    if (!isJsonSchemaDefinition(raw)) continue
+    let node = raw
+    let optional = false
+    if (typeof node === "object" && node !== null && Array.isArray((node as { type?: unknown }).type)) {
+      const types = ((node as { type: unknown[] }).type as string[]).filter((t) => t !== "null")
+      optional = types.length < (node as { type: unknown[] }).type.length
+      node = { ...(node as object), type: types.length === 1 ? types[0] : types } as JSONSchema7Definition
+    }
+    properties[key] = node
+    if (!optional) required.push(key)
+  }
   return {
     type: "object",
     properties,
-    required: Object.keys(properties),
+    required,
   }
 }
 
