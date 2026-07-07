@@ -661,7 +661,7 @@ function HomeProjectColumn(props: {
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
     <aside class="isolate flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
-      <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
+      <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5">
         {/* amicode: brand block replaces the bare "Projects" label — the lone
             letter-avatar project row underneath read as a stray "A amicode". */}
         <div class="flex min-w-0 items-center gap-2">

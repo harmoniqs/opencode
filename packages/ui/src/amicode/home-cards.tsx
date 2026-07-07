@@ -1066,9 +1066,10 @@ const COMPACT_CSS = `
   [data-slot="amicode-home-band"] { max-height: 180px !important; }
   [data-component="amicode-card-meet"], [data-component="amicode-card-you"] { padding: 8px 12px !important; }
   [data-slot="amicode-card-meet-cta"] { padding: 6px 14px !important; }
-  /* content tier: the CTA carries the message — the bullet block is the
-     tallest optional element in the hero row, and the engine line is decor */
-  [data-slot="amicode-meet-can"], [data-slot="amicode-meet-can-label"], [data-slot="amicode-meet-engine"] { display: none !important; }
+  /* content tier: the capability bullets STAY (user-requested suggestions);
+     only the decor engine-line goes, and the bullets tighten */
+  [data-slot="amicode-meet-engine"] { display: none !important; }
+  [data-slot="amicode-meet-can"] { gap: 2px !important; margin-bottom: 6px !important; }
   [data-slot="amicode-meet-divider"] { margin: 6px 0 !important; }
   [data-component="amicode-card-meet"] svg { width: 30px !important; }
 }
