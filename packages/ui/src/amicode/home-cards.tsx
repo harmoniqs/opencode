@@ -361,24 +361,43 @@ function AboutYouCard(props: {
         .catch(() => setSuggestions([]))
     }, 200)
   }
-  const pickInstitution = (sug: { name: string; domain: string; logo: string }) => {
-    // Instant: favicon-based mark. Then upgrade async to the Wikipedia page
-    // image — institutions carry high-res (often SVG) logos there, which is
-    // what makes this render LinkedIn-crisp instead of favicon-blurry.
+  const [resolvingLogo, setResolvingLogo] = createSignal(false)
+  const wikiJson = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : undefined)).catch(() => undefined)
+  const pickInstitution = async (sug: { name: string; domain: string; logo: string }) => {
+    // Instant favicon mark, then resolve the real BRAND logo: Wikidata P154
+    // ("logo image" — e.g. the purple NYU torch, not the seal) rasterized by
+    // Commons at 512px → crisp at any tile size. Fallbacks: Wikipedia page
+    // image, then the favicon. Save is held while resolving so the upgraded
+    // URL is what gets persisted (the old async upgrade lost a race with Save).
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
-    fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&titles=${encodeURIComponent(sug.name)}&prop=pageimages&piprop=original`,
-    )
-      .then((r) => (r.ok ? r.json() : undefined))
-      .then((j: any) => {
-        const page = Object.values(j?.query?.pages ?? {})[0] as any
-        const orig = page?.original?.source
-        if (typeof orig === "string" && /\.(svg|png|jpe?g|webp)$/i.test(orig) && draft().affiliation === sug.name) {
-          setDraft({ ...draft(), affiliation_logo: orig })
+    setResolvingLogo(true)
+    try {
+      let logo: string | undefined
+      const found = await wikiJson(
+        `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(sug.name)}&language=en&format=json&origin=*`,
+      )
+      const qid = found?.search?.[0]?.id
+      if (qid) {
+        const claims = await wikiJson(
+          `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${qid}&property=P154&format=json&origin=*`,
+        )
+        const file = claims?.claims?.P154?.[0]?.mainsnak?.datavalue?.value
+        if (typeof file === "string" && file) {
+          logo = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=512`
         }
-      })
-      .catch(() => { /* favicon mark stands */ })
+      }
+      if (!logo) {
+        const page = await wikiJson(
+          `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&titles=${encodeURIComponent(sug.name)}&prop=pageimages&piprop=original`,
+        )
+        const orig = (Object.values(page?.query?.pages ?? {})[0] as any)?.original?.source
+        if (typeof orig === "string" && /\.(svg|png|jpe?g|webp)$/i.test(orig)) logo = orig
+      }
+      if (logo && draft().affiliation === sug.name) setDraft({ ...draft(), affiliation_logo: logo })
+    } finally {
+      setResolvingLogo(false)
+    }
   }
 
   const openExternal = (url: string) => {
@@ -652,7 +671,7 @@ function AboutYouCard(props: {
                         <button
                           type="button"
                           data-slot="amicode-you-save"
-                          disabled={saving()}
+                          disabled={saving() || resolvingLogo()}
                           onClick={() => void save()}
                           style={{
                             "background": "var(--v2-icon-icon-accent)",
@@ -665,7 +684,7 @@ function AboutYouCard(props: {
                             "cursor": saving() ? "wait" : "pointer",
                           }}
                         >
-                          {saving() ? "Saving…" : "Save"}
+                          {saving() ? "Saving…" : resolvingLogo() ? "Finding logo…" : "Save"}
                         </button>
                         <span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>
                       </div>
