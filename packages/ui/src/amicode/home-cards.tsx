@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type JSX, createSignal, onCleanup } from "solid-js"
+import { For, Show, createEffect, createMemo, on, type JSX, createSignal, onCleanup } from "solid-js"
 import { Mark } from "../components/logo"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
@@ -354,6 +354,10 @@ function AboutYouCard(props: {
   // the pencil toggles a small form over the identity fields; Save posts and
   // the card re-renders from the refetched profile.
   const [editing, setEditing] = createSignal(false)
+  // A persisted-but-dead logo URL (e.g. the sunset Clearbit CDN) must fall
+  // back to the monogram tile, not render the broken-image glyph in the hero.
+  const [logoBroken, setLogoBroken] = createSignal(false)
+  createEffect(on(() => (props.view?.ok ? props.view.you.affiliation_logo : undefined), () => setLogoBroken(false)))
   const [saving, setSaving] = createSignal(false)
   const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "", scholar: "", affiliation_logo: "" })
   const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
@@ -555,7 +559,7 @@ function AboutYouCard(props: {
                 }}
               >
                 <Show
-                  when={y().affiliation_logo}
+                  when={y().affiliation_logo && !logoBroken()}
                   fallback={
                     <span style={{
                       "display": "inline-flex", "align-items": "center", "justify-content": "center",
@@ -578,6 +582,7 @@ function AboutYouCard(props: {
                       src={y().affiliation_logo!}
                       alt={y().affiliation ?? "institution"}
                       style={{ "width": "100%", "height": "100%", "object-fit": "contain" }}
+                      onError={() => setLogoBroken(true)}
                     />
                   </span>
                 </Show>
@@ -647,7 +652,7 @@ function AboutYouCard(props: {
                       <div style={{ "position": "relative" }}>
                         <div style={{ "display": "flex", "gap": "6px", "align-items": "center" }}>
                           <Show when={draft().affiliation_logo}>
-                            <img src={draft().affiliation_logo} alt="" style={{ "width": "20px", "height": "20px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
+                            <img src={draft().affiliation_logo} alt="" style={{ "width": "20px", "height": "20px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} onError={(e) => (e.currentTarget.style.display = "none")} />
                           </Show>
                           <input
                             data-slot="amicode-you-affiliation"
@@ -680,7 +685,7 @@ function AboutYouCard(props: {
                                     "text-align": "left", "color": "var(--v2-text-text-base)", "font-size": "12px",
                                   }}
                                 >
-                                  <img src={institutionLogoUrl(sug.domain)} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
+                                  <img src={institutionLogoUrl(sug.domain)} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} onError={(e) => (e.currentTarget.style.display = "none")} />
                                   <span style={{ "flex": "1", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{sug.name}</span>
                                   <span style={{ "color": "var(--v2-text-text-faint)", "font-size": "10px" }}>{sug.domain}</span>
                                 </button>
