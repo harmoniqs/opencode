@@ -343,7 +343,8 @@ function AboutYouCard(props: {
   }
   // Institution logos ride Google's favicon service — clearbit's logo CDN is
   // sunset (autocomplete lives on for name+domain, which is all we need).
-  const institutionLogoUrl = (domain: string) => `https://unavatar.io/${encodeURIComponent(domain)}?fallback=https://www.google.com/s2/favicons%3Fdomain%3D${encodeURIComponent(domain)}%26sz%3D256`
+  const institutionLogoUrl = (domain: string) =>
+    `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${encodeURIComponent(domain)}&size=256`
 
   // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
   // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
@@ -363,6 +364,11 @@ function AboutYouCard(props: {
   const pickInstitution = (sug: { name: string; domain: string; logo: string }) => {
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
+  }
+
+  const openExternal = (url: string) => {
+    if (window.parent !== window) window.parent.postMessage({ source: "amicode", kind: "open-external", url }, "*")
+    else window.open(url, "_blank", "noreferrer")
   }
 
   const save = async () => {
@@ -509,26 +515,11 @@ function AboutYouCard(props: {
                   </div>
                   <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>Institution</div>
                 </div>
-                <Show when={y().scholar}>
-                  <a
-                    href={y().scholar!}
-                    target="_blank"
-                    rel="noreferrer"
-                    data-slot="amicode-you-scholar"
-                    style={{
-                      "font-size": "11px", "font-weight": "600", "text-decoration": "none", "flex": "none",
-                      "color": "var(--v2-text-text-accent)", "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
-                      "border-radius": "999px", "padding": "3px 10px",
-                    }}
-                  >
-                    Scholar ↗
-                  </a>
-                </Show>
+
               </div>
             </Show>
             <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
-              <Avatar name={y().name} src={y().avatar} />
-              <div style={{ "min-width": "0" }}>
+              <div style={{ "min-width": "0", "flex": "1" }}>
                 <div
                   style={{
                     "font-size": "16px",
@@ -549,7 +540,24 @@ function AboutYouCard(props: {
                       onKeyDown={pasteFallback((v) => setDraft({ ...draft(), name: v }))}
                     />
                   }>
-                    {y().name}
+                    <span style={{ "display": "inline-flex", "align-items": "center", "gap": "8px", "max-width": "100%" }}>
+                      <span style={{ "overflow": "hidden", "text-overflow": "ellipsis" }}>{y().name}</span>
+                      <Show when={y().scholar}>
+                        <button
+                          type="button"
+                          data-slot="amicode-you-scholar"
+                          onClick={() => openExternal(y().scholar!)}
+                          style={{
+                            "font-size": "11px", "font-weight": "600", "flex": "none", "cursor": "pointer",
+                            "color": "var(--v2-text-text-accent)", "background": "none",
+                            "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
+                            "border-radius": "999px", "padding": "3px 10px",
+                          }}
+                        >
+                          Scholar ↗
+                        </button>
+                      </Show>
+                    </span>
                   </Show>
                 </div>
                 <div
