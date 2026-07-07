@@ -635,10 +635,10 @@ function HomeProjectColumn(props: {
         {/* amicode: brand block replaces the bare "Projects" label — the lone
             letter-avatar project row underneath read as a stray "A amicode". */}
         <div class="flex min-w-0 items-center gap-2">
-          <Mark class="size-4 shrink-0" />
+          <Mark class="size-6 shrink-0" />
           <div class="min-w-0">
-            <div class={HOME_SECTION_LABEL}>Amicode</div>
-            <div style={{ "font-size": "10px", "line-height": "12px", color: "var(--v2-text-text-faint)" }}>by Harmoniqs</div>
+            <div style={{ "font-size": "15px", "font-weight": "650", "line-height": "18px", color: "var(--v2-text-text-base)" }}>Amicode</div>
+            <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>by Harmoniqs</div>
           </div>
         </div>
         <Show when={global.servers.list().length === 1}>

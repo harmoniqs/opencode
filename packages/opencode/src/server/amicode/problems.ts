@@ -173,6 +173,25 @@ export function problemBody(root: string, slug: string | undefined): string {
   }
 }
 
+
+/** A run with no FINISHED whose run.log has gone cold is STALLED (wedged
+ *  solver, OOM thrash, killed orchestrator) — never "solving": the Now-Solving
+ *  card and pollers must not advertise it forever. 10 min ≫ any real gap
+ *  between iterations (Julia warmup included via file creation). */
+const STALL_AFTER_MS = 10 * 60 * 1000
+function isStalled(dir: string): boolean {
+  try {
+    return Date.now() - statSync(path.join(dir, "run.log")).mtimeMs > STALL_AFTER_MS
+  } catch {
+    // no run.log yet: judge by run dir age (never-started zombie)
+    try {
+      return Date.now() - statSync(dir).mtimeMs > STALL_AFTER_MS
+    } catch {
+      return true
+    }
+  }
+}
+
 // --- run-status (lightweight live readout; spec: run-dir contract polling, permanently) ---
 
 function tomlScalar(text: string, key: string): number | null {
@@ -219,6 +238,9 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
       live = lastIterLine(readFileSync(path.join(dir, "run.log"), "utf8"))
     } catch {
       /* not started yet */
+    }
+    if (isStalled(dir)) {
+      return { run_id: ref.run_id, status: "stalled", fidelity: live.fidelity, iteration: live.iteration }
     }
     return { run_id: ref.run_id, status: "solving", fidelity: live.fidelity, iteration: live.iteration }
   })
@@ -314,7 +336,7 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   // ONE-SPINE (amicode #84): terminal state via the shared contract reader.
   // FINISHED (the orchestrator's verdict) is the only terminal authority; its
   // status field decides; torn FINISHED = keep polling; user-stop → "stopped".
-  let status = "solving"
+  let status = isStalled(dir) ? "stalled" : "solving"
   let fidelity: number | null = null
   let iteration: number | null = lastIter?.iter ?? null
   const terminal = readTerminalState(dir, log)

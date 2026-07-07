@@ -255,7 +255,7 @@ function remembers(dirs: string[], limit: number): { title: string; detail: stri
  *  editable identity fields into ~/.amico/profile.json (derived fields —
  *  platforms/stats/remembers — are computed, never stored), invalidates the
  *  response cache, and returns the fresh profile JSON. */
-export function saveProfile(fields: { name?: string; affiliation?: string; focus?: string }): string {
+export function saveProfile(fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }): string {
   const fp = profileFile()
   let current: any = {}
   try {
@@ -263,7 +263,7 @@ export function saveProfile(fields: { name?: string; affiliation?: string; focus
   } catch {
     current = {}
   }
-  for (const key of ["name", "affiliation", "focus"] as const) {
+  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo"] as const) {
     const v = fields[key]
     if (typeof v === "string") {
       const t = v.trim()
@@ -298,6 +298,8 @@ export function profileBody(input: {
   const you = {
     name,
     affiliation: typeof profile.affiliation === "string" ? profile.affiliation : null,
+    scholar: typeof profile.scholar === "string" ? profile.scholar : null,
+    affiliation_logo: typeof profile.affiliation_logo === "string" ? profile.affiliation_logo : null,
     focus: typeof profile.focus === "string" ? profile.focus : null,
     avatar: typeof profile.avatar === "string" ? profile.avatar : null,
     platforms: mix.map((p) => p.key),

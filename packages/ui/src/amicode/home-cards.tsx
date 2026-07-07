@@ -24,6 +24,8 @@ export interface ProfileStats {
 export interface ProfileYou {
   name: string
   affiliation: string | null
+  scholar: string | null
+  affiliation_logo: string | null
   focus: string | null
   avatar: string | null
   platforms: string[]
@@ -44,6 +46,8 @@ export function parseProfileResponse(raw: unknown): ProfileView {
     you: {
       name: typeof you.name === "string" ? you.name : "Practitioner",
       affiliation: typeof you.affiliation === "string" ? you.affiliation : null,
+      scholar: typeof you.scholar === "string" ? you.scholar : null,
+      affiliation_logo: typeof you.affiliation_logo === "string" ? you.affiliation_logo : null,
       focus: typeof you.focus === "string" ? you.focus : null,
       avatar: typeof you.avatar === "string" ? you.avatar : null,
       platforms: Array.isArray(you.platforms) ? you.platforms.filter((p: unknown) => typeof p === "string") : [],
@@ -319,7 +323,7 @@ function Stat(props: { value: string; label: string }) {
 function AboutYouCard(props: {
   view: ProfileView | undefined
   onEdit: () => void
-  onSave?: (fields: { name?: string; affiliation?: string; focus?: string }) => Promise<void>
+  onSave?: (fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }) => Promise<void>
   onStart: (prompt: string) => void
 }) {
   const you = createMemo(() => (props.view?.ok ? props.view.you : undefined))
@@ -328,10 +332,13 @@ function AboutYouCard(props: {
   // the card re-renders from the refetched profile.
   const [editing, setEditing] = createSignal(false)
   const [saving, setSaving] = createSignal(false)
-  const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "" })
+  const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "", scholar: "", affiliation_logo: "" })
   const beginEdit = () => {
     const y = you()
-    setDraft({ name: y?.name ?? "", affiliation: y?.affiliation ?? "", focus: y?.focus ?? "" })
+    setDraft({
+      name: y?.name ?? "", affiliation: y?.affiliation ?? "", focus: y?.focus ?? "",
+      scholar: y?.scholar ?? "", affiliation_logo: y?.affiliation_logo ?? "",
+    })
     setEditing(true)
   }
   const save = async () => {
@@ -368,7 +375,10 @@ function AboutYouCard(props: {
   return (
     <div data-component="amicode-card-you" style={HERO_CARD}>
       <div style={{ "display": "flex", "align-items": "center", "justify-content": "space-between" }}>
-        <div style={EYEBROW}>About you</div>
+        <div style={{ "display": "flex", "align-items": "baseline", "gap": "8px" }}>
+          <div style={EYEBROW}>About you</div>
+          <span style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)" }}>self-improving — Amico refines this as you work</span>
+        </div>
         <Show when={you()}>
           <button
             type="button"
@@ -400,6 +410,58 @@ function AboutYouCard(props: {
       >
         {(y) => (
           <>
+            <Show when={y().affiliation}>
+              <div
+                data-slot="amicode-you-institution"
+                style={{
+                  "display": "flex", "gap": "10px", "align-items": "center", "margin-top": "10px",
+                  "padding": "8px 10px", "border-radius": "8px",
+                  "background": "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
+                  "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                }}
+              >
+                <Show
+                  when={y().affiliation_logo}
+                  fallback={
+                    <span style={{
+                      "display": "inline-flex", "align-items": "center", "justify-content": "center",
+                      "width": "26px", "height": "26px", "border-radius": "6px", "flex": "none",
+                      "background": "var(--v2-icon-icon-accent)", "color": "var(--v2-background-bg-base, #000)",
+                      "font-size": "11px", "font-weight": "700", "letter-spacing": "0.5px",
+                    }}>
+                      {(y().affiliation ?? "").split(/\s+/).map((w) => w[0]).join("").slice(0, 3).toUpperCase()}
+                    </span>
+                  }
+                >
+                  <img
+                    src={y().affiliation_logo!}
+                    alt={y().affiliation ?? "institution"}
+                    style={{ "width": "26px", "height": "26px", "object-fit": "contain", "border-radius": "6px", "flex": "none" }}
+                  />
+                </Show>
+                <div style={{ "min-width": "0", "flex": "1" }}>
+                  <div style={{ "font-size": "12px", "font-weight": "600", "color": "var(--v2-text-text-base)", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                    {y().affiliation}
+                  </div>
+                  <div style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)" }}>institution profile</div>
+                </div>
+                <Show when={y().scholar}>
+                  <a
+                    href={y().scholar!}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-slot="amicode-you-scholar"
+                    style={{
+                      "font-size": "11px", "font-weight": "600", "text-decoration": "none", "flex": "none",
+                      "color": "var(--v2-text-text-accent)", "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
+                      "border-radius": "999px", "padding": "3px 10px",
+                    }}
+                  >
+                    Scholar ↗
+                  </a>
+                </Show>
+              </div>
+            </Show>
             <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
               <Avatar name={y().name} src={y().avatar} />
               <div style={{ "min-width": "0" }}>
@@ -450,6 +512,20 @@ function AboutYouCard(props: {
                         value={draft().focus}
                         placeholder="What you work on"
                         onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
+                      />
+                      <input
+                        data-slot="amicode-you-scholar-input"
+                        style={FIELD}
+                        value={draft().scholar}
+                        placeholder="Google Scholar URL (optional)"
+                        onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
+                      />
+                      <input
+                        data-slot="amicode-you-logo-input"
+                        style={FIELD}
+                        value={draft().affiliation_logo}
+                        placeholder="Institution logo URL (optional — e.g. your university's mark)"
+                        onInput={(e) => setDraft({ ...draft(), affiliation_logo: e.currentTarget.value })}
                       />
                       <div style={{ "display": "flex", "gap": "8px", "align-items": "center" }}>
                         <button
@@ -630,7 +706,7 @@ export function AmicodeHomeCards(props: {
   starters: readonly { label: string; prompt: string }[]
   onStart: (prompt: string) => void
   onEditProfile: () => void
-  onSaveProfile?: (fields: { name?: string; affiliation?: string; focus?: string }) => Promise<void>
+  onSaveProfile?: (fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }) => Promise<void>
   // Jump back in
   resumeName?: string
   resumeMeta?: string

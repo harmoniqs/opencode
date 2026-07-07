@@ -234,7 +234,7 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
       Effect.sync(() => {
         const params = new URL(request.url, "http://localhost").searchParams
         const field = (k: string) => (params.has(k) ? (params.get(k) ?? "") : undefined)
-        const body = AmicodeProfile.saveProfile({ name: field("name"), affiliation: field("affiliation"), focus: field("focus") })
+        const body = AmicodeProfile.saveProfile({ name: field("name"), affiliation: field("affiliation"), focus: field("focus"), scholar: field("scholar"), affiliation_logo: field("affiliation_logo") })
         return HttpServerResponse.text(body, { contentType: "application/json" })
       }),
     )
