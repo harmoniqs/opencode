@@ -114,3 +114,26 @@ describe("hasUserReplyAfter", () => {
     expect(hasUserReplyAfter([{ id: "msg_z", role: "user" }], "")).toBe(false)
   })
 })
+
+import { answeredOption } from "./ask"
+
+describe("answeredOption — persisted-pick rehydration (reopen)", () => {
+  const parts = (map: Record<string, { type?: string; text?: string }[]>) => (id: string) => map[id] ?? []
+  const OPTS = ["transmon", "fluxonium"]
+  test("returns the first later user reply when it matches an option", () => {
+    const msgs = [
+      { id: "m1", role: "assistant" },
+      { id: "m2", role: "user" },
+      { id: "m3", role: "user" },
+    ]
+    expect(answeredOption(msgs, parts({ m2: [{ type: "text", text: " transmon " }], m3: [{ type: "text", text: "fluxonium" }] }), "m1", OPTS)).toBe("transmon")
+  })
+  test("a later non-option reply means answered-otherwise → undefined (card static, no highlight)", () => {
+    const msgs = [{ id: "m1", role: "assistant" }, { id: "m2", role: "user" }]
+    expect(answeredOption(msgs, parts({ m2: [{ type: "text", text: "actually let's do bosonic" }] }), "m1", OPTS)).toBeUndefined()
+  })
+  test("no later user reply → undefined (card stays interactive)", () => {
+    const msgs = [{ id: "m1", role: "assistant" }, { id: "m0", role: "user" }]
+    expect(answeredOption(msgs, parts({}), "m1", OPTS)).toBeUndefined()
+  })
+})

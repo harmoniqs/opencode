@@ -60,3 +60,27 @@ export function hasUserReplyAfter(
   }
   return false
 }
+
+/** Which option (if any) the user's persisted reply picked: the FIRST user
+ *  message after the card's message (ULID order) whose first text part,
+ *  trimmed, matches one of the options. Rehydrates the answered highlight on
+ *  session reopen — the ask-bridge singleton only exists while the header
+ *  rail is mounted, but the transcript is always there. */
+export function answeredOption(
+  messages: readonly { id: string; role?: string }[],
+  partsForMessage: (id: string) => readonly { type?: string; text?: string }[],
+  messageID: string,
+  options: readonly string[],
+): string | undefined {
+  if (typeof messageID !== "string" || messageID.length === 0) return undefined
+  const later = messages
+    .filter((m) => m.role === "user" && typeof m.id === "string" && m.id > messageID)
+    .sort((a, b) => (a.id < b.id ? -1 : 1))
+  for (const m of later) {
+    const text = partsForMessage(m.id).find((p) => p.type === "text" && typeof p.text === "string")?.text
+    if (text === undefined) continue
+    const t = text.trim()
+    return options.includes(t) ? t : undefined   // first reply decides; non-option reply = answered otherwise
+  }
+  return undefined
+}

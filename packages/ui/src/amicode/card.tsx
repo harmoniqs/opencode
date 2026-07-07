@@ -111,13 +111,14 @@ export function AmicodeToolCard(props: {
   input?: Record<string, any>
   output?: string // passed by message-part.tsx's Dynamic (already wired)
   messageID?: string
+  sessionID?: string
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
 
   return (
     <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
-      <Match when={ask()}>{(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}</Match>
+      <Match when={ask()}>{(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}</Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
     </Switch>
   )
