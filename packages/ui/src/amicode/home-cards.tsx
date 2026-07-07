@@ -1096,6 +1096,8 @@ export function AmicodeHomeCards(props: {
   onOpenLiveRun?: () => void
   // Pulse bank
   onWarmStart?: () => void
+  // Run gallery (shareable cards)
+  onOpenGallery?: () => void
 }) {
   const stats = createMemo(() => (props.profile?.ok ? props.profile.you.stats : undefined))
   return (
@@ -1165,6 +1167,17 @@ export function AmicodeHomeCards(props: {
             </div>
             <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
               Warm-start →
+            </div>
+          </ActionCard>
+        </Show>
+
+        {/* Run gallery — the trophy case of shareable solve cards */}
+        <Show when={props.onOpenGallery}>
+          <ActionCard eyebrow="Showcase" slot="amicode-card-gallery" onClick={props.onOpenGallery}>
+            <div style={CARD_TITLE}>Run gallery</div>
+            <div style={CARD_SUB}>shareable cards of your solves</div>
+            <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
+              Browse & share →
             </div>
           </ActionCard>
         </Show>

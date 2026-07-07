@@ -61,6 +61,8 @@ import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
+import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
+import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
 import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
@@ -264,6 +266,23 @@ function HomeDesign() {
   // in-flight run. Polls run-status + run-series only while a run is solving; the
   // interval self-terminates once status leaves "solving". All failures collapse
   // to undefined so the card simply doesn't render.
+  // amicode: run gallery (shareable solve cards) — fetched on open, newest first.
+  const [galleryOpen, setGalleryOpen] = createSignal(false)
+  const [runCardsRaw] = createResource(
+    () => (galleryOpen() ? state.selection.server : undefined),
+    () => amicodeGet(focusedServer(), "/amicode/run-cards").catch(() => undefined),
+  )
+  const runCards = createMemo(() => {
+    if (!galleryOpen()) return undefined
+    const raw = runCardsRaw()
+    return raw === undefined ? undefined : parseRunCardsResponse(raw)
+  })
+  // PNG save: downloads are dead inside the webview iframe — route through the
+  // extension's save-file bridge; plain browsers use the gallery's <a download>.
+  const saveCardPng = (filename: string, dataUrl: string) => {
+    window.parent.postMessage({ source: "amicode", kind: "save-file", filename, dataUrl }, "*")
+  }
+
   const [runStatusRaw, { refetch: refetchRunStatus }] = createResource(
     () => state.selection.server,
     () => amicodeGet(focusedServer(), "/amicode/run-status").catch(() => undefined),
@@ -629,6 +648,7 @@ function HomeDesign() {
               if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
             }}
             onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+            onOpenGallery={() => setGalleryOpen(true)}
             liveRun={liveRun()}
             onOpenLiveRun={() => {
               const name = resumeProblem()?.name
@@ -637,6 +657,13 @@ function HomeDesign() {
           />
         </div>
         <AmicodeFooter />
+        <Show when={galleryOpen()}>
+          <AmicodeRunGallery
+            cards={runCards()}
+            onClose={() => setGalleryOpen(false)}
+            onSave={window.parent !== window ? saveCardPng : undefined}
+          />
+        </Show>
       </div>
     </div>
   )
