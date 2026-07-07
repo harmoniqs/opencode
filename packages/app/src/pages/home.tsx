@@ -292,11 +292,13 @@ function HomeDesign() {
     }
   })
   createEffect(() => {
-    if (!solvingRunId()) return
+    // Standing slow poll while Home is mounted (a solve STARTED from chat must
+    // surface here without a remount), tightening to 2.5s while one is live.
+    const live = Boolean(solvingRunId())
     const timer = setInterval(() => {
       void refetchRunStatus()
-      void refetchRunSeries()
-    }, 2500)
+      if (live) void refetchRunSeries()
+    }, live ? 2500 : 5000)
     onCleanup(() => clearInterval(timer))
   })
 
