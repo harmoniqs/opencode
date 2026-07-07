@@ -867,12 +867,12 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   const directory = () => props.session.directory
   const sessionId = () => props.session.id
   const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
-  // amicode: brand mark instead of the letter project-avatar + radar ring —
-  // same treatment as the titlebar session tab (H-robot spinner while the
-  // agent works, accent dot for unread).
+  // amicode: a quiet chevron for session rows (the brand mark everywhere was
+  // too much); the H-robot spinner still takes over while the agent works,
+  // and unread keeps its accent dot.
   return (
-    <span class="relative inline-flex size-5 shrink-0 items-center justify-center">
-      <Show when={state.loading()} fallback={<Mark class="size-4" />}>
+    <span class="relative inline-flex size-5 shrink-0 items-center justify-center" style={{ color: "var(--v2-icon-icon-muted)" }}>
+      <Show when={state.loading()} fallback={<IconV2 name="chevron-right" />}>
         <AmicoSpinner class="size-4" />
       </Show>
       <Show when={state.unread()}>
