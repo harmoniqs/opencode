@@ -39,6 +39,8 @@ import { useGlobal } from "@/context/global"
 import { decode64 } from "@/utils/base64"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
+import { Mark } from "@opencode-ai/ui/logo"
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 
 type TauriDesktopWindow = {
   startDragging?: () => Promise<void>
@@ -862,14 +864,22 @@ function ProjectTabAvatar(props: {
   const directory = () => props.directory
   const sessionId = () => props.sessionId
   const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
+  // amicode: brand mark instead of the letter project-avatar ("blue A"). Idle =
+  // static Mark; while the agent works, Aaron's H-robot spinner (gentle pulse,
+  // honors prefers-reduced-motion) replaces the radar ring. Unread keeps a dot.
   return (
-    <ProjectAvatar
-      fallback={displayName(props.project ?? { worktree: props.directory })}
-      src={getProjectAvatarSource(props.project?.id, props.project?.icon)}
-      variant={getProjectAvatarVariant(props.project?.icon?.color)}
-      unread={state.unread()}
-      loading={state.loading()}
-    />
+    <span class="relative inline-flex size-5 shrink-0 items-center justify-center">
+      <Show when={state.loading()} fallback={<Mark class="size-4" />}>
+        <AmicoSpinner class="size-4" />
+      </Show>
+      <Show when={state.unread()}>
+        <span
+          aria-hidden="true"
+          class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
+          style={{ background: "var(--v2-icon-icon-accent)" }}
+        />
+      </Show>
+    </span>
   )
 }
 
