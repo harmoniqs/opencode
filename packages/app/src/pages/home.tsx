@@ -54,6 +54,7 @@ import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
+import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -606,6 +607,7 @@ function HomeDesign() {
             }}
           />
         </div>
+        <AmicodeFooter />
       </div>
     </div>
   )
