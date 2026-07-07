@@ -302,7 +302,11 @@ function parseLastPulse(log: string): { iter: number; dt: number; values: number
   for (let i = lines.length - 1; i >= 0; i--) {
     const m = lines[i].match(/^AMICODE_PULSE\s+iter=(\d+)\s+dt=([0-9eE+.\-]+)\s+a=(.+)$/)
     if (m) {
-      const values = m[3].split(",").map(Number).filter((v) => Number.isFinite(v))
+      // Drives are ;-joined, knots ,-joined (solve_template.jl). A bare
+      // split(",") turned every seam token "x51;y1" into a dropped NaN and
+      // glued all drives into one corrupt trace. Flatten drive-by-drive; the
+      // client re-slices via pulse_meta (drives x knots).
+      const values = m[3].split(";").flatMap((drive) => drive.split(",").map(Number).filter((v) => Number.isFinite(v)))
       return { iter: Number(m[1]), dt: Number(m[2]), values }
     }
   }
