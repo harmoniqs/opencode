@@ -1,6 +1,19 @@
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { batch, createEffect, createMemo, createResource, For, Match, on, onCleanup, onMount, Show, Switch, createSignal } from "solid-js"
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createResource,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  createSignal,
+} from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
@@ -271,7 +284,8 @@ function HomeDesign() {
   const solvingRunId = createMemo(() => solvingRun()?.runId)
   const [runSeriesRaw, { refetch: refetchRunSeries }] = createResource(
     () => solvingRunId(),
-    (runId) => amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
+    (runId) =>
+      amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
   )
   const liveRun = createMemo<HomeLiveRun | undefined>(() => {
     const solving = solvingRun()
@@ -295,10 +309,13 @@ function HomeDesign() {
     // Standing slow poll while Home is mounted (a solve STARTED from chat must
     // surface here without a remount), tightening to 2.5s while one is live.
     const live = Boolean(solvingRunId())
-    const timer = setInterval(() => {
-      void refetchRunStatus()
-      if (live) void refetchRunSeries()
-    }, live ? 2500 : 5000)
+    const timer = setInterval(
+      () => {
+        void refetchRunStatus()
+        if (live) void refetchRunSeries()
+      },
+      live ? 2500 : 5000,
+    )
     onCleanup(() => clearInterval(timer))
   })
 
@@ -454,131 +471,142 @@ function HomeDesign() {
 
   return (
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
-      <div data-slot="amicode-home-shell" class="mx-auto flex w-full h-full max-w-[1440px] flex-col gap-6 px-8 pt-10 pb-6">
+      <div
+        data-slot="amicode-home-shell"
+        class="mx-auto flex w-full h-full max-w-[1440px] flex-col gap-6 px-8 pt-10 pb-6"
+      >
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
-        <div data-slot="amicode-home-band" class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]">
-        <HomeProjectColumn
-          projects={projects()}
-          selected={state.selection}
-          focusServer={focusServer}
-          selectProject={selectProject}
-          openNewSession={openProjectNewSession}
-          chooseProject={(conn) => void chooseProject(conn)}
-          editProject={editProject}
-          closeProject={(conn, directory) => {
-            const next = closeHomeProject(
-              state.selection,
-              ServerConnection.key(conn),
-              global.createServerCtx(conn).projects,
-              directory,
-            )
-            if (next) setSelection(next)
-          }}
-          clearNotifications={clearNotifications}
-          unseenCount={unseenCount}
-          openSettings={openSettings}
-          openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-          language={language}
-        />
-
-        <section
-          class="isolate min-h-0 min-w-0 flex flex-col"
-          aria-label={language.t("sidebar.project.recentSessions")}
+        <div
+          data-slot="amicode-home-band"
+          class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]"
         >
-          <HomeSessionSearch
-            value={state.search}
-            placeholder={language.t("home.sessions.search.placeholder")}
-            open={searchOpen()}
-            loading={sessionLoad.isLoading}
-            results={searchResults()}
-            server={state.selection.server}
-            activeServer={state.selection.server === server.key}
-            noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
-            bindFocus={(focus) => {
-              focusSessionSearch = focus
+          <HomeProjectColumn
+            projects={projects()}
+            selected={state.selection}
+            focusServer={focusServer}
+            selectProject={selectProject}
+            openNewSession={openProjectNewSession}
+            chooseProject={(conn) => void chooseProject(conn)}
+            editProject={editProject}
+            closeProject={(conn, directory) => {
+              const next = closeHomeProject(
+                state.selection,
+                ServerConnection.key(conn),
+                global.createServerCtx(conn).projects,
+                directory,
+              )
+              if (next) setSelection(next)
             }}
-            onInput={(value) => setState("search", value)}
-            onFocus={() => setState("searchFocused", true)}
-            onClose={closeSearch}
-            onSelect={selectSearchSession}
+            clearNotifications={clearNotifications}
+            unseenCount={unseenCount}
+            openSettings={openSettings}
+            openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+            language={language}
           />
-          <ScrollView class="mt-3 min-h-0 flex-1">
-            <div class="pt-3 flex flex-col gap-6">
-              <Show
-                when={!sessionLoad.isLoading}
-                fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
-              >
+
+          <section
+            class="isolate min-h-0 min-w-0 flex flex-col"
+            aria-label={language.t("sidebar.project.recentSessions")}
+          >
+            <HomeSessionSearch
+              value={state.search}
+              placeholder={language.t("home.sessions.search.placeholder")}
+              open={searchOpen()}
+              loading={sessionLoad.isLoading}
+              results={searchResults()}
+              server={state.selection.server}
+              activeServer={state.selection.server === server.key}
+              noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
+              bindFocus={(focus) => {
+                focusSessionSearch = focus
+              }}
+              onInput={(value) => setState("search", value)}
+              onFocus={() => setState("searchFocused", true)}
+              onClose={closeSearch}
+              onSelect={selectSearchSession}
+            />
+            <ScrollView class="mt-3 min-h-0 flex-1">
+              <div class="pt-3 flex flex-col gap-6">
                 <Show
-                  when={groups().length > 0}
-                  fallback={
-                    <div class="flex min-w-0 flex-col gap-4">
-                      <HomeSessionGroupHeader
-                        title={language.t("home.sessions.empty")}
-                        onNewSession={newSessionProject() ? openNewSession : undefined}
-                      />
-                    </div>
-                  }
+                  when={!sessionLoad.isLoading}
+                  fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                 >
-                  {(() => {
-                    // amicode: collapsed = the 3 most recent sessions across all
-                    // groups; "Show all (N)" expands. Pure derivation off the
-                    // existing groups() memo — no second data path to drift.
-                    const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
-                    const visible = () => {
-                      if (sessionsExpanded() || total() <= 3) return groups()
-                      let budget = 3
-                      const out: typeof groups extends () => infer G ? G : never = [] as never
-                      for (const g of groups()) {
-                        if (budget <= 0) break
-                        const take = g.sessions.slice(0, budget)
-                        budget -= take.length
-                        ;(out as { title: string; sessions: typeof g.sessions }[]).push({ ...g, sessions: take })
-                      }
-                      return out as ReturnType<typeof groups>
+                  <Show
+                    when={groups().length > 0}
+                    fallback={
+                      <div class="flex min-w-0 flex-col gap-4">
+                        <HomeSessionGroupHeader
+                          title={language.t("home.sessions.empty")}
+                          onNewSession={newSessionProject() ? openNewSession : undefined}
+                        />
+                      </div>
                     }
-                    return (
-                      <>
-                        <For each={visible()}>
-                          {(group, index) => (
-                            <div class="flex min-w-0 flex-col gap-4">
-                              <HomeSessionGroupHeader
-                                title={group.title}
-                                onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
-                              />
-                              <div class="flex min-w-0 flex-col gap-px">
-                                <For each={group.sessions}>
-                                  {(record) => (
-                                    <HomeSessionRow
-                                      record={record}
-                                      server={state.selection.server}
-                                      activeServer={state.selection.server === server.key}
-                                      openSession={openSession}
-                                    />
-                                  )}
-                                </For>
+                  >
+                    {(() => {
+                      // amicode: collapsed = the 3 most recent sessions across all
+                      // groups; "Show all (N)" expands. Pure derivation off the
+                      // existing groups() memo — no second data path to drift.
+                      const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
+                      const visible = () => {
+                        if (sessionsExpanded() || total() <= 3) return groups()
+                        let budget = 3
+                        const out: typeof groups extends () => infer G ? G : never = [] as never
+                        for (const g of groups()) {
+                          if (budget <= 0) break
+                          const take = g.sessions.slice(0, budget)
+                          budget -= take.length
+                          ;(out as { title: string; sessions: typeof g.sessions }[]).push({ ...g, sessions: take })
+                        }
+                        return out as ReturnType<typeof groups>
+                      }
+                      return (
+                        <>
+                          <For each={visible()}>
+                            {(group, index) => (
+                              <div class="flex min-w-0 flex-col gap-4">
+                                <HomeSessionGroupHeader
+                                  title={group.title}
+                                  onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
+                                />
+                                <div class="flex min-w-0 flex-col gap-px">
+                                  <For each={group.sessions}>
+                                    {(record) => (
+                                      <HomeSessionRow
+                                        record={record}
+                                        server={state.selection.server}
+                                        activeServer={state.selection.server === server.key}
+                                        openSession={openSession}
+                                      />
+                                    )}
+                                  </For>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </For>
-                        <Show when={total() > 3}>
-                          <button
-                            type="button"
-                            data-action="home-sessions-toggle"
-                            class="self-start px-4 text-[12px]"
-                            style={{ color: "var(--v2-text-text-muted)", background: "none", border: "none", cursor: "pointer" }}
-                            onClick={() => setSessionsExpanded(!sessionsExpanded())}
-                          >
-                            {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
-                          </button>
-                        </Show>
-                      </>
-                    )
-                  })()}
+                            )}
+                          </For>
+                          <Show when={total() > 3}>
+                            <button
+                              type="button"
+                              data-action="home-sessions-toggle"
+                              class="self-start px-4 text-[12px]"
+                              style={{
+                                color: "var(--v2-text-text-muted)",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                              onClick={() => setSessionsExpanded(!sessionsExpanded())}
+                            >
+                              {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
+                            </button>
+                          </Show>
+                        </>
+                      )
+                    })()}
+                  </Show>
                 </Show>
-              </Show>
-            </div>
-          </ScrollView>
-        </section>
+              </div>
+            </ScrollView>
+          </section>
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
         <div class="relative z-[1] min-h-0 shrink overflow-y-auto pt-1">
@@ -641,8 +669,19 @@ function HomeProjectColumn(props: {
         <div class="flex min-w-0 items-center gap-2">
           <Mark class="size-6 shrink-0" />
           <div class="min-w-0">
-            <div style={{ "font-size": "15px", "font-weight": "650", "line-height": "18px", color: "var(--v2-text-text-base)" }}>Amicode</div>
-            <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>by Harmoniqs</div>
+            <div
+              style={{
+                "font-size": "15px",
+                "font-weight": "650",
+                "line-height": "18px",
+                color: "var(--v2-text-text-base)",
+              }}
+            >
+              Amicode
+            </div>
+            <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>
+              by Harmoniqs
+            </div>
           </div>
         </div>
         <Show when={global.servers.list().length === 1}>
@@ -786,27 +825,27 @@ function HomeProjectList(props: {
   // there is an actual CHOICE; add-project stays in the header either way.
   return (
     <Show when={props.projects.length > 1}>
-    <div class="flex min-w-0 flex-col gap-1">
-      <For each={props.projects}>
-        {(project) => (
-          <HomeProjectRow
-            project={project}
-            server={props.server}
-            selected={
-              props.selected.server === ServerConnection.key(props.server) &&
-              props.selected.directory === project.worktree
-            }
-            unseenCount={props.unseenCount(props.server, project)}
-            selectProject={props.selectProject}
-            openNewSession={props.openNewSession}
-            editProject={props.editProject}
-            closeProject={props.closeProject}
-            clearNotifications={props.clearNotifications}
-            language={props.language}
-          />
-        )}
-      </For>
-    </div>
+      <div class="flex min-w-0 flex-col gap-1">
+        <For each={props.projects}>
+          {(project) => (
+            <HomeProjectRow
+              project={project}
+              server={props.server}
+              selected={
+                props.selected.server === ServerConnection.key(props.server) &&
+                props.selected.directory === project.worktree
+              }
+              unseenCount={props.unseenCount(props.server, project)}
+              selectProject={props.selectProject}
+              openNewSession={props.openNewSession}
+              editProject={props.editProject}
+              closeProject={props.closeProject}
+              clearNotifications={props.clearNotifications}
+              language={props.language}
+            />
+          )}
+        </For>
+      </div>
     </Show>
   )
 }
@@ -909,7 +948,10 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   // too much; the working-spinner was removed too — one wedged run left it
   // spinning forever). Unread keeps its accent dot.
   return (
-    <span class="relative inline-flex size-5 shrink-0 items-center justify-center" style={{ color: "var(--v2-icon-icon-muted)" }}>
+    <span
+      class="relative inline-flex size-5 shrink-0 items-center justify-center"
+      style={{ color: "var(--v2-icon-icon-muted)" }}
+    >
       <IconV2 name="chevron-right" />
       <Show when={state.unread()}>
         <span

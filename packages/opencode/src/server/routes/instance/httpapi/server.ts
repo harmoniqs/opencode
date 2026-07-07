@@ -222,9 +222,7 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
       }),
     )
     yield* router.add("GET", "/amicode/profile", () =>
-      Effect.sync(() =>
-        HttpServerResponse.text(AmicodeProfile.profileResponse(), { contentType: "application/json" }),
-      ),
+      Effect.sync(() => HttpServerResponse.text(AmicodeProfile.profileResponse(), { contentType: "application/json" })),
     )
     // In-place profile save (About-You card). Same raw-route idiom as the GETs:
     // editable identity fields ride query params (small strings; keeps the
@@ -234,7 +232,13 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
       Effect.sync(() => {
         const params = new URL(request.url, "http://localhost").searchParams
         const field = (k: string) => (params.has(k) ? (params.get(k) ?? "") : undefined)
-        const body = AmicodeProfile.saveProfile({ name: field("name"), affiliation: field("affiliation"), focus: field("focus"), scholar: field("scholar"), affiliation_logo: field("affiliation_logo") })
+        const body = AmicodeProfile.saveProfile({
+          name: field("name"),
+          affiliation: field("affiliation"),
+          focus: field("focus"),
+          scholar: field("scholar"),
+          affiliation_logo: field("affiliation_logo"),
+        })
         return HttpServerResponse.text(body, { contentType: "application/json" })
       }),
     )

@@ -371,7 +371,9 @@ export const { use: useCommand, provider: CommandProvider } = createSimpleContex
       // keymap — when typing in an input/textarea (paste into profile fields
       // was being swallowed by a colliding keybind).
       const isClipboardChord =
-        (event.metaKey || event.ctrlKey) && !event.altKey && ["v", "c", "x", "a", "z", "y"].includes(event.key.toLowerCase())
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        ["v", "c", "x", "a", "z", "y"].includes(event.key.toLowerCase())
       if (isEditableTarget(event.target) && isClipboardChord && !isPalette) return
 
       if (isEditableTarget(event.target) && !isPalette && !isAllowedEditableKeybind(option?.id) && !modified && !isTab)

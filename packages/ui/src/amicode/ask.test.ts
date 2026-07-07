@@ -60,9 +60,7 @@ describe("parseAskInput", () => {
   })
 
   test("details stay aligned with their option through invalid-option filtering", () => {
-    expect(
-      parseAskInput({ question: "q", options: ["a", "", "b"], details: ["da", "dropped", "db"] }),
-    ).toEqual({
+    expect(parseAskInput({ question: "q", options: ["a", "", "b"], details: ["da", "dropped", "db"] })).toEqual({
       question: "q",
       options: ["a", "b"],
       details: ["da", "db"],
@@ -126,14 +124,29 @@ describe("answeredOption — persisted-pick rehydration (reopen)", () => {
       { id: "m2", role: "user" },
       { id: "m3", role: "user" },
     ]
-    expect(answeredOption(msgs, parts({ m2: [{ type: "text", text: " transmon " }], m3: [{ type: "text", text: "fluxonium" }] }), "m1", OPTS)).toBe("transmon")
+    expect(
+      answeredOption(
+        msgs,
+        parts({ m2: [{ type: "text", text: " transmon " }], m3: [{ type: "text", text: "fluxonium" }] }),
+        "m1",
+        OPTS,
+      ),
+    ).toBe("transmon")
   })
   test("a later non-option reply means answered-otherwise → undefined (card static, no highlight)", () => {
-    const msgs = [{ id: "m1", role: "assistant" }, { id: "m2", role: "user" }]
-    expect(answeredOption(msgs, parts({ m2: [{ type: "text", text: "actually let's do bosonic" }] }), "m1", OPTS)).toBeUndefined()
+    const msgs = [
+      { id: "m1", role: "assistant" },
+      { id: "m2", role: "user" },
+    ]
+    expect(
+      answeredOption(msgs, parts({ m2: [{ type: "text", text: "actually let's do bosonic" }] }), "m1", OPTS),
+    ).toBeUndefined()
   })
   test("no later user reply → undefined (card stays interactive)", () => {
-    const msgs = [{ id: "m1", role: "assistant" }, { id: "m0", role: "user" }]
+    const msgs = [
+      { id: "m1", role: "assistant" },
+      { id: "m0", role: "user" },
+    ]
     expect(answeredOption(msgs, parts({}), "m1", OPTS)).toBeUndefined()
   })
 })

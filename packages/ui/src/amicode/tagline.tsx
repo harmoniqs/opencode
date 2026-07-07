@@ -57,7 +57,7 @@ export function AmicodeTagline(props: { phrases?: string[]; "font-size"?: string
         timer = setTimeout(step, HOLD_MS)
       }
     }
-    timer = setTimeout(step, 700)   // first cycle starts fast
+    timer = setTimeout(step, 700) // first cycle starts fast
     const cursor = setInterval(() => setBlink((b) => !b), 530)
     onCleanup(() => {
       if (timer) clearTimeout(timer)
@@ -66,11 +66,16 @@ export function AmicodeTagline(props: { phrases?: string[]; "font-size"?: string
   })
 
   return (
-    <span data-slot="amicode-tagline" style={{ "font-size": props["font-size"] ?? "14px", "line-height": "20px", "color": "var(--v2-text-text-base)" }}>
-      <span style={{ "color": "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span>
+    <span
+      data-slot="amicode-tagline"
+      style={{ "font-size": props["font-size"] ?? "14px", "line-height": "20px", color: "var(--v2-text-text-base)" }}
+    >
+      <span style={{ color: "var(--v2-text-text-accent)", "font-weight": "600" }}>Amico</span>
       {" — "}
       <span>{text()}</span>
-      <span aria-hidden="true" style={{ "color": "var(--v2-text-text-accent)", "opacity": blink() ? "1" : "0" }}>▍</span>
+      <span aria-hidden="true" style={{ color: "var(--v2-text-text-accent)", opacity: blink() ? "1" : "0" }}>
+        ▍
+      </span>
     </span>
   )
 }

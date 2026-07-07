@@ -61,7 +61,7 @@ export function AmicodeSplash(props: { class?: string }) {
     <div
       data-component="amicode-splash"
       classList={{ [props.class ?? ""]: !!props.class }}
-      style={{ "display": "flex", "flex-direction": "column", "align-items": "center", "gap": "16px" }}
+      style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "16px" }}
     >
       <Mark class="w-16 h-auto" />
       <div
@@ -71,14 +71,16 @@ export function AmicodeSplash(props: { class?: string }) {
           "min-height": "18px",
           "min-width": "340px",
           "text-align": "center",
-          "color": "var(--v2-text-text-muted)",
+          color: "var(--v2-text-text-muted)",
           "white-space": "pre",
         }}
       >
         {text()}
-        <span aria-hidden="true" style={{ "color": "var(--v2-icon-icon-accent)", "opacity": blink() ? "1" : "0" }}>▍</span>
+        <span aria-hidden="true" style={{ color: "var(--v2-icon-icon-accent)", opacity: blink() ? "1" : "0" }}>
+          ▍
+        </span>
       </div>
-      <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>Amicode · By Harmoniqs</div>
+      <div style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>Amicode · By Harmoniqs</div>
     </div>
   )
 }

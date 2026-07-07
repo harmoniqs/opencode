@@ -173,7 +173,6 @@ export function problemBody(root: string, slug: string | undefined): string {
   }
 }
 
-
 /** A run with no FINISHED whose run.log has gone cold is STALLED (wedged
  *  solver, OOM thrash, killed orchestrator) — never "solving": the Now-Solving
  *  card and pollers must not advertise it forever. 10 min ≫ any real gap
@@ -234,7 +233,12 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
     // "finished"); torn FINISHED = still solving (re-poll); user-stop → "stopped".
     const terminal = readTerminalState(dir)
     if (terminal) {
-      return { run_id: ref.run_id, status: displayStatus(terminal.status), fidelity: terminal.fidelity, iteration: terminal.iterations }
+      return {
+        run_id: ref.run_id,
+        status: displayStatus(terminal.status),
+        fidelity: terminal.fidelity,
+        iteration: terminal.iterations,
+      }
     }
     let live = { iteration: null as number | null, fidelity: null as number | null }
     try {
@@ -309,7 +313,12 @@ function parseLastPulse(log: string): { iter: number; dt: number; values: number
       // split(",") turned every seam token "x51;y1" into a dropped NaN and
       // glued all drives into one corrupt trace. Flatten drive-by-drive; the
       // client re-slices via pulse_meta (drives x knots).
-      const values = m[3].split(";").flatMap((drive) => drive.split(",").map(Number).filter((v) => Number.isFinite(v)))
+      const values = m[3].split(";").flatMap((drive) =>
+        drive
+          .split(",")
+          .map(Number)
+          .filter((v) => Number.isFinite(v)),
+      )
       return { iter: Number(m[1]), dt: Number(m[2]), values }
     }
   }
@@ -418,7 +427,12 @@ export function problemResponse(slug: string | undefined): string {
   return cached(`problem:${slug ?? "@active"}`, 10_000, () => problemBody(problemsRoot(), slug), synthesizeProblem)
 }
 export function runStatusResponse(slug: string | undefined): string {
-  return cached(`run-status:${slug ?? "@active"}`, 1_000, () => runStatusBody(problemsRoot(), runsRoot(), slug), synthesizeRunStatus)
+  return cached(
+    `run-status:${slug ?? "@active"}`,
+    1_000,
+    () => runStatusBody(problemsRoot(), runsRoot(), slug),
+    synthesizeRunStatus,
+  )
 }
 export function runSeriesResponse(run: string | undefined, lab: string | undefined): string {
   return cached(

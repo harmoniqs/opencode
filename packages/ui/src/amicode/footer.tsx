@@ -20,11 +20,11 @@ export function AmicodeFooter() {
     <div
       data-component="amicode-footer"
       style={{
-        "display": "flex",
+        display: "flex",
         "align-items": "center",
-        "gap": "16px",
+        gap: "16px",
         "margin-top": "auto",
-        "padding": "10px 2px 0",
+        padding: "10px 2px 0",
         "border-top": "1px solid var(--v2-border-border-base)",
       }}
     >
@@ -32,31 +32,47 @@ export function AmicodeFooter() {
         type="button"
         onClick={() => openExternal("https://www.harmoniqs.ai")}
         style={{
-          "display": "inline-flex", "align-items": "center", "gap": "8px",
-          "background": "none", "border": "none", "cursor": "pointer", "padding": "0",
-          "color": "var(--v2-text-text-base)", "font-size": "12px", "font-weight": "600",
+          display: "inline-flex",
+          "align-items": "center",
+          gap: "8px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          padding: "0",
+          color: "var(--v2-text-text-base)",
+          "font-size": "12px",
+          "font-weight": "600",
         }}
       >
         <Mark class="size-4" />
         Harmoniqs ↗
       </button>
-      <div style={{ "display": "flex", "gap": "14px", "margin-left": "auto" }}>
+      <div style={{ display: "flex", gap: "14px", "margin-left": "auto" }}>
         {LINKS.slice(1).map((l) => (
           <button
             type="button"
             onClick={() => openExternal(l.url)}
             style={{
-              "background": "none", "border": "none", "cursor": "pointer", "padding": "0",
-              "color": "var(--v2-text-text-muted)", "font-size": "11px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "0",
+              color: "var(--v2-text-text-muted)",
+              "font-size": "11px",
             }}
           >
             {l.label} ↗
           </button>
         ))}
-        <span style={{
-          "font-size": "10px", "color": "var(--v2-text-text-faint)",
-          "border": "1px solid var(--v2-border-border-base)", "border-radius": "999px", "padding": "2px 8px",
-        }}>
+        <span
+          style={{
+            "font-size": "10px",
+            color: "var(--v2-text-text-faint)",
+            border: "1px solid var(--v2-border-border-base)",
+            "border-radius": "999px",
+            padding: "2px 8px",
+          }}
+        >
           Piccolo engine
         </span>
       </div>

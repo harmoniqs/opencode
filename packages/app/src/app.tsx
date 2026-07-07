@@ -228,7 +228,6 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
   )
 }
 
-
 /** amicode: live theme bridge for the VS Code webview host. The extension
  *  forwards editor theme changes as window messages (outer relay → iframe);
  *  route them through the existing setColorScheme so everything re-themes. */

@@ -69,7 +69,7 @@ function nameFromMounts(file: string): string | null {
   let pendingId: string | null = null
   for (const raw of readFileSync(file, "utf8").split("\n")) {
     const line = raw.trim()
-    if (line.startsWith("[[") ) {
+    if (line.startsWith("[[")) {
       pendingId = null
       personal = false
       continue
@@ -138,7 +138,9 @@ function runStats(root: string): {
     const labDir = path.join(root, lab.name)
     let runDirs: string[]
     try {
-      runDirs = readdirSync(labDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+      runDirs = readdirSync(labDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
     } catch {
       continue
     }
@@ -255,7 +257,13 @@ function remembers(dirs: string[], limit: number): { title: string; detail: stri
  *  editable identity fields into ~/.amico/profile.json (derived fields —
  *  platforms/stats/remembers — are computed, never stored), invalidates the
  *  response cache, and returns the fresh profile JSON. */
-export function saveProfile(fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }): string {
+export function saveProfile(fields: {
+  name?: string
+  affiliation?: string
+  focus?: string
+  scholar?: string
+  affiliation_logo?: string
+}): string {
   const fp = profileFile()
   let current: any = {}
   try {
@@ -276,7 +284,7 @@ export function saveProfile(fields: { name?: string; affiliation?: string; focus
   }
   mkdirSync(path.dirname(fp), { recursive: true })
   writeFileSync(fp, JSON.stringify(current, null, 2) + "\n")
-  cache = undefined   // next profileResponse() re-reads
+  cache = undefined // next profileResponse() re-reads
   return profileResponse()
 }
 

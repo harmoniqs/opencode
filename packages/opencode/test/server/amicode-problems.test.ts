@@ -2,7 +2,13 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { problemsBody, problemBody, runStatusBody, synthesizeProblems, synthesizeProblem } from "@/server/amicode/problems"
+import {
+  problemsBody,
+  problemBody,
+  runStatusBody,
+  synthesizeProblems,
+  synthesizeProblem,
+} from "@/server/amicode/problems"
 
 let root: string
 beforeEach(() => {
@@ -142,11 +148,20 @@ describe("problemBody", () => {
 })
 
 describe("runStatusBody", () => {
-  function seedRun(runsRoot: string, lab: string, id: string, opts: { finished?: boolean | string; result?: string; log?: string }) {
+  function seedRun(
+    runsRoot: string,
+    lab: string,
+    id: string,
+    opts: { finished?: boolean | string; result?: string; log?: string },
+  ) {
     const dir = path.join(runsRoot, lab, id)
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, "run.toml"), `run_id = "${id}"\nlab = "${lab}"\n`)
-    if (opts.finished) writeFileSync(path.join(dir, "FINISHED"), typeof opts.finished === "string" ? opts.finished : 'status = "completed"\nexit_code = 0\n')
+    if (opts.finished)
+      writeFileSync(
+        path.join(dir, "FINISHED"),
+        typeof opts.finished === "string" ? opts.finished : 'status = "completed"\nexit_code = 0\n',
+      )
     if (opts.result !== undefined) writeFileSync(path.join(dir, "result.toml"), opts.result)
     if (opts.log !== undefined) writeFileSync(path.join(dir, "run.log"), opts.log)
   }

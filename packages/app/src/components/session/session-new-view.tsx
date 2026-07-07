@@ -81,7 +81,16 @@ export function NewSessionView(props: NewSessionViewProps) {
             <Mark class="w-28" />
             {/* amicode: straight wordmark (the Logo's Racing Sans One face reads as
                 italic); byline keeps the brand attribution. */}
-            <div style={{ "font-size": "34px", "font-weight": "700", "letter-spacing": "0.1em", "color": "var(--v2-text-text-base)" }}>AMICODE</div>
+            <div
+              style={{
+                "font-size": "34px",
+                "font-weight": "700",
+                "letter-spacing": "0.1em",
+                color: "var(--v2-text-text-base)",
+              }}
+            >
+              AMICODE
+            </div>
           </div>
           {/* amicode: getting-started block (tagline + how-it-works + starter chips) */}
           <AmicodeGettingStarted

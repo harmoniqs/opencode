@@ -117,13 +117,13 @@ function sinceLabel(iso: string | null): string | undefined {
 // primitives
 // ---------------------------------------------------------------------------
 const CARD: JSX.CSSProperties = {
-  "display": "flex",
+  display: "flex",
   "flex-direction": "column",
   "min-width": "0",
-  "border": "1px solid var(--v2-border-border-base)",
+  border: "1px solid var(--v2-border-border-base)",
   "border-radius": "10px",
-  "background": "var(--v2-background-bg-layer-01)",
-  "padding": "14px 16px",
+  background: "var(--v2-background-bg-layer-01)",
+  padding: "14px 16px",
 }
 const HERO_CARD: JSX.CSSProperties = { ...CARD, "border-left": "3px solid var(--v2-icon-icon-accent)" }
 const EYEBROW: JSX.CSSProperties = {
@@ -131,28 +131,26 @@ const EYEBROW: JSX.CSSProperties = {
   "font-weight": "700",
   "letter-spacing": "0.1em",
   "text-transform": "uppercase",
-  "color": "var(--v2-text-text-faint)",
+  color: "var(--v2-text-text-faint)",
 }
-const DIVIDER: JSX.CSSProperties = { "height": "1px", "background": "var(--v2-border-border-base)", "margin": "12px 0" }
+const DIVIDER: JSX.CSSProperties = { height: "1px", background: "var(--v2-border-border-base)", margin: "12px 0" }
 
 function Bullet(props: { children: JSX.Element; title?: string }) {
   return (
     <div
       title={props.title}
       style={{
-        "display": "flex",
-        "gap": "6px",
+        display: "flex",
+        gap: "6px",
         "align-items": "baseline",
         "min-width": "0",
         "font-size": "12px",
         "line-height": "18px",
-        "color": "var(--v2-text-text-base)",
+        color: "var(--v2-text-text-base)",
       }}
     >
       <span style={{ color: "var(--v2-text-text-accent)", "flex-shrink": "0" }}>›</span>
-      <span style={{ "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-        {props.children}
-      </span>
+      <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{props.children}</span>
     </div>
   )
 }
@@ -165,14 +163,14 @@ function PrimaryButton(props: { children: JSX.Element; onClick: () => void; slot
       onClick={() => props.onClick()}
       style={{
         "align-self": "flex-start",
-        "border": "1px solid var(--v2-icon-icon-accent)",
+        border: "1px solid var(--v2-icon-icon-accent)",
         "border-radius": "6px",
-        "background": "var(--v2-background-bg-layer-02)",
-        "color": "var(--v2-text-text-base)",
-        "padding": "5px 12px",
+        background: "var(--v2-background-bg-layer-02)",
+        color: "var(--v2-text-text-base)",
+        padding: "5px 12px",
         "font-size": "12px",
         "line-height": "16px",
-        "cursor": "pointer",
+        cursor: "pointer",
       }}
     >
       {props.children}
@@ -210,12 +208,12 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
       }}
       style={{
         ...HERO_CARD,
-        "position": "relative",
-        "overflow": "hidden",
-        "cursor": "pointer",
-        "transform": hover() ? "translateY(-3px)" : "none",
+        position: "relative",
+        overflow: "hidden",
+        cursor: "pointer",
+        transform: hover() ? "translateY(-3px)" : "none",
         "box-shadow": hover() ? "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.18))" : "none",
-        "transition": "transform 0.18s ease, box-shadow 0.18s ease",
+        transition: "transform 0.18s ease, box-shadow 0.18s ease",
       }}
     >
       {/* gold shine: sweeps on hover-in; opacity-fades + snaps back (transform
@@ -223,34 +221,35 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
       <div
         aria-hidden="true"
         style={{
-          "position": "absolute",
-          "inset": "0",
+          position: "absolute",
+          inset: "0",
           "pointer-events": "none",
-          "width": "55%",
-          "background": "linear-gradient(105deg, transparent 0%, color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent) 50%, transparent 100%)",
-          "opacity": hover() ? "1" : "0",
-          "transform": hover() ? "translateX(280%)" : "translateX(-160%)",
-          "transition": hover() ? "transform 0.85s ease, opacity 0.12s ease" : "opacity 0.3s ease",
+          width: "55%",
+          background:
+            "linear-gradient(105deg, transparent 0%, color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent) 50%, transparent 100%)",
+          opacity: hover() ? "1" : "0",
+          transform: hover() ? "translateX(280%)" : "translateX(-160%)",
+          transition: hover() ? "transform 0.85s ease, opacity 0.12s ease" : "opacity 0.3s ease",
         }}
       />
       <div style={EYEBROW}>Meet Amico</div>
-      <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
+      <div style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}>
         <Mark class="w-12 h-auto shrink-0" />
         <div style={{ "min-width": "0" }}>
-          <div style={{ "font-size": "18px", "font-weight": "600", "color": "var(--v2-text-text-base)" }}>Amico</div>
-          <div style={{ "font-size": "12px", "line-height": "16px", "color": "var(--v2-text-text-muted)" }}>
+          <div style={{ "font-size": "18px", "font-weight": "600", color: "var(--v2-text-text-base)" }}>Amico</div>
+          <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--v2-text-text-muted)" }}>
             Your friendly Quantum Computing Agent
           </div>
-          <div style={{ "font-size": "11px", "line-height": "16px", "color": "var(--v2-text-text-faint)" }}>
+          <div style={{ "font-size": "11px", "line-height": "16px", color: "var(--v2-text-text-faint)" }}>
             powered by the Piccolo engine
           </div>
         </div>
       </div>
       <div style={DIVIDER} />
-      <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
+      <div style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
         I can help you
       </div>
-      <div style={{ "display": "flex", "flex-direction": "column", "gap": "3px", "margin-bottom": "12px" }}>
+      <div style={{ display: "flex", "flex-direction": "column", gap: "3px", "margin-bottom": "12px" }}>
         <For each={AMICO_CAN}>{(line) => <Bullet>{line}</Bullet>}</For>
       </div>
       {/* Primary CTA: big, center-left — the front door. Opens a fresh chat
@@ -261,23 +260,25 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         onClick={() => props.onStart("")}
         style={{
           "align-self": "flex-start",
-          "display": "inline-flex",
+          display: "inline-flex",
           "align-items": "center",
-          "gap": "10px",
+          gap: "10px",
           "margin-top": "4px",
-          "padding": "12px 22px",
-          "border": "none",
+          padding: "12px 22px",
+          border: "none",
           "border-radius": "10px",
-          "cursor": "pointer",
-          "background": "var(--v2-icon-icon-accent)",
-          "color": "var(--v2-background-bg-base, #000)",
+          cursor: "pointer",
+          background: "var(--v2-icon-icon-accent)",
+          color: "var(--v2-background-bg-base, #000)",
           "font-size": "15px",
           "font-weight": "650",
           "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
         }}
       >
         Open chat
-        <span aria-hidden="true" style={{ "font-size": "16px", "line-height": "1" }}>↗</span>
+        <span aria-hidden="true" style={{ "font-size": "16px", "line-height": "1" }}>
+          ↗
+        </span>
       </button>
     </div>
   )
@@ -293,13 +294,13 @@ function Avatar(props: { name: string; src: string | null }) {
       fallback={
         <div
           style={{
-            "width": "44px",
-            "height": "44px",
+            width: "44px",
+            height: "44px",
             "flex-shrink": "0",
             "border-radius": "10px",
-            "background": "var(--v2-background-bg-layer-03)",
-            "color": "var(--v2-text-text-muted)",
-            "display": "flex",
+            background: "var(--v2-background-bg-layer-03)",
+            color: "var(--v2-text-text-muted)",
+            display: "flex",
             "align-items": "center",
             "justify-content": "center",
             "font-size": "15px",
@@ -315,7 +316,7 @@ function Avatar(props: { name: string; src: string | null }) {
         <img
           src={src()}
           alt={props.name}
-          style={{ "width": "44px", "height": "44px", "border-radius": "10px", "object-fit": "cover", "flex-shrink": "0" }}
+          style={{ width: "44px", height: "44px", "border-radius": "10px", "object-fit": "cover", "flex-shrink": "0" }}
         />
       )}
     </Show>
@@ -324,19 +325,19 @@ function Avatar(props: { name: string; src: string | null }) {
 
 function Stat(props: { value: string; label: string }) {
   return (
-    <div style={{ "display": "flex", "flex-direction": "column", "gap": "1px", "min-width": "0" }}>
+    <div style={{ display: "flex", "flex-direction": "column", gap: "1px", "min-width": "0" }}>
       <span
         style={{
           "font-size": "16px",
           "font-weight": "600",
-          "color": "var(--v2-text-text-base)",
+          color: "var(--v2-text-text-base)",
           "font-variant-numeric": "tabular-nums",
           "line-height": "20px",
         }}
       >
         {props.value}
       </span>
-      <span style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)", "line-height": "12px" }}>
+      <span style={{ "font-size": "10px", color: "var(--v2-text-text-faint)", "line-height": "12px" }}>
         {props.label}
       </span>
     </div>
@@ -346,7 +347,13 @@ function Stat(props: { value: string; label: string }) {
 function AboutYouCard(props: {
   view: ProfileView | undefined
   onEdit: () => void
-  onSave?: (fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }) => Promise<void>
+  onSave?: (fields: {
+    name?: string
+    affiliation?: string
+    focus?: string
+    scholar?: string
+    affiliation_logo?: string
+  }) => Promise<void>
   onStart: (prompt: string) => void
 }) {
   const you = createMemo(() => (props.view?.ok ? props.view.you : undefined))
@@ -357,16 +364,24 @@ function AboutYouCard(props: {
   // A persisted-but-dead logo URL (e.g. the sunset Clearbit CDN) must fall
   // back to the monogram tile, not render the broken-image glyph in the hero.
   const [logoBroken, setLogoBroken] = createSignal(false)
-  createEffect(on(() => (props.view?.ok ? props.view.you.affiliation_logo : undefined), () => setLogoBroken(false)))
+  createEffect(
+    on(
+      () => (props.view?.ok ? props.view.you.affiliation_logo : undefined),
+      () => setLogoBroken(false),
+    ),
+  )
   const [saving, setSaving] = createSignal(false)
   const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "", scholar: "", affiliation_logo: "" })
   const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
   const beginEdit = () => {
-    setSuggestions([])   // a dropdown left open at cancel must not haunt the next edit
+    setSuggestions([]) // a dropdown left open at cancel must not haunt the next edit
     const y = you()
     setDraft({
-      name: y?.name ?? "", affiliation: y?.affiliation ?? "", focus: y?.focus ?? "",
-      scholar: y?.scholar ?? "", affiliation_logo: y?.affiliation_logo ?? "",
+      name: y?.name ?? "",
+      affiliation: y?.affiliation ?? "",
+      focus: y?.focus ?? "",
+      scholar: y?.scholar ?? "",
+      affiliation_logo: y?.affiliation_logo ?? "",
     })
     setEditing(true)
   }
@@ -379,24 +394,37 @@ function AboutYouCard(props: {
   // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
   // AND its logo; free text still saves as a plain affiliation.
   let searchTimer: ReturnType<typeof setTimeout> | undefined
-  let searchSeq = 0   // out-of-order guard: a slow "har" response must not clobber "harvard"'s
-  onCleanup(() => { if (searchTimer) clearTimeout(searchTimer) })
+  let searchSeq = 0 // out-of-order guard: a slow "har" response must not clobber "harvard"'s
+  onCleanup(() => {
+    if (searchTimer) clearTimeout(searchTimer)
+  })
   const searchInstitutions = (q: string) => {
     if (searchTimer) clearTimeout(searchTimer)
-    if (q.trim().length < 2) { searchSeq++; setSuggestions([]); return }
+    if (q.trim().length < 2) {
+      searchSeq++
+      setSuggestions([])
+      return
+    }
     searchTimer = setTimeout(() => {
       const seq = ++searchSeq
       fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q.trim())}`)
         .then((r) => (r.ok ? r.json() : []))
-        .then((rows: any) => { if (seq === searchSeq) setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : []) })
-        .catch(() => { if (seq === searchSeq) setSuggestions([]) })
+        .then((rows: any) => {
+          if (seq === searchSeq) setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : [])
+        })
+        .catch(() => {
+          if (seq === searchSeq) setSuggestions([])
+        })
     }, 200)
   }
   // Counter, not boolean: pick A then B while A's Wikidata round-trip is in
   // flight — A's finally must not re-enable Save while B still resolves (the
   // boolean version re-introduced the save-races-logo bug it claimed to fix).
   const [resolvingLogo, setResolvingLogo] = createSignal(0)
-  const wikiJson = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : undefined)).catch(() => undefined)
+  const wikiJson = (url: string) =>
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : undefined))
+      .catch(() => undefined)
   const pickInstitution = async (sug: { name: string; domain: string; logo: string }) => {
     // Instant favicon mark, then resolve the real BRAND logo: Wikidata P154
     // ("logo image" — e.g. the purple NYU torch, not the seal) rasterized by
@@ -470,7 +498,10 @@ function AboutYouCard(props: {
       }
       window.addEventListener("message", onMsg)
       window.parent.postMessage({ source: "amicode", kind: "clipboard-request", nonce }, "*")
-      setTimeout(() => { window.removeEventListener("message", onMsg); resolve("") }, 1500)
+      setTimeout(() => {
+        window.removeEventListener("message", onMsg)
+        resolve("")
+      }, 1500)
     })
   const pasteFallback = (apply: (value: string) => void) => async (e: KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
@@ -481,7 +512,11 @@ function AboutYouCard(props: {
     e.stopPropagation()
     const el = e.currentTarget as HTMLInputElement
     let clip = ""
-    try { clip = (await navigator.clipboard.readText()) ?? "" } catch { /* delegated-permission miss */ }
+    try {
+      clip = (await navigator.clipboard.readText()) ?? ""
+    } catch {
+      /* delegated-permission miss */
+    }
     if (!clip && window.parent !== window) clip = await readClipboardViaBridge()
     if (!clip) return
     const start = el.selectionStart ?? el.value.length
@@ -490,14 +525,14 @@ function AboutYouCard(props: {
   }
 
   const FIELD: JSX.CSSProperties = {
-    "width": "100%",
+    width: "100%",
     "box-sizing": "border-box",
-    "background": "var(--v2-background-bg-layer-02, transparent)",
-    "border": "1px solid var(--v2-border-border-base)",
+    background: "var(--v2-background-bg-layer-02, transparent)",
+    border: "1px solid var(--v2-border-border-base)",
     "border-radius": "6px",
-    "padding": "4px 8px",
+    padding: "4px 8px",
     "font-size": "12px",
-    "color": "var(--v2-text-text-base)",
+    color: "var(--v2-text-text-base)",
   }
   const focusLine = createMemo(() => {
     const y = you()
@@ -512,24 +547,28 @@ function AboutYouCard(props: {
 
   return (
     <div data-component="amicode-card-you" style={HERO_CARD}>
-      <div style={{ "display": "flex", "align-items": "center", "justify-content": "space-between" }}>
-        <div style={{ "display": "flex", "align-items": "baseline", "gap": "8px" }}>
+      <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between" }}>
+        <div style={{ display: "flex", "align-items": "baseline", gap: "8px" }}>
           <div style={EYEBROW}>About you</div>
-          <span style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)" }}>self-improving — Amico refines this as you work</span>
+          <span style={{ "font-size": "10px", color: "var(--v2-text-text-faint)" }}>
+            self-improving — Amico refines this as you work
+          </span>
         </div>
         <Show when={you()}>
           <button
             type="button"
             data-slot="amicode-card-you-edit"
             title={props.onSave ? (editing() ? "Cancel editing" : "Edit profile") : "Edit profile in chat"}
-            onClick={() => (props.onSave ? (editing() ? (setEditing(false), setSuggestions([])) : beginEdit()) : props.onEdit())}
+            onClick={() =>
+              props.onSave ? (editing() ? (setEditing(false), setSuggestions([])) : beginEdit()) : props.onEdit()
+            }
             style={{
-              "background": "none",
-              "border": "none",
-              "cursor": "pointer",
-              "color": "var(--v2-text-text-faint)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--v2-text-text-faint)",
               "font-size": "12px",
-              "padding": "0",
+              padding: "0",
               "line-height": "1",
             }}
           >
@@ -541,7 +580,7 @@ function AboutYouCard(props: {
       <Show
         when={you()}
         fallback={
-          <div style={{ "margin-top": "10px", "font-size": "12px", "color": "var(--v2-text-text-faint)" }}>
+          <div style={{ "margin-top": "10px", "font-size": "12px", color: "var(--v2-text-text-faint)" }}>
             {props.view && !props.view.ok ? "Profile unavailable." : "Loading…"}
           </div>
         }
@@ -552,83 +591,127 @@ function AboutYouCard(props: {
               <div
                 data-slot="amicode-you-institution"
                 style={{
-                  "display": "flex", "gap": "10px", "align-items": "center", "margin-top": "10px",
-                  "padding": "8px 10px", "border-radius": "8px",
-                  "background": "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
-                  "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                  display: "flex",
+                  gap: "10px",
+                  "align-items": "center",
+                  "margin-top": "10px",
+                  padding: "8px 10px",
+                  "border-radius": "8px",
+                  background: "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
                 }}
               >
                 <Show
                   when={y().affiliation_logo && !logoBroken()}
                   fallback={
-                    <span style={{
-                      "display": "inline-flex", "align-items": "center", "justify-content": "center",
-                      "width": "44px", "height": "44px", "border-radius": "8px", "flex": "none",
-                      "background": "var(--v2-icon-icon-accent)", "color": "var(--v2-background-bg-base, #000)",
-                      "font-size": "15px", "font-weight": "700", "letter-spacing": "0.5px",
-                    }}>
-                      {(y().affiliation ?? "").split(/\s+/).map((w) => w[0]).join("").slice(0, 3).toUpperCase()}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        "align-items": "center",
+                        "justify-content": "center",
+                        width: "44px",
+                        height: "44px",
+                        "border-radius": "8px",
+                        flex: "none",
+                        background: "var(--v2-icon-icon-accent)",
+                        color: "var(--v2-background-bg-base, #000)",
+                        "font-size": "15px",
+                        "font-weight": "700",
+                        "letter-spacing": "0.5px",
+                      }}
+                    >
+                      {(y().affiliation ?? "")
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .join("")
+                        .slice(0, 3)
+                        .toUpperCase()}
                     </span>
                   }
                 >
                   {/* LinkedIn-style logo card: white tile + padding keeps any
                       mark crisp and consistent on both themes */}
-                  <span style={{
-                    "display": "inline-flex", "align-items": "center", "justify-content": "center",
-                    "width": "44px", "height": "44px", "border-radius": "8px", "flex": "none",
-                    "background": "#FFFFFF", "border": "1px solid var(--v2-border-border-base)", "padding": "5px",
-                  }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      "align-items": "center",
+                      "justify-content": "center",
+                      width: "44px",
+                      height: "44px",
+                      "border-radius": "8px",
+                      flex: "none",
+                      background: "#FFFFFF",
+                      border: "1px solid var(--v2-border-border-base)",
+                      padding: "5px",
+                    }}
+                  >
                     <img
                       src={y().affiliation_logo!}
                       alt={y().affiliation ?? "institution"}
-                      style={{ "width": "100%", "height": "100%", "object-fit": "contain" }}
+                      style={{ width: "100%", height: "100%", "object-fit": "contain" }}
                       onError={() => setLogoBroken(true)}
                     />
                   </span>
                 </Show>
-                <div style={{ "min-width": "0", "flex": "1" }}>
-                  <div style={{ "font-size": "14px", "font-weight": "650", "color": "var(--v2-text-text-base)", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                <div style={{ "min-width": "0", flex: "1" }}>
+                  <div
+                    style={{
+                      "font-size": "14px",
+                      "font-weight": "650",
+                      color: "var(--v2-text-text-base)",
+                      overflow: "hidden",
+                      "text-overflow": "ellipsis",
+                      "white-space": "nowrap",
+                    }}
+                  >
                     {y().affiliation}
                   </div>
-                  <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>Institution</div>
+                  <div style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>Institution</div>
                 </div>
-
               </div>
             </Show>
-            <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
-              <div style={{ "min-width": "0", "flex": "1" }}>
+            <div style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}>
+              <div style={{ "min-width": "0", flex: "1" }}>
                 <div
                   style={{
                     "font-size": "16px",
                     "font-weight": "600",
-                    "color": "var(--v2-text-text-base)",
-                    "overflow": "hidden",
+                    color: "var(--v2-text-text-base)",
+                    overflow: "hidden",
                     "text-overflow": "ellipsis",
                     "white-space": "nowrap",
                   }}
                 >
-                  <Show when={!editing()} fallback={
-                    <input
-                      data-slot="amicode-you-name"
-                      style={FIELD}
-                      value={draft().name}
-                      placeholder="Name"
-                      onInput={(e) => setDraft({ ...draft(), name: e.currentTarget.value })}
-                      onKeyDown={pasteFallback((v) => setDraft({ ...draft(), name: v }))}
-                    />
-                  }>
-                    <span style={{ "display": "inline-flex", "align-items": "center", "gap": "8px", "max-width": "100%" }}>
-                      <span style={{ "overflow": "hidden", "text-overflow": "ellipsis" }}>{y().name}</span>
+                  <Show
+                    when={!editing()}
+                    fallback={
+                      <input
+                        data-slot="amicode-you-name"
+                        style={FIELD}
+                        value={draft().name}
+                        placeholder="Name"
+                        onInput={(e) => setDraft({ ...draft(), name: e.currentTarget.value })}
+                        onKeyDown={pasteFallback((v) => setDraft({ ...draft(), name: v }))}
+                      />
+                    }
+                  >
+                    <span style={{ display: "inline-flex", "align-items": "center", gap: "8px", "max-width": "100%" }}>
+                      <span style={{ overflow: "hidden", "text-overflow": "ellipsis" }}>{y().name}</span>
                       <Show when={y().scholar}>
                         <button
                           type="button"
                           data-slot="amicode-you-scholar"
                           onClick={() => openExternal(y().scholar!)}
                           style={{
-                            "font-size": "11px", "font-weight": "600", "flex": "none", "cursor": "pointer",
-                            "color": "var(--v2-text-text-accent)", "background": "none",
-                            "border": "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
-                            "border-radius": "999px", "padding": "3px 10px",
+                            "font-size": "11px",
+                            "font-weight": "600",
+                            flex: "none",
+                            cursor: "pointer",
+                            color: "var(--v2-text-text-accent)",
+                            background: "none",
+                            border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
+                            "border-radius": "999px",
+                            padding: "3px 10px",
                           }}
                         >
                           Scholar ↗
@@ -641,105 +724,169 @@ function AboutYouCard(props: {
                   style={{
                     "font-size": "12px",
                     "line-height": "16px",
-                    "color": "var(--v2-text-text-muted)",
-                    "overflow": "hidden",
+                    color: "var(--v2-text-text-muted)",
+                    overflow: "hidden",
                     "text-overflow": "ellipsis",
                     "white-space": "nowrap",
                   }}
                 >
-                  <Show when={!editing()} fallback={
-                    <div style={{ "display": "flex", "flex-direction": "column", "gap": "4px", "margin-top": "4px" }}>
-                      <div style={{ "position": "relative" }}>
-                        <div style={{ "display": "flex", "gap": "6px", "align-items": "center" }}>
-                          <Show when={draft().affiliation_logo}>
-                            <img src={draft().affiliation_logo} alt="" style={{ "width": "20px", "height": "20px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} onError={(e) => (e.currentTarget.style.display = "none")} />
-                          </Show>
-                          <input
-                            data-slot="amicode-you-affiliation"
-                            style={{ ...FIELD, "flex": "1" }}
-                            value={draft().affiliation}
-                            placeholder="University or company — search like LinkedIn"
-                            onInput={(e) => {
-                              setDraft({ ...draft(), affiliation: e.currentTarget.value })
-                              searchInstitutions(e.currentTarget.value)
-                            }}
-                            onKeyDown={pasteFallback((v) => { setDraft({ ...draft(), affiliation: v }); searchInstitutions(v) })}
-                          />
-                        </div>
-                        <Show when={suggestions().length > 0}>
-                          <div style={{
-                            "position": "absolute", "top": "100%", "left": "0", "right": "0", "z-index": "10",
-                            "margin-top": "4px", "border-radius": "8px", "overflow": "hidden",
-                            "background": "var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))",
-                            "border": "1px solid var(--v2-border-border-base)",
-                            "box-shadow": "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.2))",
-                          }}>
-                            <For each={suggestions()}>
-                              {(sug) => (
-                                <button
-                                  type="button"
-                                  onClick={() => pickInstitution(sug)}
-                                  style={{
-                                    "display": "flex", "gap": "8px", "align-items": "center", "width": "100%",
-                                    "padding": "6px 8px", "background": "none", "border": "none", "cursor": "pointer",
-                                    "text-align": "left", "color": "var(--v2-text-text-base)", "font-size": "12px",
-                                  }}
-                                >
-                                  <img src={institutionLogoUrl(sug.domain)} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} onError={(e) => (e.currentTarget.style.display = "none")} />
-                                  <span style={{ "flex": "1", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{sug.name}</span>
-                                  <span style={{ "color": "var(--v2-text-text-faint)", "font-size": "10px" }}>{sug.domain}</span>
-                                </button>
-                              )}
-                            </For>
+                  <Show
+                    when={!editing()}
+                    fallback={
+                      <div style={{ display: "flex", "flex-direction": "column", gap: "4px", "margin-top": "4px" }}>
+                        <div style={{ position: "relative" }}>
+                          <div style={{ display: "flex", gap: "6px", "align-items": "center" }}>
+                            <Show when={draft().affiliation_logo}>
+                              <img
+                                src={draft().affiliation_logo}
+                                alt=""
+                                style={{
+                                  width: "20px",
+                                  height: "20px",
+                                  "object-fit": "contain",
+                                  "border-radius": "4px",
+                                  flex: "none",
+                                }}
+                                onError={(e) => (e.currentTarget.style.display = "none")}
+                              />
+                            </Show>
+                            <input
+                              data-slot="amicode-you-affiliation"
+                              style={{ ...FIELD, flex: "1" }}
+                              value={draft().affiliation}
+                              placeholder="University or company — search like LinkedIn"
+                              onInput={(e) => {
+                                setDraft({ ...draft(), affiliation: e.currentTarget.value })
+                                searchInstitutions(e.currentTarget.value)
+                              }}
+                              onKeyDown={pasteFallback((v) => {
+                                setDraft({ ...draft(), affiliation: v })
+                                searchInstitutions(v)
+                              })}
+                            />
                           </div>
-                        </Show>
+                          <Show when={suggestions().length > 0}>
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: "0",
+                                right: "0",
+                                "z-index": "10",
+                                "margin-top": "4px",
+                                "border-radius": "8px",
+                                overflow: "hidden",
+                                background: "var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))",
+                                border: "1px solid var(--v2-border-border-base)",
+                                "box-shadow": "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.2))",
+                              }}
+                            >
+                              <For each={suggestions()}>
+                                {(sug) => (
+                                  <button
+                                    type="button"
+                                    onClick={() => pickInstitution(sug)}
+                                    style={{
+                                      display: "flex",
+                                      gap: "8px",
+                                      "align-items": "center",
+                                      width: "100%",
+                                      padding: "6px 8px",
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      "text-align": "left",
+                                      color: "var(--v2-text-text-base)",
+                                      "font-size": "12px",
+                                    }}
+                                  >
+                                    <img
+                                      src={institutionLogoUrl(sug.domain)}
+                                      alt=""
+                                      style={{
+                                        width: "18px",
+                                        height: "18px",
+                                        "object-fit": "contain",
+                                        "border-radius": "4px",
+                                        flex: "none",
+                                      }}
+                                      onError={(e) => (e.currentTarget.style.display = "none")}
+                                    />
+                                    <span
+                                      style={{
+                                        flex: "1",
+                                        overflow: "hidden",
+                                        "text-overflow": "ellipsis",
+                                        "white-space": "nowrap",
+                                      }}
+                                    >
+                                      {sug.name}
+                                    </span>
+                                    <span style={{ color: "var(--v2-text-text-faint)", "font-size": "10px" }}>
+                                      {sug.domain}
+                                    </span>
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </Show>
+                        </div>
+                        <input
+                          data-slot="amicode-you-focus"
+                          style={FIELD}
+                          value={draft().focus}
+                          placeholder="What you work on"
+                          onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
+                          onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
+                        />
+                        <input
+                          data-slot="amicode-you-scholar-input"
+                          style={FIELD}
+                          value={draft().scholar}
+                          placeholder="Google Scholar URL (optional)"
+                          onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
+                          onKeyDown={pasteFallback((v) => setDraft({ ...draft(), scholar: v }))}
+                        />
+                        <div style={{ display: "flex", gap: "8px", "align-items": "center" }}>
+                          <button
+                            type="button"
+                            data-slot="amicode-you-save"
+                            disabled={saving() || resolvingLogo() > 0}
+                            onClick={() => void save()}
+                            style={{
+                              background: "var(--v2-icon-icon-accent)",
+                              color: "var(--v2-background-bg-base, #000)",
+                              border: "none",
+                              "border-radius": "6px",
+                              padding: "4px 10px",
+                              "font-size": "12px",
+                              "font-weight": "600",
+                              cursor: saving() ? "wait" : "pointer",
+                            }}
+                          >
+                            {saving() ? "Saving…" : resolvingLogo() > 0 ? "Finding logo…" : "Save"}
+                          </button>
+                          <Show
+                            when={saveError()}
+                            fallback={
+                              <span style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>
+                                saves to your profile
+                              </span>
+                            }
+                          >
+                            <span style={{ "font-size": "11px", color: "var(--v2-state-fg-danger)" }}>
+                              {saveError()}
+                            </span>
+                          </Show>
+                        </div>
                       </div>
-                      <input
-                        data-slot="amicode-you-focus"
-                        style={FIELD}
-                        value={draft().focus}
-                        placeholder="What you work on"
-                        onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
-                        onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
-                      />
-                      <input
-                        data-slot="amicode-you-scholar-input"
-                        style={FIELD}
-                        value={draft().scholar}
-                        placeholder="Google Scholar URL (optional)"
-                        onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
-                        onKeyDown={pasteFallback((v) => setDraft({ ...draft(), scholar: v }))}
-                      />
-                      <div style={{ "display": "flex", "gap": "8px", "align-items": "center" }}>
-                        <button
-                          type="button"
-                          data-slot="amicode-you-save"
-                          disabled={saving() || resolvingLogo() > 0}
-                          onClick={() => void save()}
-                          style={{
-                            "background": "var(--v2-icon-icon-accent)",
-                            "color": "var(--v2-background-bg-base, #000)",
-                            "border": "none",
-                            "border-radius": "6px",
-                            "padding": "4px 10px",
-                            "font-size": "12px",
-                            "font-weight": "600",
-                            "cursor": saving() ? "wait" : "pointer",
-                          }}
-                        >
-                          {saving() ? "Saving…" : resolvingLogo() > 0 ? "Finding logo…" : "Save"}
-                        </button>
-                        <Show when={saveError()} fallback={<span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>}>
-                          <span style={{ "font-size": "11px", "color": "var(--v2-state-fg-danger)" }}>{saveError()}</span>
-                        </Show>
-                      </div>
-                    </div>
-                  }>
+                    }
+                  >
                     {focusLine()}
                   </Show>
                 </div>
                 <Show when={y().platforms.length > 0}>
-                  <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)", "margin-top": "1px" }}>
+                  <div style={{ "font-size": "11px", color: "var(--v2-text-text-faint)", "margin-top": "1px" }}>
                     <For each={y().platforms.slice(0, 3)}>
                       {(p, i) => (
                         <span>
@@ -757,7 +904,7 @@ function AboutYouCard(props: {
               fallback={
                 <>
                   <div style={DIVIDER} />
-                  <div style={{ "font-size": "12px", "color": "var(--v2-text-text-muted)", "margin-bottom": "8px" }}>
+                  <div style={{ "font-size": "12px", color: "var(--v2-text-text-muted)", "margin-bottom": "8px" }}>
                     No solves yet — tell Amico what you're working on and it'll start remembering.
                   </div>
                   <PrimaryButton
@@ -772,9 +919,9 @@ function AboutYouCard(props: {
               <div style={DIVIDER} />
               <div
                 style={{
-                  "display": "grid",
+                  display: "grid",
                   "grid-template-columns": "repeat(4, minmax(0, 1fr))",
-                  "gap": "8px",
+                  gap: "8px",
                 }}
               >
                 <Stat value={String(y().stats.problems)} label="problems" />
@@ -785,17 +932,17 @@ function AboutYouCard(props: {
 
               <Show when={y().remembers.length > 0}>
                 <div style={DIVIDER} />
-                <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
+                <div style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
                   Amico remembers
                 </div>
-                <div style={{ "display": "flex", "flex-direction": "column", "gap": "3px" }}>
+                <div style={{ display: "flex", "flex-direction": "column", gap: "3px" }}>
                   <For each={y().remembers}>{(m) => <Bullet title={m.detail}>{m.title}</Bullet>}</For>
                 </div>
               </Show>
 
               <Show when={sinceLabel(y().stats.since)}>
                 {(label) => (
-                  <div style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)", "margin-top": "10px" }}>
+                  <div style={{ "font-size": "10px", color: "var(--v2-text-text-faint)", "margin-top": "10px" }}>
                     {label()}
                   </div>
                 )}
@@ -811,12 +958,7 @@ function AboutYouCard(props: {
 // ---------------------------------------------------------------------------
 // action cards
 // ---------------------------------------------------------------------------
-function ActionCard(props: {
-  eyebrow: string
-  slot: string
-  onClick?: () => void
-  children: JSX.Element
-}) {
+function ActionCard(props: { eyebrow: string; slot: string; onClick?: () => void; children: JSX.Element }) {
   return (
     <div
       data-component="amicode-action-card"
@@ -824,8 +966,8 @@ function ActionCard(props: {
       onClick={() => props.onClick?.()}
       style={{
         ...CARD,
-        "gap": "6px",
-        "cursor": props.onClick ? "pointer" : "default",
+        gap: "6px",
+        cursor: props.onClick ? "pointer" : "default",
         "min-height": "88px",
       }}
     >
@@ -838,15 +980,15 @@ function ActionCard(props: {
 const CARD_TITLE: JSX.CSSProperties = {
   "font-size": "13px",
   "font-weight": "600",
-  "color": "var(--v2-text-text-base)",
-  "overflow": "hidden",
+  color: "var(--v2-text-text-base)",
+  overflow: "hidden",
   "text-overflow": "ellipsis",
   "white-space": "nowrap",
 }
 const CARD_SUB: JSX.CSSProperties = {
   "font-size": "11px",
-  "color": "var(--v2-text-text-muted)",
-  "overflow": "hidden",
+  color: "var(--v2-text-text-muted)",
+  overflow: "hidden",
   "text-overflow": "ellipsis",
   "white-space": "nowrap",
 }
@@ -886,7 +1028,6 @@ export interface HomeLiveRun {
   series?: number[]
 }
 
-
 // ---------------------------------------------------------------------------
 // height compaction — the home page must fit ONE screen on a laptop (no box
 // scrolling; scrolling is a phone affordance). Cards style inline, so these
@@ -917,7 +1058,13 @@ export function AmicodeHomeCards(props: {
   starters: readonly { label: string; prompt: string }[]
   onStart: (prompt: string) => void
   onEditProfile: () => void
-  onSaveProfile?: (fields: { name?: string; affiliation?: string; focus?: string; scholar?: string; affiliation_logo?: string }) => Promise<void>
+  onSaveProfile?: (fields: {
+    name?: string
+    affiliation?: string
+    focus?: string
+    scholar?: string
+    affiliation_logo?: string
+  }) => Promise<void>
   // Jump back in
   resumeName?: string
   resumeMeta?: string
@@ -930,24 +1077,29 @@ export function AmicodeHomeCards(props: {
 }) {
   const stats = createMemo(() => (props.profile?.ok ? props.profile.you.stats : undefined))
   return (
-    <div data-component="amicode-home-cards" style={{ "display": "flex", "flex-direction": "column", "gap": "12px" }}>
+    <div data-component="amicode-home-cards" style={{ display: "flex", "flex-direction": "column", gap: "12px" }}>
       <style>{COMPACT_CSS}</style>
       <div
         style={{
-          "display": "grid",
+          display: "grid",
           "grid-template-columns": "repeat(2, minmax(0, 1fr))",
-          "gap": "12px",
+          gap: "12px",
         }}
       >
         <MeetAmicoCard onStart={props.onStart} />
-        <AboutYouCard view={props.profile} onEdit={props.onEditProfile} onSave={props.onSaveProfile} onStart={props.onStart} />
+        <AboutYouCard
+          view={props.profile}
+          onEdit={props.onEditProfile}
+          onSave={props.onSaveProfile}
+          onStart={props.onStart}
+        />
       </div>
 
       <div
         style={{
-          "display": "grid",
+          display: "grid",
           "grid-template-columns": "repeat(auto-fit, minmax(150px, 1fr))",
-          "gap": "8px",
+          gap: "8px",
         }}
       >
         {/* Jump back in */}
@@ -957,7 +1109,7 @@ export function AmicodeHomeCards(props: {
             <Show when={props.resumeMeta}>
               <div style={CARD_SUB}>{props.resumeMeta}</div>
             </Show>
-            <div style={{ "font-size": "11px", "color": "var(--v2-text-text-accent)", "margin-top": "auto" }}>
+            <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
               Resume →
             </div>
           </ActionCard>
@@ -968,7 +1120,7 @@ export function AmicodeHomeCards(props: {
           {(run) => (
             <ActionCard eyebrow="Now solving" slot="amicode-card-live" onClick={props.onOpenLiveRun}>
               <div style={CARD_TITLE}>{run().name ?? "current run"}</div>
-              <div style={{ "display": "flex", "align-items": "center", "gap": "8px", "min-width": "0" }}>
+              <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0" }}>
                 <span style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
                   iter {run().iteration ?? "—"} · F {fidelity(run().fidelity ?? null)}
                 </span>
@@ -989,7 +1141,7 @@ export function AmicodeHomeCards(props: {
             <div style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
               best F {fidelity(stats()!.best_fidelity)}
             </div>
-            <div style={{ "font-size": "11px", "color": "var(--v2-text-text-accent)", "margin-top": "auto" }}>
+            <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
               Warm-start →
             </div>
           </ActionCard>
@@ -997,7 +1149,7 @@ export function AmicodeHomeCards(props: {
 
         {/* Start something */}
         <ActionCard eyebrow="Start something" slot="amicode-card-start">
-          <div style={{ "display": "flex", "flex-wrap": "wrap", "gap": "5px", "margin-top": "2px" }}>
+          <div style={{ display: "flex", "flex-wrap": "wrap", gap: "5px", "margin-top": "2px" }}>
             <For each={props.starters}>
               {(starter) => (
                 <button
@@ -1005,14 +1157,14 @@ export function AmicodeHomeCards(props: {
                   data-slot="amicode-card-start-chip"
                   onClick={() => props.onStart(starter.prompt)}
                   style={{
-                    "border": "1px solid var(--v2-border-border-base)",
+                    border: "1px solid var(--v2-border-border-base)",
                     "border-radius": "6px",
-                    "background": "var(--v2-background-bg-layer-02)",
-                    "color": "var(--v2-text-text-base)",
-                    "padding": "3px 9px",
+                    background: "var(--v2-background-bg-layer-02)",
+                    color: "var(--v2-text-text-base)",
+                    padding: "3px 9px",
                     "font-size": "11px",
                     "line-height": "15px",
-                    "cursor": "pointer",
+                    cursor: "pointer",
                   }}
                 >
                   {starter.label}

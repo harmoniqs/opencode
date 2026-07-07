@@ -1,12 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { fetchAmicodeRunSeries, openAmicodeEntity } from "./ui-bridge"
-import {
-  type RunSeries,
-  type RunSeriesView,
-  elapsedLabel,
-  headlineMetric,
-  parseRunSeriesResponse,
-} from "./run-series"
+import { type RunSeries, type RunSeriesView, elapsedLabel, headlineMetric, parseRunSeriesResponse } from "./run-series"
 
 export { parseRunSeriesResponse, type RunSeries, type RunSeriesView } from "./run-series"
 
@@ -93,7 +87,7 @@ function Plot(props: { d: string[] | undefined }) {
                 stroke-width="1.5"
                 stroke-linejoin="round"
                 vector-effect="non-scaling-stroke"
-                opacity={i() === 0 ? 1 : 0.55}   // second/third drive quadratures read as companions
+                opacity={i() === 0 ? 1 : 0.55} // second/third drive quadratures read as companions
               />
             )}
           </For>
@@ -214,7 +208,11 @@ export function RunWindow(props: { run: string; lab?: string }) {
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Run</span>
         <Show
           when={run()}
-          fallback={<span style={{ color: "var(--v2-text-text-muted)" }}>{view()?.ok === false ? "unavailable" : "loading…"}</span>}
+          fallback={
+            <span style={{ color: "var(--v2-text-text-muted)" }}>
+              {view()?.ok === false ? "unavailable" : "loading…"}
+            </span>
+          }
         >
           {(r) => (
             <>

@@ -55,23 +55,23 @@ export function AmicodeGettingStarted(props: {
     <div
       data-component="amicode-getting-started"
       style={{
-        "display": "flex",
+        display: "flex",
         "flex-direction": "column",
         "align-items": "center",
-        "gap": "12px",
+        gap: "12px",
         "min-width": "0",
         "max-width": "100%",
       }}
     >
       <div
         data-slot="amicode-gs-tagline"
-        style={{ "font-size": "14px", "line-height": "20px", "color": "var(--v2-text-text-base)" }}
+        style={{ "font-size": "14px", "line-height": "20px", color: "var(--v2-text-text-base)" }}
       >
         <AmicodeTagline />
       </div>
       <div
         data-slot="amicode-gs-byline"
-        style={{ "font-size": "11px", "line-height": "14px", "color": "var(--v2-text-text-faint)", "margin-top": "-8px" }}
+        style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)", "margin-top": "-8px" }}
       >
         By Harmoniqs
       </div>
@@ -79,14 +79,14 @@ export function AmicodeGettingStarted(props: {
         <div
           data-slot="amicode-gs-steps"
           style={{
-            "display": "flex",
+            display: "flex",
             "flex-wrap": "wrap",
             "justify-content": "center",
             "column-gap": "16px",
             "row-gap": "4px",
             "font-size": "12px",
             "line-height": "16px",
-            "color": "var(--v2-text-text-faint)",
+            color: "var(--v2-text-text-faint)",
           }}
         >
           <For each={STEPS}>{(step) => <span style={{ "white-space": "nowrap" }}>{step}</span>}</For>
@@ -95,10 +95,10 @@ export function AmicodeGettingStarted(props: {
       <div
         data-slot="amicode-gs-starters"
         style={{
-          "display": "flex",
+          display: "flex",
           "flex-wrap": "wrap",
           "justify-content": "center",
-          "gap": "6px",
+          gap: "6px",
         }}
       >
         <For each={AMICODE_STARTERS}>
@@ -108,14 +108,14 @@ export function AmicodeGettingStarted(props: {
               data-slot="amicode-gs-starter"
               onClick={() => props.onStart(starter.prompt)}
               style={{
-                "border": "1px solid var(--v2-icon-icon-accent)",
+                border: "1px solid var(--v2-icon-icon-accent)",
                 "border-radius": "6px",
-                "background": "var(--v2-background-bg-layer-02)",
-                "color": "var(--v2-text-text-base)",
-                "padding": "4px 12px",
+                background: "var(--v2-background-bg-layer-02)",
+                color: "var(--v2-text-text-base)",
+                padding: "4px 12px",
                 "font-size": "12px",
                 "line-height": "16px",
-                "cursor": "pointer",
+                cursor: "pointer",
               }}
             >
               {starter.label}
@@ -128,14 +128,14 @@ export function AmicodeGettingStarted(props: {
             data-slot="amicode-gs-resume"
             onClick={() => props.onResume?.()}
             style={{
-              "border": "1px solid var(--v2-icon-icon-accent)",
+              border: "1px solid var(--v2-icon-icon-accent)",
               "border-radius": "6px",
-              "background": "var(--v2-background-bg-layer-02)",
-              "color": "var(--v2-text-text-base)",
-              "padding": "4px 12px",
+              background: "var(--v2-background-bg-layer-02)",
+              color: "var(--v2-text-text-base)",
+              padding: "4px 12px",
               "font-size": "12px",
               "line-height": "16px",
-              "cursor": "pointer",
+              cursor: "pointer",
             }}
           >
             Resume “{props.resumeName}”

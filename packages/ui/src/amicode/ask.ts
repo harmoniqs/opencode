@@ -25,9 +25,7 @@ export function parseAskInput(input: unknown): AskInput | undefined {
   if (!Array.isArray(options)) return undefined
 
   const detailsValid =
-    Array.isArray(details) &&
-    details.length === options.length &&
-    details.every((detail) => typeof detail === "string")
+    Array.isArray(details) && details.length === options.length && details.every((detail) => typeof detail === "string")
 
   const pairs = options
     .map((option, index) => ({ option, detail: detailsValid ? (details[index] as string).trim() : undefined }))
@@ -48,10 +46,7 @@ export function parseAskInput(input: unknown): AskInput | undefined {
 // i.e. some user message exists LATER (ULID order: lexicographically greater
 // id) than the card's message. Assistant text streamed after the ask call
 // must NOT lock the card (live-demo bug, 2026-07-03).
-export function hasUserReplyAfter(
-  messages: readonly { id: string; role?: string }[],
-  messageID: string,
-): boolean {
+export function hasUserReplyAfter(messages: readonly { id: string; role?: string }[], messageID: string): boolean {
   if (typeof messageID !== "string" || messageID.length === 0) return false
   for (const message of messages) {
     if (message.role !== "user") continue
@@ -80,7 +75,7 @@ export function answeredOption(
     const text = partsForMessage(m.id).find((p) => p.type === "text" && typeof p.text === "string")?.text
     if (text === undefined) continue
     const t = text.trim()
-    return options.includes(t) ? t : undefined   // first reply decides; non-option reply = answered otherwise
+    return options.includes(t) ? t : undefined // first reply decides; non-option reply = answered otherwise
   }
   return undefined
 }

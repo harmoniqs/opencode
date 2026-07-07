@@ -147,7 +147,12 @@ export function parseRunStatusResponse(raw: unknown): RunStatusView[] {
     .filter(
       (entry) =>
         typeof entry.run_id === "string" &&
-        (entry.status === "solving" || entry.status === "finished" || entry.status === "failed" || entry.status === "stalled" || entry.status === "stopped" || entry.status === "aborted"),
+        (entry.status === "solving" ||
+          entry.status === "finished" ||
+          entry.status === "failed" ||
+          entry.status === "stalled" ||
+          entry.status === "stopped" ||
+          entry.status === "aborted"),
     )
     .map(
       (entry): RunStatusView => ({

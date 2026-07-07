@@ -39,15 +39,15 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
     <div
       data-component="amicode-ask-card"
       style={{
-        "display": "flex",
+        display: "flex",
         "flex-direction": "column",
-        "gap": "8px",
+        gap: "8px",
         "min-width": "0",
-        "border": "1px solid var(--v2-border-border-base)",
+        border: "1px solid var(--v2-border-border-base)",
         "border-left": "3px solid var(--v2-icon-icon-accent)",
         "border-radius": "6px",
-        "background": "var(--v2-background-bg-layer-01)",
-        "padding": "8px 12px",
+        background: "var(--v2-background-bg-layer-01)",
+        padding: "8px 12px",
         "font-size": "12px",
         "line-height": "16px",
       }}
@@ -57,15 +57,15 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
           style={{
             "font-weight": "700",
             "letter-spacing": "0.08em",
-            "color": "var(--v2-text-text-accent)",
+            color: "var(--v2-text-text-accent)",
           }}
         >
           AMICO
         </span>
         <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
-        <span style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}>Question</span>
+        <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Question</span>
       </div>
-      <div data-slot="amicode-ask-question" style={{ "font-size": "13px", "color": "var(--v2-text-text-base)" }}>
+      <div data-slot="amicode-ask-question" style={{ "font-size": "13px", color: "var(--v2-text-text-base)" }}>
         {props.ask.question}
       </div>
       <div style={{ display: "flex", "flex-wrap": "wrap", gap: "6px" }}>
@@ -78,23 +78,23 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
               disabled={!active()}
               onClick={() => submit(option)}
               style={{
-                "display": "flex",
+                display: "flex",
                 "flex-direction": "column",
                 "align-items": "flex-start",
-                "gap": "2px",
+                gap: "2px",
                 "text-align": "left",
-                "border":
+                border:
                   picked() === option
                     ? "1px solid var(--v2-icon-icon-accent)"
                     : "1px solid var(--v2-border-border-strong)",
                 "border-radius": "6px",
-                "background": "var(--v2-background-bg-layer-02)",
-                "color": "var(--v2-text-text-base)",
-                "padding": "3px 10px",
+                background: "var(--v2-background-bg-layer-02)",
+                color: "var(--v2-text-text-base)",
+                padding: "3px 10px",
                 "font-size": "12px",
                 "line-height": "16px",
-                "cursor": active() ? "pointer" : "default",
-                "opacity": active() || picked() === option ? "1" : "0.55",
+                cursor: active() ? "pointer" : "default",
+                opacity: active() || picked() === option ? "1" : "0.55",
               }}
             >
               <span>{option}</span>
@@ -105,7 +105,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
                     style={{
                       "font-size": "11px",
                       "line-height": "14px",
-                      "color": "var(--v2-text-text-faint)",
+                      color: "var(--v2-text-text-faint)",
                     }}
                   >
                     {detail()}
