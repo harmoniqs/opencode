@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type JSX, createSignal } from "solid-js"
+import { For, Show, createMemo, type JSX, createSignal, onCleanup } from "solid-js"
 import { Mark } from "../components/logo"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
@@ -356,7 +356,9 @@ function AboutYouCard(props: {
   const [editing, setEditing] = createSignal(false)
   const [saving, setSaving] = createSignal(false)
   const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "", scholar: "", affiliation_logo: "" })
+  const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
   const beginEdit = () => {
+    setSuggestions([])   // a dropdown left open at cancel must not haunt the next edit
     const y = you()
     setDraft({
       name: y?.name ?? "", affiliation: y?.affiliation ?? "", focus: y?.focus ?? "",
@@ -372,16 +374,18 @@ function AboutYouCard(props: {
   // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
   // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
   // AND its logo; free text still saves as a plain affiliation.
-  const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
   let searchTimer: ReturnType<typeof setTimeout> | undefined
+  let searchSeq = 0   // out-of-order guard: a slow "har" response must not clobber "harvard"'s
+  onCleanup(() => { if (searchTimer) clearTimeout(searchTimer) })
   const searchInstitutions = (q: string) => {
     if (searchTimer) clearTimeout(searchTimer)
-    if (q.trim().length < 2) { setSuggestions([]); return }
+    if (q.trim().length < 2) { searchSeq++; setSuggestions([]); return }
     searchTimer = setTimeout(() => {
+      const seq = ++searchSeq
       fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q.trim())}`)
         .then((r) => (r.ok ? r.json() : []))
-        .then((rows: any) => setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : []))
-        .catch(() => setSuggestions([]))
+        .then((rows: any) => { if (seq === searchSeq) setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : []) })
+        .catch(() => { if (seq === searchSeq) setSuggestions([]) })
     }, 200)
   }
   // Counter, not boolean: pick A then B while A's Wikidata round-trip is in
@@ -511,7 +515,7 @@ function AboutYouCard(props: {
             type="button"
             data-slot="amicode-card-you-edit"
             title={props.onSave ? (editing() ? "Cancel editing" : "Edit profile") : "Edit profile in chat"}
-            onClick={() => (props.onSave ? (editing() ? setEditing(false) : beginEdit()) : props.onEdit())}
+            onClick={() => (props.onSave ? (editing() ? (setEditing(false), setSuggestions([])) : beginEdit()) : props.onEdit())}
             style={{
               "background": "none",
               "border": "none",
