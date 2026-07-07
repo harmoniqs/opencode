@@ -2,9 +2,8 @@ name: typecheck
 
 on:
   push:
-    branches: [dev]
+    branches: [local/amicode]
   pull_request:
-    branches: [dev]
   workflow_dispatch:
 
 jobs:
