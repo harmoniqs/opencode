@@ -343,7 +343,7 @@ function AboutYouCard(props: {
   }
   // Institution logos ride Google's favicon service — clearbit's logo CDN is
   // sunset (autocomplete lives on for name+domain, which is all we need).
-  const institutionLogoUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
+  const institutionLogoUrl = (domain: string) => `https://unavatar.io/${encodeURIComponent(domain)}?fallback=https://www.google.com/s2/favicons%3Fdomain%3D${encodeURIComponent(domain)}%26sz%3D256`
 
   // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
   // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
@@ -375,21 +375,36 @@ function AboutYouCard(props: {
       setSaving(false)
     }
   }
-  /** ⌘/Ctrl+V fallback: native paste doesn't reliably reach inputs inside the
-   *  VS Code webview iframe — read the clipboard ourselves and insert at the
-   *  caret, then hand the result to the caller. */
+  /** ⌘/Ctrl+V fallback: neither native paste nor navigator.clipboard reach a
+   *  cross-origin iframe inside a VS Code webview (the parent has no
+   *  clipboard-read to delegate) — so ask the EXTENSION HOST over the message
+   *  bridge; it reads the OS clipboard and replies. navigator.clipboard is
+   *  still tried first for plain-browser contexts. */
+  const readClipboardViaBridge = () =>
+    new Promise<string>((resolve) => {
+      const nonce = Math.random().toString(36).slice(2)
+      const onMsg = (e: MessageEvent) => {
+        const d = e.data as { source?: string; kind?: string; nonce?: string; text?: string } | undefined
+        if (d?.source !== "amicode" || d.kind !== "clipboard" || d.nonce !== nonce) return
+        window.removeEventListener("message", onMsg)
+        resolve(typeof d.text === "string" ? d.text : "")
+      }
+      window.addEventListener("message", onMsg)
+      window.parent.postMessage({ source: "amicode", kind: "clipboard-request", nonce }, "*")
+      setTimeout(() => { window.removeEventListener("message", onMsg); resolve("") }, 1500)
+    })
   const pasteFallback = (apply: (value: string) => void) => async (e: KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
     e.preventDefault()
     e.stopPropagation()
-    try {
-      const clip = await navigator.clipboard.readText()
-      if (!clip) return
-      const el = e.currentTarget as HTMLInputElement
-      const start = el.selectionStart ?? el.value.length
-      const end = el.selectionEnd ?? el.value.length
-      apply(el.value.slice(0, start) + clip + el.value.slice(end))
-    } catch { /* clipboard unavailable — nothing to do */ }
+    const el = e.currentTarget as HTMLInputElement
+    let clip = ""
+    try { clip = (await navigator.clipboard.readText()) ?? "" } catch { /* delegated-permission miss */ }
+    if (!clip && window.parent !== window) clip = await readClipboardViaBridge()
+    if (!clip) return
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    apply(el.value.slice(0, start) + clip + el.value.slice(end))
   }
 
   const FIELD: JSX.CSSProperties = {
@@ -466,25 +481,33 @@ function AboutYouCard(props: {
                   fallback={
                     <span style={{
                       "display": "inline-flex", "align-items": "center", "justify-content": "center",
-                      "width": "26px", "height": "26px", "border-radius": "6px", "flex": "none",
+                      "width": "44px", "height": "44px", "border-radius": "8px", "flex": "none",
                       "background": "var(--v2-icon-icon-accent)", "color": "var(--v2-background-bg-base, #000)",
-                      "font-size": "11px", "font-weight": "700", "letter-spacing": "0.5px",
+                      "font-size": "15px", "font-weight": "700", "letter-spacing": "0.5px",
                     }}>
                       {(y().affiliation ?? "").split(/\s+/).map((w) => w[0]).join("").slice(0, 3).toUpperCase()}
                     </span>
                   }
                 >
-                  <img
-                    src={y().affiliation_logo!}
-                    alt={y().affiliation ?? "institution"}
-                    style={{ "width": "26px", "height": "26px", "object-fit": "contain", "border-radius": "6px", "flex": "none" }}
-                  />
+                  {/* LinkedIn-style logo card: white tile + padding keeps any
+                      mark crisp and consistent on both themes */}
+                  <span style={{
+                    "display": "inline-flex", "align-items": "center", "justify-content": "center",
+                    "width": "44px", "height": "44px", "border-radius": "8px", "flex": "none",
+                    "background": "#FFFFFF", "border": "1px solid var(--v2-border-border-base)", "padding": "5px",
+                  }}>
+                    <img
+                      src={y().affiliation_logo!}
+                      alt={y().affiliation ?? "institution"}
+                      style={{ "width": "100%", "height": "100%", "object-fit": "contain" }}
+                    />
+                  </span>
                 </Show>
                 <div style={{ "min-width": "0", "flex": "1" }}>
-                  <div style={{ "font-size": "12px", "font-weight": "600", "color": "var(--v2-text-text-base)", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                  <div style={{ "font-size": "14px", "font-weight": "650", "color": "var(--v2-text-text-base)", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
                     {y().affiliation}
                   </div>
-                  <div style={{ "font-size": "10px", "color": "var(--v2-text-text-faint)" }}>institution profile</div>
+                  <div style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>Institution</div>
                 </div>
                 <Show when={y().scholar}>
                   <a
