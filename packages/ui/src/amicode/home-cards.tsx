@@ -341,6 +341,10 @@ function AboutYouCard(props: {
     })
     setEditing(true)
   }
+  // Institution logos ride Google's favicon service — clearbit's logo CDN is
+  // sunset (autocomplete lives on for name+domain, which is all we need).
+  const institutionLogoUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
+
   // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
   // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
   // AND its logo; free text still saves as a plain affiliation.
@@ -357,7 +361,7 @@ function AboutYouCard(props: {
     }, 200)
   }
   const pickInstitution = (sug: { name: string; domain: string; logo: string }) => {
-    setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: sug.logo || `https://logo.clearbit.com/${sug.domain}` })
+    setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
   }
 
@@ -371,6 +375,23 @@ function AboutYouCard(props: {
       setSaving(false)
     }
   }
+  /** ⌘/Ctrl+V fallback: native paste doesn't reliably reach inputs inside the
+   *  VS Code webview iframe — read the clipboard ourselves and insert at the
+   *  caret, then hand the result to the caller. */
+  const pasteFallback = (apply: (value: string) => void) => async (e: KeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      const clip = await navigator.clipboard.readText()
+      if (!clip) return
+      const el = e.currentTarget as HTMLInputElement
+      const start = el.selectionStart ?? el.value.length
+      const end = el.selectionEnd ?? el.value.length
+      apply(el.value.slice(0, start) + clip + el.value.slice(end))
+    } catch { /* clipboard unavailable — nothing to do */ }
+  }
+
   const FIELD: JSX.CSSProperties = {
     "width": "100%",
     "box-sizing": "border-box",
@@ -502,6 +523,7 @@ function AboutYouCard(props: {
                       value={draft().name}
                       placeholder="Name"
                       onInput={(e) => setDraft({ ...draft(), name: e.currentTarget.value })}
+                      onKeyDown={pasteFallback((v) => setDraft({ ...draft(), name: v }))}
                     />
                   }>
                     {y().name}
@@ -533,6 +555,7 @@ function AboutYouCard(props: {
                               setDraft({ ...draft(), affiliation: e.currentTarget.value })
                               searchInstitutions(e.currentTarget.value)
                             }}
+                            onKeyDown={pasteFallback((v) => { setDraft({ ...draft(), affiliation: v }); searchInstitutions(v) })}
                           />
                         </div>
                         <Show when={suggestions().length > 0}>
@@ -554,7 +577,7 @@ function AboutYouCard(props: {
                                     "text-align": "left", "color": "var(--v2-text-text-base)", "font-size": "12px",
                                   }}
                                 >
-                                  <img src={sug.logo || `https://logo.clearbit.com/${sug.domain}`} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
+                                  <img src={institutionLogoUrl(sug.domain)} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
                                   <span style={{ "flex": "1", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{sug.name}</span>
                                   <span style={{ "color": "var(--v2-text-text-faint)", "font-size": "10px" }}>{sug.domain}</span>
                                 </button>
@@ -569,6 +592,7 @@ function AboutYouCard(props: {
                         value={draft().focus}
                         placeholder="What you work on"
                         onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
+                        onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
                       />
                       <input
                         data-slot="amicode-you-scholar-input"
@@ -576,6 +600,7 @@ function AboutYouCard(props: {
                         value={draft().scholar}
                         placeholder="Google Scholar URL (optional)"
                         onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
+                        onKeyDown={pasteFallback((v) => setDraft({ ...draft(), scholar: v }))}
                       />
                       <div style={{ "display": "flex", "gap": "8px", "align-items": "center" }}>
                         <button
