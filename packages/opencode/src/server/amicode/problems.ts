@@ -183,9 +183,12 @@ function isStalled(dir: string): boolean {
   try {
     return Date.now() - statSync(path.join(dir, "run.log")).mtimeMs > STALL_AFTER_MS
   } catch {
-    // no run.log yet: judge by run dir age (never-started zombie)
+    // No run.log yet: judge by run.toml age (written once at birth, then
+    // immutable). NOT the dir mtime — writing STOP (or any file, even a
+    // .DS_Store) into the dir bumps it and would flip a corpse back to
+    // "solving" for another 10 minutes.
     try {
-      return Date.now() - statSync(dir).mtimeMs > STALL_AFTER_MS
+      return Date.now() - statSync(path.join(dir, "run.toml")).mtimeMs > STALL_AFTER_MS
     } catch {
       return true
     }
