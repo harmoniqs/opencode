@@ -428,12 +428,17 @@ function AboutYouCard(props: {
     else window.open(url, "_blank", "noreferrer")
   }
 
+  const [saveError, setSaveError] = createSignal<string | undefined>(undefined)
   const save = async () => {
     if (!props.onSave) return
     setSaving(true)
+    setSaveError(undefined)
     try {
       await props.onSave(draft())
       setEditing(false)
+    } catch {
+      // Silent reverts read as "the button is broken" — say what happened.
+      setSaveError("Couldn't save — server unreachable. Try again.")
     } finally {
       setSaving(false)
     }
@@ -709,7 +714,9 @@ function AboutYouCard(props: {
                         >
                           {saving() ? "Saving…" : resolvingLogo() ? "Finding logo…" : "Save"}
                         </button>
-                        <span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>
+                        <Show when={saveError()} fallback={<span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>}>
+                          <span style={{ "font-size": "11px", "color": "var(--v2-state-fg-danger)" }}>{saveError()}</span>
+                        </Show>
                       </div>
                     </div>
                   }>
