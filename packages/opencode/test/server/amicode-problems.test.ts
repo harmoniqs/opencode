@@ -142,11 +142,11 @@ describe("problemBody", () => {
 })
 
 describe("runStatusBody", () => {
-  function seedRun(runsRoot: string, lab: string, id: string, opts: { finished?: boolean; result?: string; log?: string }) {
+  function seedRun(runsRoot: string, lab: string, id: string, opts: { finished?: boolean | string; result?: string; log?: string }) {
     const dir = path.join(runsRoot, lab, id)
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, "run.toml"), `run_id = "${id}"\nlab = "${lab}"\n`)
-    if (opts.finished) writeFileSync(path.join(dir, "FINISHED"), "")
+    if (opts.finished) writeFileSync(path.join(dir, "FINISHED"), typeof opts.finished === "string" ? opts.finished : 'status = "completed"\nexit_code = 0\n')
     if (opts.result !== undefined) writeFileSync(path.join(dir, "result.toml"), opts.result)
     if (opts.log !== undefined) writeFileSync(path.join(dir, "run.log"), opts.log)
   }
@@ -162,7 +162,7 @@ describe("runStatusBody", () => {
     })
     seedRun(runs, "default", "r-done", { finished: true, result: "fidelity = 0.9998\niterations = 60\n" })
     seedRun(runs, "default", "r-live", { log: "noise\nAMICODE_ITER iter=12 f=3.2e-02 inf_pr=1e-9\n" })
-    seedRun(runs, "default", "r-dead", { finished: true }) // FINISHED but no result.toml
+    seedRun(runs, "default", "r-dead", { finished: 'status = "failed"\nexit_code = 1\n' }) // failed says so in FINISHED
     const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
     expect(parsed.ok).toBe(true)
     expect(parsed.runs).toEqual([
@@ -172,11 +172,11 @@ describe("runStatusBody", () => {
     ])
     rmSync(runs, { recursive: true, force: true })
   })
-  test("missing run dir → solving with nulls; unknown slug → not_found", () => {
+  test("missing run dir → stalled (ghost ref, never solving-forever); unknown slug → not_found", () => {
     const runs = mkdtempSync(path.join(tmpdir(), "amicode-runs-"))
     seedProblem("x-gate", { runs: [{ run_id: "r-gone", lab: "default", recorded: "t" }] })
     const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
-    expect(parsed.runs).toEqual([{ run_id: "r-gone", status: "solving", fidelity: null, iteration: null }])
+    expect(parsed.runs).toEqual([{ run_id: "r-gone", status: "stalled", fidelity: null, iteration: null }])
     expect(JSON.parse(runStatusBody(root, runs, "zz")).error).toStartWith("not_found:")
     rmSync(runs, { recursive: true, force: true })
   })
