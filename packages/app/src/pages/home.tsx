@@ -478,7 +478,7 @@ function HomeDesign() {
         />
 
         <section
-          class="min-h-0 min-w-0 flex flex-col"
+          class="isolate min-h-0 min-w-0 flex flex-col"
           aria-label={language.t("sidebar.project.recentSessions")}
         >
           <HomeSessionSearch
@@ -596,7 +596,7 @@ function HomeProjectColumn(props: {
   const dialog = useDialog()
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
-    <aside class="flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
+    <aside class="isolate flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
       <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
         {/* amicode: brand block replaces the bare "Projects" label — the lone
             letter-avatar project row underneath read as a stray "A amicode". */}
@@ -867,14 +867,22 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   const directory = () => props.session.directory
   const sessionId = () => props.session.id
   const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
+  // amicode: brand mark instead of the letter project-avatar + radar ring —
+  // same treatment as the titlebar session tab (H-robot spinner while the
+  // agent works, accent dot for unread).
   return (
-    <ProjectAvatar
-      fallback={displayName(props.project)}
-      src={getProjectAvatarSource(props.project.id, props.project.icon)}
-      variant={getProjectAvatarVariant(props.project.icon?.color)}
-      unread={state.unread()}
-      loading={state.loading()}
-    />
+    <span class="relative inline-flex size-5 shrink-0 items-center justify-center">
+      <Show when={state.loading()} fallback={<Mark class="size-4" />}>
+        <AmicoSpinner class="size-4" />
+      </Show>
+      <Show when={state.unread()}>
+        <span
+          aria-hidden="true"
+          class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
+          style={{ background: "var(--v2-icon-icon-accent)" }}
+        />
+      </Show>
+    </span>
   )
 }
 
