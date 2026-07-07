@@ -213,6 +213,11 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
         return HttpServerResponse.text(AmicodeProblems.runStatusResponse(slug), { contentType: "application/json" })
       }),
     )
+    yield* router.add("GET", "/amicode/run-cards", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeProblems.runCardsResponse(), { contentType: "application/json" }),
+      ),
+    )
     yield* router.add("GET", "/amicode/run-series", (request) =>
       Effect.sync(() => {
         const params = new URL(request.url, "http://localhost").searchParams

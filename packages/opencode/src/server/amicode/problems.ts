@@ -404,6 +404,99 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   })
 }
 
+// --- run-cards (shareable gallery: every finished solve across problems) ---
+
+export function synthesizeRunCards(code: string, detail: string): string {
+  return JSON.stringify({ ok: false, cards: [], error: `${code}: ${detail}` })
+}
+
+/** Every COMPLETED run with a recorded fidelity, across all problem
+ *  workspaces, shaped for the share-card renderer (headline F, convergence
+ *  series, final pulse, platform/gate from the recorded entities). Stops and
+ *  failures are deliberately absent — the gallery is a trophy case. */
+export function runCardsBody(root: string, runs: string): string {
+  if (!existsSync(root)) return synthesizeRunCards("no_problems_dir", `${root} does not exist`)
+  const cards: Record<string, unknown>[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const slug = entry.name
+    const metaFile = path.join(root, slug, "problem.json")
+    if (!existsSync(metaFile)) continue
+    let name = slug
+    try {
+      const meta = readJson(metaFile) as { name?: unknown }
+      if (typeof meta?.name === "string" && meta.name) name = meta.name
+    } catch {
+      /* slug fallback */
+    }
+    let platform: string | null = null
+    let gate: string | null = null
+    for (const kind of ["system", "formulation", "run"]) {
+      try {
+        const e = readJson(path.join(root, slug, "entities", `${kind}.json`)) as { params?: Record<string, unknown> }
+        const params = e?.params ?? {}
+        if (platform === null && typeof params.platform === "string") platform = params.platform
+        if (platform === null && typeof params.system === "string") platform = params.system
+        if (gate === null && typeof params.gate === "string") gate = params.gate
+      } catch {
+        /* entity absent */
+      }
+    }
+    let refs: { run_id?: unknown; lab?: unknown }[] = []
+    try {
+      const parsed = readJson(path.join(root, slug, "runs.json")) as { runs?: unknown }
+      if (Array.isArray(parsed?.runs)) refs = parsed.runs as typeof refs
+    } catch {
+      /* no runs yet */
+    }
+    for (const ref of refs) {
+      const runId = String(ref.run_id ?? "")
+      if (!runId) continue
+      const dir = path.join(runs, String(ref.lab ?? "default"), runId)
+      const terminal = readTerminalState(dir)
+      if (!terminal || terminal.status !== "completed" || terminal.fidelity === null) continue
+      let log = ""
+      try {
+        log = readFileSync(path.join(dir, "run.log"), "utf8")
+      } catch {
+        /* card renders without curves */
+      }
+      const iters: { iter: number; f: number }[] = []
+      for (const line of log.split("\n")) {
+        const m = line.match(/^AMICODE_ITER\s+iter=(\d+)\s+f=([0-9eE+.\-]+)/)
+        if (!m) continue
+        const f = Number(m[2])
+        if (Number.isFinite(f)) iters.push({ iter: Number(m[1]), f })
+      }
+      const startMs = runIdStartMs(runId)
+      let endMs: number | null = null
+      try {
+        endMs = statSync(path.join(dir, "FINISHED")).mtimeMs
+      } catch {
+        /* elapsed stays null */
+      }
+      const pulse = parseLastPulse(log)
+      cards.push({
+        slug,
+        problem: name,
+        platform,
+        gate,
+        run_id: runId,
+        lab: String(ref.lab ?? "default"),
+        fidelity: terminal.fidelity,
+        iterations: terminal.iterations,
+        elapsed_ms: startMs !== null && endMs !== null ? Math.max(0, Math.round(endMs - startMs)) : null,
+        finished_at: endMs,
+        series: downsample(iters, 80),
+        pulse: pulse ? { dt: pulse.dt, values: pulse.values } : null,
+        pulse_meta: parsePulseMeta(log),
+      })
+    }
+  }
+  cards.sort((a, b) => ((b.finished_at as number) ?? 0) - ((a.finished_at as number) ?? 0))
+  return JSON.stringify({ ok: true, cards, error: null })
+}
+
 // --- cached entrypoints for the routes (never reject; body is a JSON string) ---
 
 const caches = new Map<string, { at: number; body: string }>()
@@ -425,6 +518,9 @@ export function problemsResponse(): string {
 }
 export function problemResponse(slug: string | undefined): string {
   return cached(`problem:${slug ?? "@active"}`, 10_000, () => problemBody(problemsRoot(), slug), synthesizeProblem)
+}
+export function runCardsResponse(): string {
+  return cached("run-cards", 5_000, () => runCardsBody(problemsRoot(), runsRoot()), synthesizeRunCards)
 }
 export function runStatusResponse(slug: string | undefined): string {
   return cached(
