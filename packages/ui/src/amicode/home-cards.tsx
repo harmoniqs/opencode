@@ -187,8 +187,48 @@ const AMICO_CAN = [
 ]
 
 function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
+  // Hover: gold shine sweeps left→right + the card lifts; click anywhere on
+  // the card (except its inner CTA) opens a fresh session — the Amicode page.
+  const [hover, setHover] = createSignal(false)
   return (
-    <div data-component="amicode-card-meet" style={HERO_CARD}>
+    <div
+      data-component="amicode-card-meet"
+      role="button"
+      tabIndex={0}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return
+        props.onStart("")
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !(e.target as HTMLElement).closest("button")) props.onStart("")
+      }}
+      style={{
+        ...HERO_CARD,
+        "position": "relative",
+        "overflow": "hidden",
+        "cursor": "pointer",
+        "transform": hover() ? "translateY(-3px)" : "none",
+        "box-shadow": hover() ? "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.18))" : "none",
+        "transition": "transform 0.18s ease, box-shadow 0.18s ease",
+      }}
+    >
+      {/* gold shine: sweeps on hover-in; opacity-fades + snaps back (transform
+          intentionally untransitioned on leave) so it never sweeps backwards */}
+      <div
+        aria-hidden="true"
+        style={{
+          "position": "absolute",
+          "inset": "0",
+          "pointer-events": "none",
+          "width": "55%",
+          "background": "linear-gradient(105deg, transparent 0%, color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent) 50%, transparent 100%)",
+          "opacity": hover() ? "1" : "0",
+          "transform": hover() ? "translateX(280%)" : "translateX(-160%)",
+          "transition": hover() ? "transform 0.85s ease, opacity 0.12s ease" : "opacity 0.3s ease",
+        }}
+      />
       <div style={EYEBROW}>Meet Amico</div>
       <div style={{ "display": "flex", "gap": "12px", "align-items": "center", "margin-top": "10px" }}>
         <Mark class="w-12 h-auto shrink-0" />
