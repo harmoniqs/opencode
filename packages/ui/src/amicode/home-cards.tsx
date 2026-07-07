@@ -341,6 +341,26 @@ function AboutYouCard(props: {
     })
     setEditing(true)
   }
+  // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
+  // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
+  // AND its logo; free text still saves as a plain affiliation.
+  const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+  const searchInstitutions = (q: string) => {
+    if (searchTimer) clearTimeout(searchTimer)
+    if (q.trim().length < 2) { setSuggestions([]); return }
+    searchTimer = setTimeout(() => {
+      fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q.trim())}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows: any) => setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : []))
+        .catch(() => setSuggestions([]))
+    }, 200)
+  }
+  const pickInstitution = (sug: { name: string; domain: string; logo: string }) => {
+    setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: sug.logo || `https://logo.clearbit.com/${sug.domain}` })
+    setSuggestions([])
+  }
+
   const save = async () => {
     if (!props.onSave) return
     setSaving(true)
@@ -499,13 +519,50 @@ function AboutYouCard(props: {
                 >
                   <Show when={!editing()} fallback={
                     <div style={{ "display": "flex", "flex-direction": "column", "gap": "4px", "margin-top": "4px" }}>
-                      <input
-                        data-slot="amicode-you-affiliation"
-                        style={FIELD}
-                        value={draft().affiliation}
-                        placeholder="Affiliation (e.g. Harmoniqs)"
-                        onInput={(e) => setDraft({ ...draft(), affiliation: e.currentTarget.value })}
-                      />
+                      <div style={{ "position": "relative" }}>
+                        <div style={{ "display": "flex", "gap": "6px", "align-items": "center" }}>
+                          <Show when={draft().affiliation_logo}>
+                            <img src={draft().affiliation_logo} alt="" style={{ "width": "20px", "height": "20px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
+                          </Show>
+                          <input
+                            data-slot="amicode-you-affiliation"
+                            style={{ ...FIELD, "flex": "1" }}
+                            value={draft().affiliation}
+                            placeholder="University or company — search like LinkedIn"
+                            onInput={(e) => {
+                              setDraft({ ...draft(), affiliation: e.currentTarget.value })
+                              searchInstitutions(e.currentTarget.value)
+                            }}
+                          />
+                        </div>
+                        <Show when={suggestions().length > 0}>
+                          <div style={{
+                            "position": "absolute", "top": "100%", "left": "0", "right": "0", "z-index": "10",
+                            "margin-top": "4px", "border-radius": "8px", "overflow": "hidden",
+                            "background": "var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))",
+                            "border": "1px solid var(--v2-border-border-base)",
+                            "box-shadow": "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.2))",
+                          }}>
+                            <For each={suggestions()}>
+                              {(sug) => (
+                                <button
+                                  type="button"
+                                  onClick={() => pickInstitution(sug)}
+                                  style={{
+                                    "display": "flex", "gap": "8px", "align-items": "center", "width": "100%",
+                                    "padding": "6px 8px", "background": "none", "border": "none", "cursor": "pointer",
+                                    "text-align": "left", "color": "var(--v2-text-text-base)", "font-size": "12px",
+                                  }}
+                                >
+                                  <img src={sug.logo || `https://logo.clearbit.com/${sug.domain}`} alt="" style={{ "width": "18px", "height": "18px", "object-fit": "contain", "border-radius": "4px", "flex": "none" }} />
+                                  <span style={{ "flex": "1", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{sug.name}</span>
+                                  <span style={{ "color": "var(--v2-text-text-faint)", "font-size": "10px" }}>{sug.domain}</span>
+                                </button>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
                       <input
                         data-slot="amicode-you-focus"
                         style={FIELD}
@@ -519,13 +576,6 @@ function AboutYouCard(props: {
                         value={draft().scholar}
                         placeholder="Google Scholar URL (optional)"
                         onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
-                      />
-                      <input
-                        data-slot="amicode-you-logo-input"
-                        style={FIELD}
-                        value={draft().affiliation_logo}
-                        placeholder="Institution logo URL (optional — e.g. your university's mark)"
-                        onInput={(e) => setDraft({ ...draft(), affiliation_logo: e.currentTarget.value })}
                       />
                       <div style={{ "display": "flex", "gap": "8px", "align-items": "center" }}>
                         <button
