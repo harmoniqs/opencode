@@ -470,6 +470,9 @@ function AboutYouCard(props: {
     })
   const pasteFallback = (apply: (value: string) => void) => async (e: KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
+    // Plain-browser contexts: native paste works — never preventDefault it
+    // (Firefox/Safari would lose paste entirely; the bridge is iframe-only).
+    if (window.parent === window) return
     e.preventDefault()
     e.stopPropagation()
     const el = e.currentTarget as HTMLInputElement
