@@ -15,8 +15,8 @@ export const TAGLINE_PHRASES = [
 
 const TYPE_MS = 45
 const DELETE_MS = 22
-const HOLD_MS = 2400
-const GAP_MS = 350
+const HOLD_MS = 1700
+const GAP_MS = 180
 
 export function AmicodeTagline(props: { phrases?: string[]; "font-size"?: string }) {
   const phrases = () => props.phrases ?? TAGLINE_PHRASES
@@ -57,7 +57,7 @@ export function AmicodeTagline(props: { phrases?: string[]; "font-size"?: string
         timer = setTimeout(step, HOLD_MS)
       }
     }
-    timer = setTimeout(step, HOLD_MS)
+    timer = setTimeout(step, 700)   // first cycle starts fast
     const cursor = setInterval(() => setBlink((b) => !b), 530)
     onCleanup(() => {
       if (timer) clearTimeout(timer)
