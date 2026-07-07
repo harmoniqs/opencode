@@ -473,7 +473,7 @@ function HomeDesign() {
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
       <div
         data-slot="amicode-home-shell"
-        class="mx-auto flex w-full h-full max-w-[1440px] flex-col gap-6 px-8 pt-10 pb-6"
+        class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"
       >
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
         <div
@@ -500,7 +500,6 @@ function HomeDesign() {
             clearNotifications={clearNotifications}
             unseenCount={unseenCount}
             openSettings={openSettings}
-            openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
             language={language}
           />
 
@@ -609,7 +608,7 @@ function HomeDesign() {
           </section>
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
-        <div class="relative z-[1] min-h-0 shrink overflow-y-auto pt-1">
+        <div class="relative z-[1] flex-none pt-1">
           <AmicodeHomeCards
             profile={profileView()}
             starters={AMICODE_STARTERS}
@@ -655,7 +654,6 @@ function HomeProjectColumn(props: {
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
   openSettings: () => void
-  openHelp: () => void
   language: ReturnType<typeof useLanguage>
 }) {
   const global = useGlobal()
@@ -735,14 +733,6 @@ function HomeProjectColumn(props: {
         >
           <IconV2 name="settings-gear" size="small" />
           <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.settings")}</span>
-        </button>
-        <button
-          type="button"
-          class={`${HOME_PROJECT_NAV_ROW} text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted`}
-          onClick={props.openHelp}
-        >
-          <IconV2 name="help" size="small" />
-          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.help")}</span>
         </button>
       </div>
     </aside>
