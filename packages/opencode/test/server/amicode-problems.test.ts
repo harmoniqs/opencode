@@ -2,7 +2,14 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { problemsBody, problemBody, runStatusBody, synthesizeProblems, synthesizeProblem } from "@/server/amicode/problems"
+import {
+  problemsBody,
+  problemBody,
+  runStatusBody,
+  runCardsBody,
+  synthesizeProblems,
+  synthesizeProblem,
+} from "@/server/amicode/problems"
 
 let root: string
 beforeEach(() => {
@@ -142,11 +149,20 @@ describe("problemBody", () => {
 })
 
 describe("runStatusBody", () => {
-  function seedRun(runsRoot: string, lab: string, id: string, opts: { finished?: boolean; result?: string; log?: string }) {
+  function seedRun(
+    runsRoot: string,
+    lab: string,
+    id: string,
+    opts: { finished?: boolean | string; result?: string; log?: string },
+  ) {
     const dir = path.join(runsRoot, lab, id)
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, "run.toml"), `run_id = "${id}"\nlab = "${lab}"\n`)
-    if (opts.finished) writeFileSync(path.join(dir, "FINISHED"), "")
+    if (opts.finished)
+      writeFileSync(
+        path.join(dir, "FINISHED"),
+        typeof opts.finished === "string" ? opts.finished : 'status = "completed"\nexit_code = 0\n',
+      )
     if (opts.result !== undefined) writeFileSync(path.join(dir, "result.toml"), opts.result)
     if (opts.log !== undefined) writeFileSync(path.join(dir, "run.log"), opts.log)
   }
@@ -162,7 +178,7 @@ describe("runStatusBody", () => {
     })
     seedRun(runs, "default", "r-done", { finished: true, result: "fidelity = 0.9998\niterations = 60\n" })
     seedRun(runs, "default", "r-live", { log: "noise\nAMICODE_ITER iter=12 f=3.2e-02 inf_pr=1e-9\n" })
-    seedRun(runs, "default", "r-dead", { finished: true }) // FINISHED but no result.toml
+    seedRun(runs, "default", "r-dead", { finished: 'status = "failed"\nexit_code = 1\n' }) // failed says so in FINISHED
     const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
     expect(parsed.ok).toBe(true)
     expect(parsed.runs).toEqual([
@@ -172,11 +188,11 @@ describe("runStatusBody", () => {
     ])
     rmSync(runs, { recursive: true, force: true })
   })
-  test("missing run dir → solving with nulls; unknown slug → not_found", () => {
+  test("missing run dir → stalled (ghost ref, never solving-forever); unknown slug → not_found", () => {
     const runs = mkdtempSync(path.join(tmpdir(), "amicode-runs-"))
     seedProblem("x-gate", { runs: [{ run_id: "r-gone", lab: "default", recorded: "t" }] })
     const parsed = JSON.parse(runStatusBody(root, runs, "x-gate"))
-    expect(parsed.runs).toEqual([{ run_id: "r-gone", status: "solving", fidelity: null, iteration: null }])
+    expect(parsed.runs).toEqual([{ run_id: "r-gone", status: "stalled", fidelity: null, iteration: null }])
     expect(JSON.parse(runStatusBody(root, runs, "zz")).error).toStartWith("not_found:")
     rmSync(runs, { recursive: true, force: true })
   })
@@ -194,5 +210,57 @@ describe("synthesize", () => {
       runs: [],
       error: "x: d",
     })
+  })
+})
+
+describe("runCardsBody", () => {
+  test("collects only completed runs with fidelity, shaped for the card renderer", () => {
+    const runs = mkdtempSync(path.join(tmpdir(), "amicode-cards-"))
+    seedProblem("cz-gate", {
+      runs: [
+        { run_id: "r20260707-010101Z-aaaa", lab: "default", recorded: "t" },
+        { run_id: "r20260707-020202Z-bbbb", lab: "default", recorded: "t" },
+      ],
+    })
+    writeFileSync(
+      path.join(root, "cz-gate", "problem.json"),
+      JSON.stringify({ slug: "cz-gate", name: "CZ on Rydberg" }),
+    )
+    mkdirSync(path.join(root, "cz-gate", "entities"), { recursive: true })
+    writeFileSync(
+      path.join(root, "cz-gate", "entities", "system.json"),
+      JSON.stringify({ params: { platform: "rydberg" } }),
+    )
+    writeFileSync(path.join(root, "cz-gate", "entities", "run.json"), JSON.stringify({ params: { gate: "CZ" } }))
+    const dirA = path.join(runs, "default", "r20260707-010101Z-aaaa")
+    mkdirSync(dirA, { recursive: true })
+    writeFileSync(path.join(dirA, "run.toml"), 'run_id = "r20260707-010101Z-aaaa"\n')
+    writeFileSync(
+      path.join(dirA, "run.log"),
+      'AMICODE_ITER iter=1 f=5.0e-01\nAMICODE_PULSE_META drives=2 knots=3 labels=["I","Q"]\nAMICODE_PULSE iter=2 dt=0.5 a=1,2,3;4,5,6\nAMICODE_ITER iter=2 f=1.0e-04\n',
+    )
+    writeFileSync(path.join(dirA, "result.toml"), "fidelity = 0.9999\niterations = 2\n")
+    writeFileSync(path.join(dirA, "FINISHED"), 'status = "completed"\nexit_code = 0\n')
+    const dirB = path.join(runs, "default", "r20260707-020202Z-bbbb")
+    mkdirSync(dirB, { recursive: true })
+    writeFileSync(path.join(dirB, "FINISHED"), 'status = "failed"\nexit_code = 1\n') // failures stay out of the trophy case
+
+    const parsed = JSON.parse(runCardsBody(root, runs))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.cards).toHaveLength(1)
+    const card = parsed.cards[0]
+    expect(card).toMatchObject({
+      slug: "cz-gate",
+      problem: "CZ on Rydberg",
+      platform: "rydberg",
+      gate: "CZ",
+      run_id: "r20260707-010101Z-aaaa",
+      fidelity: 0.9999,
+      iterations: 2,
+    })
+    expect(card.series).toHaveLength(2)
+    expect(card.pulse.values).toEqual([1, 2, 3, 4, 5, 6])
+    expect(card.pulse_meta.drives).toBe(2)
+    rmSync(runs, { recursive: true, force: true })
   })
 })

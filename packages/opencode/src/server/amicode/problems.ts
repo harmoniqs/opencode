@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
+import { readTerminalState, displayStatus } from "./run-terminal"
 
 /** Same env override the amicode plugin honors (test + grant point align). */
 export function problemsRoot(): string {
@@ -172,6 +173,27 @@ export function problemBody(root: string, slug: string | undefined): string {
   }
 }
 
+/** A run with no FINISHED whose run.log has gone cold is STALLED (wedged
+ *  solver, OOM thrash, killed orchestrator) — never "solving": the Now-Solving
+ *  card and pollers must not advertise it forever. 10 min ≫ any real gap
+ *  between iterations (Julia warmup included via file creation). */
+const STALL_AFTER_MS = 10 * 60 * 1000
+function isStalled(dir: string): boolean {
+  try {
+    return Date.now() - statSync(path.join(dir, "run.log")).mtimeMs > STALL_AFTER_MS
+  } catch {
+    // No run.log yet: judge by run.toml age (written once at birth, then
+    // immutable). NOT the dir mtime — writing STOP (or any file, even a
+    // .DS_Store) into the dir bumps it and would flip a corpse back to
+    // "solving" for another 10 minutes.
+    try {
+      return Date.now() - statSync(path.join(dir, "run.toml")).mtimeMs > STALL_AFTER_MS
+    } catch {
+      return true
+    }
+  }
+}
+
 // --- run-status (lightweight live readout; spec: run-dir contract polling, permanently) ---
 
 function tomlScalar(text: string, key: string): number | null {
@@ -206,14 +228,16 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
   }
   const out = refs.map((ref) => {
     const dir = path.join(runs, String(ref.lab ?? "default"), String(ref.run_id ?? ""))
-    if (existsSync(path.join(dir, "FINISHED"))) {
-      try {
-        const result = readFileSync(path.join(dir, "result.toml"), "utf8")
-        const fidelity = tomlScalar(result, "fidelity")
-        if (fidelity === null) throw new Error("no fidelity")
-        return { run_id: ref.run_id, status: "finished", fidelity, iteration: tomlScalar(result, "iterations") }
-      } catch {
-        return { run_id: ref.run_id, status: "failed", fidelity: null, iteration: null }
+    // ONE-SPINE (amicode #84): terminal state via the shared contract reader —
+    // FINISHED's status field decides (a failed run with a result.toml is NOT
+    // "finished"); torn FINISHED = still solving (re-poll); user-stop → "stopped".
+    const terminal = readTerminalState(dir)
+    if (terminal) {
+      return {
+        run_id: ref.run_id,
+        status: displayStatus(terminal.status),
+        fidelity: terminal.fidelity,
+        iteration: terminal.iterations,
       }
     }
     let live = { iteration: null as number | null, fidelity: null as number | null }
@@ -221,6 +245,9 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
       live = lastIterLine(readFileSync(path.join(dir, "run.log"), "utf8"))
     } catch {
       /* not started yet */
+    }
+    if (isStalled(dir)) {
+      return { run_id: ref.run_id, status: "stalled", fidelity: live.fidelity, iteration: live.iteration }
     }
     return { run_id: ref.run_id, status: "solving", fidelity: live.fidelity, iteration: live.iteration }
   })
@@ -282,7 +309,16 @@ function parseLastPulse(log: string): { iter: number; dt: number; values: number
   for (let i = lines.length - 1; i >= 0; i--) {
     const m = lines[i].match(/^AMICODE_PULSE\s+iter=(\d+)\s+dt=([0-9eE+.\-]+)\s+a=(.+)$/)
     if (m) {
-      const values = m[3].split(",").map(Number).filter((v) => Number.isFinite(v))
+      // Drives are ;-joined, knots ,-joined (solve_template.jl). A bare
+      // split(",") turned every seam token "x51;y1" into a dropped NaN and
+      // glued all drives into one corrupt trace. Flatten drive-by-drive; the
+      // client re-slices via pulse_meta (drives x knots).
+      const values = m[3].split(";").flatMap((drive) =>
+        drive
+          .split(",")
+          .map(Number)
+          .filter((v) => Number.isFinite(v)),
+      )
       return { iter: Number(m[1]), dt: Number(m[2]), values }
     }
   }
@@ -313,28 +349,23 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   const bestF = iters.length ? Math.min(...iters.map((p) => p.f)) : null
   const lastIter = iters.length ? iters[iters.length - 1] : null
 
-  const finished = existsSync(path.join(dir, "FINISHED"))
-  let status = "solving"
+  // ONE-SPINE (amicode #84): terminal state via the shared contract reader.
+  // FINISHED (the orchestrator's verdict) is the only terminal authority; its
+  // status field decides; torn FINISHED = keep polling; user-stop → "stopped".
+  let status = isStalled(dir) ? "stalled" : "solving"
   let fidelity: number | null = null
   let iteration: number | null = lastIter?.iter ?? null
-  if (finished) {
-    try {
-      const result = readFileSync(path.join(dir, "result.toml"), "utf8")
-      fidelity = tomlScalar(result, "fidelity")
-      const it = tomlScalar(result, "iterations")
-      if (it !== null) iteration = it
-      status = fidelity === null ? "failed" : "finished"
-    } catch {
-      status = "failed"
-    }
+  const terminal = readTerminalState(dir, log)
+  if (terminal) {
+    status = displayStatus(terminal.status)
+    fidelity = terminal.fidelity
+    if (terminal.iterations !== null) iteration = terminal.iterations
   }
-  // DONE line: authoritative fidelity even before the FINISHED sentinel lands.
-  if (fidelity === null) {
+  // DONE line: a pre-FINISHED fidelity HINT only (the sentinel may lag the
+  // script by a beat) — it never decides status; that's FINISHED's job.
+  if (fidelity === null && status === "solving") {
     const done = log.match(/^DONE\s+fidelity=([0-9eE+.\-]+)/m)
-    if (done) {
-      fidelity = Number(done[1])
-      if (status === "solving") status = "finished"
-    }
+    if (done) fidelity = Number(done[1])
   }
 
   const pulse = parseLastPulse(log)
@@ -347,7 +378,7 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   const startMs = runIdStartMs(run)
   let endMs: number | null = null
   try {
-    endMs = statSync(path.join(dir, finished ? "FINISHED" : "run.log")).mtimeMs
+    endMs = statSync(path.join(dir, terminal ? "FINISHED" : "run.log")).mtimeMs
   } catch {
     /* no file to stat → no elapsed */
   }
@@ -373,6 +404,99 @@ export function runSeriesBody(runsRoot: string, run: string | undefined, lab: st
   })
 }
 
+// --- run-cards (shareable gallery: every finished solve across problems) ---
+
+export function synthesizeRunCards(code: string, detail: string): string {
+  return JSON.stringify({ ok: false, cards: [], error: `${code}: ${detail}` })
+}
+
+/** Every COMPLETED run with a recorded fidelity, across all problem
+ *  workspaces, shaped for the share-card renderer (headline F, convergence
+ *  series, final pulse, platform/gate from the recorded entities). Stops and
+ *  failures are deliberately absent — the gallery is a trophy case. */
+export function runCardsBody(root: string, runs: string): string {
+  if (!existsSync(root)) return synthesizeRunCards("no_problems_dir", `${root} does not exist`)
+  const cards: Record<string, unknown>[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const slug = entry.name
+    const metaFile = path.join(root, slug, "problem.json")
+    if (!existsSync(metaFile)) continue
+    let name = slug
+    try {
+      const meta = readJson(metaFile) as { name?: unknown }
+      if (typeof meta?.name === "string" && meta.name) name = meta.name
+    } catch {
+      /* slug fallback */
+    }
+    let platform: string | null = null
+    let gate: string | null = null
+    for (const kind of ["system", "formulation", "run"]) {
+      try {
+        const e = readJson(path.join(root, slug, "entities", `${kind}.json`)) as { params?: Record<string, unknown> }
+        const params = e?.params ?? {}
+        if (platform === null && typeof params.platform === "string") platform = params.platform
+        if (platform === null && typeof params.system === "string") platform = params.system
+        if (gate === null && typeof params.gate === "string") gate = params.gate
+      } catch {
+        /* entity absent */
+      }
+    }
+    let refs: { run_id?: unknown; lab?: unknown }[] = []
+    try {
+      const parsed = readJson(path.join(root, slug, "runs.json")) as { runs?: unknown }
+      if (Array.isArray(parsed?.runs)) refs = parsed.runs as typeof refs
+    } catch {
+      /* no runs yet */
+    }
+    for (const ref of refs) {
+      const runId = String(ref.run_id ?? "")
+      if (!runId) continue
+      const dir = path.join(runs, String(ref.lab ?? "default"), runId)
+      const terminal = readTerminalState(dir)
+      if (!terminal || terminal.status !== "completed" || terminal.fidelity === null) continue
+      let log = ""
+      try {
+        log = readFileSync(path.join(dir, "run.log"), "utf8")
+      } catch {
+        /* card renders without curves */
+      }
+      const iters: { iter: number; f: number }[] = []
+      for (const line of log.split("\n")) {
+        const m = line.match(/^AMICODE_ITER\s+iter=(\d+)\s+f=([0-9eE+.\-]+)/)
+        if (!m) continue
+        const f = Number(m[2])
+        if (Number.isFinite(f)) iters.push({ iter: Number(m[1]), f })
+      }
+      const startMs = runIdStartMs(runId)
+      let endMs: number | null = null
+      try {
+        endMs = statSync(path.join(dir, "FINISHED")).mtimeMs
+      } catch {
+        /* elapsed stays null */
+      }
+      const pulse = parseLastPulse(log)
+      cards.push({
+        slug,
+        problem: name,
+        platform,
+        gate,
+        run_id: runId,
+        lab: String(ref.lab ?? "default"),
+        fidelity: terminal.fidelity,
+        iterations: terminal.iterations,
+        elapsed_ms: startMs !== null && endMs !== null ? Math.max(0, Math.round(endMs - startMs)) : null,
+        finished_at: endMs,
+        series: downsample(iters, 80),
+        pulse: pulse ? { dt: pulse.dt, values: pulse.values } : null,
+        pulse_meta: parsePulseMeta(log),
+      })
+    }
+  }
+  cards.sort((a, b) => ((b.finished_at as number) ?? 0) - ((a.finished_at as number) ?? 0))
+  return JSON.stringify({ ok: true, cards, error: null })
+}
+
 // --- cached entrypoints for the routes (never reject; body is a JSON string) ---
 
 const caches = new Map<string, { at: number; body: string }>()
@@ -395,8 +519,16 @@ export function problemsResponse(): string {
 export function problemResponse(slug: string | undefined): string {
   return cached(`problem:${slug ?? "@active"}`, 10_000, () => problemBody(problemsRoot(), slug), synthesizeProblem)
 }
+export function runCardsResponse(): string {
+  return cached("run-cards", 5_000, () => runCardsBody(problemsRoot(), runsRoot()), synthesizeRunCards)
+}
 export function runStatusResponse(slug: string | undefined): string {
-  return cached(`run-status:${slug ?? "@active"}`, 1_000, () => runStatusBody(problemsRoot(), runsRoot(), slug), synthesizeRunStatus)
+  return cached(
+    `run-status:${slug ?? "@active"}`,
+    1_000,
+    () => runStatusBody(problemsRoot(), runsRoot(), slug),
+    synthesizeRunStatus,
+  )
 }
 export function runSeriesResponse(run: string | undefined, lab: string | undefined): string {
   return cached(

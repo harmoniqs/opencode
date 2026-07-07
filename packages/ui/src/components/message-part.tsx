@@ -1049,7 +1049,12 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
             class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
           >
             <span data-slot="context-tool-group-label" class="shrink-0">
-              <ToolStatusTitle active={pending()} activeText="Working in shell" doneText="Worked in shell" split={false} />
+              <ToolStatusTitle
+                active={pending()}
+                activeText="Working in shell"
+                doneText="Worked in shell"
+                split={false}
+              />
             </span>
             <span
               data-slot="context-tool-group-summary"

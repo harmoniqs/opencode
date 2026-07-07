@@ -22,7 +22,7 @@ describe("WSL server settings presentation", () => {
         matchesDesktop: null,
         error: null,
       }),
-    ).toBe("Install OpenCode")
+    ).toBe("Install Amicode")
     expect(
       wslOpencodeAction({
         distro: "Debian",
@@ -32,7 +32,7 @@ describe("WSL server settings presentation", () => {
         matchesDesktop: false,
         error: null,
       }),
-    ).toBe("Update OpenCode")
+    ).toBe("Update Amicode")
     expect(
       wslOpencodeAction({
         distro: "Debian",

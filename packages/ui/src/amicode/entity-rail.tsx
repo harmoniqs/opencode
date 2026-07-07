@@ -87,7 +87,8 @@ export function AmicodeEntityRail(props: {
   )
   const [lastGood, setLastGood] = createSignal<ProblemView | undefined>(undefined)
   const current = createMemo<ProblemView | undefined>(() => {
-    if (problemRaw.error) return { ok: false, entities: {}, scoreStages: [], events: [], runs: [], error: "fetch failed" }
+    if (problemRaw.error)
+      return { ok: false, entities: {}, scoreStages: [], events: [], runs: [], error: "fetch failed" }
     const raw = problemRaw.latest
     if (raw === undefined) return undefined
     return parseProblemResponse(raw)
@@ -110,9 +111,7 @@ export function AmicodeEntityRail(props: {
     const snapshot = state()
     const hasRuns = snapshot.kind === "ready" && snapshot.view.runs.length > 0
     const unfinished =
-      hasRuns && !runStatuses().length
-        ? true
-        : runStatuses().some((status) => status.status === "solving")
+      hasRuns && !runStatuses().length ? true : runStatuses().some((status) => status.status === "solving")
     if (hasRuns && unfinished && timer === undefined) {
       timer = setInterval(async () => {
         const statuses = parseRunStatusResponse(await props.fetchRunStatus().catch(() => undefined))
@@ -141,18 +140,18 @@ export function AmicodeEntityRail(props: {
       <div
         data-component="amicode-entity-rail"
         style={{
-          "display": "flex",
+          display: "flex",
           "flex-wrap": "wrap",
           "align-items": "center",
-          "gap": "6px 10px",
+          gap: "6px 10px",
           "min-width": "0",
           "max-height": "76px",
           "overflow-y": "auto",
-          "border": "1px solid var(--v2-border-border-base)",
+          border: "1px solid var(--v2-border-border-base)",
           "border-left": "3px solid var(--v2-icon-icon-accent)",
           "border-radius": "6px",
-          "background": "var(--v2-background-bg-layer-01)",
-          "padding": "6px 10px",
+          background: "var(--v2-background-bg-layer-01)",
+          padding: "6px 10px",
           "font-size": "11px",
           "line-height": "16px",
           "white-space": "nowrap",
@@ -162,7 +161,7 @@ export function AmicodeEntityRail(props: {
           style={{
             "font-weight": "700",
             "letter-spacing": "0.08em",
-            "color": "var(--v2-text-text-accent)",
+            color: "var(--v2-text-text-accent)",
             "flex-shrink": "0",
           }}
         >
@@ -177,13 +176,13 @@ export function AmicodeEntityRail(props: {
                 type="button"
                 data-slot="amicode-rail-retry"
                 style={{
-                  "color": "var(--v2-text-text-base)",
+                  color: "var(--v2-text-text-base)",
                   "text-decoration": "underline",
-                  "background": "none",
-                  "border": "none",
-                  "padding": "0",
-                  "font": "inherit",
-                  "cursor": "pointer",
+                  background: "none",
+                  border: "none",
+                  padding: "0",
+                  font: "inherit",
+                  cursor: "pointer",
                 }}
                 onClick={() => void refetch()}
               >
@@ -199,12 +198,12 @@ export function AmicodeEntityRail(props: {
                 data-slot="amicode-rail-problem"
                 style={{
                   "font-weight": "600",
-                  "color": "var(--v2-text-text-base)",
-                  "background": "none",
-                  "border": "none",
-                  "padding": "0",
+                  color: "var(--v2-text-text-base)",
+                  background: "none",
+                  border: "none",
+                  padding: "0",
                   "font-size": "inherit",
-                  "cursor": "pointer",
+                  cursor: "pointer",
                   "flex-shrink": "0",
                 }}
                 onClick={() => props.onOpenSwitcher()}
@@ -223,11 +222,11 @@ export function AmicodeEntityRail(props: {
                     data-stage={chip.kind}
                     data-pending="true"
                     style={{
-                      "display": "inline-flex",
+                      display: "inline-flex",
                       "align-items": "baseline",
-                      "gap": "4px",
+                      gap: "4px",
                       "flex-shrink": "0",
-                      "color": "var(--v2-text-text-faint)",
+                      color: "var(--v2-text-text-faint)",
                     }}
                   >
                     <span style={{ "font-weight": "600" }}>{chip.label}</span>
@@ -240,22 +239,22 @@ export function AmicodeEntityRail(props: {
                   data-slot="amicode-rail-chip"
                   data-stage={chip.kind}
                   style={{
-                    "display": "inline-flex",
+                    display: "inline-flex",
                     "align-items": "baseline",
-                    "gap": "4px",
+                    gap: "4px",
                     "flex-shrink": "0",
-                    "background": "none",
-                    "border": "none",
-                    "padding": "0",
-                    "font": "inherit",
-                    "cursor": "pointer",
+                    background: "none",
+                    border: "none",
+                    padding: "0",
+                    font: "inherit",
+                    cursor: "pointer",
                   }}
                   onClick={() => props.onOpenEntity(chip.kind)}
                 >
                   <span style={{ color: "var(--v2-text-text-muted)", "font-weight": "600" }}>{chip.label}</span>
                   <span
                     style={{
-                      "color": "var(--v2-text-text-base)",
+                      color: "var(--v2-text-text-base)",
                       "font-family": "var(--font-family-mono, ui-monospace, monospace)",
                     }}
                   >

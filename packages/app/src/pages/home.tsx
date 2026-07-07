@@ -1,6 +1,19 @@
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { batch, createEffect, createMemo, createResource, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createResource,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  createSignal,
+} from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
@@ -47,12 +60,16 @@ import { useSettings } from "@/context/settings"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
-import { amicodeGet } from "@/utils/amicode-fetch"
+import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
+import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
+import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
 import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
+import { Mark } from "@opencode-ai/ui/logo"
+import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -207,7 +224,7 @@ function HomeDesign() {
   // amicode: home-card data. All read from the focused server's /amicode/* raw
   // routes (~/.amico). Each degrades to undefined on failure so a card simply
   // doesn't render (no empty chrome) rather than erroring the whole page.
-  const [profileRaw] = createResource(
+  const [profileRaw, { refetch: refetchProfile }] = createResource(
     () => state.selection.server,
     () => amicodeGet(focusedServer(), "/amicode/profile").catch(() => undefined),
   )
@@ -249,6 +266,23 @@ function HomeDesign() {
   // in-flight run. Polls run-status + run-series only while a run is solving; the
   // interval self-terminates once status leaves "solving". All failures collapse
   // to undefined so the card simply doesn't render.
+  // amicode: run gallery (shareable solve cards) — fetched on open, newest first.
+  const [galleryOpen, setGalleryOpen] = createSignal(false)
+  const [runCardsRaw] = createResource(
+    () => (galleryOpen() ? state.selection.server : undefined),
+    () => amicodeGet(focusedServer(), "/amicode/run-cards").catch(() => undefined),
+  )
+  const runCards = createMemo(() => {
+    if (!galleryOpen()) return undefined
+    const raw = runCardsRaw()
+    return raw === undefined ? undefined : parseRunCardsResponse(raw)
+  })
+  // PNG save: downloads are dead inside the webview iframe — route through the
+  // extension's save-file bridge; plain browsers use the gallery's <a download>.
+  const saveCardPng = (filename: string, dataUrl: string) => {
+    window.parent.postMessage({ source: "amicode", kind: "save-file", filename, dataUrl }, "*")
+  }
+
   const [runStatusRaw, { refetch: refetchRunStatus }] = createResource(
     () => state.selection.server,
     () => amicodeGet(focusedServer(), "/amicode/run-status").catch(() => undefined),
@@ -269,7 +303,8 @@ function HomeDesign() {
   const solvingRunId = createMemo(() => solvingRun()?.runId)
   const [runSeriesRaw, { refetch: refetchRunSeries }] = createResource(
     () => solvingRunId(),
-    (runId) => amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
+    (runId) =>
+      amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
   )
   const liveRun = createMemo<HomeLiveRun | undefined>(() => {
     const solving = solvingRun()
@@ -290,14 +325,20 @@ function HomeDesign() {
     }
   })
   createEffect(() => {
-    if (!solvingRunId()) return
-    const timer = setInterval(() => {
-      void refetchRunStatus()
-      void refetchRunSeries()
-    }, 2500)
+    // Standing slow poll while Home is mounted (a solve STARTED from chat must
+    // surface here without a remount), tightening to 2.5s while one is live.
+    const live = Boolean(solvingRunId())
+    const timer = setInterval(
+      () => {
+        void refetchRunStatus()
+        if (live) void refetchRunSeries()
+      },
+      live ? 2500 : 5000,
+    )
     onCleanup(() => clearInterval(timer))
   })
 
+  const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
   function startWithPrompt(prompt: string) {
     const project = newSessionProject()
     if (!project) {
@@ -449,106 +490,157 @@ function HomeDesign() {
 
   return (
     <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
-      <div class="mx-auto flex w-full h-full max-w-[1080px] flex-col gap-6 px-6 pt-14 pb-6">
+      <div
+        data-slot="amicode-home-shell"
+        class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"
+      >
         {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
-        <div class="grid min-h-0 flex-[1] gap-8 md:grid-cols-[280px_minmax(0,720px)]">
-        <HomeProjectColumn
-          projects={projects()}
-          selected={state.selection}
-          focusServer={focusServer}
-          selectProject={selectProject}
-          openNewSession={openProjectNewSession}
-          chooseProject={(conn) => void chooseProject(conn)}
-          editProject={editProject}
-          closeProject={(conn, directory) => {
-            const next = closeHomeProject(
-              state.selection,
-              ServerConnection.key(conn),
-              global.createServerCtx(conn).projects,
-              directory,
-            )
-            if (next) setSelection(next)
-          }}
-          clearNotifications={clearNotifications}
-          unseenCount={unseenCount}
-          openSettings={openSettings}
-          openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-          language={language}
-        />
-
-        <section
-          class="min-h-0 min-w-0 flex flex-col"
-          aria-label={language.t("sidebar.project.recentSessions")}
+        <div
+          data-slot="amicode-home-band"
+          class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]"
         >
-          <HomeSessionSearch
-            value={state.search}
-            placeholder={language.t("home.sessions.search.placeholder")}
-            open={searchOpen()}
-            loading={sessionLoad.isLoading}
-            results={searchResults()}
-            server={state.selection.server}
-            activeServer={state.selection.server === server.key}
-            noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
-            bindFocus={(focus) => {
-              focusSessionSearch = focus
+          <HomeProjectColumn
+            projects={projects()}
+            selected={state.selection}
+            focusServer={focusServer}
+            selectProject={selectProject}
+            openNewSession={openProjectNewSession}
+            chooseProject={(conn) => void chooseProject(conn)}
+            editProject={editProject}
+            closeProject={(conn, directory) => {
+              const next = closeHomeProject(
+                state.selection,
+                ServerConnection.key(conn),
+                global.createServerCtx(conn).projects,
+                directory,
+              )
+              if (next) setSelection(next)
             }}
-            onInput={(value) => setState("search", value)}
-            onFocus={() => setState("searchFocused", true)}
-            onClose={closeSearch}
-            onSelect={selectSearchSession}
+            clearNotifications={clearNotifications}
+            unseenCount={unseenCount}
+            openSettings={openSettings}
+            language={language}
           />
-          <ScrollView class="mt-3 min-h-0 flex-1">
-            <div class="pt-3 flex flex-col gap-6">
-              <Show
-                when={!sessionLoad.isLoading}
-                fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
-              >
+
+          <section
+            class="isolate min-h-0 min-w-0 flex flex-col"
+            aria-label={language.t("sidebar.project.recentSessions")}
+          >
+            <HomeSessionSearch
+              value={state.search}
+              placeholder={language.t("home.sessions.search.placeholder")}
+              open={searchOpen()}
+              loading={sessionLoad.isLoading}
+              results={searchResults()}
+              server={state.selection.server}
+              activeServer={state.selection.server === server.key}
+              noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
+              bindFocus={(focus) => {
+                focusSessionSearch = focus
+              }}
+              onInput={(value) => setState("search", value)}
+              onFocus={() => setState("searchFocused", true)}
+              onClose={closeSearch}
+              onSelect={selectSearchSession}
+            />
+            <ScrollView class="mt-3 min-h-0 flex-1">
+              <div class="pt-3 flex flex-col gap-6">
                 <Show
-                  when={groups().length > 0}
-                  fallback={
-                    <div class="flex min-w-0 flex-col gap-4">
-                      <HomeSessionGroupHeader
-                        title={language.t("home.sessions.empty")}
-                        onNewSession={newSessionProject() ? openNewSession : undefined}
-                      />
-                    </div>
-                  }
+                  when={!sessionLoad.isLoading}
+                  fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                 >
-                  <For each={groups()}>
-                    {(group, index) => (
+                  <Show
+                    when={groups().length > 0}
+                    fallback={
                       <div class="flex min-w-0 flex-col gap-4">
                         <HomeSessionGroupHeader
-                          title={group.title}
-                          onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
+                          title={language.t("home.sessions.empty")}
+                          onNewSession={newSessionProject() ? openNewSession : undefined}
                         />
-                        <div class="flex min-w-0 flex-col gap-px">
-                          <For each={group.sessions}>
-                            {(record) => (
-                              <HomeSessionRow
-                                record={record}
-                                server={state.selection.server}
-                                activeServer={state.selection.server === server.key}
-                                openSession={openSession}
-                              />
+                      </div>
+                    }
+                  >
+                    {(() => {
+                      // amicode: collapsed = the 3 most recent sessions across all
+                      // groups; "Show all (N)" expands. Pure derivation off the
+                      // existing groups() memo — no second data path to drift.
+                      const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
+                      const visible = () => {
+                        if (sessionsExpanded() || total() <= 3) return groups()
+                        let budget = 3
+                        const out: typeof groups extends () => infer G ? G : never = [] as never
+                        for (const g of groups()) {
+                          if (budget <= 0) break
+                          const take = g.sessions.slice(0, budget)
+                          budget -= take.length
+                          ;(out as { title: string; sessions: typeof g.sessions }[]).push({ ...g, sessions: take })
+                        }
+                        return out as ReturnType<typeof groups>
+                      }
+                      return (
+                        <>
+                          <For each={visible()}>
+                            {(group, index) => (
+                              <div class="flex min-w-0 flex-col gap-4">
+                                <HomeSessionGroupHeader
+                                  title={group.title}
+                                  onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
+                                />
+                                <div class="flex min-w-0 flex-col gap-px">
+                                  <For each={group.sessions}>
+                                    {(record) => (
+                                      <HomeSessionRow
+                                        record={record}
+                                        server={state.selection.server}
+                                        activeServer={state.selection.server === server.key}
+                                        openSession={openSession}
+                                      />
+                                    )}
+                                  </For>
+                                </div>
+                              </div>
                             )}
                           </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
+                          <Show when={total() > 3}>
+                            <button
+                              type="button"
+                              data-action="home-sessions-toggle"
+                              class="self-start px-4 text-[12px]"
+                              style={{
+                                color: "var(--v2-text-text-muted)",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                              onClick={() => setSessionsExpanded(!sessionsExpanded())}
+                            >
+                              {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
+                            </button>
+                          </Show>
+                        </>
+                      )
+                    })()}
+                  </Show>
                 </Show>
-              </Show>
-            </div>
-          </ScrollView>
-        </section>
+              </div>
+            </ScrollView>
+          </section>
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
-        <div class="shrink-0 pt-1">
+        <div class="relative z-[1] flex-none pt-1">
           <AmicodeHomeCards
             profile={profileView()}
             starters={AMICODE_STARTERS}
             onStart={startWithPrompt}
             onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
+            onSaveProfile={async (fields) => {
+              // In-place save (About-You card): identity fields ride query
+              // params on the raw POST route; refetch renders the saved state.
+              const q = new URLSearchParams()
+              for (const [k, v] of Object.entries(fields)) if (v !== undefined) q.set(k, v)
+              await amicodePost(focusedServer(), `/amicode/profile?${q.toString()}`)
+              await refetchProfile()
+            }}
             resumeName={resumeProblem()?.name}
             resumeMeta={resumeMeta()}
             onResume={() => {
@@ -556,6 +648,7 @@ function HomeDesign() {
               if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
             }}
             onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+            onOpenGallery={() => setGalleryOpen(true)}
             liveRun={liveRun()}
             onOpenLiveRun={() => {
               const name = resumeProblem()?.name
@@ -563,6 +656,14 @@ function HomeDesign() {
             }}
           />
         </div>
+        <AmicodeFooter />
+        <Show when={galleryOpen()}>
+          <AmicodeRunGallery
+            cards={runCards()}
+            onClose={() => setGalleryOpen(false)}
+            onSave={window.parent !== window ? saveCardPng : undefined}
+          />
+        </Show>
       </div>
     </div>
   )
@@ -580,16 +681,34 @@ function HomeProjectColumn(props: {
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
   openSettings: () => void
-  openHelp: () => void
   language: ReturnType<typeof useLanguage>
 }) {
   const global = useGlobal()
   const dialog = useDialog()
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
-    <aside class="flex min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
-      <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
-        <div class={HOME_SECTION_LABEL}>{props.language.t("home.projects")}</div>
+    <aside class="isolate flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
+      <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5">
+        {/* amicode: brand block replaces the bare "Projects" label — the lone
+            letter-avatar project row underneath read as a stray "A amicode". */}
+        <div class="flex min-w-0 items-center gap-2">
+          <Mark class="size-6 shrink-0" />
+          <div class="min-w-0">
+            <div
+              style={{
+                "font-size": "15px",
+                "font-weight": "650",
+                "line-height": "18px",
+                color: "var(--v2-text-text-base)",
+              }}
+            >
+              Amicode
+            </div>
+            <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>
+              by Harmoniqs
+            </div>
+          </div>
+        </div>
         <Show when={global.servers.list().length === 1}>
           <IconButtonV2
             data-action="home-add-project"
@@ -641,14 +760,6 @@ function HomeProjectColumn(props: {
         >
           <IconV2 name="settings-gear" size="small" />
           <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.settings")}</span>
-        </button>
-        <button
-          type="button"
-          class={`${HOME_PROJECT_NAV_ROW} text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted`}
-          onClick={props.openHelp}
-        >
-          <IconV2 name="help" size="small" />
-          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.help")}</span>
         </button>
       </div>
     </aside>
@@ -726,28 +837,33 @@ function HomeProjectList(props: {
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
   language: ReturnType<typeof useLanguage>
 }) {
+  // amicode: a single project is auto-focused, so its row under the brand
+  // block is pure clutter (a stray "A amicode"). The list only renders once
+  // there is an actual CHOICE; add-project stays in the header either way.
   return (
-    <div class="flex min-w-0 flex-col gap-1">
-      <For each={props.projects}>
-        {(project) => (
-          <HomeProjectRow
-            project={project}
-            server={props.server}
-            selected={
-              props.selected.server === ServerConnection.key(props.server) &&
-              props.selected.directory === project.worktree
-            }
-            unseenCount={props.unseenCount(props.server, project)}
-            selectProject={props.selectProject}
-            openNewSession={props.openNewSession}
-            editProject={props.editProject}
-            closeProject={props.closeProject}
-            clearNotifications={props.clearNotifications}
-            language={props.language}
-          />
-        )}
-      </For>
-    </div>
+    <Show when={props.projects.length > 1}>
+      <div class="flex min-w-0 flex-col gap-1">
+        <For each={props.projects}>
+          {(project) => (
+            <HomeProjectRow
+              project={project}
+              server={props.server}
+              selected={
+                props.selected.server === ServerConnection.key(props.server) &&
+                props.selected.directory === project.worktree
+              }
+              unseenCount={props.unseenCount(props.server, project)}
+              selectProject={props.selectProject}
+              openNewSession={props.openNewSession}
+              editProject={props.editProject}
+              closeProject={props.closeProject}
+              clearNotifications={props.clearNotifications}
+              language={props.language}
+            />
+          )}
+        </For>
+      </div>
+    </Show>
   )
 }
 
@@ -845,14 +961,23 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   const directory = () => props.session.directory
   const sessionId = () => props.session.id
   const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
+  // amicode: a quiet chevron for session rows (the brand mark everywhere was
+  // too much; the working-spinner was removed too — one wedged run left it
+  // spinning forever). Unread keeps its accent dot.
   return (
-    <ProjectAvatar
-      fallback={displayName(props.project)}
-      src={getProjectAvatarSource(props.project.id, props.project.icon)}
-      variant={getProjectAvatarVariant(props.project.icon?.color)}
-      unread={state.unread()}
-      loading={state.loading()}
-    />
+    <span
+      class="relative inline-flex size-5 shrink-0 items-center justify-center"
+      style={{ color: "var(--v2-icon-icon-muted)" }}
+    >
+      <IconV2 name="chevron-right" />
+      <Show when={state.unread()}>
+        <span
+          aria-hidden="true"
+          class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
+          style={{ background: "var(--v2-icon-icon-accent)" }}
+        />
+      </Show>
+    </span>
   )
 }
 

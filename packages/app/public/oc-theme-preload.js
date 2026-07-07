@@ -9,6 +9,17 @@
     localStorage.removeItem("opencode-theme-css-dark")
   }
 
+  // amicode: VS Code webview bridge — the extension passes ?colorScheme=light|dark
+  // (from vscode.window.activeColorTheme). Seed the storage key BEFORE the read
+  // below so the app boots in the editor's theme (prefers-color-scheme inside a
+  // webview iframe reports the OS, not VS Code).
+  try {
+    var q = new URLSearchParams(location.search).get("colorScheme")
+    if (q === "light" || q === "dark") localStorage.setItem("opencode-color-scheme", q)
+  } catch (e) {
+    /* storage unavailable — keep defaults */
+  }
+
   var scheme = localStorage.getItem("opencode-color-scheme") || "system"
   var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
   var mode = isDark ? "dark" : "light"

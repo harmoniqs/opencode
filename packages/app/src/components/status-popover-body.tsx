@@ -5,7 +5,16 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { showToast } from "@/utils/toast"
 import { useNavigate } from "@solidjs/router"
-import { type Accessor, createEffect, createMemo, createResource, For, type JSXElement, onCleanup, Show } from "solid-js"
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createResource,
+  For,
+  type JSXElement,
+  onCleanup,
+  Show,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import { ServerHealthIndicator, ServerRow } from "@/components/server/server-row"
 import { useLanguage } from "@/context/language"

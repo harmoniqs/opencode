@@ -17,3 +17,19 @@ export async function amicodeGet(conn: ServerConnection.Any | undefined, route: 
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return (await res.json()) as unknown
 }
+
+/** POST sibling of amicodeGet — the amicode raw routes keep params in the URL
+ *  (no body), so this is the same call shape with method POST. Used by the
+ *  About-You card's in-place profile save. */
+export async function amicodePost(conn: ServerConnection.Any | undefined, route: string): Promise<unknown> {
+  if (!conn) throw new Error("no active server")
+  const headers: Record<string, string> = {}
+  if (conn.http.password)
+    headers.Authorization = `Basic ${authTokenFromCredentials({
+      username: conn.http.username,
+      password: conn.http.password,
+    })}`
+  const res = await fetch(new URL(route, conn.http.url), { method: "POST", headers })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json()) as unknown
+}

@@ -46,25 +46,25 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
         if (parsed) openAmicodeEntity(parsed.entity, parsed.seq)
       }}
       style={{
-        "display": "flex",
+        display: "flex",
         "align-items": "baseline",
-        "gap": "8px",
+        gap: "8px",
         "min-width": "0",
-        "border": "1px solid var(--v2-border-border-base)",
+        border: "1px solid var(--v2-border-border-base)",
         "border-left": "3px solid var(--v2-icon-icon-accent)",
         "border-radius": "6px",
-        "background": "var(--v2-background-bg-layer-01)",
-        "padding": "4px 12px",
+        background: "var(--v2-background-bg-layer-01)",
+        padding: "4px 12px",
         "font-size": "12px",
         "line-height": "16px",
-        "cursor": sentinel() ? "pointer" : "default",
+        cursor: sentinel() ? "pointer" : "default",
       }}
     >
       <span
         style={{
           "font-weight": "700",
           "letter-spacing": "0.08em",
-          "color": "var(--v2-text-text-accent)",
+          color: "var(--v2-text-text-accent)",
         }}
       >
         AMICO
@@ -74,10 +74,7 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
         when={sentinel()}
         fallback={
           <>
-            <span
-              data-slot="amicode-card-stage"
-              style={{ "font-weight": "600", "color": "var(--v2-text-text-base)" }}
-            >
+            <span data-slot="amicode-card-stage" style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>
               {stage()}
             </span>
             <span data-slot="amicode-card-status" style={{ color: "var(--v2-text-text-muted)" }}>
@@ -90,9 +87,9 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
           <span
             data-slot="amicode-card-receipt"
             style={{
-              "color": "var(--v2-text-text-base)",
+              color: "var(--v2-text-text-base)",
               "min-width": "0",
-              "overflow": "hidden",
+              overflow: "hidden",
               "text-overflow": "ellipsis",
               "white-space": "nowrap",
             }}
@@ -111,13 +108,16 @@ export function AmicodeToolCard(props: {
   input?: Record<string, any>
   output?: string // passed by message-part.tsx's Dynamic (already wired)
   messageID?: string
+  sessionID?: string
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
 
   return (
     <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
-      <Match when={ask()}>{(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} />}</Match>
+      <Match when={ask()}>
+        {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
+      </Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
     </Switch>
   )

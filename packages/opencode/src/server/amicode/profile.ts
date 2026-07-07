@@ -11,7 +11,7 @@
 // before the interview fills a profile in. "Amico remembers" is sourced LIVE
 // from the memory notes (feedback/user type) — the trust surface that makes the
 // friend persona real.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { problemsRoot, runsRoot } from "./problems"
@@ -69,7 +69,7 @@ function nameFromMounts(file: string): string | null {
   let pendingId: string | null = null
   for (const raw of readFileSync(file, "utf8").split("\n")) {
     const line = raw.trim()
-    if (line.startsWith("[[") ) {
+    if (line.startsWith("[[")) {
       pendingId = null
       personal = false
       continue
@@ -138,7 +138,9 @@ function runStats(root: string): {
     const labDir = path.join(root, lab.name)
     let runDirs: string[]
     try {
-      runDirs = readdirSync(labDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+      runDirs = readdirSync(labDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
     } catch {
       continue
     }
@@ -251,6 +253,41 @@ function remembers(dirs: string[], limit: number): { title: string; detail: stri
   return []
 }
 
+/** In-place profile save (About-You card inline editing). Merges ONLY the
+ *  editable identity fields into ~/.amico/profile.json (derived fields —
+ *  platforms/stats/remembers — are computed, never stored), invalidates the
+ *  response cache, and returns the fresh profile JSON. */
+export function saveProfile(fields: {
+  name?: string
+  affiliation?: string
+  focus?: string
+  scholar?: string
+  affiliation_logo?: string
+}): string {
+  const fp = profileFile()
+  let current: any = {}
+  try {
+    if (existsSync(fp)) current = JSON.parse(readFileSync(fp, "utf8")) ?? {}
+  } catch {
+    current = {}
+  }
+  // A JSON primitive ("x", 42) survives the ?? {} and current[key]= would
+  // throw a 500 the client swallows — only an object merge makes sense.
+  if (typeof current !== "object" || current === null || Array.isArray(current)) current = {}
+  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo"] as const) {
+    const v = fields[key]
+    if (typeof v === "string") {
+      const t = v.trim()
+      if (t === "") delete current[key]
+      else current[key] = t
+    }
+  }
+  mkdirSync(path.dirname(fp), { recursive: true })
+  writeFileSync(fp, JSON.stringify(current, null, 2) + "\n")
+  cache = undefined // next profileResponse() re-reads
+  return profileResponse()
+}
+
 export function profileBody(input: {
   profileFile: string
   mountsFile: string
@@ -272,6 +309,8 @@ export function profileBody(input: {
   const you = {
     name,
     affiliation: typeof profile.affiliation === "string" ? profile.affiliation : null,
+    scholar: typeof profile.scholar === "string" ? profile.scholar : null,
+    affiliation_logo: typeof profile.affiliation_logo === "string" ? profile.affiliation_logo : null,
     focus: typeof profile.focus === "string" ? profile.focus : null,
     avatar: typeof profile.avatar === "string" ? profile.avatar : null,
     platforms: mix.map((p) => p.key),

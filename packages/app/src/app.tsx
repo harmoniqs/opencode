@@ -7,7 +7,7 @@ import { MarkedProvider } from "@opencode-ai/ui/context/marked"
 import { File } from "@opencode-ai/ui/file"
 import { Font } from "@opencode-ai/ui/font"
 import { Splash } from "@opencode-ai/ui/logo"
-import { ThemeProvider } from "@opencode-ai/ui/theme/context"
+import { ThemeProvider, useTheme } from "@opencode-ai/ui/theme/context"
 import { MetaProvider } from "@solidjs/meta"
 import { type BaseRouterProps, Navigate, Route, Router, useParams, useSearchParams } from "@solidjs/router"
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
@@ -50,6 +50,7 @@ import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout
 import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
 import { useCheckServerHealth } from "./utils/server-health"
+import { AmicodeSplash } from "@opencode-ai/ui/amicode-splash"
 
 const HomeRoute = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
@@ -227,6 +228,35 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
   )
 }
 
+/** amicode: live theme bridge for the VS Code webview host. The extension
+ *  forwards editor theme changes as window messages (outer relay → iframe);
+ *  route them through the existing setColorScheme so everything re-themes. */
+function AmicodeThemeBridge() {
+  const theme = useTheme()
+  const onMsg = (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; colorScheme?: string } | undefined
+    if (d?.source !== "amicode" || d.kind !== "theme") return
+    if (d.colorScheme === "light" || d.colorScheme === "dark") theme.setColorScheme(d.colorScheme)
+  }
+  window.addEventListener("message", onMsg)
+  onCleanup(() => window.removeEventListener("message", onMsg))
+  // ⌘⇧P / Ctrl+Shift+P: when embedded in the amicode webview (we have a
+  // parent), the EDITOR's Command Palette wins over the app's own palette —
+  // capture-phase so the in-app binding never sees it; forwarded over the
+  // existing allowlisted command bridge.
+  const onKey = (e: KeyboardEvent) => {
+    if (window.parent === window) return
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault()
+      e.stopPropagation()
+      window.parent.postMessage({ source: "amicode", kind: "command", command: "workbench.action.showCommands" }, "*")
+    }
+  }
+  window.addEventListener("keydown", onKey, { capture: true })
+  onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }))
+  return null
+}
+
 export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
   return (
     <MetaProvider>
@@ -236,6 +266,7 @@ export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
           void window.api?.setTitlebar?.({ mode })
         }}
       >
+        <AmicodeThemeBridge />
         <LanguageProvider locale={props.locale}>
           <UiI18nBridge>
             <ErrorBoundary
@@ -296,7 +327,7 @@ function ConnectionGate(props: ParentProps<{ disableHealthCheck?: boolean }>) {
       when={!checking()}
       fallback={
         <div class="h-dvh w-screen flex flex-col items-center justify-center bg-background-base">
-          <Splash class="w-16 h-20 opacity-50 animate-pulse" />
+          <AmicodeSplash />
         </div>
       }
     >

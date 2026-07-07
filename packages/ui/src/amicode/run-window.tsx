@@ -1,12 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { fetchAmicodeRunSeries, openAmicodeEntity } from "./ui-bridge"
-import {
-  type RunSeries,
-  type RunSeriesView,
-  elapsedLabel,
-  headlineMetric,
-  parseRunSeriesResponse,
-} from "./run-series"
+import { type RunSeries, type RunSeriesView, elapsedLabel, headlineMetric, parseRunSeriesResponse } from "./run-series"
 
 export { parseRunSeriesResponse, type RunSeries, type RunSeriesView } from "./run-series"
 
@@ -32,8 +26,10 @@ function objectivePath(values: number[]): string | undefined {
 
 function linePath(ys: number[]): string | undefined {
   if (ys.length < 2) return undefined
-  const min = Math.min(...ys)
-  const max = Math.max(...ys)
+  return scaledPath(ys, Math.min(...ys), Math.max(...ys))
+}
+
+function scaledPath(ys: number[], min: number, max: number): string {
   const span = max - min || 1
   const step = PLOT_W / (ys.length - 1)
   return ys
@@ -45,23 +41,36 @@ function linePath(ys: number[]): string | undefined {
     .join(" ")
 }
 
+/** One path per drive, sharing a min/max scale so amplitudes stay comparable.
+ *  The wire ships drives flattened back-to-back; pulse_meta says how to slice. */
+function drivePaths(values: number[], drives: number): string[] {
+  const n = Math.max(1, drives)
+  const knots = Math.floor(values.length / n)
+  if (knots < 2) return []
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  return Array.from({ length: n }, (_, d) => scaledPath(values.slice(d * knots, (d + 1) * knots), min, max))
+}
+
 function statusColor(status: string): string {
   if (status === "finished") return "var(--v2-state-fg-success)"
-  if (status === "failed") return "var(--v2-state-fg-danger)"
+  if (status === "failed" || status === "aborted") return "var(--v2-state-fg-danger)"
+  if (status === "stalled") return "var(--v2-state-fg-warning)" // wedged (OOM?) — not blue: must not read as live
+  if (status === "stopped") return "var(--v2-text-text-muted)" // deliberate user stop — calm, not alarming, not live
   return "var(--v2-text-text-accent)" // solving
 }
 
-function Plot(props: { d: string | undefined }) {
+function Plot(props: { d: string[] | undefined }) {
   return (
     <Show
-      when={props.d}
+      when={props.d && props.d.length > 0 ? props.d : undefined}
       fallback={
         <div style={{ height: `${PLOT_H}px`, display: "flex", "align-items": "center" }}>
           <span style={{ "font-size": "10px", color: "var(--v2-text-text-faint)" }}>gathering iterations…</span>
         </div>
       }
     >
-      {(d) => (
+      {(paths) => (
         <svg
           width="100%"
           height={PLOT_H}
@@ -69,14 +78,19 @@ function Plot(props: { d: string | undefined }) {
           preserveAspectRatio="none"
           style={{ display: "block" }}
         >
-          <path
-            d={d()}
-            fill="none"
-            stroke="var(--v2-icon-icon-accent)"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-            vector-effect="non-scaling-stroke"
-          />
+          <For each={paths()}>
+            {(d, i) => (
+              <path
+                d={d}
+                fill="none"
+                stroke="var(--v2-icon-icon-accent)"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+                opacity={i() === 0 ? 1 : 0.55} // second/third drive quadratures read as companions
+              />
+            )}
+          </For>
         </svg>
       )}
     </Show>
@@ -119,9 +133,11 @@ export function RunWindow(props: { run: string; lab?: string }) {
   onMount(() => void load())
   createEffect(() => {
     const v = view()
-    const solving = v?.ok === true && v.run.status === "solving"
-    if (solving && timer === undefined) timer = setInterval(() => void load(), POLL_MS)
-    if (!solving) stop()
+    // Poll through "stalled" too: a stalled run can resume (or get force-
+    // finalized) and the window must converge instead of freezing forever.
+    const live = v?.ok === true && (v.run.status === "solving" || v.run.status === "stalled")
+    if (live && timer === undefined) timer = setInterval(() => void load(), POLL_MS)
+    if (!live) stop()
   })
   onCleanup(stop)
 
@@ -129,10 +145,15 @@ export function RunWindow(props: { run: string; lab?: string }) {
     const v = view()
     return v?.ok ? v.run : undefined
   })
-  const plotPath = createMemo(() => {
+  const plotPath = createMemo<string[] | undefined>(() => {
     const r = run()
     if (!r) return undefined
-    return mode() === "objective" ? objectivePath(r.series.map((p) => p.f)) : linePath(r.pulse?.values ?? [])
+    if (mode() === "objective") {
+      const d = objectivePath(r.series.map((p) => p.f))
+      return d ? [d] : undefined
+    }
+    const values = r.pulse?.values ?? []
+    return drivePaths(values, r.pulseMeta?.drives ?? 1)
   })
 
   const ToggleButton = (p: { mode: "objective" | "pulse"; label: string; disabled?: boolean }) => (
@@ -187,7 +208,11 @@ export function RunWindow(props: { run: string; lab?: string }) {
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Run</span>
         <Show
           when={run()}
-          fallback={<span style={{ color: "var(--v2-text-text-muted)" }}>{view()?.ok === false ? "unavailable" : "loading…"}</span>}
+          fallback={
+            <span style={{ color: "var(--v2-text-text-muted)" }}>
+              {view()?.ok === false ? "unavailable" : "loading…"}
+            </span>
+          }
         >
           {(r) => (
             <>

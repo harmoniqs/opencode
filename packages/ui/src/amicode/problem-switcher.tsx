@@ -68,9 +68,7 @@ export function AmicodeProblemSwitcher(props: {
                   </Show>
                   <span class="text-11-regular text-text-weaker shrink-0">{problem.status}</span>
                   <div class="flex-1" />
-                  <span class="text-12-regular text-text-weak shrink-0">
-                    {problem.entityKinds.length} entities
-                  </span>
+                  <span class="text-12-regular text-text-weak shrink-0">{problem.entityKinds.length} entities</span>
                   <Show when={problem.recorded}>
                     <span class="text-11-regular text-text-weaker shrink-0">{problem.recorded}</span>
                   </Show>
