@@ -384,7 +384,10 @@ function AboutYouCard(props: {
         .catch(() => setSuggestions([]))
     }, 200)
   }
-  const [resolvingLogo, setResolvingLogo] = createSignal(false)
+  // Counter, not boolean: pick A then B while A's Wikidata round-trip is in
+  // flight — A's finally must not re-enable Save while B still resolves (the
+  // boolean version re-introduced the save-races-logo bug it claimed to fix).
+  const [resolvingLogo, setResolvingLogo] = createSignal(0)
   const wikiJson = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : undefined)).catch(() => undefined)
   const pickInstitution = async (sug: { name: string; domain: string; logo: string }) => {
     // Instant favicon mark, then resolve the real BRAND logo: Wikidata P154
@@ -394,7 +397,7 @@ function AboutYouCard(props: {
     // URL is what gets persisted (the old async upgrade lost a race with Save).
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
-    setResolvingLogo(true)
+    setResolvingLogo((n) => n + 1)
     try {
       let logo: string | undefined
       const found = await wikiJson(
@@ -419,7 +422,7 @@ function AboutYouCard(props: {
       }
       if (logo && draft().affiliation === sug.name) setDraft({ ...draft(), affiliation_logo: logo })
     } finally {
-      setResolvingLogo(false)
+      setResolvingLogo((n) => Math.max(0, n - 1))
     }
   }
 
@@ -699,7 +702,7 @@ function AboutYouCard(props: {
                         <button
                           type="button"
                           data-slot="amicode-you-save"
-                          disabled={saving() || resolvingLogo()}
+                          disabled={saving() || resolvingLogo() > 0}
                           onClick={() => void save()}
                           style={{
                             "background": "var(--v2-icon-icon-accent)",
@@ -712,7 +715,7 @@ function AboutYouCard(props: {
                             "cursor": saving() ? "wait" : "pointer",
                           }}
                         >
-                          {saving() ? "Saving…" : resolvingLogo() ? "Finding logo…" : "Save"}
+                          {saving() ? "Saving…" : resolvingLogo() > 0 ? "Finding logo…" : "Save"}
                         </button>
                         <Show when={saveError()} fallback={<span style={{ "font-size": "11px", "color": "var(--v2-text-text-faint)" }}>saves to your profile</span>}>
                           <span style={{ "font-size": "11px", "color": "var(--v2-state-fg-danger)" }}>{saveError()}</span>
