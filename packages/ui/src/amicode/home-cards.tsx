@@ -253,9 +253,32 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
       <div style={{ "display": "flex", "flex-direction": "column", "gap": "3px", "margin-bottom": "12px" }}>
         <For each={AMICO_CAN}>{(line) => <Bullet>{line}</Bullet>}</For>
       </div>
-      <PrimaryButton slot="amicode-card-meet-cta" onClick={() => props.onStart("what can Amico do?")}>
-        What can Amico do?
-      </PrimaryButton>
+      {/* Primary CTA: big, center-left — the front door. Opens a fresh chat
+          (same destination as clicking the card). */}
+      <button
+        type="button"
+        data-slot="amicode-card-meet-cta"
+        onClick={() => props.onStart("")}
+        style={{
+          "align-self": "flex-start",
+          "display": "inline-flex",
+          "align-items": "center",
+          "gap": "10px",
+          "margin-top": "4px",
+          "padding": "12px 22px",
+          "border": "none",
+          "border-radius": "10px",
+          "cursor": "pointer",
+          "background": "var(--v2-icon-icon-accent)",
+          "color": "var(--v2-background-bg-base, #000)",
+          "font-size": "15px",
+          "font-weight": "650",
+          "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
+        }}
+      >
+        Open chat
+        <span aria-hidden="true" style={{ "font-size": "16px", "line-height": "1" }}>↗</span>
+      </button>
     </div>
   )
 }
