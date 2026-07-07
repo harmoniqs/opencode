@@ -240,6 +240,20 @@ function AmicodeThemeBridge() {
   }
   window.addEventListener("message", onMsg)
   onCleanup(() => window.removeEventListener("message", onMsg))
+  // ⌘⇧P / Ctrl+Shift+P: when embedded in the amicode webview (we have a
+  // parent), the EDITOR's Command Palette wins over the app's own palette —
+  // capture-phase so the in-app binding never sees it; forwarded over the
+  // existing allowlisted command bridge.
+  const onKey = (e: KeyboardEvent) => {
+    if (window.parent === window) return
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault()
+      e.stopPropagation()
+      window.parent.postMessage({ source: "amicode", kind: "command", command: "workbench.action.showCommands" }, "*")
+    }
+  }
+  window.addEventListener("keydown", onKey, { capture: true })
+  onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }))
   return null
 }
 
