@@ -906,8 +906,8 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   const sessionId = () => props.session.id
   const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
   // amicode: a quiet chevron for session rows (the brand mark everywhere was
-  // too much); the H-robot spinner still takes over while the agent works,
-  // and unread keeps its accent dot.
+  // too much; the working-spinner was removed too — one wedged run left it
+  // spinning forever). Unread keeps its accent dot.
   return (
     <span class="relative inline-flex size-5 shrink-0 items-center justify-center" style={{ color: "var(--v2-icon-icon-muted)" }}>
       <IconV2 name="chevron-right" />
