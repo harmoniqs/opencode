@@ -49,7 +49,11 @@ export function readTerminalState(dir: string, log?: string): TerminalState | un
     return undefined
   }
   const raw = tomlString(finished, "status")
-  if (raw !== "completed" && raw !== "failed" && raw !== "aborted" && raw !== "stopped") return undefined
+  // MIRROR (amicode finished.schema.json): the FINISHED enum is exactly
+  // completed|failed|aborted — "stopped" only ever arises via the
+  // AMICODE_STOPPED relabel below, never as a raw FINISHED value. Accepting a
+  // raw "stopped" here was drift: the canonical reader treats it as torn.
+  if (raw !== "completed" && raw !== "failed" && raw !== "aborted") return undefined
   let status: TerminalState["status"] = raw
   if (status === "completed") {
     const body =
@@ -69,6 +73,9 @@ export function readTerminalState(dir: string, log?: string): TerminalState | un
     try {
       const result = readFileSync(path.join(dir, "result.toml"), "utf8")
       fidelity = tomlScalar(result, "fidelity")
+      // MIRROR (amicode result.schema.json): fidelity is bounded 0..1.0001 —
+      // an out-of-range scrape must not surface an F the extension refuses.
+      if (fidelity !== null && (fidelity < 0 || fidelity > 1.0001)) fidelity = null
       iterations = tomlScalar(result, "iterations")
     } catch {
       /* result.toml absent: completed with no recorded fidelity */
