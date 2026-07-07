@@ -263,6 +263,9 @@ export function saveProfile(fields: { name?: string; affiliation?: string; focus
   } catch {
     current = {}
   }
+  // A JSON primitive ("x", 42) survives the ?? {} and current[key]= would
+  // throw a 500 the client swallows — only an object merge makes sense.
+  if (typeof current !== "object" || current === null || Array.isArray(current)) current = {}
   for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo"] as const) {
     const v = fields[key]
     if (typeof v === "string") {
