@@ -233,23 +233,35 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         }}
       />
       <div style={EYEBROW}>Meet Amico</div>
-      <div style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}>
+      <div
+        data-slot="amicode-meet-identity"
+        style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}
+      >
         <Mark class="w-12 h-auto shrink-0" />
         <div style={{ "min-width": "0" }}>
           <div style={{ "font-size": "18px", "font-weight": "600", color: "var(--v2-text-text-base)" }}>Amico</div>
           <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--v2-text-text-muted)" }}>
             Your friendly Quantum Computing Agent
           </div>
-          <div style={{ "font-size": "11px", "line-height": "16px", color: "var(--v2-text-text-faint)" }}>
+          <div
+            data-slot="amicode-meet-engine"
+            style={{ "font-size": "11px", "line-height": "16px", color: "var(--v2-text-text-faint)" }}
+          >
             powered by the Piccolo engine
           </div>
         </div>
       </div>
-      <div style={DIVIDER} />
-      <div style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-bottom": "6px" }}>
+      <div data-slot="amicode-meet-divider" style={DIVIDER} />
+      <div
+        data-slot="amicode-meet-can-label"
+        style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-bottom": "6px" }}
+      >
         I can help you
       </div>
-      <div style={{ display: "flex", "flex-direction": "column", gap: "3px", "margin-bottom": "12px" }}>
+      <div
+        data-slot="amicode-meet-can"
+        style={{ display: "flex", "flex-direction": "column", gap: "3px", "margin-bottom": "12px" }}
+      >
         <For each={AMICO_CAN}>{(line) => <Bullet>{line}</Bullet>}</For>
       </div>
       {/* Primary CTA: big, center-left — the front door. Opens a fresh chat
@@ -1041,6 +1053,10 @@ const COMPACT_CSS = `
   [data-component="amicode-home-cards"] { gap: 8px !important; }
   [data-component="amicode-card-meet"], [data-component="amicode-card-you"] { padding: 10px 14px !important; }
   [data-component="amicode-card-meet"] svg { width: 36px !important; }
+  [data-slot="amicode-meet-identity"] { margin-top: 6px !important; }
+  [data-slot="amicode-meet-divider"] { margin: 8px 0 !important; }
+  [data-slot="amicode-meet-can"] { margin-bottom: 8px !important; }
+  [data-slot="amicode-you-institution"] { margin-top: 6px !important; padding: 6px 8px !important; }
   [data-component="amicode-action-card"] { padding: 10px 12px !important; }
   [data-slot="amicode-card-meet-cta"] { padding: 8px 16px !important; font-size: 13px !important; }
   [data-component="amicode-footer"] { padding-top: 6px !important; }
@@ -1050,6 +1066,11 @@ const COMPACT_CSS = `
   [data-slot="amicode-home-band"] { max-height: 180px !important; }
   [data-component="amicode-card-meet"], [data-component="amicode-card-you"] { padding: 8px 12px !important; }
   [data-slot="amicode-card-meet-cta"] { padding: 6px 14px !important; }
+  /* content tier: the CTA carries the message — the bullet block is the
+     tallest optional element in the hero row, and the engine line is decor */
+  [data-slot="amicode-meet-can"], [data-slot="amicode-meet-can-label"], [data-slot="amicode-meet-engine"] { display: none !important; }
+  [data-slot="amicode-meet-divider"] { margin: 6px 0 !important; }
+  [data-component="amicode-card-meet"] svg { width: 30px !important; }
 }
 `
 
