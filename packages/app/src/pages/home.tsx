@@ -1,6 +1,6 @@
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { batch, createEffect, createMemo, createResource, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
+import { batch, createEffect, createMemo, createResource, For, Match, on, onCleanup, onMount, Show, Switch, createSignal } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
@@ -299,6 +299,7 @@ function HomeDesign() {
     onCleanup(() => clearInterval(timer))
   })
 
+  const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
   function startWithPrompt(prompt: string) {
     const project = newSessionProject()
     if (!project) {
@@ -515,28 +516,61 @@ function HomeDesign() {
                     </div>
                   }
                 >
-                  <For each={groups()}>
-                    {(group, index) => (
-                      <div class="flex min-w-0 flex-col gap-4">
-                        <HomeSessionGroupHeader
-                          title={group.title}
-                          onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
-                        />
-                        <div class="flex min-w-0 flex-col gap-px">
-                          <For each={group.sessions}>
-                            {(record) => (
-                              <HomeSessionRow
-                                record={record}
-                                server={state.selection.server}
-                                activeServer={state.selection.server === server.key}
-                                openSession={openSession}
+                  {(() => {
+                    // amicode: collapsed = the 3 most recent sessions across all
+                    // groups; "Show all (N)" expands. Pure derivation off the
+                    // existing groups() memo — no second data path to drift.
+                    const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
+                    const visible = () => {
+                      if (sessionsExpanded() || total() <= 3) return groups()
+                      let budget = 3
+                      const out: typeof groups extends () => infer G ? G : never = [] as never
+                      for (const g of groups()) {
+                        if (budget <= 0) break
+                        const take = g.sessions.slice(0, budget)
+                        budget -= take.length
+                        ;(out as { title: string; sessions: typeof g.sessions }[]).push({ ...g, sessions: take })
+                      }
+                      return out as ReturnType<typeof groups>
+                    }
+                    return (
+                      <>
+                        <For each={visible()}>
+                          {(group, index) => (
+                            <div class="flex min-w-0 flex-col gap-4">
+                              <HomeSessionGroupHeader
+                                title={group.title}
+                                onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
                               />
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
+                              <div class="flex min-w-0 flex-col gap-px">
+                                <For each={group.sessions}>
+                                  {(record) => (
+                                    <HomeSessionRow
+                                      record={record}
+                                      server={state.selection.server}
+                                      activeServer={state.selection.server === server.key}
+                                      openSession={openSession}
+                                    />
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                        <Show when={total() > 3}>
+                          <button
+                            type="button"
+                            data-action="home-sessions-toggle"
+                            class="self-start px-4 text-[12px]"
+                            style={{ color: "var(--v2-text-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+                            onClick={() => setSessionsExpanded(!sessionsExpanded())}
+                          >
+                            {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
+                          </button>
+                        </Show>
+                      </>
+                    )
+                  })()}
                 </Show>
               </Show>
             </div>
@@ -872,9 +906,7 @@ function HomeSessionAvatar(props: { project: LocalProject; session: Session; act
   // and unread keeps its accent dot.
   return (
     <span class="relative inline-flex size-5 shrink-0 items-center justify-center" style={{ color: "var(--v2-icon-icon-muted)" }}>
-      <Show when={state.loading()} fallback={<IconV2 name="chevron-right" />}>
-        <AmicoSpinner class="size-4" />
-      </Show>
+      <IconV2 name="chevron-right" />
       <Show when={state.unread()}>
         <span
           aria-hidden="true"
