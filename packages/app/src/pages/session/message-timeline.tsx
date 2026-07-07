@@ -335,18 +335,22 @@ export function MessageTimeline(props: {
     dialog.show(
       () => (
         <Dialog title={`AMICO · ${entityLabel(kind)}`} fit>
-          <AmicodeEntityView
-            view={problemView()}
-            kind={kind}
-            anchorSeq={seq}
-            onDraftPrompt={(text) => {
-              dialog.close()
-              draftPrompt(prompt, text)
-            }}
-            onRetry={() => void refetchProblem()}
-            retryLabel={language.t("amicode.retry")}
-            editLabel={language.t("amicode.editInChat")}
-          />
+          {/* fit-to-content goes near-fullscreen on run entities (long paths +
+              history) — cap the panel and let it scroll internally instead */}
+          <div style={{ width: "min(680px, 90vw)", "max-height": "68vh", "overflow-y": "auto" }}>
+            <AmicodeEntityView
+              view={problemView()}
+              kind={kind}
+              anchorSeq={seq}
+              onDraftPrompt={(text) => {
+                dialog.close()
+                draftPrompt(prompt, text)
+              }}
+              onRetry={() => void refetchProblem()}
+              retryLabel={language.t("amicode.retry")}
+              editLabel={language.t("amicode.editInChat")}
+            />
+          </div>
         </Dialog>
       ),
       () => setEntityViewOpen(false),
