@@ -60,8 +60,9 @@ function drivePaths(values: number[], drives: number): string[] {
 
 function statusColor(status: string): string {
   if (status === "finished") return "var(--v2-state-fg-success)"
-  if (status === "failed") return "var(--v2-state-fg-danger)"
+  if (status === "failed" || status === "aborted") return "var(--v2-state-fg-danger)"
   if (status === "stalled") return "var(--v2-state-fg-warning)" // wedged (OOM?) — not blue: must not read as live
+  if (status === "stopped") return "var(--v2-text-text-muted)" // deliberate user stop — calm, not alarming, not live
   return "var(--v2-text-text-accent)" // solving
 }
 
@@ -138,9 +139,11 @@ export function RunWindow(props: { run: string; lab?: string }) {
   onMount(() => void load())
   createEffect(() => {
     const v = view()
-    const solving = v?.ok === true && v.run.status === "solving"
-    if (solving && timer === undefined) timer = setInterval(() => void load(), POLL_MS)
-    if (!solving) stop()
+    // Poll through "stalled" too: a stalled run can resume (or get force-
+    // finalized) and the window must converge instead of freezing forever.
+    const live = v?.ok === true && (v.run.status === "solving" || v.run.status === "stalled")
+    if (live && timer === undefined) timer = setInterval(() => void load(), POLL_MS)
+    if (!live) stop()
   })
   onCleanup(stop)
 
