@@ -119,6 +119,39 @@ const readClipboardText: Platform["readClipboardText"] = () => {
   })
 }
 
+// Amicode webview (generalized): the same sandboxed-iframe paste failure
+// hits every OTHER editable in the app too — provider API-key fields,
+// settings inputs, etc. — not just the chat composer (which has its own
+// handler, above, and calls stopPropagation() on every paste it handles —
+// so this document-level listener never double-fires there). It only
+// activates when the native paste event gave nothing, so it's a no-op
+// everywhere clipboardData already works (plain browser tabs, desktop).
+const isFormField = (el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement =>
+  el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+
+const installGlobalPasteFallback = () => {
+  document.addEventListener("paste", (event) => {
+    const target = event.target
+    const isEditable = isFormField(target) || (target instanceof HTMLElement && target.isContentEditable)
+    if (!isEditable) return
+    if (event.clipboardData?.getData("text/plain")) return
+
+    event.preventDefault()
+    void readClipboardText().then((text) => {
+      if (!text) return
+      if (isFormField(target)) {
+        const start = target.selectionStart ?? target.value.length
+        const end = target.selectionEnd ?? target.value.length
+        target.value = target.value.slice(0, start) + text + target.value.slice(end)
+        target.selectionStart = target.selectionEnd = start + text.length
+        target.dispatchEvent(new Event("input", { bubbles: true }))
+      } else {
+        document.execCommand("insertText", false, text)
+      }
+    })
+  })
+}
+
 const root = document.getElementById("root")
 if (!(root instanceof HTMLElement) && import.meta.env.DEV) {
   throw new Error(getRootNotFoundError())
@@ -180,6 +213,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 if (root instanceof HTMLElement) {
+  installGlobalPasteFallback()
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {
