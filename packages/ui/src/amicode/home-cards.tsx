@@ -1,5 +1,11 @@
 import { For, Show, createEffect, createMemo, on, type JSX, createSignal, onCleanup } from "solid-js"
 import { Mark } from "../components/logo"
+import {
+  institutionLogoUrl,
+  suggestInstitutions,
+  resolveBrandLogo,
+  type InstitutionSuggestion,
+} from "./institution-lookup"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
 // and useful practitioner info on). Two identity heroes — MEET AMICO (who your
@@ -397,14 +403,8 @@ function AboutYouCard(props: {
     })
     setEditing(true)
   }
-  // Institution logos ride Google's favicon service — clearbit's logo CDN is
-  // sunset (autocomplete lives on for name+domain, which is all we need).
-  const institutionLogoUrl = (domain: string) =>
-    `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${encodeURIComponent(domain)}&size=256`
-
-  // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
-  // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
-  // AND its logo; free text still saves as a plain affiliation.
+  // Institution lookup lives in institution-lookup.ts (shared with the
+  // onboarding wizard); this card owns debounce, sequencing, and signals.
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   let searchSeq = 0 // out-of-order guard: a slow "har" response must not clobber "harvard"'s
   onCleanup(() => {
@@ -419,55 +419,24 @@ function AboutYouCard(props: {
     }
     searchTimer = setTimeout(() => {
       const seq = ++searchSeq
-      fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q.trim())}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows: any) => {
-          if (seq === searchSeq) setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : [])
-        })
-        .catch(() => {
-          if (seq === searchSeq) setSuggestions([])
-        })
+      void suggestInstitutions(q).then((rows) => {
+        if (seq === searchSeq) setSuggestions(rows)
+      })
     }, 200)
   }
   // Counter, not boolean: pick A then B while A's Wikidata round-trip is in
   // flight — A's finally must not re-enable Save while B still resolves (the
   // boolean version re-introduced the save-races-logo bug it claimed to fix).
   const [resolvingLogo, setResolvingLogo] = createSignal(0)
-  const wikiJson = (url: string) =>
-    fetch(url)
-      .then((r) => (r.ok ? r.json() : undefined))
-      .catch(() => undefined)
-  const pickInstitution = async (sug: { name: string; domain: string; logo: string }) => {
-    // Instant favicon mark, then resolve the real BRAND logo: Wikidata P154
-    // ("logo image" — e.g. the purple NYU torch, not the seal) rasterized by
-    // Commons at 512px → crisp at any tile size. Fallbacks: Wikipedia page
-    // image, then the favicon. Save is held while resolving so the upgraded
-    // URL is what gets persisted (the old async upgrade lost a race with Save).
+  const pickInstitution = async (sug: InstitutionSuggestion) => {
+    // Instant favicon mark, then resolve the real BRAND logo (Wikidata P154 →
+    // Wikipedia pageimage → favicon; see institution-lookup.ts). Save is held
+    // while resolving so the upgraded URL is what gets persisted.
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
     setResolvingLogo((n) => n + 1)
     try {
-      let logo: string | undefined
-      const found = await wikiJson(
-        `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(sug.name)}&language=en&format=json&origin=*`,
-      )
-      const qid = found?.search?.[0]?.id
-      if (qid) {
-        const claims = await wikiJson(
-          `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${qid}&property=P154&format=json&origin=*`,
-        )
-        const file = claims?.claims?.P154?.[0]?.mainsnak?.datavalue?.value
-        if (typeof file === "string" && file) {
-          logo = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=512`
-        }
-      }
-      if (!logo) {
-        const page = await wikiJson(
-          `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&titles=${encodeURIComponent(sug.name)}&prop=pageimages&piprop=original`,
-        )
-        const orig = (Object.values(page?.query?.pages ?? {})[0] as any)?.original?.source
-        if (typeof orig === "string" && /\.(svg|png|jpe?g|webp)$/i.test(orig)) logo = orig
-      }
+      const logo = await resolveBrandLogo(sug.name, sug.domain)
       if (logo && draft().affiliation === sug.name) setDraft({ ...draft(), affiliation_logo: logo })
     } finally {
       setResolvingLogo((n) => Math.max(0, n - 1))
