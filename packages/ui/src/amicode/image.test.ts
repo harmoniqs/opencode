@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseImageMarkers } from "./image-strip"
+import { darkVariant, parseImageMarkers } from "./image-strip"
 
 describe("parseImageMarkers", () => {
   test("extracts marker lines in order", () => {
@@ -42,5 +42,15 @@ describe("parseImageMarkers", () => {
 
   test("marker must start the line", () => {
     expect(parseImageMarkers("note: AMICODE_IMAGE: sneaky.png")).toEqual([])
+  })
+})
+
+describe("darkVariant", () => {
+  test("inserts .dark before the extension", () => {
+    expect(darkVariant("position_sweep.png")).toBe("position_sweep.dark.png")
+    expect(darkVariant("a/b/register.png")).toBe("a/b/register.dark.png")
+  })
+  test("leaves extensionless paths alone", () => {
+    expect(darkVariant("noext")).toBe("noext")
   })
 })

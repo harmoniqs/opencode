@@ -249,4 +249,11 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
      `sdk.client.file.read({ path, directory: sdk.directory })` (GET /file/content returns
      `{type:"binary", content:<base64>}`). Registered in the TIMELINE, not the entity rail,
      so it works in sessions with zero amicode_* parts.
-   - Checks: tsgo -b clean; bun test:unit 376 pass; bun test src/amicode 68 pass.
+   - THEME VARIANTS (same entry, second pass): in dark mode the strip first requests
+     `<name>.dark.png` (pure helper `darkVariant`; scheme read reactively from the
+     `data-color-scheme` attribute on <html> via MutationObserver, so a theme toggle
+     re-resolves live). Theme-matched assets render on transparent backing; a light asset
+     falling back in dark mode keeps a white backing for legibility. Demo scripts render
+     both variants per figure (demo_style.py render_both; dark palette #5E8FD8/#C97F4E on
+     #131010, dataviz six-checks validated).
+   - Checks: tsgo -b clean; bun test:unit 376 pass; bun test src/amicode 70 pass.

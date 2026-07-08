@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createResource, createSignal } from "solid-js"
+import { For, Match, Show, Switch, createResource, createSignal, onCleanup } from "solid-js"
 import { amicodeImageBridge } from "./image-bridge"
 
 // AMICODE: native image rendering for tool output. Scripts print marker lines
@@ -18,6 +18,24 @@ const MIME: Record<string, string> = {
   gif: "image/gif",
   webp: "image/webp",
   svg: "image/svg+xml",
+}
+
+/** Pure: foo.png → foo.dark.png (inserted before the final extension). */
+export function darkVariant(path: string): string {
+  const dot = path.lastIndexOf(".")
+  if (dot <= 0) return path
+  return `${path.slice(0, dot)}.dark${path.slice(dot)}`
+}
+
+// Reactive app color scheme: the boot preload + theme toggle stamp
+// data-color-scheme on <html>; watch it so strips re-resolve on toggle.
+function createColorScheme() {
+  const read = () => (document.documentElement.dataset.colorScheme === "dark" ? "dark" : "light")
+  const [scheme, setScheme] = createSignal<"dark" | "light">(read())
+  const observer = new MutationObserver(() => setScheme(read()))
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
+  onCleanup(() => observer.disconnect())
+  return scheme
 }
 
 /** Pure: extract deduped, extension-safe image paths from tool output. */
@@ -45,9 +63,21 @@ function dataUri(path: string, base64: string): string {
 
 function Figure(props: { path: string }) {
   const [expanded, setExpanded] = createSignal(false)
+  const scheme = createColorScheme()
+  // Theme-matched variant first (foo.dark.png in dark mode), falling back to
+  // the authored file. `themed` records whether the variant matched, so the
+  // fallback keeps a light backing behind light-surface charts in dark mode.
   const [content] = createResource(
-    () => ({ bridge: amicodeImageBridge(), path: props.path }),
-    async ({ bridge, path }) => (bridge ? await bridge.read(path) : undefined),
+    () => ({ bridge: amicodeImageBridge(), path: props.path, dark: scheme() === "dark" }),
+    async ({ bridge, path, dark }) => {
+      if (!bridge) return undefined
+      if (dark) {
+        const variant = await bridge.read(darkVariant(path))
+        if (variant !== undefined) return { base64: variant, themed: true }
+      }
+      const base = await bridge.read(path)
+      return base === undefined ? undefined : { base64: base, themed: !dark }
+    },
   )
 
   const toggle = () => setExpanded((prior) => !prior)
@@ -79,7 +109,7 @@ function Figure(props: { path: string }) {
         </Match>
         <Match when={content() !== undefined}>
           <img
-            src={dataUri(props.path, content()!)}
+            src={dataUri(props.path, content()!.base64)}
             alt={props.path}
             role="button"
             tabindex="0"
@@ -98,7 +128,9 @@ function Figure(props: { path: string }) {
               "align-self": "flex-start",
               "border-radius": "8px",
               border: "1px solid var(--v2-border-border-base)",
-              background: "#fff", // charts are authored on light surfaces; keep them legible in dark mode
+              // Theme-matched variants carry their own surface; only a light
+              // asset shown in dark mode needs a light backing to stay legible.
+              background: content()!.themed ? "transparent" : "#fff",
               cursor: expanded() ? "zoom-out" : "zoom-in",
               transition: "opacity 150ms ease-out",
             }}
