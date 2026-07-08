@@ -66,7 +66,6 @@ import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amico
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
-import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
@@ -352,6 +351,26 @@ function HomeDesign() {
   // Onboarding wizard (session zero): decided ONCE when the profile first
   // resolves — the mid-wizard profile refetch must not unmount the preview
   // step, and a dismiss is remembered per install (localStorage).
+  // Library (papers that make Amico smarter): count + latest for the card.
+  const [libraryRaw, { refetch: refetchLibrary }] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/library").catch(() => undefined),
+  )
+  const libraryView = createMemo(() => {
+    const raw = libraryRaw() as { ok?: boolean; papers?: { name?: string; path?: string }[] } | undefined
+    if (!raw || raw.ok !== true || !Array.isArray(raw.papers)) return undefined
+    return {
+      count: raw.papers.length,
+      latestName: typeof raw.papers[0]?.name === "string" ? raw.papers[0].name : undefined,
+      latestPath: typeof raw.papers[0]?.path === "string" ? raw.papers[0].path : undefined,
+    }
+  })
+  async function uploadPaper(filename: string, dataB64: string) {
+    const res = await amicodePost(focusedServer(), "/amicode/library", { filename, data_b64: dataB64 })
+    if ((res as { ok?: boolean } | undefined)?.ok !== true) throw new Error("library save rejected")
+    await refetchLibrary()
+  }
+
   const WIZARD_DISMISS_KEY = "amicode-onboarding-dismissed"
   const [wizardOpen, setWizardOpen] = createSignal(false)
   let wizardDecided = false
@@ -667,8 +686,9 @@ function HomeDesign() {
         <div class="relative z-[1] flex-none pt-1">
           <AmicodeHomeCards
             profile={profileView()}
-            starters={AMICODE_STARTERS}
             onStart={startWithPrompt}
+            library={libraryView()}
+            onUploadPaper={uploadPaper}
             onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
             onSaveProfile={saveProfileFields}
             resumeName={resumeProblem()?.name}

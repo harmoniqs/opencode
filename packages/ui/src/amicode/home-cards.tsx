@@ -1002,6 +1002,101 @@ function Sparkline(props: { values: number[] }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// LIBRARY — upload papers so Amico learns YOUR work (the personalization card)
+// ---------------------------------------------------------------------------
+function LibraryCard(props: {
+  library?: { count: number; latestName?: string; latestPath?: string }
+  onUploadPaper: (filename: string, dataB64: string) => Promise<void>
+  onStart: (prompt: string) => void
+}) {
+  const [busy, setBusy] = createSignal(false)
+  const [error, setError] = createSignal<string | undefined>(undefined)
+  let fileInput: HTMLInputElement | undefined
+
+  const upload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      for (const file of Array.from(files)) {
+        const buf = new Uint8Array(await file.arrayBuffer())
+        let bin = ""
+        const CHUNK = 0x8000
+        for (let i = 0; i < buf.length; i += CHUNK) bin += String.fromCharCode(...buf.subarray(i, i + CHUNK))
+        await props.onUploadPaper(file.name, btoa(bin))
+      }
+    } catch {
+      setError("Upload failed — is the server up?")
+    } finally {
+      setBusy(false)
+      if (fileInput) fileInput.value = ""
+    }
+  }
+
+  return (
+    <ActionCard eyebrow="Library" slot="amicode-card-library">
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".pdf,application/pdf"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => void upload(e.currentTarget.files)}
+      />
+      <div style={CARD_TITLE}>
+        {(props.library?.count ?? 0) > 0
+          ? `${props.library!.count} paper${props.library!.count === 1 ? "" : "s"}`
+          : "Make Amico smarter"}
+      </div>
+      <div style={CARD_SUB}>{error() ?? props.library?.latestName ?? "upload papers — Amico learns your work"}</div>
+      <div style={{ display: "flex", gap: "10px", "align-items": "center", "margin-top": "auto" }}>
+        <button
+          type="button"
+          data-slot="amicode-card-library-upload"
+          disabled={busy()}
+          onClick={(e) => {
+            e.stopPropagation()
+            fileInput?.click()
+          }}
+          style={{
+            border: "1px solid var(--v2-icon-icon-accent)",
+            "border-radius": "6px",
+            background: "var(--v2-background-bg-layer-02)",
+            color: "var(--v2-text-text-base)",
+            padding: "3px 10px",
+            "font-size": "11px",
+            cursor: busy() ? "wait" : "pointer",
+          }}
+        >
+          {busy() ? "Uploading…" : "Upload PDF"}
+        </button>
+        <Show when={props.library?.latestPath}>
+          <button
+            type="button"
+            data-slot="amicode-card-library-read"
+            onClick={() =>
+              props.onStart(
+                `Read the paper at ${props.library!.latestPath} and remember its key results, methods, and how they relate to my work.`,
+              )
+            }
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--v2-text-text-accent)",
+              "font-size": "11px",
+              padding: "0",
+            }}
+          >
+            Discuss latest →
+          </button>
+        </Show>
+      </div>
+    </ActionCard>
+  )
+}
+
 export interface HomeLiveRun {
   name?: string
   iteration?: number | null
@@ -1046,8 +1141,10 @@ const COMPACT_CSS = `
 
 export function AmicodeHomeCards(props: {
   profile: ProfileView | undefined
-  starters: readonly { label: string; prompt: string }[]
   onStart: (prompt: string) => void
+  // Library ("make Amico smarter"): uploaded papers land in ~/.amico/library
+  library?: { count: number; latestName?: string; latestPath?: string }
+  onUploadPaper?: (filename: string, dataB64: string) => Promise<void>
   onEditProfile: () => void
   onSaveProfile?: (fields: {
     name?: string
@@ -1151,32 +1248,13 @@ export function AmicodeHomeCards(props: {
           </ActionCard>
         </Show>
 
-        {/* Start something */}
-        <ActionCard eyebrow="Start something" slot="amicode-card-start">
-          <div style={{ display: "flex", "flex-wrap": "wrap", gap: "5px", "margin-top": "2px" }}>
-            <For each={props.starters}>
-              {(starter) => (
-                <button
-                  type="button"
-                  data-slot="amicode-card-start-chip"
-                  onClick={() => props.onStart(starter.prompt)}
-                  style={{
-                    border: "1px solid var(--v2-border-border-base)",
-                    "border-radius": "6px",
-                    background: "var(--v2-background-bg-layer-02)",
-                    color: "var(--v2-text-text-base)",
-                    padding: "3px 9px",
-                    "font-size": "11px",
-                    "line-height": "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {starter.label}
-                </button>
-              )}
-            </For>
-          </div>
-        </ActionCard>
+        {/* Library — papers that make Amico smarter (replaces the old starter
+            chips: Open chat already owns "start something"). Uploads go to
+            POST /amicode/library; the extension grants the agent read access
+            to ~/.amico/library so "read my latest paper" just works. */}
+        <Show when={props.onUploadPaper}>
+          <LibraryCard library={props.library} onUploadPaper={props.onUploadPaper!} onStart={props.onStart} />
+        </Show>
       </div>
     </div>
   )
