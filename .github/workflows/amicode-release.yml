@@ -1,0 +1,95 @@
+# AMICODE fork: tag-triggered binary release.
+# Push a tag `v<base-version>-amicode.<n>` (e.g. v1.17.3-amicode.4) → builds
+# linux-x64 (native) + darwin-arm64 (cross-compiled), verifies the channel
+# gate (AMICODE-PATCHES.md gotcha 2), and publishes a GitHub release with
+# sha256s. Replaces the hand-rolled releases (amicode.1–.3).
+name: amicode-release
+on:
+  push:
+    tags:
+      - "v*-amicode.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release (e.g. v1.17.3-amicode.4)"
+        required: true
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Derive base version from tag
+        id: v
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"; VERSION="${VERSION%%-amicode.*}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build linux-x64 (native) + darwin-arm64 (cross)
+        working-directory: packages/opencode
+        env:
+          OPENCODE_VERSION: ${{ steps.v.outputs.version }}
+          # NOT "latest": that compiles the web UI with VITE_OPENCODE_CHANNEL=prod,
+          # defaulting newLayoutDesigns OFF and hiding every amicode surface
+          # (gotcha 2 in AMICODE-PATCHES.md; bit releases amicode.1/.2).
+          OPENCODE_CHANNEL: dev
+          OPENCODE_BUILD_TARGETS: "opencode-linux-x64,opencode-darwin-arm64"
+        run: bun run script/build.ts
+
+      - name: Gate check — amicode UI default must be ON in both binaries
+        run: |
+          set -euo pipefail
+          check() {
+            local BIN="$1"
+            test -f "$BIN"
+            # minified shape: `...general?.newLayoutDesigns,<VAR>)` with `<VAR>=!0` (on) / `=!1` (off)
+            local VAR
+            VAR=$(grep -aoh 'newLayoutDesigns,[A-Za-z$_]\{1,8\})' "$BIN" | head -1 | sed 's/newLayoutDesigns,//; s/)//')
+            test -n "$VAR" || { echo "FAIL: gate pattern not found in $BIN (minifier drift? update this check)"; exit 1; }
+            grep -aq "[^A-Za-z0-9_\$]${VAR}=!0" "$BIN" \
+              || { echo "FAIL: channel gate OFF (${VAR}=!1) in $BIN — built with channel latest/prod?"; exit 1; }
+            echo "OK: gate ON (${VAR}=!0) in $BIN"
+          }
+          LIN=packages/opencode/dist/opencode-linux-x64/bin/opencode
+          check "$LIN"
+          check packages/opencode/dist/opencode-darwin-arm64/bin/opencode
+          GOT=$("$LIN" --version)
+          [ "$GOT" = "${{ steps.v.outputs.version }}" ] || { echo "FAIL: --version=$GOT expected ${{ steps.v.outputs.version }}"; exit 1; }
+
+      - name: Package assets (flat 'opencode' inside, per amicode fetcher contract)
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cp packages/opencode/dist/opencode-linux-x64/bin/opencode out/opencode
+          tar -czf out/opencode-linux-x64.tar.gz -C out opencode && rm out/opencode
+          (cd packages/opencode/dist/opencode-darwin-arm64/bin && zip -qj "$GITHUB_WORKSPACE/out/opencode-darwin-arm64.zip" opencode)
+          sha256sum out/opencode-linux-x64.tar.gz out/opencode-darwin-arm64.zip | sed 's|out/||' | tee out/SHA256SUMS.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.v.outputs.tag }}"
+          NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=dev (UI gate verified ON in both binaries).
+
+          Assets: linux-x64 (native, smoke-tested), darwin-arm64 (cross-compiled from Linux — not natively smoke-tested).
+
+          sha256 (pin these in amicode's opencode.lock.json):
+          \`\`\`
+          $(cat out/SHA256SUMS.txt)
+          \`\`\`"
+          gh release create "$TAG" --title "Amicode binary $TAG" --notes "$NOTES" \
+            out/opencode-linux-x64.tar.gz out/opencode-darwin-arm64.zip
