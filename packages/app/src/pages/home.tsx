@@ -341,11 +341,23 @@ function HomeDesign() {
   const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
   function startWithPrompt(prompt: string) {
     const project = newSessionProject()
-    if (!project) {
-      openNewSession()
+    if (project) {
+      tabs.newDraft({ server: server.key, directory: project.worktree }, prompt)
       return
     }
-    tabs.newDraft({ server: server.key, directory: project.worktree }, prompt)
+    // No tracked projects (fresh profile against a bare `opencode serve`):
+    // openNewSession() would dead-end silently here — it needs the same
+    // newSessionProject() that just came back empty. Fall back to the server's
+    // own working directory (path.directory, synced from GET /path; "" until
+    // loaded) and start tracking it, so the home CTAs work on first visit.
+    // Deliberately NOT sync.data.project: its "global" record has worktree "/".
+    const conn = focusedServer()
+    const directory = focusedSync().data.path.directory
+    if (!conn || !directory) return
+    const ctx = global.createServerCtx(conn)
+    ctx.projects.open(directory)
+    ctx.projects.touch(directory)
+    tabs.newDraft({ server: ServerConnection.key(conn), directory }, prompt)
   }
 
   function setSelection(next: HomeProjectSelection) {
