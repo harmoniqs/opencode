@@ -41,14 +41,25 @@ root postinstall `packages/core fix-node-pty` + husky OK). No source patches nee
   - Version/channel come from `packages/script/src/index.ts` (`Script`): without env it fetches
     npm + uses the git branch as channel → set `OPENCODE_VERSION=1.17.3` (forces channel
     `latest`, keeps `Script.release` false so no `gh release upload` runs).
+  - **Gotcha 2 (channel gate — bit releases amicode.1/.2):** channel `latest` compiles the
+    embedded web UI with `VITE_OPENCODE_CHANNEL="prod"` (`packages/app/vite.js`), which
+    defaults `settings.general.newLayoutDesigns` OFF (`packages/app/src/context/settings.tsx`)
+    — hiding EVERY amicode surface (home cards, institution card, v2 titlebar) at runtime,
+    though the code is compiled in. ALWAYS also set `OPENCODE_CHANNEL=dev` (any non-`latest`
+    channel maps to `dev` for the UI). Verify a build:
+    `grep -aoh 'newLayoutDesigns:.\{1,45\}' <binary>` → find the default var, its assignment
+    must be `=!0`. Fixed builds: v1.17.3-amicode.3 (2026-07-07, same source as amicode.2).
 
 ### 3. Exact local build command (worked)
 
 ```bash
 cd ~/harmoniqs/opencode/packages/opencode
-PATH="$HOME/.bun/bin:$PATH" OPENCODE_VERSION=1.17.3 bun run script/build.ts --single --skip-install
+PATH="$HOME/.bun/bin:$PATH" OPENCODE_VERSION=1.17.3 OPENCODE_CHANNEL=dev bun run script/build.ts --single --skip-install
 # artifact: packages/opencode/dist/opencode-linux-x64/bin/opencode
 # convenience copy: ~/harmoniqs/opencode/dist/opencode-local
+# OPENCODE_CHANNEL=dev is REQUIRED — see gotcha 2 (channel gate) above.
+# darwin cross-compile (release asset): drop --single --skip-install, set
+#   OPENCODE_BUILD_TARGETS="opencode-darwin-arm64"
 ```
 
 ### 3b. Smoke test (2026-07-03, local build)
