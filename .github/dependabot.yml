@@ -1,0 +1,18 @@
+# AMICODE fork: deliberately NARROW dependabot scope.
+#
+# This is a thin fork of sst/opencode with a patch stack (AMICODE-PATCHES.md).
+# Package updates (bun.lock, npm) must come from UPSTREAM merges — dependabot
+# bumping them here would grow the patch stack and diverge the lockfile from
+# upstream for no benefit. Only workflow actions are watched, monthly and
+# grouped, chiefly for our own release automation (amicode-release.yml).
+# An actions PR that only touches upstream workflow files can be closed.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
