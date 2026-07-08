@@ -225,3 +225,28 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
 - index.css: @font-face for both (JuliaMono full glyph set — Julia Unicode; Racing Sans One latin subset, font-display swap). logo.tsx + wordmark-v2.tsx: font-family 'Racing Sans One' first, weight 700→400. settings.tsx: monoDefault/monoFallback lead with JuliaMono. theme.css: --font-family-mono leads with JuliaMono. Terminal font DELIBERATELY unchanged (JetBrainsMono Nerd Font Mono via separate terminalFallback).
 - New assets (git-added — build breaks without them): public/assets/RacingSansOne-Regular.woff2 (21 KB) + JuliaMono-Regular.woff2 (946 KB).
 - Font build sha256: `2a15da111be516516fb1fbd1a4fb5ae02ad9bddd6373ede08cdf7b28c19d163a` (dist/opencode-local + vendored path, write-temp + mv -f swap; SUPERSEDES #13's a73d8583… — same code, fonts now committed). Verify (scratch port 14099): `GET /assets/RacingSansOne-Regular.woff2` → 200 font/woff2 21804 B; `GET /assets/JuliaMono-Regular.woff2` → 200 font/woff2 946516 B; "Racing Sans One" in built css + index/new-session chunks, "JuliaMono" in `index-Dwtxigfs.css`; `GET /amicode/problems` → 200; `GET /` → 200 `<title>Amicode</title>`; ui `bun test src` → 70 pass; typecheck green ui+app (no snapshots assert fonts, per Aaron — confirmed nothing went red). Bonus confirmation: KaTeX\_\* woff2 assets now in dist — the entity view's katex import (#13) pulls its font set into the embed.
+10. (image strip) — amicode: native inline images in chat from tool output.
+   - Marker idiom (same family as AMICODE_ITER/AMICODE_PULSE): any COMPLETED tool part whose
+     output contains lines `AMICODE_IMAGE: <project-relative-path>` renders those files as a
+     native image strip under the tool card. Works for plain bash tools — no amicode plugin
+     required (built for the 2026-07-09 Pasqal demo scripts, which print the markers after
+     writing PNGs).
+   - NEW packages/ui/src/amicode/image-bridge.ts — module-signal bridge (ask-bridge pattern):
+     app side registers `read(path) → Promise<base64|undefined>`; no bridge (share page,
+     headless) → strips render nothing, markers degrade to the plain text already in output.
+   - NEW packages/ui/src/amicode/image-strip.tsx — `parseImageMarkers` (pure: line-anchored,
+     dedupe, cap 6, png/jpg/jpeg/gif/webp/svg only, REJECTS absolute paths and `..` traversal)
+     + `AmicodeImageStrip` (reserved-height skeleton → no CLS; click/Enter/Space toggles
+     420px-capped ↔ natural size with zoom-in/out cursors; filename captions in muted mono;
+     accent left border matching the card family; white img background so light-surface charts
+     stay legible in dark mode). Tests: image.test.ts (6 tests; `bun test src/amicode` → 68 pass).
+   - NEW packages/ui/src/components/amicode-image-bridge.tsx — re-export shim (wildcard-export
+     pattern, same as the rail).
+   - Stock-code touches: packages/ui/src/components/message-part.tsx — import + strip mount
+     under the tool `<Dynamic>` in the `<Match when={true}>` branch, gated on
+     status === "completed"; packages/app/src/pages/session/message-timeline.tsx — import +
+     `onCleanup(registerAmicodeImageBridge(...))` reading via
+     `sdk.client.file.read({ path, directory: sdk.directory })` (GET /file/content returns
+     `{type:"binary", content:<base64>}`). Registered in the TIMELINE, not the entity rail,
+     so it works in sessions with zero amicode_* parts.
+   - Checks: tsgo -b clean; bun test:unit 376 pass; bun test src/amicode 68 pass.

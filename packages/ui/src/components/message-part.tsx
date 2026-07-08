@@ -37,6 +37,7 @@ import { useDialog } from "../context/dialog"
 import { type UiI18n, useI18n } from "../context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
 import { AmicodeToolCard } from "../amicode/card"
+import { AmicodeImageStrip, parseImageMarkers } from "../amicode/image-strip"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
 import { Collapsible } from "./collapsible"
@@ -1508,6 +1509,12 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               deferContent={props.deferToolContent}
               virtualizeDiff={props.virtualizeDiff}
             />
+            {/* amicode: image strip — completed tool output carrying
+                AMICODE_IMAGE: <path> marker lines renders those files natively
+                (fetched via the image bridge; no-op when none registered). */}
+            <Show when={part().state.status === "completed"}>
+              <AmicodeImageStrip files={parseImageMarkers((part().state as { output?: unknown }).output)} />
+            </Show>
           </Match>
         </Switch>
       </div>

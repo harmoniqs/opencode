@@ -20,6 +20,7 @@ import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { registerAmicodeImageBridge } from "@opencode-ai/ui/amicode-image-bridge"
 import { AmicodeEntityView, entityLabel, parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { AmicodeProblemSwitcher, parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { Button } from "@opencode-ai/ui/button"
@@ -303,6 +304,25 @@ export function MessageTimeline(props: {
   const language = useLanguage()
   const { params, sessionKey } = useSessionKey()
   const platform = usePlatform()
+
+  // amicode: image bridge — lets AmicodeImageStrip (rendered deep in the
+  // message-part dispatch) read project files via this session's SDK client.
+  // Registered here (NOT via the entity rail) so image markers work in plain
+  // bash sessions with no amicode_* tool parts. Unregistered on unmount.
+  onCleanup(
+    registerAmicodeImageBridge({
+      read: async (path) => {
+        try {
+          const response = await sdk.client.file.read({ path, directory: sdk.directory })
+          const data = response.data as { type?: string; content?: string } | undefined
+          if (!data || data.type !== "binary" || typeof data.content !== "string") return undefined
+          return data.content
+        } catch {
+          return undefined
+        }
+      },
+    }),
+  )
 
   // amicode: problem-UI wiring (spec B) — the app owns transport (per-active-
   // server Basic auth via amicodeGet) + the ring-2 dialogs; the rail owns its
