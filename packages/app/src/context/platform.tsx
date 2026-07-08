@@ -103,6 +103,11 @@ type PlatformBase = {
   /** Read image from clipboard (desktop only) */
   readClipboardImage?(): Promise<File | null>
 
+  /** Read text from clipboard via the extension-host bridge (amicode VS Code
+   *  webview only) — a sandboxed cross-origin iframe can't reach
+   *  navigator.clipboard or the native paste event's clipboardData */
+  readClipboardText?(): Promise<string | null>
+
   /** Export collected diagnostic logs (desktop only) */
   exportDebugLogs?(): Promise<string>
 

@@ -94,6 +94,31 @@ const restart: Platform["restart"] = async () => {
   window.location.reload()
 }
 
+// Amicode webview: the chat iframe is sandboxed + cross-origin, so
+// navigator.clipboard and the native paste event's clipboardData are both
+// denied. Ask the extension host over the message bridge instead — it reads
+// the OS clipboard and replies (same proven pattern as home-cards.tsx's
+// readClipboardViaBridge). Framed contexts only; plain browser tabs use
+// native paste and never call this.
+const readClipboardText: Platform["readClipboardText"] = () => {
+  if (window.parent === window) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const nonce = Math.random().toString(36).slice(2)
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { source?: string; kind?: string; nonce?: string; text?: string } | undefined
+      if (data?.source !== "amicode" || data.kind !== "clipboard" || data.nonce !== nonce) return
+      window.removeEventListener("message", onMessage)
+      resolve(typeof data.text === "string" ? data.text : null)
+    }
+    window.addEventListener("message", onMessage)
+    window.parent.postMessage({ source: "amicode", kind: "clipboard-request", nonce }, "*")
+    setTimeout(() => {
+      window.removeEventListener("message", onMessage)
+      resolve(null)
+    }, 1500)
+  })
+}
+
 const root = document.getElementById("root")
 if (!(root instanceof HTMLElement) && import.meta.env.DEV) {
   throw new Error(getRootNotFoundError())
@@ -132,6 +157,7 @@ const platform: Platform = {
     return stored ? ServerConnection.Key.make(stored) : null
   },
   setDefaultServer: writeDefaultServerUrl,
+  readClipboardText,
 }
 
 if (import.meta.env.VITE_SENTRY_DSN) {

@@ -32,6 +32,7 @@ type PromptAttachmentsInput = {
   focusEditor: () => void
   addPart: (part: ContentPart) => boolean
   readClipboardImage?: () => Promise<File | null>
+  readClipboardText?: () => Promise<string | null>
 }
 
 export function createPromptAttachments(input: PromptAttachmentsInput) {
@@ -92,23 +93,25 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
 
   const handlePaste = async (event: ClipboardEvent) => {
     const clipboardData = event.clipboardData
-    if (!clipboardData) return
+    if (!clipboardData && !input.readClipboardText) return
 
     event.preventDefault()
     event.stopPropagation()
 
-    const files = Array.from(clipboardData.items).flatMap((item) => {
-      if (item.kind !== "file") return []
-      const file = item.getAsFile()
-      return file ? [file] : []
-    })
+    const files = clipboardData
+      ? Array.from(clipboardData.items).flatMap((item) => {
+          if (item.kind !== "file") return []
+          const file = item.getAsFile()
+          return file ? [file] : []
+        })
+      : []
 
     if (files.length > 0) {
       await addAttachments(files)
       return
     }
 
-    const plainText = clipboardData.getData("text/plain") ?? ""
+    let plainText = clipboardData?.getData("text/plain") ?? ""
 
     // Desktop: Browser clipboard has no images and no text, try platform's native clipboard for images
     if (input.readClipboardImage && !plainText) {
@@ -117,6 +120,12 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
         await addAttachment(file)
         return
       }
+    }
+
+    // Amicode webview: the sandboxed cross-origin iframe gives us an empty
+    // clipboardData on paste — fall back to the extension-host bridge.
+    if (!plainText && input.readClipboardText) {
+      plainText = (await input.readClipboardText()) ?? ""
     }
 
     if (!plainText) return
