@@ -25,7 +25,20 @@
   font-style: normal;
 }
 
-/* amicode: brand wordmark typeface (AMICODE logo) */
+/* amicode: brand wordmark typeface (AMICODE logo).
+   LICENSE-PENDING: "Aero" by Nirmal Biswas (Picatype) is donationware — usage
+   requires a USD 25+ payment to nirmalbiswas@gmail.com. Bundled for PREVIEW ONLY
+   while the wordmark face is being chosen; MUST be licensed (or replaced) before
+   any release ships. Racing Sans One (OFL, commercial-clean) is kept as the
+   fallback / prior candidate. */
+@font-face {
+  font-family: "Aero";
+  src: url("/assets/Aero-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: "Racing Sans One";
   src: url("/assets/RacingSansOne-Regular.woff2") format("woff2");

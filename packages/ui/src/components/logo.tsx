@@ -81,7 +81,7 @@ export const Logo = (props: { class?: string }) => {
         dominant-baseline="central"
         textLength="230"
         lengthAdjust="spacingAndGlyphs"
-        font-family="var(--font-family-sans, ui-sans-serif, system-ui, -apple-system, sans-serif)"
+        font-family="'Aero', var(--font-family-sans, ui-sans-serif, system-ui, -apple-system, sans-serif)"
         font-weight="750"
         letter-spacing="4"
         font-size="36"

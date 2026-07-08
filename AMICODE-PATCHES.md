@@ -225,6 +225,7 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
 - index.css: @font-face for both (JuliaMono full glyph set — Julia Unicode; Racing Sans One latin subset, font-display swap). logo.tsx + wordmark-v2.tsx: font-family 'Racing Sans One' first, weight 700→400. settings.tsx: monoDefault/monoFallback lead with JuliaMono. theme.css: --font-family-mono leads with JuliaMono. Terminal font DELIBERATELY unchanged (JetBrainsMono Nerd Font Mono via separate terminalFallback).
 - New assets (git-added — build breaks without them): public/assets/RacingSansOne-Regular.woff2 (21 KB) + JuliaMono-Regular.woff2 (946 KB).
 - Font build sha256: `2a15da111be516516fb1fbd1a4fb5ae02ad9bddd6373ede08cdf7b28c19d163a` (dist/opencode-local + vendored path, write-temp + mv -f swap; SUPERSEDES #13's a73d8583… — same code, fonts now committed). Verify (scratch port 14099): `GET /assets/RacingSansOne-Regular.woff2` → 200 font/woff2 21804 B; `GET /assets/JuliaMono-Regular.woff2` → 200 font/woff2 946516 B; "Racing Sans One" in built css + index/new-session chunks, "JuliaMono" in `index-Dwtxigfs.css`; `GET /amicode/problems` → 200; `GET /` → 200 `<title>Amicode</title>`; ui `bun test src` → 70 pass; typecheck green ui+app (no snapshots assert fonts, per Aaron — confirmed nothing went red). Bonus confirmation: KaTeX\_\* woff2 assets now in dist — the entity view's katex import (#13) pulls its font set into the embed.
+
 9. (home CTA fallback) — amicode(home): "Open chat" works on a fresh profile.
    - BUG: `startWithPrompt` (fork wiring for the Meet-Amico card, patch 5ef6b7e0e) dead-ended
      silently when the persisted client-side project list was empty (fresh browser profile
@@ -245,3 +246,11 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
      reuses any server on port 3000 (`reuseExistingServer`) — run with `PLAYWRIGHT_PORT=<free>`
      if something else (e.g. the harmoniqs website dev server) holds 3000.
    - Checks: `tsgo -b` clean; `bun run test:unit` 376 pass / 0 fail.
+
+15. (Aero wordmark, re-added) — amicode: AMICODE wordmark/logo font-family gains `'Aero'` ahead of the existing fallback chain, both call sites: logo.tsx (`'Aero', var(--font-family-sans, ...)`) and wordmark-v2.tsx (`'Aero', 'Racing Sans One', var(--font-family-mono, ...)`). Additive only — no fallback removed, no sizing/weight/spacing touched. This had been iterated as uncommitted working-tree WIP before the branch fast-forwarded 57 commits to current `origin/local/amicode` (e9b695191); re-applied fresh against the current font stacks (logo.tsx's had independently moved to a sans-serif stack + weight 750/letter-spacing 4 in the interim — preserved as-is, only the family list changed).
+
+    > ⚠️ **LICENSE-PENDING — release blocker.** "Aero" by Nirmal Biswas (Picatype) is donationware, USD 25+ to nirmalbiswas@gmail.com. Bundled at `packages/app/public/assets/Aero-Regular.ttf` for PREVIEW ONLY; not locked as the official face. Before any release: pay the license and record proof here, or drop `'Aero'` from both `font-family` chains + remove its `@font-face` (index.css) + the asset.
+
+    - index.css: new `@font-face` for "Aero" (truetype, weight 400, `font-display: swap`), inserted immediately before the existing Racing Sans One face; carries the license-pending comment inline.
+    - New asset (git-added): `public/assets/Aero-Regular.ttf` (44,464 B).
+    - Verify: `bun run typecheck` green in both `packages/ui` and `packages/app` (tsgo, no errors). Visual/glyph confirmation is manual-only (see build note under #16, which builds and vendors this alongside the paste fix).
