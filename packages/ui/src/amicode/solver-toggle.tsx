@@ -26,11 +26,20 @@ export function saveSolverMode(mode: SolverMode, storage: Pick<Storage, "setItem
   }
 }
 
-export function AmicodeSolverToggle() {
-  const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
+export function AmicodeSolverToggle(props: {
+  /** Server-truth mode (GET /amicode/solver-mode); localStorage is only the
+   *  pre-load hint so the control doesn't flash piccolo on boot. */
+  mode?: SolverMode
+  switching?: boolean
+  onSelect?: (mode: SolverMode) => void
+}) {
+  const [local, setLocal] = createSignal<SolverMode>(loadSolverMode())
+  const mode = () => props.mode ?? local()
   const pick = (m: SolverMode) => {
-    setMode(m)
+    if (props.switching || m === mode()) return
+    setLocal(m)
     saveSolverMode(m)
+    props.onSelect?.(m)
   }
   const seg = (active: boolean): Record<string, string> => ({
     display: "inline-flex",
@@ -96,7 +105,9 @@ export function AmicodeSolverToggle() {
           </span>
         </button>
       </div>
-      <span style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>High Performance Solver</span>
+      <span style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>
+        {props.switching ? "Switching…" : "High Performance Solver"}
+      </span>
     </div>
   )
 }

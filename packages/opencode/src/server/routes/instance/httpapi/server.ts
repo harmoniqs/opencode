@@ -61,6 +61,7 @@ import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeLibrary from "@/server/amicode/library"
+import * as AmicodeSolverMode from "@/server/amicode/solver-mode"
 import * as AmicodeProfile from "@/server/amicode/profile"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
@@ -234,6 +235,17 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
     // editable identity fields ride query params (small strings; keeps the
     // handler body-free like every other amicode route). Returns the fresh
     // profile JSON so the card can render the saved state without a second GET.
+    yield* router.add("GET", "/amicode/solver-mode", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeSolverMode.solverModeBody(), { contentType: "application/json" }),
+      ),
+    )
+    yield* router.add("POST", "/amicode/solver-mode", (request) =>
+      Effect.sync(() => {
+        const mode = new URL(request.url, "http://localhost").searchParams.get("mode") ?? undefined
+        return HttpServerResponse.text(AmicodeSolverMode.setSolverModeBody(mode), { contentType: "application/json" })
+      }),
+    )
     yield* router.add("GET", "/amicode/library", () =>
       Effect.sync(() => HttpServerResponse.text(AmicodeLibrary.libraryBody(), { contentType: "application/json" })),
     )

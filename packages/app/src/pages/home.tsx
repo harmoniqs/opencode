@@ -63,7 +63,8 @@ import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
-import { AmicodeSolverToggle } from "@opencode-ai/ui/amicode-solver-toggle"
+import { AmicodeSolverToggle, type SolverMode } from "@opencode-ai/ui/amicode-solver-toggle"
+import { AmicodeSolverSwitchWizard } from "@opencode-ai/ui/amicode-solver-switch-wizard"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
@@ -370,6 +371,28 @@ function HomeDesign() {
     const res = await amicodePost(focusedServer(), "/amicode/library", { filename, data_b64: dataB64 })
     if ((res as { ok?: boolean } | undefined)?.ok !== true) throw new Error("library save rejected")
     await refetchLibrary()
+  }
+
+  // Solver mode (rchari/solver-wire): server-truth via /amicode/solver-mode;
+  // selecting a mode POSTs, then the switch wizard polls THROUGH the server
+  // restart (failures expected mid-switch) until the extension reports ready.
+  const [solverRaw, { refetch: refetchSolverMode }] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/solver-mode").catch(() => undefined),
+  )
+  const solverState = createMemo(() => {
+    const raw = solverRaw() as { ok?: boolean; mode?: string; status?: string } | undefined
+    if (!raw || raw.ok !== true) return undefined
+    return { mode: (raw.mode === "hp" ? "hp" : "piccolo") as SolverMode, switching: raw.status === "switching" }
+  })
+  const [switchTarget, setSwitchTarget] = createSignal<SolverMode | undefined>(undefined)
+  const selectSolver = (mode: SolverMode) => {
+    setSwitchTarget(mode)
+    void amicodePost(focusedServer(), `/amicode/solver-mode?mode=${mode}`).catch(() => setSwitchTarget(undefined))
+  }
+  const pollSolver = async () => {
+    const raw = (await amicodeGet(focusedServer(), "/amicode/solver-mode")) as { mode?: string; status?: string }
+    return { mode: String(raw?.mode ?? ""), status: String(raw?.status ?? "") }
   }
 
   const WIZARD_DISMISS_KEY = "amicode-onboarding-dismissed"
@@ -699,7 +722,11 @@ function HomeDesign() {
         <div class="relative z-[1] flex-none pt-1">
           {/* solver mode (show-only v1, spec-20260709-093000): right-aligned above the cards */}
           <div style={{ display: "flex", "justify-content": "flex-end", "margin-bottom": "8px" }}>
-            <AmicodeSolverToggle />
+            <AmicodeSolverToggle
+              mode={solverState()?.mode}
+              switching={solverState()?.switching}
+              onSelect={selectSolver}
+            />
           </div>
           <AmicodeHomeCards
             profile={profileView()}
@@ -738,6 +765,18 @@ function HomeDesign() {
               startWithPrompt("")
             }}
           />
+        </Show>
+        <Show when={switchTarget()}>
+          {(target) => (
+            <AmicodeSolverSwitchWizard
+              target={target()}
+              poll={pollSolver}
+              onDone={() => {
+                setSwitchTarget(undefined)
+                void refetchSolverMode()
+              }}
+            />
+          )}
         </Show>
         <Show when={galleryOpen()}>
           <AmicodeRunGallery
