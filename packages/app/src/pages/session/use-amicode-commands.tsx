@@ -10,9 +10,12 @@ import { useCommand, type CommandOption } from "@/context/command"
 // Each command posts {source:"amicode",kind:"command",command} to window.parent;
 // chat_panel.ts relays it to an ALLOWLISTED vscode command.
 
-const inAmicode = () => typeof window !== "undefined" && window.self !== window.top
+// Exported so non-palette surfaces (e.g. the "Inspect Run" button on the entity
+// rail) can fire the same host-bridged commands. inAmicode() gates them out of
+// the public web/share build, where there is no extension host to relay to.
+export const inAmicode = () => typeof window !== "undefined" && window.self !== window.top
 
-const postAmicode = (command: string) => {
+export const postAmicode = (command: string) => {
   try {
     window.parent?.postMessage({ source: "amicode", kind: "command", command }, "*")
   } catch {}

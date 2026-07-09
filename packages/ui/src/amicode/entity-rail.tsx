@@ -49,6 +49,10 @@ export function AmicodeEntityRail(props: {
   onOpenEntity: (kind: string, seq?: number) => void
   onOpenSwitcher: () => void
   onAsk?: (text: string) => void
+  // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
+  // to the host (postAmicode → amicode.openInspector) and passes it only when
+  // framed in Amicode, so the button stays hidden everywhere else.
+  onInspectRun?: () => void
   retryLabel: string
   unavailableLabel: string
 }) {
@@ -133,6 +137,12 @@ export function AmicodeEntityRail(props: {
     const snapshot = state()
     if (snapshot.kind !== "ready") return undefined
     return snapshot.view.name ?? snapshot.view.slug
+  })
+  // Whether there is a run to inspect — gates the "Inspect Run" button so it
+  // appears alongside the live run chip, not before any solve has started.
+  const hasRun = createMemo(() => {
+    const snapshot = state()
+    return snapshot.kind === "ready" && snapshot.view.runs.length > 0
   })
 
   return (
@@ -264,6 +274,30 @@ export function AmicodeEntityRail(props: {
               </Show>
             )}
           </For>
+          <Show when={props.onInspectRun && hasRun()}>
+            <button
+              type="button"
+              data-slot="amicode-rail-inspect"
+              style={{
+                display: "inline-flex",
+                "align-items": "center",
+                "flex-shrink": "0",
+                gap: "4px",
+                border: "1px solid var(--v2-border-border-base)",
+                "border-radius": "5px",
+                background: "none",
+                color: "var(--v2-text-text-accent)",
+                padding: "1px 8px",
+                font: "inherit",
+                "font-weight": "600",
+                cursor: "pointer",
+              }}
+              title="Open the Run Inspector panel"
+              onClick={() => props.onInspectRun?.()}
+            >
+              Inspect Run
+            </button>
+          </Show>
         </Show>
       </div>
     </Show>
