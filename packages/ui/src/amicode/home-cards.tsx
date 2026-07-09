@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, on, type JSX, createSignal, onCleanup } from "solid-js"
-import { Mark } from "../components/logo"
+import { MarkDetailed } from "../components/logo"
 import {
   institutionLogoUrl,
   suggestInstitutions,
@@ -244,7 +244,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         data-slot="amicode-meet-identity"
         style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}
       >
-        <Mark class="w-12 h-auto shrink-0" />
+        <MarkDetailed class="w-12 h-auto shrink-0" />
         <div style={{ "min-width": "0" }}>
           <div style={{ "font-size": "18px", "font-weight": "600", color: "var(--v2-text-text-base)" }}>Amico</div>
           <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--v2-text-text-muted)" }}>

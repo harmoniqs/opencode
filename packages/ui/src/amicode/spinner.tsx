@@ -1,4 +1,5 @@
 import { type ComponentProps } from "solid-js"
+import { MARK_PATH } from "../components/logo"
 
 // AMICODE: working/thinking spinner — the Harmoniqs H-robot silhouette as a
 // small monochrome glyph (H body with the screen slit knocked out via
@@ -10,6 +11,12 @@ import { type ComponentProps } from "solid-js"
 // matches the stock spinner's own animation language. prefers-reduced-motion:
 // static glyph, no animation (matchMedia guard; inline animations don't
 // inherit the CSS-file media-query pattern used elsewhere).
+//
+// Path comes from logo.tsx's MARK_PATH (Mark/Splash now render the same
+// glyph) instead of its own copy — this file used to carry an independent
+// literal that happened to already match Mark/Splash's silhouette variant;
+// consolidated so there's one geometry in this repo, not a second one that
+// could quietly drift the way Mark/Splash's OWN old copy did.
 
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
@@ -22,7 +29,7 @@ export function AmicoSpinner(props: {
   return (
     <svg
       {...props}
-      viewBox="0 0 64 56"
+      viewBox="0 0 3600 3600"
       data-component="amico-spinner"
       classList={{
         ...props.classList,
@@ -32,7 +39,7 @@ export function AmicoSpinner(props: {
     >
       <path
         fill-rule="evenodd"
-        d="M2 2h16v14h28V2h16v52H46V40H18v14H2Z M9 19h46v18H9Z"
+        d={MARK_PATH}
         style={
           reducedMotion()
             ? undefined
