@@ -10,7 +10,7 @@ import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { Icon } from "@opencode-ai/ui/icon"
 import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
-import { Mark } from "@opencode-ai/ui/logo"
+import { MarkDetailed } from "@opencode-ai/ui/logo"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
 
 const MAIN_WORKTREE = "main"
@@ -78,7 +78,7 @@ export function NewSessionView(props: NewSessionViewProps) {
       <div class="flex-1 px-6 pb-30 flex items-center justify-center text-center">
         <div class="w-full max-w-200 flex flex-col items-center text-center gap-4">
           <div class="flex flex-col items-center gap-6">
-            <Mark class="w-28" />
+            <MarkDetailed class="w-28" />
             {/* amicode: straight wordmark (the Logo's Racing Sans One face reads as
                 italic); byline keeps the brand attribution. */}
             <div

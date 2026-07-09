@@ -1,0 +1,577 @@
+/* AMICODE surfaces — the in-chat receipt card (card.tsx), the entity-view
+ * dialog body (entity-view.tsx), the problem-header rail (entity-rail.tsx), the
+ * question card (ask-card.tsx) and the run window (run-window.tsx). One shared
+ * visual language: a 1px hairline with a 3px accent rail, the H-mark as the
+ * signature (and, while working, the spinner), state carried in form as well as
+ * words. All colors come from the v2 theme tokens; only failure earns the one
+ * red rail. Namespaced by [data-component="amicode-*"] so nothing leaks.
+ *
+ * Imported from styles/index.css (components layer). Interaction/animation/
+ * pseudo-element rules live here because inline styles can't express them. */
+
+@keyframes amc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.32; }
+}
+@keyframes amc-blip {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent); }
+  50% { opacity: 0.45; box-shadow: 0 0 0 4px color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent); }
+}
+@keyframes amc-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* ---- shared signature (mark + wordmark) ---------------------------------- */
+.amc-mark {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--v2-icon-icon-accent);
+  fill: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .amc-mark.is-running { animation: amc-pulse 1.2s ease-in-out infinite; }
+}
+.amc-sig {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.amc-wordmark {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  color: var(--v2-text-text-accent);
+}
+.amc-rule {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 10px;
+  background: var(--v2-border-border-base);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   THE CHIP — [data-component="amicode-card"]
+   ============================================================ */
+[data-component="amicode-card"] {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  text-align: left;
+  /* No side rail — identity comes from the accent-tinted wash + hairline and
+     the bright H-mark. A faint gold border reads as "AMICO" without a bar. */
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 22%, var(--v2-border-border-base));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 6%, var(--v2-background-bg-layer-01));
+  padding: 5px 9px 5px 10px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--v2-text-text-base);
+  box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.12s ease;
+}
+[data-component="amicode-card"][data-clickable="true"] {
+  cursor: pointer;
+}
+[data-component="amicode-card"][data-clickable="true"]:hover {
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 11%, var(--v2-background-bg-layer-01));
+  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
+  box-shadow:
+    var(--v2-elevation-raised, 0 1px 2px rgba(0, 0, 0, 0.25)),
+    0 0 0 3px color-mix(in srgb, var(--v2-icon-icon-accent) 8%, transparent);
+}
+[data-component="amicode-card"][data-clickable="true"]:active {
+  transform: translateY(0.5px);
+}
+[data-component="amicode-card"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline-offset: 2px;
+}
+[data-component="amicode-card"][data-state="error"] {
+  border-color: color-mix(in srgb, var(--v2-state-fg-danger) 38%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-state-fg-danger) 6%, var(--v2-background-bg-layer-01));
+}
+[data-component="amicode-card"][data-state="error"] .amc-mark,
+[data-component="amicode-card"][data-state="error"] .amc-wordmark {
+  color: var(--v2-state-fg-danger);
+}
+[data-component="amicode-card"] .amc-mark {
+  width: 13px;
+  height: 13px;
+}
+
+[data-component="amicode-card"] .amc-body {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+}
+[data-component="amicode-card"] .amc-label {
+  font-weight: 640;
+  color: var(--v2-text-text-base);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+[data-component="amicode-card"] .amc-detail {
+  color: var(--v2-text-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+[data-component="amicode-card"][data-state="running"] .amc-detail {
+  color: var(--v2-text-text-accent);
+}
+[data-component="amicode-card"][data-state="error"] .amc-detail {
+  color: var(--v2-state-fg-danger);
+}
+
+/* structured diff pieces */
+[data-component="amicode-card"] .amc-diff {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+[data-component="amicode-card"] .amc-diff + .amc-diff {
+  padding-left: 7px;
+  margin-left: 2px;
+  border-left: 1px solid var(--v2-border-border-muted);
+}
+[data-component="amicode-card"] .amc-diff .k { color: var(--v2-text-text-muted); }
+[data-component="amicode-card"] .amc-diff .v {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--v2-text-text-base);
+}
+[data-component="amicode-card"] .amc-diff .v.from { color: var(--v2-text-text-faint); }
+[data-component="amicode-card"] .amc-diff .arw {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-faint);
+  padding: 0 1px;
+}
+
+[data-component="amicode-card"] .amc-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+[data-component="amicode-card"] .amc-tick {
+  width: 12px;
+  height: 12px;
+  color: var(--v2-state-fg-success);
+  flex-shrink: 0;
+}
+[data-component="amicode-card"] .amc-livedot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--v2-icon-icon-accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-component="amicode-card"][data-state="running"] .amc-livedot { animation: amc-blip 1.2s ease-in-out infinite; }
+}
+[data-component="amicode-card"] .amc-chev {
+  color: var(--v2-text-text-faint);
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 0.16s ease, transform 0.16s ease, color 0.16s ease;
+}
+[data-component="amicode-card"][data-clickable="true"]:hover .amc-chev,
+[data-component="amicode-card"][data-clickable="true"]:focus-visible .amc-chev {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--v2-text-text-muted);
+}
+/* keyboard/touch: no hover — keep the affordance visible so it never hides */
+@media (hover: none) {
+  [data-component="amicode-card"][data-clickable="true"] .amc-chev { opacity: 0.6; transform: none; }
+}
+
+/* ============================================================
+   ENTITY VIEW — [data-component="amicode-entity-view"] (dialog body)
+   ============================================================ */
+[data-component="amicode-entity-view"] {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 4px 0;
+  color: var(--v2-text-text-base);
+}
+
+[data-component="amicode-entity-view"] .amc-ev-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 2px 4px 8px;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-entity-view"] .amc-tier {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--v2-background-bg-layer-02);
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-entity-view"] .amc-tier[data-tier="free"] {
+  background: var(--v2-state-bg-warning);
+  color: var(--v2-state-fg-warning);
+}
+
+[data-component="amicode-entity-view"] .amc-ev-formula {
+  margin: 8px 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--v2-background-bg-layer-01);
+  border: 1px solid var(--v2-border-border-muted);
+  overflow-x: auto;
+}
+[data-component="amicode-entity-view"] .amc-ev-formula-label {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-faint);
+  margin-bottom: 10px;
+}
+
+[data-component="amicode-entity-view"] .amc-ev-sec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 4px 8px;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-faint);
+}
+[data-component="amicode-entity-view"] .amc-ev-sec::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--v2-border-border-muted);
+}
+
+[data-component="amicode-entity-view"] .amc-ev-group {
+  margin: 8px 4px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v2-text-text-muted);
+}
+
+[data-component="amicode-entity-view"] .amc-field {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: baseline;
+  gap: 14px;
+  padding: 7px 8px 7px 4px;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+[data-component="amicode-entity-view"] .amc-field:hover { background: var(--v2-background-bg-layer-01); }
+[data-component="amicode-entity-view"] .amc-field .amc-fk { min-width: 0; }
+[data-component="amicode-entity-view"] .amc-field .amc-fk .name {
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--v2-text-text-base);
+}
+[data-component="amicode-entity-view"] .amc-field .amc-fk .raw {
+  display: block;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 10px;
+  color: var(--v2-text-text-faint);
+  margin-top: 1px;
+}
+[data-component="amicode-entity-view"] .amc-field .amc-fv {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--v2-text-text-base);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+  min-width: 0;
+}
+[data-component="amicode-entity-view"] .amc-field .amc-fv.changed { color: var(--v2-text-text-accent); }
+[data-component="amicode-entity-view"] .amc-field .amc-fv.changed::before {
+  content: "•";
+  color: var(--v2-icon-icon-accent);
+  padding-right: 6px;
+  font-size: 10px;
+  vertical-align: middle;
+}
+
+[data-component="amicode-entity-view"] .amc-edit {
+  -webkit-appearance: none;
+  appearance: none;
+  justify-self: end;
+  font: inherit;
+  font-size: 11px;
+  color: var(--v2-text-text-muted);
+  background: transparent;
+  border: 1px solid var(--v2-border-border-muted);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  opacity: 0.55;
+  transition: opacity 0.14s ease, color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+[data-component="amicode-entity-view"] .amc-field:hover .amc-edit { opacity: 1; }
+[data-component="amicode-entity-view"] .amc-edit:hover {
+  color: var(--v2-text-text-accent);
+  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+}
+[data-component="amicode-entity-view"] .amc-edit:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline-offset: 1px;
+  opacity: 1;
+}
+[data-component="amicode-entity-view"] .amc-edit .amc-edit-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.18s ease, opacity 0.14s ease;
+}
+[data-component="amicode-entity-view"] .amc-field:hover .amc-edit .amc-edit-label,
+[data-component="amicode-entity-view"] .amc-edit:focus-visible .amc-edit-label {
+  max-width: 90px;
+  opacity: 1;
+}
+
+[data-component="amicode-entity-view"] .amc-timeline {
+  display: flex;
+  flex-direction: column;
+  margin-left: 6px;
+  padding-left: 2px;
+  border-left: 1.5px solid var(--v2-border-border-muted);
+}
+[data-component="amicode-entity-view"] .amc-event {
+  position: relative;
+  padding: 9px 10px 9px 20px;
+  border-radius: 8px;
+}
+[data-component="amicode-entity-view"] .amc-event::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 15px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v2-background-bg-base);
+  border: 1.5px solid var(--v2-text-text-faint);
+}
+[data-component="amicode-entity-view"] .amc-event[data-anchored] {
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+}
+[data-component="amicode-entity-view"] .amc-event[data-anchored]::before {
+  background: var(--v2-icon-icon-accent);
+  border-color: var(--v2-icon-icon-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-icon-icon-accent) 18%, transparent);
+}
+[data-component="amicode-entity-view"] .amc-event .erow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+[data-component="amicode-entity-view"] .amc-event .seq {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 10px;
+  color: var(--v2-text-text-muted);
+  background: var(--v2-background-bg-layer-02);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+[data-component="amicode-entity-view"] .amc-event .src {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--v2-text-text-faint);
+}
+[data-component="amicode-entity-view"] .amc-event .when {
+  font-size: 11px;
+  color: var(--v2-text-text-faint);
+  margin-left: auto;
+}
+[data-component="amicode-entity-view"] .amc-event .summary {
+  font-size: 13px;
+  color: var(--v2-text-text-base);
+  margin-top: 3px;
+}
+[data-component="amicode-entity-view"] .amc-event .summary .k { color: var(--v2-text-text-muted); }
+[data-component="amicode-entity-view"] .amc-event .summary .v {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+[data-component="amicode-entity-view"] .amc-event .summary .v.from { color: var(--v2-text-text-faint); }
+[data-component="amicode-entity-view"] .amc-event .summary .arw {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-faint);
+  padding: 0 4px;
+}
+
+[data-component="amicode-entity-view"] .amc-ev-foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 12px 4px 6px;
+  border-top: 1px solid var(--v2-border-border-muted);
+  font-size: 12px;
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-entity-view"] .amc-ev-foot .amc-mark {
+  width: 13px;
+  height: 13px;
+  color: var(--v2-text-text-faint);
+}
+[data-component="amicode-entity-view"] .amc-ev-foot b {
+  color: var(--v2-text-text-base);
+  font-weight: 600;
+}
+
+[data-component="amicode-entity-view"] .amc-ev-empty {
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+  padding: 4px;
+}
+
+/* error + skeleton states */
+[data-component="amicode-entity-view"] .amc-ev-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+[data-component="amicode-entity-view"] .amc-ev-error .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--v2-state-fg-danger);
+}
+[data-component="amicode-entity-view"] .amc-ev-error .msg {
+  flex: 1;
+  font-size: 14px;
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-entity-view"] .amc-ev-retry {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--v2-text-text-base);
+  background: transparent;
+  border: 1px solid var(--v2-border-border-strong);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+[data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
+[data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline-offset: 1px;
+}
+
+[data-component="amicode-entity-view"] .amc-sk {
+  height: 14px;
+  border-radius: 6px;
+  background: var(--v2-background-bg-layer-02);
+  position: relative;
+  overflow: hidden;
+  margin: 12px 0;
+}
+[data-component="amicode-entity-view"] .amc-sk.w60 { width: 60%; }
+[data-component="amicode-entity-view"] .amc-sk.w40 { width: 40%; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-component="amicode-entity-view"] .amc-sk::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--v2-text-text-base) 8%, transparent), transparent);
+    animation: amc-shimmer 1.4s infinite;
+  }
+}
+
+/* ============================================================
+   SHARED CARD SURFACES — rail, ask, run window
+   ============================================================ */
+[data-component="amicode-entity-rail"],
+[data-component="amicode-ask-card"],
+[data-component="amicode-run-window"] {
+  /* Same rail-free treatment as the receipt card: gold-tinted hairline + a
+     whisper of accent wash, so the whole AMICO family shares one identity. */
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-border-border-base));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 5%, var(--v2-background-bg-layer-01));
+  box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
+}
+
+/* rail chip hover */
+[data-component="amicode-entity-rail"] [data-slot="amicode-rail-chip"] {
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin: -1px -1px;
+  transition: background 0.14s ease;
+}
+[data-component="amicode-entity-rail"] button[data-slot="amicode-rail-chip"]:hover {
+  background: var(--v2-background-bg-layer-02);
+}
+[data-component="amicode-entity-rail"] [data-slot="amicode-rail-problem"]:hover {
+  color: var(--v2-text-text-accent) !important;
+}
+[data-component="amicode-entity-rail"] button:focus-visible,
+[data-component="amicode-ask-card"] button:focus-visible,
+[data-component="amicode-run-window"] button:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline-offset: 2px;
+}
+
+/* ask-card option hover */
+[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled) {
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
+}
+[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):hover {
+  border-color: var(--v2-icon-icon-accent) !important;
+  background: var(--v2-background-bg-layer-03) !important;
+}
+[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+/* run window: subtle hover to signal it opens the Run entity */
+[data-component="amicode-run-window"] {
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+[data-component="amicode-run-window"]:hover {
+  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+}

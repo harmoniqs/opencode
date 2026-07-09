@@ -6,6 +6,12 @@
 // trading card, not UI panel. Pure string-SVG so the same markup drives both
 // the in-app gallery (innerHTML) and the PNG export (SVG → Image → canvas).
 
+// The mark geometry lives in ONE place — logo.tsx's MARK_PATH (a plain string
+// const). Importing it here keeps this card from drifting into a private copy
+// of the glyph, which is what this consolidation fixes. The mark is square
+// (viewBox 0 0 3600 3600).
+import { MARK_PATH } from "../components/logo"
+
 export type RunCardData = {
   slug: string
   problem: string
@@ -129,14 +135,13 @@ export function renderRunCardSvg(d: RunCardData): string {
     }
   }
 
-  const MARK = "M2 2h16v14h28V2h16v52H46V40H18v14H2Z M9 19h46v18H9Z"
   const mono = "ui-monospace, SFMono-Regular, Menlo, monospace"
   const sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect width="${W}" height="${H}" fill="${BG}"/>
   <rect x="0" y="0" width="${W}" height="6" fill="${GOLD}"/>
-  <g transform="translate(80,64) scale(0.55)" fill="${GOLD}"><path fill-rule="evenodd" d="${MARK}"/></g>
+  <g transform="translate(80,64) scale(0.011)" fill="${GOLD}"><path fill-rule="evenodd" d="${MARK_PATH}"/></g>
   <text x="130" y="88" font-family="${sans}" font-size="22" font-weight="700" letter-spacing="4" fill="${TEXT}">AMICODE</text>
   <text x="262" y="88" font-family="${sans}" font-size="15" letter-spacing="3" fill="${MUTED}">SOLVED PULSE</text>
 
