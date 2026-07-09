@@ -533,8 +533,8 @@ export function AmicodeOnboardingWizard(props: {
               You're set. Amico will remember this — say hi and design your first pulse.
             </div>
             <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "4px" }}>
-              <PrimaryBtn label="Open chat ↗" onClick={() => props.onOpenChat()} />
-              <QuietBtn label="Stay on the home page" onClick={() => props.onDismiss()} />
+              <PrimaryBtn label="Go to my home page" onClick={() => props.onDismiss()} />
+              <QuietBtn label="or start a chat with Amico" onClick={() => props.onOpenChat()} />
             </div>
           </div>
         </Show>
