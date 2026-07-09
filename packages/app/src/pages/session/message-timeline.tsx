@@ -73,6 +73,7 @@ import { useServer } from "@/context/server"
 import { usePrompt } from "@/context/prompt"
 import { startPrompt, draftPrompt } from "@/utils/start-prompt"
 import { amicodeGet } from "@/utils/amicode-fetch"
+import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
 import { useSync } from "@/context/sync"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { messageAgentColor } from "@/utils/agent"
@@ -1697,6 +1698,7 @@ export function MessageTimeline(props: {
               }
               onOpenEntity={openEntityView}
               onOpenSwitcher={openSwitcher}
+              onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
               retryLabel={language.t("amicode.retry")}
               unavailableLabel={language.t("amicode.unavailable")}
               onAsk={(text) => {
