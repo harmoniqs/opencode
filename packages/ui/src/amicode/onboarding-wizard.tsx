@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup } from "solid-js"
-import { Mark } from "../components/logo"
+import { Mark, MarkDetailed } from "../components/logo"
 import {
   institutionLogoUrl,
   suggestInstitutions,
@@ -236,7 +236,7 @@ export function AmicodeOnboardingWizard(props: {
               padding: "14px 0 4px",
             }}
           >
-            <Mark class="w-14 h-auto" />
+            <MarkDetailed class="w-14 h-auto" />
             <div>
               <div style={{ "font-size": "22px", "font-weight": "700", color: "var(--v2-text-text-base)" }}>
                 Welcome to Amicode
