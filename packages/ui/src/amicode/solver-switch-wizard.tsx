@@ -12,7 +12,7 @@ import { Mark } from "../components/logo"
 export type SwitchTarget = "piccolo" | "hp"
 
 const STAGES: Record<SwitchTarget, string[]> = {
-  hp: ["Unlocking Piccolissimo (issimo entitlement)", "Restarting session server", "Piccolissimo ready"],
+  hp: ["Unlocking Piccolissimo", "Restarting session server", "Piccolissimo ready"],
   piccolo: ["Reverting to the public stack", "Restarting session server", "Piccolo ready"],
 }
 
