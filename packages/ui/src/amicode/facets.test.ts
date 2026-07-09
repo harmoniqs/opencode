@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { compactValue, setDiff, modeBadges, systemReceiptPieces } from "./facets"
+import { compactValue, setDiff, modeBadges, systemReceiptPieces, formulationReceiptPieces } from "./facets"
 
 const byKind = (t: { kind: string; label?: string }, i: number) => `${t.kind}:${t.label ?? i}`
 
@@ -101,5 +101,33 @@ describe("systemReceiptPieces", () => {
   it("elided set key (…) → chip mode", () => {
     const r = systemReceiptPieces({ "…": { from: null, to: "2 more fields" }, "drive.arch": { from: "global", to: "zoned" } })
     expect(r.kind).toBe("chip")
+  })
+})
+
+describe("formulationReceiptPieces", () => {
+  it("creation (trajectory_type.from null) → chip mode", () => {
+    const r = formulationReceiptPieces({
+      trajectory_type: { from: null, to: "gate" },
+      time_mode: { from: null, to: "min_time" },
+      target: { from: null, to: "CZ" },
+    })
+    expect(r.kind).toBe("chip")
+  })
+  it("mode transition → 'type: ket → gate'", () => {
+    const r = formulationReceiptPieces({ trajectory_type: { from: "ket", to: "gate" } })
+    expect(r.kind).toBe("pieces")
+    if (r.kind === "pieces") expect(r.pieces.some((p) => /type: ket → gate/.test(p.text))).toBe(true)
+  })
+  it("flag add → '+ free-phase'", () => {
+    const r = formulationReceiptPieces({ free_phase: { from: false, to: true } })
+    expect(r.kind).toBe("pieces")
+    if (r.kind === "pieces") expect(r.pieces.some((p) => p.text === "+ free-phase" && p.tone === "add")).toBe(true)
+  })
+  it("added constraint → '+ …' via setDiff", () => {
+    const r = formulationReceiptPieces({
+      constraints: { from: [], to: [{ kind: "leakage_c", label: "leakage ≤1e-3" }] },
+    })
+    expect(r.kind).toBe("pieces")
+    if (r.kind === "pieces") expect(r.pieces.some((p) => p.text.includes("+ leakage ≤1e-3") && p.tone === "add")).toBe(true)
   })
 })

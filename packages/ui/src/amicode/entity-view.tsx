@@ -3,6 +3,7 @@ import { AmicoMark } from "./spinner"
 import { receiptParts } from "./receipt"
 import { type ProblemView, editPromptText, entityRows, fieldGroup, historyRows, humanizeKey } from "./problem"
 import { SystemComposite } from "./system-view"
+import { FormulationView } from "./formulation-view"
 
 // AMICODE ring-2 entity view (spec B): dialog BODY opened from a rail chip or
 // diff receipt — current fields (pretty table + per-field "Edit in chat"
@@ -140,10 +141,17 @@ export function AmicodeEntityView(props: {
             <Show when={props.kind === "system"}>
               <SystemComposite entity={entity()} />
             </Show>
+            <Show when={props.kind === "formulation"}>
+              <FormulationView entity={entity()} />
+            </Show>
 
             <Show
-              when={props.kind !== "system" && fieldRows().length > 0}
-              fallback={props.kind === "system" ? null : <div class="amc-ev-empty">No fields recorded yet.</div>}
+              when={props.kind !== "system" && props.kind !== "formulation" && fieldRows().length > 0}
+              fallback={
+                props.kind === "system" || props.kind === "formulation" ? null : (
+                  <div class="amc-ev-empty">No fields recorded yet.</div>
+                )
+              }
             >
               <div class="amc-ev-sec">Details</div>
               <div class="flex flex-col" data-slot="amicode-entity-fields">

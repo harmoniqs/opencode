@@ -178,3 +178,54 @@ export function systemReceiptPieces(diff: DiffMap): EntityReceipt {
   }
   return { kind: "pieces", pieces }
 }
+
+const FORM_MODE_TAG: Record<string, string> = {
+  trajectory_type: "type",
+  time_mode: "time",
+  parameterization: "pulse",
+  "robustness.kind": "robust",
+}
+
+/** Formulation diff → semantic pieces, or a post-state chip on creation/large/
+ *  elided. Modes render as `tag: from → to`, flags as `+/− flag`, objectives/
+ *  constraints via setDiff, everything else `key old→new`. Pure; never throws. */
+export function formulationReceiptPieces(diff: DiffMap): EntityReceipt {
+  const keys = Object.keys(diff)
+  const elided = keys.includes(ELIDED) || Object.values(diff).some((e) => e.to === ELIDED || e.from === ELIDED)
+  const tt = diff["trajectory_type"]
+  const isCreation = !!tt && (tt.from === null || tt.from === undefined)
+
+  const pieces: ReceiptPiece[] = []
+  for (const [key, entry] of Object.entries(diff)) {
+    if (key === ELIDED) continue
+    if (key === "objectives" || key === "constraints") {
+      const from = (Array.isArray(entry.from) ? entry.from : []) as Record<string, unknown>[]
+      const to = (Array.isArray(entry.to) ? entry.to : []) as Record<string, unknown>[]
+      const keyFn = (t: Record<string, unknown>, i: number) => `${t.kind}:${t.label ?? i}`
+      const d = setDiff(from, to, keyFn)
+      for (const a of d.added) pieces.push({ text: `+ ${a.label ?? a.kind}`, tone: "add" })
+      for (const r of d.removed) pieces.push({ text: `− ${r.label ?? r.kind}`, tone: "remove" })
+      for (const c of d.changed)
+        for (const ch of c.changes)
+          pieces.push({ text: `${c.key.split(":")[0]} ${ch.field.split(".").pop()} ${compactValue(ch.from)}→${compactValue(ch.to)}`, tone: "change" })
+    } else if (key === "free_phase" || key === "leakage") {
+      const flag = key.replace(/_/g, "-")
+      if (entry.to === true) pieces.push({ text: `+ ${flag}`, tone: "add" })
+      else if (entry.to === false) pieces.push({ text: `− ${flag}`, tone: "remove" })
+    } else if (key in FORM_MODE_TAG) {
+      pieces.push({ text: `${FORM_MODE_TAG[key]}: ${compactValue(entry.from)} → ${compactValue(entry.to)}`, tone: "change" })
+    } else {
+      pieces.push({ text: `${key.split(".").pop()} ${compactValue(entry.from)}→${compactValue(entry.to)}`, tone: "change" })
+    }
+  }
+
+  if (isCreation || elided || pieces.length > 4) {
+    const entity: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(diff)) {
+      if (key === ELIDED || entry.to === ELIDED) continue
+      setDotted(entity, key, entry.to)
+    }
+    return { kind: "chip", entity }
+  }
+  return { kind: "pieces", pieces }
+}

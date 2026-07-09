@@ -3,8 +3,8 @@ import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseDiffSentinel, receiptParts } from "./receipt"
-import { systemReceiptPieces } from "./facets"
-import { compositeChip } from "./problem"
+import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
+import { compositeChip, chipText } from "./problem"
 import { AmicoMark } from "./spinner"
 import { openAmicodeEntity } from "./ui-bridge"
 import { RunWindow } from "./run-window"
@@ -64,17 +64,25 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
             : { key: change.key, from: change.from, to: change.to },
       ) ?? [],
   )
-  // System entity: semantic composite receipt (spec §5) instead of JSON pieces.
-  const systemReceipt = createMemo(() => {
+  // Hero entities (system, formulation): a semantic receipt (spec §5) instead of
+  // JSON pieces — a post-state chip on creation/large/elided, else a delta.
+  const heroReceipt = createMemo(() => {
     const p = parts()
-    return p && p.sentinel.entity === "system" ? systemReceiptPieces(p.sentinel.diff) : undefined
+    if (!p) return undefined
+    if (p.sentinel.entity === "system") return systemReceiptPieces(p.sentinel.diff)
+    if (p.sentinel.entity === "formulation") return formulationReceiptPieces(p.sentinel.diff)
+    return undefined
   })
-  const systemChip = createMemo(() => {
-    const sr = systemReceipt()
-    return sr?.kind === "chip" ? (compositeChip(sr.entity) ?? "updated") : undefined
+  const heroChip = createMemo(() => {
+    const p = parts()
+    const sr = heroReceipt()
+    if (!p || sr?.kind !== "chip") return undefined
+    return p.sentinel.entity === "system"
+      ? (compositeChip(sr.entity) ?? "updated")
+      : (chipText(p.sentinel.entity, sr.entity) ?? "updated")
   })
-  const systemPieces = createMemo(() => {
-    const sr = systemReceipt()
+  const heroPieces = createMemo(() => {
+    const sr = heroReceipt()
     return sr?.kind === "pieces" ? sr.pieces : undefined
   })
   const state = () =>
@@ -119,7 +127,7 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
         <span class="amc-body" data-slot="amicode-card-receipt">
           <span class="amc-label">{active().receipt.label}</span>
           <Show
-            when={systemReceipt()}
+            when={heroReceipt()}
             fallback={
               <For each={diffPieces()}>
                 {(piece) => (
@@ -140,9 +148,9 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
             }
           >
             <Show
-              when={systemChip()}
+              when={heroChip()}
               fallback={
-                <For each={systemPieces()}>
+                <For each={heroPieces()}>
                   {(p) => (
                     <span class="amc-diff" data-tone={p.tone}>
                       <span class="v">{p.text}</span>
