@@ -32,6 +32,9 @@ type PromptAttachmentsInput = {
   focusEditor: () => void
   addPart: (part: ContentPart) => boolean
   readClipboardImage?: () => Promise<File | null>
+  /** Fallback clipboard-text reader for the VS Code webview iframe, where native
+   *  paste delivers no data. Resolves "" when unavailable (see clipboard-bridge). */
+  readClipboardText?: () => Promise<string>
 }
 
 export function createPromptAttachments(input: PromptAttachmentsInput) {
@@ -108,7 +111,7 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
       return
     }
 
-    const plainText = clipboardData.getData("text/plain") ?? ""
+    let plainText = clipboardData.getData("text/plain") ?? ""
 
     // Desktop: Browser clipboard has no images and no text, try platform's native clipboard for images
     if (input.readClipboardImage && !plainText) {
@@ -117,6 +120,13 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
         await addAttachment(file)
         return
       }
+    }
+
+    // Amicode webview: a cross-origin iframe inside the VS Code webview gets no
+    // clipboard data from native paste, so ask the extension host over the
+    // amicode bridge before giving up (resolves "" outside the webview).
+    if (!plainText && input.readClipboardText) {
+      plainText = await input.readClipboardText()
     }
 
     if (!plainText) return

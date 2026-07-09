@@ -57,6 +57,7 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
+import { readClipboardViaBridge } from "./prompt-input/clipboard-bridge"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
@@ -1087,6 +1088,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     },
     addPart,
     readClipboardImage: platform.readClipboardImage,
+    // Webview-iframe paste fallback; self-gates to a no-op outside the webview.
+    readClipboardText: () => readClipboardViaBridge(),
   })
 
   const fileAttachmentInput = () => (
