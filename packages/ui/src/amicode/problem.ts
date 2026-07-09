@@ -448,3 +448,154 @@ export function systemProjection(input: Record<string, unknown>): SystemProjecti
     isComposite: false,
   }
 }
+
+// --- formulation projection (spec §6.2) --------------------------------------
+// Dual-shape (legacy free-form OR structured facets). The fork CANNOT import the
+// plugin's normalizeFormulation, so this re-implements the §10 mapping IN PLACE,
+// pinned by the shared fixture corpus (formulation-projection.test.ts). Never
+// throws; unknown enums pass through raw.
+
+export type PrimaryObjectiveKey =
+  | "ket_infidelity"
+  | "unitary_infidelity"
+  | "unitary_free_phase"
+  | "density_infidelity"
+  | "min_time"
+export interface FormulationTerm {
+  kind: string
+  params: Record<string, number>
+  label?: string
+}
+export interface FormulationProjection {
+  trajectory_type: string
+  time_mode: string
+  parameterization: string
+  robustness: { kind: string; params: Record<string, unknown> }
+  free_phase: boolean
+  leakage: boolean
+  leakage_params?: Record<string, number>
+  time_params?: Record<string, number>
+  target: string
+  objectives: FormulationTerm[]
+  constraints: FormulationTerm[]
+  primaryKey: PrimaryObjectiveKey
+  derivedFinalFidelity?: number
+  solve?: Record<string, unknown>
+  isStructured: boolean
+}
+
+const fmtTerm = (o: any): FormulationTerm => {
+  const out: FormulationTerm = {
+    kind: typeof o?.kind === "string" ? o.kind : "custom",
+    params: o?.params && typeof o.params === "object" ? o.params : {},
+  }
+  if (typeof o?.label === "string") out.label = o.label
+  return out
+}
+const fmtRobustness = (r: any): { kind: string; params: Record<string, unknown> } =>
+  r && typeof r === "object" && typeof r.kind === "string"
+    ? { kind: r.kind, params: r.params && typeof r.params === "object" ? r.params : {} }
+    : { kind: "none", params: {} }
+const inferTrajFromTarget = (target: string): string => (/^\s*\||prep|state/i.test(target) ? "ket" : "gate")
+const fmtConstraintKind = (lc: string): string => {
+  if (/slew|\bdu\b/.test(lc)) return "du_bound"
+  if (/ddu|accel/.test(lc)) return "ddu_bound"
+  if (/Δt|timestep|\bdt\b/.test(lc)) return "dt_bounds"
+  if (/calibration|\bpin\b/.test(lc)) return "calibration_pin"
+  if (/amplitude|bound/.test(lc)) return "bounds"
+  return "custom"
+}
+const derivePrimaryKey = (trajectory_type: string, free_phase: boolean, time_mode: string): PrimaryObjectiveKey => {
+  if (time_mode === "min_time") return "min_time"
+  if (trajectory_type === "ket" || trajectory_type === "multiket") return "ket_infidelity"
+  if (trajectory_type === "density" || trajectory_type === "multidensity") return "density_infidelity"
+  if (trajectory_type === "gate") return free_phase ? "unitary_free_phase" : "unitary_infidelity"
+  return "unitary_infidelity"
+}
+
+export function formulationProjection(input: Record<string, unknown>): FormulationProjection {
+  const r = (input ?? {}) as Record<string, any>
+  let trajectory_type: string
+  let time_mode: string
+  let parameterization: string
+  let free_phase: boolean
+  let leakage: boolean
+  let target: string
+  let robustness: { kind: string; params: Record<string, unknown> }
+  let objectives: FormulationTerm[]
+  let constraints: FormulationTerm[]
+  let time_params: Record<string, number> | undefined
+  let leakage_params: Record<string, number> | undefined
+  let solve: Record<string, unknown> | undefined
+  let isStructured: boolean
+
+  if (typeof r.trajectory_type === "string") {
+    isStructured = true
+    trajectory_type = r.trajectory_type
+    time_mode = r.time_mode === "min_time" ? "min_time" : "fixed"
+    parameterization = typeof r.parameterization === "string" ? r.parameterization : "smooth"
+    robustness = fmtRobustness(r.robustness)
+    free_phase = r.free_phase === true
+    leakage = r.leakage === true
+    target = typeof r.target === "string" ? r.target : ""
+    objectives = Array.isArray(r.objectives) ? r.objectives.map(fmtTerm) : []
+    constraints = Array.isArray(r.constraints) ? r.constraints.map(fmtTerm) : []
+    if (r.time_params && typeof r.time_params === "object") time_params = r.time_params
+    if (r.leakage_params && typeof r.leakage_params === "object") leakage_params = r.leakage_params
+    if (r.solve && typeof r.solve === "object") solve = r.solve
+  } else {
+    isStructured = false
+    const problem = typeof r.problem === "string" ? r.problem : ""
+    target = typeof r.target === "string" ? r.target : ""
+    trajectory_type = "gate"
+    time_mode = "fixed"
+    if (problem === "state_prep") trajectory_type = "ket"
+    else if (problem === "min_time") {
+      time_mode = "min_time"
+      trajectory_type = inferTrajFromTarget(target)
+    }
+    parameterization = "smooth"
+    robustness = { kind: "none", params: {} }
+    free_phase = false
+    leakage = false
+    objectives = []
+    const objStr = typeof r.objective === "string" ? r.objective.trim() : ""
+    if (objStr && !/infidelity/i.test(objStr)) objectives.push({ kind: "custom", params: {}, label: objStr })
+    constraints = []
+    for (const c of Array.isArray(r.constraints) ? r.constraints : []) {
+      if (typeof c !== "string") continue
+      const lc = c.toLowerCase()
+      if (/leakage/.test(lc)) {
+        leakage = true
+        continue
+      }
+      if (/final.?fidelity/.test(lc)) {
+        const m = c.match(/[\d.]+/)
+        time_params = { ...(time_params ?? {}), final_fidelity: m ? Number(m[0]) : 0.99 }
+        continue
+      }
+      constraints.push({ kind: fmtConstraintKind(lc), params: {}, label: c })
+    }
+    if (r.solve && typeof r.solve === "object") solve = r.solve
+  }
+
+  const out: FormulationProjection = {
+    trajectory_type,
+    time_mode,
+    parameterization,
+    robustness,
+    free_phase,
+    leakage,
+    target,
+    objectives,
+    constraints,
+    primaryKey: derivePrimaryKey(trajectory_type, free_phase, time_mode),
+    isStructured,
+  }
+  if (time_params) out.time_params = time_params
+  if (leakage_params) out.leakage_params = leakage_params
+  if (solve) out.solve = solve
+  if (time_mode === "min_time" && time_params && typeof time_params.final_fidelity === "number")
+    out.derivedFinalFidelity = time_params.final_fidelity
+  return out
+}
