@@ -6,6 +6,7 @@
 // every field, drop non-conforming array entries, never throw. JSX-free so it
 // is directly testable under `bun test`.
 import { entityLabel } from "./receipt"
+import { compactValue } from "./facets"
 
 // --- view types --------------------------------------------------------------
 
@@ -169,9 +170,7 @@ export function parseRunStatusResponse(raw: unknown): RunStatusView[] {
 const CHIP_ORDER = ["system", "formulation", "run", "device_session", "calibration"]
 
 function shortValue(value: unknown): string {
-  if (value === null || value === undefined) return "—"
-  if (typeof value === "string") return value
-  return JSON.stringify(value)
+  return compactValue(value) // spec §4: array/object-aware, never a JSON blob
 }
 
 /** Compact per-kind chip text; undefined when the entity has nothing to show. */
