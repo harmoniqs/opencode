@@ -190,7 +190,6 @@ export function RunWindow(props: { run: string; lab?: string }) {
         gap: "6px",
         "min-width": "0",
         border: "1px solid var(--v2-border-border-base)",
-        "border-left": "3px solid var(--v2-icon-icon-accent)",
         "border-radius": "6px",
         background: "var(--v2-background-bg-layer-01)",
         padding: "8px 12px",

@@ -148,7 +148,6 @@ export function AmicodeEntityRail(props: {
           "max-height": "76px",
           "overflow-y": "auto",
           border: "1px solid var(--v2-border-border-base)",
-          "border-left": "3px solid var(--v2-icon-icon-accent)",
           "border-radius": "6px",
           background: "var(--v2-background-bg-layer-01)",
           padding: "6px 10px",

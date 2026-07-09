@@ -132,7 +132,7 @@ const CARD: JSX.CSSProperties = {
   background: "var(--v2-background-bg-layer-01)",
   padding: "14px 16px",
 }
-const HERO_CARD: JSX.CSSProperties = { ...CARD, "border-left": "3px solid var(--v2-icon-icon-accent)" }
+const HERO_CARD: JSX.CSSProperties = { ...CARD }
 const EYEBROW: JSX.CSSProperties = {
   "font-size": "10px",
   "font-weight": "700",

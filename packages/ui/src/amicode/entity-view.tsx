@@ -56,7 +56,6 @@ export function AmicodeEntityView(props: {
       class="flex flex-col gap-3 py-2 pl-4 pr-3"
       data-component="amicode-entity-view"
       data-kind={props.kind}
-      style={{ "border-left": "3px solid var(--v2-icon-icon-accent)" }}
     >
       <Show
         when={props.view}

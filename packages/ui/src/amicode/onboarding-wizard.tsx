@@ -216,7 +216,6 @@ export function AmicodeOnboardingWizard(props: {
           "overflow-y": "auto",
           "border-radius": "16px",
           border: "1px solid var(--v2-border-border-base)",
-          "border-top": "4px solid var(--v2-icon-icon-accent)",
           background: "var(--v2-background-bg-base)",
           padding: "28px 32px 22px",
           display: "flex",
