@@ -62,10 +62,10 @@ import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
+import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
-import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
@@ -339,6 +339,62 @@ function HomeDesign() {
   })
 
   const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
+  // Shared by the About-You card and the onboarding wizard: identity fields
+  // ride query params on the raw POST route; refetch renders the saved state.
+  async function saveProfileFields(fields: Record<string, string | undefined>) {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(fields)) if (v !== undefined) q.set(k, v)
+    await amicodePost(focusedServer(), `/amicode/profile?${q.toString()}`)
+    await refetchProfile()
+  }
+
+  // Onboarding wizard (session zero): decided ONCE when the profile first
+  // resolves — the mid-wizard profile refetch must not unmount the preview
+  // step, and a dismiss is remembered per install (localStorage).
+  // Library (papers that make Amico smarter): count + latest for the card.
+  const [libraryRaw, { refetch: refetchLibrary }] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/library").catch(() => undefined),
+  )
+  const libraryView = createMemo(() => {
+    const raw = libraryRaw() as { ok?: boolean; papers?: { name?: string; path?: string }[] } | undefined
+    if (!raw || raw.ok !== true || !Array.isArray(raw.papers)) return undefined
+    return {
+      count: raw.papers.length,
+      latestName: typeof raw.papers[0]?.name === "string" ? raw.papers[0].name : undefined,
+      latestPath: typeof raw.papers[0]?.path === "string" ? raw.papers[0].path : undefined,
+    }
+  })
+  async function uploadPaper(filename: string, dataB64: string) {
+    const res = await amicodePost(focusedServer(), "/amicode/library", { filename, data_b64: dataB64 })
+    if ((res as { ok?: boolean } | undefined)?.ok !== true) throw new Error("library save rejected")
+    await refetchLibrary()
+  }
+
+  const WIZARD_DISMISS_KEY = "amicode-onboarding-dismissed"
+  const [wizardOpen, setWizardOpen] = createSignal(false)
+  let wizardDecided = false
+  createEffect(() => {
+    const view = profileView()
+    if (wizardDecided || view === undefined || !view.ok) return
+    wizardDecided = true
+    let dismissed = false
+    try {
+      dismissed = localStorage.getItem(WIZARD_DISMISS_KEY) === "1"
+    } catch {
+      /* storage unavailable → treat as not dismissed */
+    }
+    setWizardOpen(shouldShowWizard(view.you, dismissed))
+  })
+  const dismissWizard = () => {
+    try {
+      localStorage.setItem(WIZARD_DISMISS_KEY, "1")
+    } catch {
+      /* best-effort */
+    }
+    setWizardOpen(false)
+  }
+
   function startWithPrompt(prompt: string) {
     const project = newSessionProject()
     if (project) {
@@ -642,17 +698,11 @@ function HomeDesign() {
         <div class="relative z-[1] flex-none pt-1">
           <AmicodeHomeCards
             profile={profileView()}
-            starters={AMICODE_STARTERS}
             onStart={startWithPrompt}
+            library={libraryView()}
+            onUploadPaper={uploadPaper}
             onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
-            onSaveProfile={async (fields) => {
-              // In-place save (About-You card): identity fields ride query
-              // params on the raw POST route; refetch renders the saved state.
-              const q = new URLSearchParams()
-              for (const [k, v] of Object.entries(fields)) if (v !== undefined) q.set(k, v)
-              await amicodePost(focusedServer(), `/amicode/profile?${q.toString()}`)
-              await refetchProfile()
-            }}
+            onSaveProfile={saveProfileFields}
             resumeName={resumeProblem()?.name}
             resumeMeta={resumeMeta()}
             onResume={() => {
@@ -669,6 +719,21 @@ function HomeDesign() {
           />
         </div>
         <AmicodeFooter />
+        <Show when={wizardOpen()}>
+          <AmicodeOnboardingWizard
+            initialName={(() => {
+              const v = profileView()
+              return v?.ok ? v.you.name : ""
+            })()}
+            onComplete={saveProfileFields}
+            onUploadPaper={uploadPaper}
+            onDismiss={dismissWizard}
+            onOpenChat={() => {
+              dismissWizard()
+              startWithPrompt("")
+            }}
+          />
+        </Show>
         <Show when={galleryOpen()}>
           <AmicodeRunGallery
             cards={runCards()}

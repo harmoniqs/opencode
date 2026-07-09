@@ -1,5 +1,12 @@
 import { For, Show, createEffect, createMemo, on, type JSX, createSignal, onCleanup } from "solid-js"
 import { Mark } from "../components/logo"
+import {
+  institutionLogoUrl,
+  suggestInstitutions,
+  resolveBrandLogo,
+  type InstitutionSuggestion,
+} from "./institution-lookup"
+import { fileToBase64 } from "./upload"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
 // and useful practitioner info on). Two identity heroes — MEET AMICO (who your
@@ -397,14 +404,8 @@ function AboutYouCard(props: {
     })
     setEditing(true)
   }
-  // Institution logos ride Google's favicon service — clearbit's logo CDN is
-  // sunset (autocomplete lives on for name+domain, which is all we need).
-  const institutionLogoUrl = (domain: string) =>
-    `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${encodeURIComponent(domain)}&size=256`
-
-  // LinkedIn-style institution lookup: Clearbit's free autocomplete (no key,
-  // CORS-open) → name + domain + logo. Picking a suggestion fills affiliation
-  // AND its logo; free text still saves as a plain affiliation.
+  // Institution lookup lives in institution-lookup.ts (shared with the
+  // onboarding wizard); this card owns debounce, sequencing, and signals.
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   let searchSeq = 0 // out-of-order guard: a slow "har" response must not clobber "harvard"'s
   onCleanup(() => {
@@ -419,55 +420,24 @@ function AboutYouCard(props: {
     }
     searchTimer = setTimeout(() => {
       const seq = ++searchSeq
-      fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q.trim())}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows: any) => {
-          if (seq === searchSeq) setSuggestions(Array.isArray(rows) ? rows.slice(0, 5) : [])
-        })
-        .catch(() => {
-          if (seq === searchSeq) setSuggestions([])
-        })
+      void suggestInstitutions(q).then((rows) => {
+        if (seq === searchSeq) setSuggestions(rows)
+      })
     }, 200)
   }
   // Counter, not boolean: pick A then B while A's Wikidata round-trip is in
   // flight — A's finally must not re-enable Save while B still resolves (the
   // boolean version re-introduced the save-races-logo bug it claimed to fix).
   const [resolvingLogo, setResolvingLogo] = createSignal(0)
-  const wikiJson = (url: string) =>
-    fetch(url)
-      .then((r) => (r.ok ? r.json() : undefined))
-      .catch(() => undefined)
-  const pickInstitution = async (sug: { name: string; domain: string; logo: string }) => {
-    // Instant favicon mark, then resolve the real BRAND logo: Wikidata P154
-    // ("logo image" — e.g. the purple NYU torch, not the seal) rasterized by
-    // Commons at 512px → crisp at any tile size. Fallbacks: Wikipedia page
-    // image, then the favicon. Save is held while resolving so the upgraded
-    // URL is what gets persisted (the old async upgrade lost a race with Save).
+  const pickInstitution = async (sug: InstitutionSuggestion) => {
+    // Instant favicon mark, then resolve the real BRAND logo (Wikidata P154 →
+    // Wikipedia pageimage → favicon; see institution-lookup.ts). Save is held
+    // while resolving so the upgraded URL is what gets persisted.
     setDraft({ ...draft(), affiliation: sug.name, affiliation_logo: institutionLogoUrl(sug.domain) })
     setSuggestions([])
     setResolvingLogo((n) => n + 1)
     try {
-      let logo: string | undefined
-      const found = await wikiJson(
-        `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(sug.name)}&language=en&format=json&origin=*`,
-      )
-      const qid = found?.search?.[0]?.id
-      if (qid) {
-        const claims = await wikiJson(
-          `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${qid}&property=P154&format=json&origin=*`,
-        )
-        const file = claims?.claims?.P154?.[0]?.mainsnak?.datavalue?.value
-        if (typeof file === "string" && file) {
-          logo = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=512`
-        }
-      }
-      if (!logo) {
-        const page = await wikiJson(
-          `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&titles=${encodeURIComponent(sug.name)}&prop=pageimages&piprop=original`,
-        )
-        const orig = (Object.values(page?.query?.pages ?? {})[0] as any)?.original?.source
-        if (typeof orig === "string" && /\.(svg|png|jpe?g|webp)$/i.test(orig)) logo = orig
-      }
+      const logo = await resolveBrandLogo(sug.name, sug.domain)
       if (logo && draft().affiliation === sug.name) setDraft({ ...draft(), affiliation_logo: logo })
     } finally {
       setResolvingLogo((n) => Math.max(0, n - 1))
@@ -1033,6 +1003,97 @@ function Sparkline(props: { values: number[] }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// LIBRARY — upload papers so Amico learns YOUR work (the personalization card)
+// ---------------------------------------------------------------------------
+function LibraryCard(props: {
+  library?: { count: number; latestName?: string; latestPath?: string }
+  onUploadPaper: (filename: string, dataB64: string) => Promise<void>
+  onStart: (prompt: string) => void
+}) {
+  const [busy, setBusy] = createSignal(false)
+  const [error, setError] = createSignal<string | undefined>(undefined)
+  let fileInput: HTMLInputElement | undefined
+
+  const upload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      for (const file of Array.from(files)) {
+        await props.onUploadPaper(file.name, await fileToBase64(file))
+      }
+    } catch {
+      setError("Upload failed — is the server up?")
+    } finally {
+      setBusy(false)
+      if (fileInput) fileInput.value = ""
+    }
+  }
+
+  return (
+    <ActionCard eyebrow="Library" slot="amicode-card-library">
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".pdf,application/pdf"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => void upload(e.currentTarget.files)}
+      />
+      <div style={CARD_TITLE}>
+        {(props.library?.count ?? 0) > 0
+          ? `${props.library!.count} paper${props.library!.count === 1 ? "" : "s"}`
+          : "Make Amico smarter"}
+      </div>
+      <div style={CARD_SUB}>{error() ?? props.library?.latestName ?? "upload papers — Amico learns your work"}</div>
+      <div style={{ display: "flex", gap: "10px", "align-items": "center", "margin-top": "auto" }}>
+        <button
+          type="button"
+          data-slot="amicode-card-library-upload"
+          disabled={busy()}
+          onClick={(e) => {
+            e.stopPropagation()
+            fileInput?.click()
+          }}
+          style={{
+            border: "1px solid var(--v2-icon-icon-accent)",
+            "border-radius": "6px",
+            background: "var(--v2-background-bg-layer-02)",
+            color: "var(--v2-text-text-base)",
+            padding: "3px 10px",
+            "font-size": "11px",
+            cursor: busy() ? "wait" : "pointer",
+          }}
+        >
+          {busy() ? "Uploading…" : "Upload PDF"}
+        </button>
+        <Show when={props.library?.latestPath}>
+          <button
+            type="button"
+            data-slot="amicode-card-library-read"
+            onClick={() =>
+              props.onStart(
+                `Read the paper at ${props.library!.latestPath} and remember its key results, methods, and how they relate to my work.`,
+              )
+            }
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--v2-text-text-accent)",
+              "font-size": "11px",
+              padding: "0",
+            }}
+          >
+            Discuss latest →
+          </button>
+        </Show>
+      </div>
+    </ActionCard>
+  )
+}
+
 export interface HomeLiveRun {
   name?: string
   iteration?: number | null
@@ -1077,8 +1138,10 @@ const COMPACT_CSS = `
 
 export function AmicodeHomeCards(props: {
   profile: ProfileView | undefined
-  starters: readonly { label: string; prompt: string }[]
   onStart: (prompt: string) => void
+  // Library ("make Amico smarter"): uploaded papers land in ~/.amico/library
+  library?: { count: number; latestName?: string; latestPath?: string }
+  onUploadPaper?: (filename: string, dataB64: string) => Promise<void>
   onEditProfile: () => void
   onSaveProfile?: (fields: {
     name?: string
@@ -1182,32 +1245,13 @@ export function AmicodeHomeCards(props: {
           </ActionCard>
         </Show>
 
-        {/* Start something */}
-        <ActionCard eyebrow="Start something" slot="amicode-card-start">
-          <div style={{ display: "flex", "flex-wrap": "wrap", gap: "5px", "margin-top": "2px" }}>
-            <For each={props.starters}>
-              {(starter) => (
-                <button
-                  type="button"
-                  data-slot="amicode-card-start-chip"
-                  onClick={() => props.onStart(starter.prompt)}
-                  style={{
-                    border: "1px solid var(--v2-border-border-base)",
-                    "border-radius": "6px",
-                    background: "var(--v2-background-bg-layer-02)",
-                    color: "var(--v2-text-text-base)",
-                    padding: "3px 9px",
-                    "font-size": "11px",
-                    "line-height": "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {starter.label}
-                </button>
-              )}
-            </For>
-          </div>
-        </ActionCard>
+        {/* Library — papers that make Amico smarter (replaces the old starter
+            chips: Open chat already owns "start something"). Uploads go to
+            POST /amicode/library; the extension grants the agent read access
+            to ~/.amico/library so "read my latest paper" just works. */}
+        <Show when={props.onUploadPaper}>
+          <LibraryCard library={props.library} onUploadPaper={props.onUploadPaper!} onStart={props.onStart} />
+        </Show>
       </div>
     </div>
   )
