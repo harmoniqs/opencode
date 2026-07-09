@@ -277,6 +277,22 @@ export function railState(current: ProblemView | undefined, lastGood: ProblemVie
 
 export type EntityRow = { key: string; value: string }
 
+/** Field/label humanizer for the entity view: last dotted segment, underscores
+ *  to spaces, sentence case — `params.drive_max` → "Drive max", `problem_type`
+ *  → "Problem type". Presentation only; the raw key is still shown alongside. */
+export function humanizeKey(key: string): string {
+  const raw = (key.split(".").pop() ?? key).replaceAll("_", " ").trim()
+  if (!raw) return key
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+/** The dotted prefix of a flattened row key (the group it belongs to), or
+ *  undefined for a top-level scalar. `params.drive_max` → "params". */
+export function fieldGroup(key: string): string | undefined {
+  const dot = key.indexOf(".")
+  return dot === -1 ? undefined : key.slice(0, dot)
+}
+
 /** Stable field rows: scalars in object order, one level of object nesting
  *  flattened to dotted keys, undefined skipped. */
 export function entityRows(entity: Record<string, unknown>): EntityRow[] {

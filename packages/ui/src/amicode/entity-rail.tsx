@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
+import { AmicoMark } from "./spinner"
 import { registerAmicodeUiBridge } from "./ui-bridge"
 import {
   type ProblemView,
@@ -49,6 +50,10 @@ export function AmicodeEntityRail(props: {
   onOpenEntity: (kind: string, seq?: number) => void
   onOpenSwitcher: () => void
   onAsk?: (text: string) => void
+  // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
+  // to the host (postAmicode → amicode.openInspector) and passes it only when
+  // framed in Amicode, so the button stays hidden everywhere else.
+  onInspectRun?: () => void
   retryLabel: string
   unavailableLabel: string
 }) {
@@ -134,6 +139,12 @@ export function AmicodeEntityRail(props: {
     if (snapshot.kind !== "ready") return undefined
     return snapshot.view.name ?? snapshot.view.slug
   })
+  // Whether there is a run to inspect — gates the "Inspect Run" button so it
+  // appears alongside the live run chip, not before any solve has started.
+  const hasRun = createMemo(() => {
+    const snapshot = state()
+    return snapshot.kind === "ready" && snapshot.view.runs.length > 0
+  })
 
   return (
     <Show when={amicodeParts().any > 0}>
@@ -147,25 +158,15 @@ export function AmicodeEntityRail(props: {
           "min-width": "0",
           "max-height": "76px",
           "overflow-y": "auto",
-          border: "1px solid var(--v2-border-border-base)",
-          "border-left": "3px solid var(--v2-icon-icon-accent)",
-          "border-radius": "6px",
-          background: "var(--v2-background-bg-layer-01)",
           padding: "6px 10px",
           "font-size": "11px",
           "line-height": "16px",
           "white-space": "nowrap",
         }}
       >
-        <span
-          style={{
-            "font-weight": "700",
-            "letter-spacing": "0.08em",
-            color: "var(--v2-text-text-accent)",
-            "flex-shrink": "0",
-          }}
-        >
-          AMICO
+        <span class="amc-sig">
+          <AmicoMark />
+          <span class="amc-wordmark">AMICO</span>
         </span>
         <Show
           when={state().kind !== "unavailable"}
@@ -264,6 +265,30 @@ export function AmicodeEntityRail(props: {
               </Show>
             )}
           </For>
+          <Show when={props.onInspectRun && hasRun()}>
+            <button
+              type="button"
+              data-slot="amicode-rail-inspect"
+              style={{
+                display: "inline-flex",
+                "align-items": "center",
+                "flex-shrink": "0",
+                gap: "4px",
+                border: "1px solid var(--v2-border-border-base)",
+                "border-radius": "5px",
+                background: "none",
+                color: "var(--v2-text-text-accent)",
+                padding: "1px 8px",
+                font: "inherit",
+                "font-weight": "600",
+                cursor: "pointer",
+              }}
+              title="Open the Run Inspector panel"
+              onClick={() => props.onInspectRun?.()}
+            >
+              Inspect Run
+            </button>
+          </Show>
         </Show>
       </div>
     </Show>

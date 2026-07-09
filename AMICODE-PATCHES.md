@@ -245,3 +245,16 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
      reuses any server on port 3000 (`reuseExistingServer`) — run with `PLAYWRIGHT_PORT=<free>`
      if something else (e.g. the harmoniqs website dev server) holds 3000.
    - Checks: `tsgo -b` clean; `bun run test:unit` 376 pass / 0 fail.
+
+15. (mark drift fix, synced to amicode PR #99 final) — amicode: consolidated the fork's brand mark to ONE geometry, matching amicode's redesigned mark. The "kept in sync manually" cross-repo promise from patch #8 had already silently failed.
+
+- Trigger: amicode's mark was redesigned (PR #99) without a corresponding update here — the fork still rendered the OLD "digi" pixel-accented H-robot everywhere. PR #99 went through several iterations before landing on its final geometry; this entry tracks that FINAL state (square viewBox `0 0 3600 3600`), not the intermediate "hackathon mark" (viewBox `116 287 3377 3035`) an earlier draft of this fork PR had copied — that intermediate geometry is now itself stale and was replaced here.
+- Two copies of near-identical geometry lived in THIS repo (logo.tsx's `Robot` used by `Mark`/`Splash`, and spinner.tsx's `AmicoSpinner`), plus a third in favicon/amico.svg. Consolidated to a single `MARK_PATH` exported from logo.tsx.
+- Geometry now mirrors amicode PR #99's two authored SVGs (amicode:`packages/extension/media/amico{,_reduced}.svg`), both square `0 0 3600 3600`:
+  - `MARK_PATH` = amico_reduced.svg's outer-bracket path (fill-rule evenodd screen knockout). Used by `Mark`, `Splash`, `AmicoSpinner`, and mirrored as a literal in favicon/amico.svg — every SMALL context, matching amicode's own "small → reduced" rule.
+  - `MarkDetailed` = amico.svg's full detailed mark (bracket path + internal circuit-pattern rects/polygons). Used ONLY by the Meet Amico home card (`w-12`/48px), large enough for the detail to resolve.
+  - `Mark`/`Splash`/`MarkDetailed` viewBox `0 0 64 56`/`116 287 3377 3035` → `0 0 3600 3600`; logo.css aspect-ratio `8/7` → `1/1` (the mark is square now).
+- Still theme-adaptive via currentColor + var(--icon-strong-base) — this is a live webview DOM, so currentColor resolves (unlike amicode's native VS Code tab icon, which needs committed {light,dark} files; see amicode PR #99).
+- NOT a re-established cross-repo sync promise — `MARK_PATH` is the single source of truth WITHIN this repo; it happens to match amicode's current geometry, kept aligned by hand when the mark changes.
+- Tests: ui `bun test src/amicode` green; typecheck green ui + app.
+- NOT done this round: full native `bun run script/build.ts` compile + vendored-binary swap — this patch only touches the embedded web UI. Deferred to the next amicode.N release tag, same split as patches #8/#11.

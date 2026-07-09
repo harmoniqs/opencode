@@ -1200,8 +1200,17 @@ export default function Page() {
     ),
   )
 
+  // Only follow the bottom while the model is actually streaming. This was
+  // previously hard-coded to `true`, so the auto-scroller's ResizeObserver
+  // force-scrolled on *any* reflow (image load, tool accordion expand, font
+  // swap, layout settle) — which read as the chat "jumping" on its own. Gating
+  // it on the session's real working state also stops it from competing with
+  // the timeline's own bottom-lock outside of streaming.
   const autoScroll = createAutoScroll({
-    working: () => true,
+    working: () => {
+      const id = params.id
+      return id ? sync.data.session_working(id) : false
+    },
     overflowAnchor: "dynamic",
   })
 

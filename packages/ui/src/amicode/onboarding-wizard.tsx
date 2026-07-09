@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup } from "solid-js"
-import { Mark } from "../components/logo"
+import { Mark, MarkDetailed } from "../components/logo"
 import {
   institutionLogoUrl,
   suggestInstitutions,
@@ -216,7 +216,6 @@ export function AmicodeOnboardingWizard(props: {
           "overflow-y": "auto",
           "border-radius": "16px",
           border: "1px solid var(--v2-border-border-base)",
-          "border-top": "4px solid var(--v2-icon-icon-accent)",
           background: "var(--v2-background-bg-base)",
           padding: "28px 32px 22px",
           display: "flex",
@@ -236,7 +235,7 @@ export function AmicodeOnboardingWizard(props: {
               padding: "14px 0 4px",
             }}
           >
-            <Mark class="w-14 h-auto" />
+            <MarkDetailed class="w-14 h-auto" />
             <div>
               <div style={{ "font-size": "22px", "font-weight": "700", color: "var(--v2-text-text-base)" }}>
                 Welcome to Amicode
