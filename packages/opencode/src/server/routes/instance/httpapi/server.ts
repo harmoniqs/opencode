@@ -61,6 +61,7 @@ import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeLibrary from "@/server/amicode/library"
+import * as AmicodeTraces from "@/server/amicode/traces"
 import * as AmicodeProfile from "@/server/amicode/profile"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
@@ -234,6 +235,15 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
     // editable identity fields ride query params (small strings; keeps the
     // handler body-free like every other amicode route). Returns the fresh
     // profile JSON so the card can render the saved state without a second GET.
+    yield* router.add("GET", "/amicode/traces", (request) =>
+      Effect.sync(() => {
+        const params = new URL(request.url, "http://localhost").searchParams
+        const session = params.get("session") ?? undefined
+        const limit = Number(params.get("limit") ?? "500") || 500
+        const body = session ? AmicodeTraces.traceBody(session, limit) : AmicodeTraces.tracesIndexBody()
+        return HttpServerResponse.text(body, { contentType: "application/json" })
+      }),
+    )
     yield* router.add("GET", "/amicode/library", () =>
       Effect.sync(() => HttpServerResponse.text(AmicodeLibrary.libraryBody(), { contentType: "application/json" })),
     )
