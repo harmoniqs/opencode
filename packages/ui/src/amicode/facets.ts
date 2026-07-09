@@ -105,3 +105,76 @@ export function modeBadges(p: Record<string, unknown>): Badge[] {
   if (topo) out.push({ label: "topology", value: topo })
   return out
 }
+
+// ---- receipt piece builders (spec §5) --------------------------------------
+// The receipt sees only the diff (from/to per key), not the full entity.
+
+export type DiffMap = Record<string, { from: unknown; to: unknown }>
+export type ReceiptPiece = { text: string; tone: "add" | "remove" | "change" }
+/** chip = render the post-state compositeChip (creation / large / elided);
+ *  pieces = a semantic delta. The card owns turning `entity` into a chip
+ *  (via problem.ts compositeChip) — kept out of here to avoid an import cycle. */
+export type EntityReceipt = { kind: "chip"; entity: Record<string, unknown> } | { kind: "pieces"; pieces: ReceiptPiece[] }
+
+const ELIDED = "…"
+
+function describeComponent(item: Record<string, unknown>): string {
+  const bits = [item.role, typeof item.levels === "number" ? `${item.levels}lvl` : undefined].filter(Boolean).join("·")
+  return `${item.id ?? "?"}${bits ? ` (${bits})` : ""}`
+}
+function describeCoupling(item: Record<string, unknown>): string {
+  const between = Array.isArray(item.between) ? item.between.map(String).join("↔") : "?"
+  return `${between} ${item.kind ?? ""}`.trim()
+}
+function setDotted(obj: Record<string, unknown>, dotted: string, value: unknown): void {
+  const parts = dotted.split(".")
+  let cur = obj
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (typeof cur[parts[i]] !== "object" || cur[parts[i]] === null) cur[parts[i]] = {}
+    cur = cur[parts[i]] as Record<string, unknown>
+  }
+  cur[parts[parts.length - 1]] = value
+}
+
+/** System diff → semantic pieces, or a post-state chip on creation/large/elided.
+ *  `components`/`couplings` diff via setDiff (add/remove/param-change); other keys
+ *  render as `key old→new`. Pure; never throws. */
+export function systemReceiptPieces(diff: DiffMap): EntityReceipt {
+  const keys = Object.keys(diff)
+  const elided = keys.includes(ELIDED) || Object.values(diff).some((e) => e.to === ELIDED || e.from === ELIDED)
+  const comp = diff["components"]
+  const isCreation =
+    !!comp && (comp.from === null || comp.from === undefined || (Array.isArray(comp.from) && comp.from.length === 0))
+
+  const pieces: ReceiptPiece[] = []
+  for (const [key, entry] of Object.entries(diff)) {
+    if (key === ELIDED) continue
+    if (key === "components" || key === "couplings") {
+      const from = (Array.isArray(entry.from) ? entry.from : []) as Record<string, unknown>[]
+      const to = (Array.isArray(entry.to) ? entry.to : []) as Record<string, unknown>[]
+      const keyFn =
+        key === "components"
+          ? (c: Record<string, unknown>) => String(c.id)
+          : (c: Record<string, unknown>) => `${(Array.isArray(c.between) ? c.between : []).join("↔")}:${c.kind}`
+      const describe = key === "components" ? describeComponent : describeCoupling
+      const d = setDiff(from, to, keyFn)
+      for (const a of d.added) pieces.push({ text: `+ ${describe(a)}`, tone: "add" })
+      for (const r of d.removed) pieces.push({ text: `− ${describe(r)}`, tone: "remove" })
+      for (const c of d.changed)
+        for (const ch of c.changes)
+          pieces.push({ text: `${c.key} ${ch.field.split(".").pop()} ${compactValue(ch.from)}→${compactValue(ch.to)}`, tone: "change" })
+    } else {
+      pieces.push({ text: `${key.split(".").pop()} ${compactValue(entry.from)}→${compactValue(entry.to)}`, tone: "change" })
+    }
+  }
+
+  if (isCreation || elided || pieces.length > 4) {
+    const entity: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(diff)) {
+      if (key === ELIDED || entry.to === ELIDED) continue
+      setDotted(entity, key, entry.to)
+    }
+    return { kind: "chip", entity }
+  }
+  return { kind: "pieces", pieces }
+}

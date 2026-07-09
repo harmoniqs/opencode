@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { compactValue, setDiff, modeBadges } from "./facets"
+import { compactValue, setDiff, modeBadges, systemReceiptPieces } from "./facets"
 
 const byKind = (t: { kind: string; label?: string }, i: number) => `${t.kind}:${t.label ?? i}`
 
@@ -68,5 +68,38 @@ describe("modeBadges", () => {
     expect(b.some((x) => /leakage/.test(x.label))).toBe(false)
     expect(b.some((x) => /robust/.test(x.label))).toBe(false)
     expect(b.some((x) => /min.?time/.test(x.value + x.label))).toBe(false)
+  })
+})
+
+describe("systemReceiptPieces", () => {
+  it("creation (components.from empty) → chip mode with a reconstructed entity", () => {
+    const r = systemReceiptPieces({
+      platform: { from: null, to: "transmon" },
+      components: { from: null, to: [{ id: "q1", role: "qubit", levels: 3 }, { id: "q2", role: "qubit", levels: 3 }] },
+      "drive.arch": { from: null, to: "per-component" },
+    })
+    expect(r.kind).toBe("chip")
+    if (r.kind === "chip") {
+      expect(Array.isArray(r.entity.components)).toBe(true)
+      expect((r.entity.drive as { arch: string }).arch).toBe("per-component")
+    }
+  })
+  it("add-component → a '+ q2' piece", () => {
+    const r = systemReceiptPieces({
+      components: { from: [{ id: "q1", role: "qubit", levels: 3 }], to: [{ id: "q1", role: "qubit", levels: 3 }, { id: "q2", role: "qubit", levels: 3 }] },
+    })
+    expect(r.kind).toBe("pieces")
+    if (r.kind === "pieces") expect(r.pieces.some((p) => p.text.includes("+ q2") && p.tone === "add")).toBe(true)
+  })
+  it("param-change → a 'q1 delta …→…' change piece", () => {
+    const r = systemReceiptPieces({
+      components: { from: [{ id: "q1", role: "qubit", params: { delta: -0.2 } }], to: [{ id: "q1", role: "qubit", params: { delta: -0.25 } }] },
+    })
+    expect(r.kind).toBe("pieces")
+    if (r.kind === "pieces") expect(r.pieces.some((p) => p.text.includes("q1") && p.text.includes("delta") && p.tone === "change")).toBe(true)
+  })
+  it("elided set key (…) → chip mode", () => {
+    const r = systemReceiptPieces({ "…": { from: null, to: "2 more fields" }, "drive.arch": { from: "global", to: "zoned" } })
+    expect(r.kind).toBe("chip")
   })
 })

@@ -3,6 +3,8 @@ import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseDiffSentinel, receiptParts } from "./receipt"
+import { systemReceiptPieces } from "./facets"
+import { compositeChip } from "./problem"
 import { AmicoMark } from "./spinner"
 import { openAmicodeEntity } from "./ui-bridge"
 import { RunWindow } from "./run-window"
@@ -62,6 +64,19 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
             : { key: change.key, from: change.from, to: change.to },
       ) ?? [],
   )
+  // System entity: semantic composite receipt (spec §5) instead of JSON pieces.
+  const systemReceipt = createMemo(() => {
+    const p = parts()
+    return p && p.sentinel.entity === "system" ? systemReceiptPieces(p.sentinel.diff) : undefined
+  })
+  const systemChip = createMemo(() => {
+    const sr = systemReceipt()
+    return sr?.kind === "chip" ? (compositeChip(sr.entity) ?? "updated") : undefined
+  })
+  const systemPieces = createMemo(() => {
+    const sr = systemReceipt()
+    return sr?.kind === "pieces" ? sr.pieces : undefined
+  })
   const state = () =>
     errored() ? "error" : running() ? "running" : parts() ? "receipt" : props.status === "completed" ? "done" : "idle"
   const openLabel = () => `Open ${parts()?.receipt.label ?? stage()} details`
@@ -103,22 +118,46 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
       {(active) => (
         <span class="amc-body" data-slot="amicode-card-receipt">
           <span class="amc-label">{active().receipt.label}</span>
-          <For each={diffPieces()}>
-            {(piece) => (
-              <span class="amc-diff">
-                <span class="k">{piece.key}</span>
-                <Show when={piece.from !== undefined}>
-                  <span class="v from">{piece.from}</span>
-                  <span class="arw" aria-hidden="true">
-                    →
+          <Show
+            when={systemReceipt()}
+            fallback={
+              <For each={diffPieces()}>
+                {(piece) => (
+                  <span class="amc-diff">
+                    <span class="k">{piece.key}</span>
+                    <Show when={piece.from !== undefined}>
+                      <span class="v from">{piece.from}</span>
+                      <span class="arw" aria-hidden="true">
+                        →
+                      </span>
+                    </Show>
+                    <Show when={piece.to !== undefined}>
+                      <span class="v">{piece.to}</span>
+                    </Show>
                   </span>
-                </Show>
-                <Show when={piece.to !== undefined}>
-                  <span class="v">{piece.to}</span>
-                </Show>
-              </span>
-            )}
-          </For>
+                )}
+              </For>
+            }
+          >
+            <Show
+              when={systemChip()}
+              fallback={
+                <For each={systemPieces()}>
+                  {(p) => (
+                    <span class="amc-diff" data-tone={p.tone}>
+                      <span class="v">{p.text}</span>
+                    </span>
+                  )}
+                </For>
+              }
+            >
+              {(chip) => (
+                <span class="amc-diff">
+                  <span class="v">{chip()}</span>
+                </span>
+              )}
+            </Show>
+          </Show>
         </span>
       )}
     </Show>

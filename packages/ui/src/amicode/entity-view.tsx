@@ -1,8 +1,8 @@
 import { For, Show, createMemo } from "solid-js"
-import katex from "katex"
 import { AmicoMark } from "./spinner"
 import { receiptParts } from "./receipt"
 import { type ProblemView, editPromptText, entityRows, fieldGroup, historyRows, humanizeKey } from "./problem"
+import { SystemComposite } from "./system-view"
 
 // AMICODE ring-2 entity view (spec B): dialog BODY opened from a rail chip or
 // diff receipt — current fields (pretty table + per-field "Edit in chat"
@@ -19,14 +19,7 @@ import { type ProblemView, editPromptText, entityRows, fieldGroup, historyRows, 
 // edit-in-chat contract so the absence of Save buttons reads as intent. Styling
 // is in ./amicode.css; data-slot hooks are preserved for the e2e suite.
 
-// Known-platform Hamiltonians, rendered via the fork's existing katex (same
-// dep marked.tsx uses). Unknown platform → no math block.
-const HAMILTONIAN_LATEX: Record<string, string> = {
-  transmon:
-    "\\hat H = \\omega \\hat a^\\dagger \\hat a + \\tfrac{\\delta}{2}\\hat a^\\dagger \\hat a^\\dagger \\hat a \\hat a + u(t)(\\hat a + \\hat a^\\dagger)",
-  rydberg:
-    "\\hat H = \\tfrac{\\Omega(t)}{2}\\sum_i \\sigma_x^{(i)} - \\Delta(t)\\sum_i \\hat n_i + \\sum_{i<j} \\tfrac{C_6}{r_{ij}^6}\\hat n_i \\hat n_j",
-}
+// (System Hamiltonian LaTeX now lives in ./system-view.tsx's SystemComposite.)
 
 type DiffPiece = { key: string; from?: string; to?: string }
 
@@ -104,14 +97,6 @@ export function AmicodeEntityView(props: {
     const refs = props.view.runs
     return refs.length > 0 ? (refs[refs.length - 1].tier ?? "vetted") : undefined
   })
-  const hamiltonian = createMemo(() => {
-    if (props.kind !== "system") return undefined
-    const platform = entity().platform
-    if (typeof platform !== "string") return undefined
-    const latex = HAMILTONIAN_LATEX[platform]
-    if (!latex) return undefined
-    return katex.renderToString(latex, { throwOnError: false })
-  })
 
   return (
     <div class="flex flex-col" data-component="amicode-entity-view" data-kind={props.kind}>
@@ -152,18 +137,13 @@ export function AmicodeEntityView(props: {
               </div>
             </Show>
 
-            <Show when={hamiltonian()}>
-              {(html) => (
-                <div class="amc-ev-formula" data-slot="amicode-entity-hamiltonian">
-                  <div class="amc-ev-formula-label">Hamiltonian</div>
-                  <div innerHTML={html()} />
-                </div>
-              )}
+            <Show when={props.kind === "system"}>
+              <SystemComposite entity={entity()} />
             </Show>
 
             <Show
-              when={fieldRows().length > 0}
-              fallback={<div class="amc-ev-empty">No fields recorded yet.</div>}
+              when={props.kind !== "system" && fieldRows().length > 0}
+              fallback={props.kind === "system" ? null : <div class="amc-ev-empty">No fields recorded yet.</div>}
             >
               <div class="amc-ev-sec">Details</div>
               <div class="flex flex-col" data-slot="amicode-entity-fields">
