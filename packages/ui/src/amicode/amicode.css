@@ -614,3 +614,31 @@
 [data-component="amicode-system-view"] .amc-ev-formula-label {
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v2-text-text-muted); margin-bottom: 2px;
 }
+
+/* ---- Formulation hero (spec §6.2): mode badges + objective + constraints ---- */
+[data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }
+[data-component="amicode-formulation-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-component="amicode-formulation-view"] .amc-badge {
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
+  font-size: 0.76rem;
+}
+[data-component="amicode-formulation-view"] .amc-badge.active {
+  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+}
+[data-component="amicode-formulation-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
+[data-component="amicode-formulation-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-formulation-view"] .amc-obj { display: flex; flex-direction: column; gap: 4px; }
+[data-component="amicode-formulation-view"] .amc-obj-primary { display: flex; align-items: baseline; gap: 8px; }
+[data-component="amicode-formulation-view"] .amc-obj-name { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-formulation-view"] .amc-obj-tag {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-formulation-view"] .amc-obj-latex { margin: 2px 0; }
+[data-component="amicode-formulation-view"] .amc-obj-term,
+[data-component="amicode-formulation-view"] .amc-constraint {
+  font-size: 0.82rem; color: var(--v2-text-text-base); font-variant-numeric: tabular-nums;
+  padding: 2px 0; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 45%, transparent);
+}
+[data-component="amicode-formulation-view"] .amc-solve { font-size: 0.82rem; color: var(--v2-text-text-muted); font-variant-numeric: tabular-nums; }
