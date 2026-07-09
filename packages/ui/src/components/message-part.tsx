@@ -60,6 +60,9 @@ import { useLocation } from "@solidjs/router"
 import { attached, inline, kind } from "./message-file"
 import { readPartText } from "./message-part-text"
 
+const reducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+
 async function writeClipboard(text: string): Promise<boolean> {
   const body = typeof document === "undefined" ? undefined : document.body
   if (body) {
@@ -90,6 +93,17 @@ function ShellSubmessage(props: { text: string; animate?: boolean }) {
 
   onMount(() => {
     if (!props.animate) return
+    // The initial render collapses width to 0 and hides the value behind a blur;
+    // if the user prefers reduced motion, snap straight to the resting state
+    // instead of animating (and instead of leaving it stuck collapsed/hidden).
+    if (reducedMotion()) {
+      if (widthRef) widthRef.style.width = "auto"
+      if (valueRef) {
+        valueRef.style.opacity = "1"
+        valueRef.style.filter = "blur(0px)"
+      }
+      return
+    }
     requestAnimationFrame(() => {
       if (widthRef) {
         animate(widthRef, { width: "auto" }, { type: "spring", visualDuration: 0.25, bounce: 0 })

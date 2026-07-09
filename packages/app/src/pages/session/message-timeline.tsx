@@ -568,12 +568,21 @@ export function MessageTimeline(props: {
   createEffect(
     on(
       () => [timelineRowKeys(), activeAssistantContentVersion(), sessionStatus().type] as const,
-      () => {
+      (curr, prev) => {
         if (!virtualizer) return
         if (!props.shouldAnchorBottom() && !measuredBottomAnchored) return
-        const keys = timelineRowKeys()
+        const keys = curr[0]
         if (keys.length === 0) return
-        virtualizer.scrollToIndex(keys.length - 1, { align: "end" })
+        // Only realign via virtua (an estimate-based scroll that can visibly
+        // pre-jump before item heights are measured) when the *set of rows*
+        // changes or the session status flips. Pure intra-row growth while a
+        // token streams is left to the measured-bottom rAF lock below, which
+        // pins against the real DOM height — so the two mechanisms stop landing
+        // on slightly different scroll positions frame-to-frame. `timelineRowKeys`
+        // is memoized with `equals: sameKeys`, so its reference only changes when
+        // the row set actually changes, making this comparison cheap and exact.
+        const rowsChanged = !prev || prev[0] !== keys || prev[2] !== curr[2]
+        if (rowsChanged) virtualizer.scrollToIndex(keys.length - 1, { align: "end" })
         scheduleMeasuredBottomAnchor()
       },
       { defer: true },
