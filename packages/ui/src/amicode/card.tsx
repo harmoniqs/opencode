@@ -1,8 +1,9 @@
-import { Match, Show, Switch, createMemo } from "solid-js"
+import { For, Match, Show, Switch, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
-import { parseDiffSentinel, receiptText } from "./receipt"
+import { parseDiffSentinel, receiptParts } from "./receipt"
+import { AmicoMark } from "./spinner"
 import { openAmicodeEntity } from "./ui-bridge"
 import { RunWindow } from "./run-window"
 
@@ -31,73 +32,150 @@ function runRefFromOutput(output: unknown): { run: string; lab?: string } | unde
 // is agent-directed text and is deliberately NOT rendered — durable state
 // lives in the problem rail (./entity-rail.tsx). Receipt click opens the
 // entity view through the ui-bridge (no-op until the rail registers it).
+//
+// The card carries four states, differentiated in FORM, not just words: the
+// H-mark is the spinner while working (running), settles under a green check
+// when done with no diff, becomes a structured diff receipt when there is one,
+// and turns its rail red on failure. It is a real <button> when it can open the
+// entity (keyboard-reachable, focus ring) and a plain <div> otherwise. Styling
+// lives in ./amicode.css; data-slot hooks are preserved for the e2e suite.
+
+type DiffPiece = { key: string; from?: string; to?: string }
 
 function Chip(props: { tool: string; status?: string; output?: string }) {
   const stage = createMemo(() => amicodeStage(props.tool))
   const running = () => props.status === "pending" || props.status === "running"
-  const sentinel = createMemo(() => (props.status === "completed" ? parseDiffSentinel(props.output) : undefined))
+  const errored = () => props.status === "error" || props.status === "failed"
+  const parts = createMemo(() => {
+    if (props.status !== "completed") return undefined
+    const sentinel = parseDiffSentinel(props.output)
+    return sentinel ? { sentinel, receipt: receiptParts(sentinel) } : undefined
+  })
+  const clickable = () => !!parts()
+  const diffPieces = createMemo<DiffPiece[]>(
+    () =>
+      parts()?.receipt.changes.map((change) =>
+        change.kind === "elision"
+          ? { key: "…" }
+          : change.kind === "set"
+            ? { key: change.key, to: change.to }
+            : { key: change.key, from: change.from, to: change.to },
+      ) ?? [],
+  )
+  const state = () =>
+    errored() ? "error" : running() ? "running" : parts() ? "receipt" : props.status === "completed" ? "done" : "idle"
+  const openLabel = () => `Open ${parts()?.receipt.label ?? stage()} details`
+  const open = () => {
+    const active = parts()
+    if (active) openAmicodeEntity(active.sentinel.entity, active.sentinel.seq)
+  }
+
+  // Signature / body / trail are shared by the clickable (<button>) and inert
+  // (<div>) shells. Split so the shell can be a real button only when there is
+  // an entity to open — a bare <button> would inherit type="submit" and fire
+  // the composer form; a plain onClick <div> would be invisible to the keyboard.
+  const Sig = () => (
+    <span class="amc-sig">
+      <AmicoMark running={running()} />
+      <span class="amc-wordmark">AMICO</span>
+    </span>
+  )
+  const Body = () => (
+    <Show
+      when={parts()}
+      fallback={
+        <span class="amc-body">
+          <span class="amc-label" data-slot="amicode-card-stage">
+            {stage()}
+          </span>
+          <span class="amc-detail" data-slot="amicode-card-status">
+            {running()
+              ? "working…"
+              : errored()
+                ? "couldn’t complete"
+                : props.status === "completed"
+                  ? "updated"
+                  : (props.status ?? "")}
+          </span>
+        </span>
+      }
+    >
+      {(active) => (
+        <span class="amc-body" data-slot="amicode-card-receipt">
+          <span class="amc-label">{active().receipt.label}</span>
+          <For each={diffPieces()}>
+            {(piece) => (
+              <span class="amc-diff">
+                <span class="k">{piece.key}</span>
+                <Show when={piece.from !== undefined}>
+                  <span class="v from">{piece.from}</span>
+                  <span class="arw" aria-hidden="true">
+                    →
+                  </span>
+                </Show>
+                <Show when={piece.to !== undefined}>
+                  <span class="v">{piece.to}</span>
+                </Show>
+              </span>
+            )}
+          </For>
+        </span>
+      )}
+    </Show>
+  )
+  const Trail = () => (
+    <span class="amc-trail">
+      <Switch>
+        <Match when={state() === "done"}>
+          <svg class="amc-tick" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M3.5 8.5l3 3 6-6.5"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </Match>
+        <Match when={state() === "running"}>
+          <span class="amc-livedot" aria-hidden="true" />
+        </Match>
+      </Switch>
+      <Show when={clickable()}>
+        <span class="amc-chev" aria-hidden="true">
+          ›
+        </span>
+      </Show>
+    </span>
+  )
 
   return (
-    <div
-      data-component="amicode-card"
-      data-tool={props.tool}
-      onClick={() => {
-        const parsed = sentinel()
-        if (parsed) openAmicodeEntity(parsed.entity, parsed.seq)
-      }}
-      style={{
-        display: "flex",
-        "align-items": "baseline",
-        gap: "8px",
-        "min-width": "0",
-        border: "1px solid var(--v2-border-border-base)",
-        "border-radius": "6px",
-        background: "var(--v2-background-bg-layer-01)",
-        padding: "4px 12px",
-        "font-size": "12px",
-        "line-height": "16px",
-        cursor: sentinel() ? "pointer" : "default",
-      }}
+    <Show
+      when={clickable()}
+      fallback={
+        <div data-component="amicode-card" data-tool={props.tool} data-state={state()} data-clickable="false">
+          <Sig />
+          <span class="amc-rule" aria-hidden="true" />
+          <Body />
+          <Trail />
+        </div>
+      }
     >
-      <span
-        style={{
-          "font-weight": "700",
-          "letter-spacing": "0.08em",
-          color: "var(--v2-text-text-accent)",
-        }}
+      <button
+        type="button"
+        data-component="amicode-card"
+        data-tool={props.tool}
+        data-state={state()}
+        data-clickable="true"
+        aria-label={openLabel()}
+        onClick={open}
       >
-        AMICO
-      </span>
-      <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
-      <Show
-        when={sentinel()}
-        fallback={
-          <>
-            <span data-slot="amicode-card-stage" style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>
-              {stage()}
-            </span>
-            <span data-slot="amicode-card-status" style={{ color: "var(--v2-text-text-muted)" }}>
-              {running() ? "running…" : props.status === "completed" ? "updated ✓" : (props.status ?? "")}
-            </span>
-          </>
-        }
-      >
-        {(value) => (
-          <span
-            data-slot="amicode-card-receipt"
-            style={{
-              color: "var(--v2-text-text-base)",
-              "min-width": "0",
-              overflow: "hidden",
-              "text-overflow": "ellipsis",
-              "white-space": "nowrap",
-            }}
-          >
-            {receiptText(value())}
-          </span>
-        )}
-      </Show>
-    </div>
+        <Sig />
+        <span class="amc-rule" aria-hidden="true" />
+        <Body />
+        <Trail />
+      </button>
+    </Show>
   )
 }
 

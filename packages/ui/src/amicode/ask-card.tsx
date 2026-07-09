@@ -1,6 +1,7 @@
 import { For, Show, createSignal } from "solid-js"
 import { amicodeAskBridge } from "./ask-bridge"
 import { answeredOption, hasUserReplyAfter, type AskInput } from "./ask"
+import { AmicoMark } from "./spinner"
 import { useData } from "../context/data"
 
 // AMICODE: question card for amicode_ask tool parts — question text + one
@@ -43,23 +44,15 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
         "flex-direction": "column",
         gap: "8px",
         "min-width": "0",
-        border: "1px solid var(--v2-border-border-base)",
-        "border-radius": "6px",
-        background: "var(--v2-background-bg-layer-01)",
         padding: "8px 12px",
         "font-size": "12px",
         "line-height": "16px",
       }}
     >
-      <div style={{ display: "flex", "align-items": "baseline", gap: "8px" }}>
-        <span
-          style={{
-            "font-weight": "700",
-            "letter-spacing": "0.08em",
-            color: "var(--v2-text-text-accent)",
-          }}
-        >
-          AMICO
+      <div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+        <span class="amc-sig">
+          <AmicoMark />
+          <span class="amc-wordmark">AMICO</span>
         </span>
         <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Question</span>

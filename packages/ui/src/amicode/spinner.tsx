@@ -21,6 +21,25 @@ import { MARK_PATH } from "../components/logo"
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
+// Static/animated brand mark for the amicode surfaces (receipt card, entity
+// view, rail, ask, run window). Same H-glyph as AmicoSpinner; color comes from
+// the `.amc-mark` class (accent) via currentColor, and `running` toggles the
+// pulse through `.amc-mark.is-running` (CSS owns the prefers-reduced-motion
+// guard here — see amicode.css — rather than the matchMedia guard below).
+export function AmicoMark(props: { class?: string; running?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 3600 3600"
+      fill="currentColor"
+      aria-hidden="true"
+      data-component="amico-mark"
+      classList={{ "amc-mark": true, "is-running": !!props.running, [props.class ?? ""]: !!props.class }}
+    >
+      <path fill-rule="evenodd" d={MARK_PATH} />
+    </svg>
+  )
+}
+
 export function AmicoSpinner(props: {
   class?: string
   classList?: ComponentProps<"div">["classList"]

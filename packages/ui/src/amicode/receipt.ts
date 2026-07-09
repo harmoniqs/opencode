@@ -61,18 +61,39 @@ function short(value: unknown): string {
   return JSON.stringify(value)
 }
 
+// A receipt's body, broken into typed pieces so the UI can render each change
+// as a discrete unit (dimmed old value · arrow · new value) instead of a flat
+// string. `receiptText` below joins these back into the exact one-line form the
+// legacy chip and the tests expect — the structured and string renders never
+// diverge because they come from the same source.
+export type ReceiptChange =
+  | { kind: "elision" }
+  | { kind: "set"; key: string; to: string }
+  | { kind: "change"; key: string; from: string; to: string }
+export type ReceiptParts = { label: string; changes: ReceiptChange[]; action: string }
+
+export function receiptParts(sentinel: DiffSentinel): ReceiptParts {
+  const changes: ReceiptChange[] = Object.entries(sentinel.diff).map(([key, entry]) => {
+    if (key === "…") return { kind: "elision" }
+    const bare = key.split(".").pop() ?? key
+    if (entry.from === null || entry.from === undefined) return { kind: "set", key: bare, to: short(entry.to) }
+    return { kind: "change", key: bare, from: short(entry.from), to: short(entry.to) }
+  })
+  return { label: entityLabel(sentinel.entity), changes, action: sentinel.action }
+}
+
 /** `System · levels 3→4 · omega 4.8` — dotted diff keys render bare (last
  *  segment); creates (from null) render value-only; the spec-A elision key
  *  `…` renders as a bare ellipsis. Empty diff → the action. One line, always. */
 export function receiptText(sentinel: DiffSentinel): string {
-  const parts = Object.entries(sentinel.diff).map(([key, entry]) => {
-    if (key === "…") return "…"
-    const bare = key.split(".").pop() ?? key
-    if (entry.from === null || entry.from === undefined) return `${bare} ${short(entry.to)}`
-    return `${bare} ${short(entry.from)}→${short(entry.to)}`
+  const { label, changes, action } = receiptParts(sentinel)
+  const parts = changes.map((change) => {
+    if (change.kind === "elision") return "…"
+    if (change.kind === "set") return `${change.key} ${change.to}`
+    return `${change.key} ${change.from}→${change.to}`
   })
-  const body = parts.length > 0 ? parts.join(" · ") : sentinel.action
-  return `${entityLabel(sentinel.entity)} · ${body}`
+  const body = parts.length > 0 ? parts.join(" · ") : action
+  return `${label} · ${body}`
 }
 
 /** For any raw-output display path: drop a trailing sentinel line. NOTE: the
