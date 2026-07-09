@@ -74,3 +74,34 @@ function flatFieldChanges(a: unknown, b: unknown, prefix = ""): FieldChange[] {
   }
   return out
 }
+
+export type Badge = { label: string; value: string; tone?: "neutral" | "active" }
+
+const badgeStr = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined)
+
+/** Mode facets → badges. Defensive over a loose record (serves both System
+ *  drive/topology and Formulation trajectory/time/param/robustness/flags).
+ *  Skips none-robustness, false flags, and the "fixed" time default. */
+export function modeBadges(p: Record<string, unknown>): Badge[] {
+  const out: Badge[] = []
+  const tt = badgeStr(p.trajectory_type)
+  if (tt) out.push({ label: "type", value: tt })
+  const pm = badgeStr(p.parameterization)
+  if (pm) out.push({ label: "pulse", value: pm.replace(/_/g, "-") })
+  const tm = badgeStr(p.time_mode)
+  if (tm && tm !== "fixed") out.push({ label: "time", value: tm.replace(/_/g, "-"), tone: "active" })
+  const rob =
+    p.robustness && typeof p.robustness === "object"
+      ? badgeStr((p.robustness as Record<string, unknown>).kind)
+      : undefined
+  if (rob && rob !== "none") out.push({ label: "robust", value: rob, tone: "active" })
+  if (p.free_phase === true) out.push({ label: "free-phase", value: "", tone: "active" })
+  if (p.leakage === true) out.push({ label: "leakage", value: "", tone: "active" })
+  // System modes share the badge language.
+  const drive =
+    p.drive && typeof p.drive === "object" ? badgeStr((p.drive as Record<string, unknown>).arch) : undefined
+  if (drive) out.push({ label: "drive", value: drive })
+  const topo = badgeStr(p.topology)
+  if (topo) out.push({ label: "topology", value: topo })
+  return out
+}
