@@ -6,6 +6,7 @@ import {
   resolveBrandLogo,
   type InstitutionSuggestion,
 } from "./institution-lookup"
+import { fileToBase64 } from "./upload"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
 // and useful practitioner info on). Two identity heroes — MEET AMICO (who your
@@ -1020,11 +1021,7 @@ function LibraryCard(props: {
     setError(undefined)
     try {
       for (const file of Array.from(files)) {
-        const buf = new Uint8Array(await file.arrayBuffer())
-        let bin = ""
-        const CHUNK = 0x8000
-        for (let i = 0; i < buf.length; i += CHUNK) bin += String.fromCharCode(...buf.subarray(i, i + CHUNK))
-        await props.onUploadPaper(file.name, btoa(bin))
+        await props.onUploadPaper(file.name, await fileToBase64(file))
       }
     } catch {
       setError("Upload failed — is the server up?")

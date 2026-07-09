@@ -6,6 +6,7 @@ import {
   resolveBrandLogo,
   type InstitutionSuggestion,
 } from "./institution-lookup"
+import { fileToBase64 } from "./upload"
 
 // AMICODE: first-run onboarding wizard — the dedicated welcome UI (session
 // zero, visual edition). Three steps: brand welcome → about-you (name, focus,
@@ -55,10 +56,34 @@ const LABEL: Record<string, string> = {
 export function AmicodeOnboardingWizard(props: {
   initialName?: string
   onComplete: (fields: WizardFields) => Promise<void>
+  /** Optional: enables the library step (papers that make Amico smarter). */
+  onUploadPaper?: (filename: string, dataB64: string) => Promise<void>
   onDismiss: () => void
   onOpenChat: () => void
 }) {
-  const [step, setStep] = createSignal<0 | 1 | 2>(0)
+  const [step, setStep] = createSignal<0 | 1 | 2 | 3>(0)
+  const FINAL = 3
+  // library step state (skipped entirely when onUploadPaper isn't wired)
+  const [uploaded, setUploaded] = createSignal<string[]>([])
+  const [uploadBusy, setUploadBusy] = createSignal(false)
+  const [uploadError, setUploadError] = createSignal<string | undefined>(undefined)
+  let paperInput: HTMLInputElement | undefined
+  const uploadPapers = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !props.onUploadPaper) return
+    setUploadBusy(true)
+    setUploadError(undefined)
+    try {
+      for (const file of Array.from(files)) {
+        await props.onUploadPaper(file.name, await fileToBase64(file))
+        setUploaded([...uploaded(), file.name])
+      }
+    } catch {
+      setUploadError("Upload failed — PDFs only, up to 30MB.")
+    } finally {
+      setUploadBusy(false)
+      if (paperInput) paperInput.value = ""
+    }
+  }
   const [fields, setFields] = createSignal<WizardFields>({
     name: props.initialName ?? "",
     affiliation: "",
@@ -108,7 +133,7 @@ export function AmicodeOnboardingWizard(props: {
     setSaveError(undefined)
     try {
       await props.onComplete(fields())
-      setStep(2)
+      setStep(props.onUploadPaper ? 2 : FINAL)
     } catch {
       setSaveError("Couldn't save — server unreachable. Try again.")
     } finally {
@@ -118,7 +143,7 @@ export function AmicodeOnboardingWizard(props: {
 
   const Dots = () => (
     <div style={{ display: "flex", gap: "6px", "justify-content": "center" }}>
-      <For each={[0, 1, 2]}>
+      <For each={props.onUploadPaper ? [0, 1, 2, 3] : [0, 1, 3]}>
         {(i) => (
           <span
             style={{
@@ -388,8 +413,71 @@ export function AmicodeOnboardingWizard(props: {
           </div>
         </Show>
 
-        {/* step 2 — done: the profile as the home page will show it */}
-        <Show when={step() === 2}>
+        {/* step 2 — library: papers that make Amico smarter (optional) */}
+        <Show when={step() === 2 && props.onUploadPaper}>
+          <div style={{ display: "flex", "flex-direction": "column", gap: "12px" }}>
+            <div>
+              <div style={{ "font-size": "17px", "font-weight": "700", color: "var(--v2-text-text-base)" }}>
+                Teach Amico your work
+              </div>
+              <div style={{ "font-size": "12px", color: "var(--v2-text-text-muted)", "margin-top": "2px" }}>
+                Upload papers (PDFs) — Amico reads them to learn your methods and results. You can add more anytime from
+                the Library card on the home page.
+              </div>
+            </div>
+            <input
+              ref={paperInput}
+              type="file"
+              accept=".pdf,application/pdf"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => void uploadPapers(e.currentTarget.files)}
+            />
+            <Show when={uploaded().length > 0}>
+              <div style={{ display: "flex", "flex-direction": "column", gap: "4px" }}>
+                <For each={uploaded()}>
+                  {(name) => (
+                    <div
+                      style={{
+                        display: "flex",
+                        "align-items": "center",
+                        gap: "6px",
+                        "font-size": "12px",
+                        color: "var(--v2-text-text-base)",
+                      }}
+                    >
+                      <span style={{ color: "var(--v2-state-fg-success)" }}>✓</span>
+                      <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                        {name}
+                      </span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={uploadError()}>
+              <div style={{ "font-size": "12px", color: "var(--v2-state-fg-danger)" }}>{uploadError()}</div>
+            </Show>
+            <div style={{ display: "flex", "align-items": "center", gap: "10px", "margin-top": "4px" }}>
+              <PrimaryBtn
+                label={uploadBusy() ? "Uploading…" : uploaded().length > 0 ? "Add another PDF" : "Upload a PDF"}
+                disabled={uploadBusy()}
+                onClick={() => paperInput?.click()}
+              />
+              <PrimaryBtn
+                label={uploaded().length > 0 ? "Continue" : "Continue without papers"}
+                disabled={uploadBusy()}
+                onClick={() => setStep(FINAL)}
+              />
+              <span style={{ "margin-left": "auto" }}>
+                <QuietBtn label="Back" onClick={() => setStep(1)} />
+              </span>
+            </div>
+          </div>
+        </Show>
+
+        {/* final step — done: the profile as the home page will show it */}
+        <Show when={step() === FINAL}>
           <div
             style={{
               display: "flex",

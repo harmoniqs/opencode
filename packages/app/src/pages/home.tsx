@@ -714,6 +714,7 @@ function HomeDesign() {
               return v?.ok ? v.you.name : ""
             })()}
             onComplete={saveProfileFields}
+            onUploadPaper={uploadPaper}
             onDismiss={dismissWizard}
             onOpenChat={() => {
               dismissWizard()
