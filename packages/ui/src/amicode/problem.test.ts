@@ -10,6 +10,9 @@ import {
   entityRows,
   historyRows,
   editPromptText,
+  compositeChip,
+  compositeSystemRows,
+  systemProjection,
 } from "./problem"
 
 describe("wire parsers are tolerant and never throw", () => {
@@ -147,5 +150,73 @@ describe("entity view helpers", () => {
   test("editPromptText names the entity and field, trailing space for the new value", () => {
     expect(editPromptText("system", "levels", 4)).toBe("Change the system levels (currently 4) to ")
     expect(editPromptText("system", "params.omega", 4.8)).toBe("Change the system omega (currently 4.8) to ")
+  })
+})
+
+describe("composite system display derivations (spec-20260709)", () => {
+  const flat = { platform: "transmon", levels: 3, params: { omega: 4.8, drive_max: 0.2 } }
+  const n1 = {
+    platform: "transmon",
+    components: [{ id: "q1", role: "qubit", levels: 3, params: { omega: 4.8, drive_max: 0.2 } }],
+    couplings: [],
+    drive: { arch: "per-component" },
+  }
+  const cz = {
+    platform: "transmon",
+    components: [
+      { id: "q1", role: "qubit", levels: 3, params: { omega: 4.8 } },
+      { id: "q2", role: "qubit", levels: 3, params: { omega: 4.9 } },
+    ],
+    couplings: [{ between: ["q1", "q2"], kind: "cross-resonance", params: { g: 0.005 } }],
+    topology: "single-pair",
+    drive: { arch: "per-component" },
+  }
+
+  test("chipText: N=1 composite matches the legacy flat look; N>1 summarizes components/coupling/arch", () => {
+    expect(chipText("system", flat as any)).toBe("transmon · 3 lvl · cap 0.2")
+    expect(chipText("system", n1 as any)).toBe("transmon · 3 lvl · cap 0.2") // N=1 back-compat
+    expect(chipText("system", cz as any)).toBe("transmon · 2×qubit · cross-resonance · per-component")
+  })
+
+  test("legacy flat entity still renders (defensive dual-shape)", () => {
+    expect(chipText("system", flat as any)).toBeDefined()
+    expect(entityRows(flat as any).some((r) => r.key === "levels")).toBe(true) // generic flat path
+  })
+
+  test("entityRows: composite → component-table + coupling-list rows, not a JSON blob", () => {
+    const rows = compositeSystemRows(cz as any)
+    expect(rows.find((r) => r.key === "platform")?.value).toBe("transmon")
+    expect(rows.find((r) => r.key === "drive")?.value).toBe("per-component")
+    expect(rows.find((r) => r.key === "topology")?.value).toBe("single-pair")
+    expect(rows.find((r) => r.key === "component q1")?.value).toContain("qubit")
+    expect(rows.find((r) => r.key === "component q1")?.value).toContain("omega=4.8")
+    const cpRow = rows.find((r) => r.key.startsWith("coupling"))
+    expect(cpRow?.key).toBe("coupling q1↔q2")
+    expect(cpRow?.value).toContain("cross-resonance")
+    // and entityRows routes composites here (no raw array blob)
+    expect(entityRows(cz as any).some((r) => r.value.startsWith("["))).toBe(false)
+  })
+
+  test("systemProjection: composite read-through; flat collapses to N=1 (isComposite flag)", () => {
+    const p = systemProjection(cz as any)
+    expect(p.isComposite).toBe(true)
+    expect(p.components.map((c) => c.id)).toEqual(["q1", "q2"])
+    expect(p.couplings[0].between).toEqual(["q1", "q2"])
+    expect(p.driveArch).toBe("per-component")
+    const pf = systemProjection(flat as any)
+    expect(pf.isComposite).toBe(false)
+    expect(pf.components).toHaveLength(1)
+    expect(pf.components[0]).toMatchObject({ id: "q1", role: "qubit", levels: 3 })
+    expect(pf.couplings).toEqual([])
+    // rydberg flat → atom role + global arch (mirrors normalizeSystem)
+    const pr = systemProjection({ platform: "rydberg", levels: 3, params: {} } as any)
+    expect(pr.components[0].role).toBe("atom")
+    expect(pr.driveArch).toBe("global")
+  })
+
+  test("compositeChip is defensive on garbage (never throws)", () => {
+    expect(() => compositeChip({} as any)).not.toThrow()
+    expect(() => compositeSystemRows({ components: "nope" } as any)).not.toThrow()
+    expect(() => systemProjection(null as any)).not.toThrow()
   })
 })
