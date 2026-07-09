@@ -36,3 +36,41 @@ function headLabel(o: Record<string, unknown>): string {
   }
   return "item"
 }
+
+export type FieldChange = { field: string; from: unknown; to: unknown }
+export type SetDiff<T> = { added: T[]; removed: T[]; changed: { key: string; item: T; changes: FieldChange[] }[] }
+
+/** Set delta by a UNIQUE key (keyFn MUST be unique within the set — for
+ *  objectives/constraints use `kind:(label??index)`; kind alone collides). */
+export function setDiff<T>(from: T[], to: T[], keyFn: (t: T, i: number) => string): SetDiff<T> {
+  const fromMap = new Map(from.map((t, i) => [keyFn(t, i), t]))
+  const toMap = new Map(to.map((t, i) => [keyFn(t, i), t]))
+  const added = [...toMap].filter(([k]) => !fromMap.has(k)).map(([, t]) => t)
+  const removed = [...fromMap].filter(([k]) => !toMap.has(k)).map(([, t]) => t)
+  const changed: SetDiff<T>["changed"] = []
+  for (const [k, toItem] of toMap) {
+    const fromItem = fromMap.get(k)
+    if (fromItem === undefined) continue
+    const changes = flatFieldChanges(fromItem, toItem)
+    if (changes.length) changed.push({ key: k, item: toItem, changes })
+  }
+  return { added, removed, changed }
+}
+
+/** One-level-deep field comparison (dotted keys for nested params). */
+function flatFieldChanges(a: unknown, b: unknown, prefix = ""): FieldChange[] {
+  const out: FieldChange[] = []
+  const ao = (a ?? {}) as Record<string, unknown>
+  const bo = (b ?? {}) as Record<string, unknown>
+  for (const k of new Set([...Object.keys(ao), ...Object.keys(bo)])) {
+    const av = ao[k],
+      bv = bo[k]
+    const field = prefix ? `${prefix}.${k}` : k
+    if (av && bv && typeof av === "object" && typeof bv === "object" && !Array.isArray(av)) {
+      out.push(...flatFieldChanges(av, bv, field))
+    } else if (JSON.stringify(av) !== JSON.stringify(bv)) {
+      out.push({ field, from: av, to: bv })
+    }
+  }
+  return out
+}
