@@ -225,3 +225,23 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
 - index.css: @font-face for both (JuliaMono full glyph set — Julia Unicode; Racing Sans One latin subset, font-display swap). logo.tsx + wordmark-v2.tsx: font-family 'Racing Sans One' first, weight 700→400. settings.tsx: monoDefault/monoFallback lead with JuliaMono. theme.css: --font-family-mono leads with JuliaMono. Terminal font DELIBERATELY unchanged (JetBrainsMono Nerd Font Mono via separate terminalFallback).
 - New assets (git-added — build breaks without them): public/assets/RacingSansOne-Regular.woff2 (21 KB) + JuliaMono-Regular.woff2 (946 KB).
 - Font build sha256: `2a15da111be516516fb1fbd1a4fb5ae02ad9bddd6373ede08cdf7b28c19d163a` (dist/opencode-local + vendored path, write-temp + mv -f swap; SUPERSEDES #13's a73d8583… — same code, fonts now committed). Verify (scratch port 14099): `GET /assets/RacingSansOne-Regular.woff2` → 200 font/woff2 21804 B; `GET /assets/JuliaMono-Regular.woff2` → 200 font/woff2 946516 B; "Racing Sans One" in built css + index/new-session chunks, "JuliaMono" in `index-Dwtxigfs.css`; `GET /amicode/problems` → 200; `GET /` → 200 `<title>Amicode</title>`; ui `bun test src` → 70 pass; typecheck green ui+app (no snapshots assert fonts, per Aaron — confirmed nothing went red). Bonus confirmation: KaTeX\_\* woff2 assets now in dist — the entity view's katex import (#13) pulls its font set into the embed.
+9. (home CTA fallback) — amicode(home): "Open chat" works on a fresh profile.
+   - BUG: `startWithPrompt` (fork wiring for the Meet-Amico card, patch 5ef6b7e0e) dead-ended
+     silently when the persisted client-side project list was empty (fresh browser profile
+     against a bare `opencode serve`): the `!project` branch called `openNewSession()`, which
+     needs the SAME empty `newSessionProject()` and hits `if (!conn || !project) return`.
+     Primary home CTA did nothing, no error. Hit live 2026-07-08 (web UI on a scratch dir).
+   - FIX (packages/app/src/pages/home.tsx, `startWithPrompt` only): when no project is
+     tracked, fall back to the focused server's own working directory —
+     `focusedSync().data.path.directory` (synced from GET /path; "" until loaded, so the
+     falsy guard holds) — open+touch it as a project (self-heals the home page), then
+     `tabs.newDraft` with the prompt preserved. Deliberately NOT `sync.data.project`:
+     the server's "global" project record has worktree "/".
+   - Regression spec: packages/app/e2e/regression/home-open-chat-empty-projects.spec.ts —
+     fresh profile (NO localStorage seed), mocked server, click the CTA (`exact: true` —
+     the whole card is also a button whose accessible name contains "Open chat"), expect
+     navigation to `/new-session?draftId=` + the cwd persisted as a tracked project.
+     Verified failing on the unfixed code, passing with the fix. Playwright note: config
+     reuses any server on port 3000 (`reuseExistingServer`) — run with `PLAYWRIGHT_PORT=<free>`
+     if something else (e.g. the harmoniqs website dev server) holds 3000.
+   - Checks: `tsgo -b` clean; `bun run test:unit` 376 pass / 0 fail.
