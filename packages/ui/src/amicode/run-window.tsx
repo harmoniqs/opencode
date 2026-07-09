@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { AmicoMark } from "./spinner"
 import { fetchAmicodeRunSeries, openAmicodeEntity } from "./ui-bridge"
 import { type RunSeries, type RunSeriesView, elapsedLabel, headlineMetric, parseRunSeriesResponse } from "./run-series"
 
@@ -189,10 +190,6 @@ export function RunWindow(props: { run: string; lab?: string }) {
         "flex-direction": "column",
         gap: "6px",
         "min-width": "0",
-        border: "1px solid var(--v2-border-border-base)",
-        "border-left": "3px solid var(--v2-icon-icon-accent)",
-        "border-radius": "6px",
-        background: "var(--v2-background-bg-layer-01)",
         padding: "8px 12px",
         "font-size": "12px",
         "line-height": "16px",
@@ -200,9 +197,10 @@ export function RunWindow(props: { run: string; lab?: string }) {
       }}
     >
       {/* header: AMICO · Run · status · iter · metric · elapsed */}
-      <div style={{ display: "flex", "align-items": "baseline", gap: "8px", "flex-wrap": "wrap", "min-width": "0" }}>
-        <span style={{ "font-weight": "700", "letter-spacing": "0.08em", color: "var(--v2-text-text-accent)" }}>
-          AMICO
+      <div style={{ display: "flex", "align-items": "center", gap: "8px", "flex-wrap": "wrap", "min-width": "0" }}>
+        <span class="amc-sig">
+          <AmicoMark />
+          <span class="amc-wordmark">AMICO</span>
         </span>
         <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Run</span>
