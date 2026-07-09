@@ -66,11 +66,19 @@ describe("chipText per-kind compact renderers", () => {
     )
     expect(chipText("system", { platform: "rydberg" })).toBe("rydberg")
   })
-  test("formulation: target + objective, problem_type fallback", () => {
-    expect(chipText("formulation", { problem_type: "gate_synthesis", target: "X", objective: "infidelity" })).toBe(
-      "X · infidelity",
-    )
-    expect(chipText("formulation", { problem_type: "gate_synthesis" })).toBe("gate_synthesis")
+  test("formulation: structured mode facets (NOT the phantom problem_type)", () => {
+    expect(
+      chipText("formulation", {
+        trajectory_type: "gate",
+        time_mode: "min_time",
+        robustness: { kind: "ensemble" },
+        free_phase: true,
+      }),
+    ).toBe("gate · min-time · ensemble · free-phase")
+    // legacy free-form maps through the projection:
+    expect(chipText("formulation", { problem: "state_prep", target: "|1>" })).toBe("ket")
+    // an entity carrying ONLY the phantom problem_type is ignored → default gate:
+    expect(chipText("formulation", { problem_type: "gate_synthesis" })).toBe("gate")
   })
   test("unknown kind: generic key=value join, nested flattened bare, notes skipped", () => {
     expect(chipText("pulse", { format: "jld2", knots: 51, notes: "long text" })).toBe("format=jld2 · knots=51")

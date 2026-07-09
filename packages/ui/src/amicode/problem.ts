@@ -192,9 +192,16 @@ export function chipText(kind: string, entity: Record<string, unknown>): string 
     return parts.length > 0 ? parts.join(" · ") : undefined
   }
   if (kind === "formulation") {
-    const parts = [str(entity.target), str(entity.objective)].filter((p): p is string => Boolean(p))
-    if (parts.length > 0) return parts.join(" · ")
-    return str(entity.problem_type)
+    // Structured facets via formulationProjection (dual-shape) — NOT the phantom
+    // `problem_type` the plugin never writes (spec §6.3 drift fix).
+    const p = formulationProjection(entity)
+    const parts = [
+      p.trajectory_type,
+      p.time_mode === "min_time" ? "min-time" : undefined,
+      p.robustness.kind !== "none" ? p.robustness.kind : undefined,
+      p.free_phase ? "free-phase" : undefined,
+    ].filter((x): x is string => Boolean(x))
+    return parts.length > 0 ? parts.join(" · ") : undefined
   }
   if (kind === "run") return undefined // run chip text comes from runChipText
   // generic: flatten one level of nesting to bare keys, skip null/notes/recorded
