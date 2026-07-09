@@ -575,3 +575,42 @@
   border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
   background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
 }
+
+/* ---- System hero (spec §6.1): schematic + table + Hamiltonian ---- */
+[data-component="amicode-system-view"] { display: flex; flex-direction: column; gap: 12px; }
+[data-component="amicode-system-view"] .amc-schematic {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 4px;
+}
+[data-component="amicode-system-view"] .amc-node {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--v2-border-border-base);
+  background: var(--v2-background-bg-layer-01);
+}
+[data-component="amicode-system-view"] .amc-node-id { font-weight: 600; color: var(--v2-text-text-base); }
+[data-component="amicode-system-view"] .amc-node-lvl { font-size: 0.72rem; color: var(--v2-text-text-muted); }
+[data-component="amicode-system-view"] .amc-edge {
+  display: inline-flex; flex-direction: column; align-items: center; min-width: 40px; padding: 0 4px;
+}
+[data-component="amicode-system-view"] .amc-edge-line { color: var(--v2-border-border-base); line-height: 1; }
+[data-component="amicode-system-view"] .amc-edge-label {
+  font-size: 0.7rem; letter-spacing: 0.02em; color: var(--v2-text-text-accent);
+}
+[data-component="amicode-system-view"] .amc-loose {
+  display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.78rem; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-system-view"] .amc-systbl { display: flex; flex-direction: column; }
+[data-component="amicode-system-view"] .amc-systbl-row {
+  display: grid; grid-template-columns: 3rem 5rem auto 1fr; gap: 8px; align-items: baseline;
+  padding: 4px 2px; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 55%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+[data-component="amicode-system-view"] .amc-systbl-row.amc-coupling { grid-template-columns: 8rem 5rem 1fr; }
+[data-component="amicode-system-view"] .amc-c-id { font-weight: 600; color: var(--v2-text-text-base); }
+[data-component="amicode-system-view"] .amc-c-role,
+[data-component="amicode-system-view"] .amc-c-lvl { color: var(--v2-text-text-muted); font-size: 0.8rem; }
+[data-component="amicode-system-view"] .amc-c-params { color: var(--v2-text-text-base); font-size: 0.8rem; }
+[data-component="amicode-system-view"] .amc-ev-formula { margin-top: 4px; }
+[data-component="amicode-system-view"] .amc-ev-formula-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v2-text-text-muted); margin-bottom: 2px;
+}
