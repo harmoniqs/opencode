@@ -340,14 +340,18 @@ export function MessageTimeline(props: {
               history) — cap the panel and let it scroll internally instead */}
           <div
             style={{
-              width: "min(680px, 90vw)",
-              "max-width": "90vw",
+              // Definite width + horizontal CLIP (not auto). The `fit` Dialog
+              // sizes to content; with overflow-x:auto the browser measures the
+              // wide scroll-width of a nowrap child (katex Hamiltonian) and the
+              // panel grows, then clips both edges. overflow-x:hidden gives no
+              // scroll-width to leak, so the panel stays this width; content
+              // wraps within it and the Hamiltonian scrolls inside its own box.
+              width: "620px",
+              "max-width": "calc(100vw - 48px)",
               "min-width": "0",
               "max-height": "68vh",
-              // contain BOTH axes — the `fit` Dialog sizes to content, so an
-              // unconstrained-x wrapper lets a wide child bleed out and grow +
-              // clip the whole panel. auto keeps the 680px box; content wraps.
-              overflow: "auto",
+              "overflow-x": "hidden",
+              "overflow-y": "auto",
             }}
           >
             <AmicodeEntityView
