@@ -1,10 +1,22 @@
 [data-component="assistant-message"] {
   content-visibility: auto;
   width: 100%;
+  /* min-width:0 — a flex column won't shrink below its content's intrinsic
+     width without it, so a long unbroken-ish line (URLs, "overlapping" running
+     into the next word) pushed the message past the viewport and clipped on the
+     right. The container chain already sets this; the message column + its
+     text parts were the gap. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+}
+
+[data-component="assistant-message"] [data-component="text-part"],
+[data-component="assistant-message"] [data-slot="text-part-body"] {
+  min-width: 0;
+  max-width: 100%;
 }
 
 [data-component="user-message"] {

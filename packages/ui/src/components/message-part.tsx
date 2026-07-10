@@ -1,4 +1,4 @@
-import { AmicoSpinner } from "../amicode/spinner"
+import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import {
   Component,
   createEffect,
@@ -605,88 +605,100 @@ export function AssistantParts(props: {
   const last = createMemo(() => grouped().at(-1)?.key)
 
   return (
-    <Index each={grouped()}>
-      {(entryAccessor) => {
-        const entryType = createMemo(() => entryAccessor().type)
+    <>
+      {/* amicode: the AMICO signature heads EVERY assistant turn, not just the
+          interview receipt cards — the brand identity shouldn't vanish in plain
+          chat. Shown once the turn has renderable parts; running-state animates
+          the mark. Styling is Kate's restyle (amc-sig/amc-wordmark), untouched. */}
+      <Show when={grouped().length > 0}>
+        <span class="amc-sig" data-slot="amicode-turn-signature">
+          <AmicoMark running={props.working && last() === grouped().at(-1)?.key} />
+          <span class="amc-wordmark">AMICO</span>
+        </span>
+      </Show>
+      <Index each={grouped()}>
+        {(entryAccessor) => {
+          const entryType = createMemo(() => entryAccessor().type)
 
-        return (
-          <Switch>
-            <Match when={entryType() === "context"}>
-              {(() => {
-                const parts = createMemo(
-                  () => {
-                    const entry = entryAccessor()
-                    if (entry.type !== "context") return emptyTools
-                    return entry.refs
-                      .map((ref) => part().get(ref.messageID)?.get(ref.partID))
-                      .filter((part): part is ToolPart => !!part && isContextGroupTool(part))
-                  },
-                  emptyTools,
-                  { equals: same },
-                )
-                const busy = createMemo(() => props.working && last() === entryAccessor().key)
+          return (
+            <Switch>
+              <Match when={entryType() === "context"}>
+                {(() => {
+                  const parts = createMemo(
+                    () => {
+                      const entry = entryAccessor()
+                      if (entry.type !== "context") return emptyTools
+                      return entry.refs
+                        .map((ref) => part().get(ref.messageID)?.get(ref.partID))
+                        .filter((part): part is ToolPart => !!part && isContextGroupTool(part))
+                    },
+                    emptyTools,
+                    { equals: same },
+                  )
+                  const busy = createMemo(() => props.working && last() === entryAccessor().key)
 
-                return (
-                  <Show when={parts().length > 0}>
-                    <ContextToolGroup parts={parts()} busy={busy()} />
-                  </Show>
-                )
-              })()}
-            </Match>
-            <Match when={entryType() === "shell"}>
-              {(() => {
-                const parts = createMemo(
-                  () => {
-                    const entry = entryAccessor()
-                    if (entry.type !== "shell") return emptyTools
-                    return entry.refs
-                      .map((ref) => part().get(ref.messageID)?.get(ref.partID))
-                      .filter((part): part is ToolPart => !!part && isShellGroupTool(part))
-                  },
-                  emptyTools,
-                  { equals: same },
-                )
-                const busy = createMemo(() => props.working && last() === entryAccessor().key)
-
-                return (
-                  <Show when={parts().length > 0}>
-                    <ShellToolGroup parts={parts()} busy={busy()} />
-                  </Show>
-                )
-              })()}
-            </Match>
-            <Match when={entryType() === "part"}>
-              {(() => {
-                const message = createMemo(() => {
-                  const entry = entryAccessor()
-                  if (entry.type !== "part") return
-                  return msgs().get(entry.ref.messageID)
-                })
-                const item = createMemo(() => {
-                  const entry = entryAccessor()
-                  if (entry.type !== "part") return
-                  return part().get(entry.ref.messageID)?.get(entry.ref.partID)
-                })
-
-                return (
-                  <Show when={message()}>
-                    <Show when={item()}>
-                      <Part
-                        part={item()!}
-                        message={message()!}
-                        showAssistantCopyPartID={props.showAssistantCopyPartID}
-                        turnDurationMs={props.turnDurationMs}
-                        defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
-                      />
+                  return (
+                    <Show when={parts().length > 0}>
+                      <ContextToolGroup parts={parts()} busy={busy()} />
                     </Show>
-                  </Show>
-                )
-              })()}
-            </Match>
-          </Switch>
-        )
-      }}
-    </Index>
+                  )
+                })()}
+              </Match>
+              <Match when={entryType() === "shell"}>
+                {(() => {
+                  const parts = createMemo(
+                    () => {
+                      const entry = entryAccessor()
+                      if (entry.type !== "shell") return emptyTools
+                      return entry.refs
+                        .map((ref) => part().get(ref.messageID)?.get(ref.partID))
+                        .filter((part): part is ToolPart => !!part && isShellGroupTool(part))
+                    },
+                    emptyTools,
+                    { equals: same },
+                  )
+                  const busy = createMemo(() => props.working && last() === entryAccessor().key)
+
+                  return (
+                    <Show when={parts().length > 0}>
+                      <ShellToolGroup parts={parts()} busy={busy()} />
+                    </Show>
+                  )
+                })()}
+              </Match>
+              <Match when={entryType() === "part"}>
+                {(() => {
+                  const message = createMemo(() => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "part") return
+                    return msgs().get(entry.ref.messageID)
+                  })
+                  const item = createMemo(() => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "part") return
+                    return part().get(entry.ref.messageID)?.get(entry.ref.partID)
+                  })
+
+                  return (
+                    <Show when={message()}>
+                      <Show when={item()}>
+                        <Part
+                          part={item()!}
+                          message={message()!}
+                          showAssistantCopyPartID={props.showAssistantCopyPartID}
+                          turnDurationMs={props.turnDurationMs}
+                          defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                        />
+                      </Show>
+                    </Show>
+                  )
+                })()}
+              </Match>
+            </Switch>
+          )
+        }}
+      </Index>
+    </>
   )
 }
 
