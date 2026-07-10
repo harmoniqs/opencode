@@ -606,3 +606,10 @@ export function formulationProjection(input: Record<string, unknown>): Formulati
     out.derivedFinalFidelity = time_params.final_fidelity
   return out
 }
+
+/** Compact an ISO timestamp for the entity-view ("2026-07-10T15:53:30.450Z" →
+ *  "07-10 15:53") — the full ISO is wide and clips the dialog. Non-ISO passes through. */
+export function formatTs(ts: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(ts)
+  return m ? `${m[2]}-${m[3]} ${m[4]}` : ts
+}

@@ -4,6 +4,7 @@ import {
   parseProblemResponse,
   parseRunStatusResponse,
   chipText,
+  formatTs,
   mergeChips,
   runChipText,
   railState,
@@ -65,6 +66,10 @@ describe("chipText per-kind compact renderers", () => {
       "transmon · 4 lvl · cap 0.2",
     )
     expect(chipText("system", { platform: "rydberg" })).toBe("rydberg")
+  })
+  test("formatTs compacts ISO, passes non-ISO through", () => {
+    expect(formatTs("2026-07-10T15:53:30.450Z")).toBe("07-10 15:53")
+    expect(formatTs("just now")).toBe("just now")
   })
   test("formulation: structured mode facets (NOT the phantom problem_type)", () => {
     expect(

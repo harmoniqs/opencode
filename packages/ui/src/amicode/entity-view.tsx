@@ -1,7 +1,7 @@
 import { For, Show, createMemo } from "solid-js"
 import { AmicoMark } from "./spinner"
 import { receiptParts } from "./receipt"
-import { type ProblemView, editPromptText, entityRows, fieldGroup, historyRows, humanizeKey } from "./problem"
+import { type ProblemView, editPromptText, entityRows, fieldGroup, formatTs, historyRows, humanizeKey } from "./problem"
 import { SystemComposite } from "./system-view"
 import { FormulationView } from "./formulation-view"
 
@@ -134,7 +134,7 @@ export function AmicodeEntityView(props: {
                     </span>
                   )}
                 </Show>
-                <Show when={latestTs()}>{(ts) => <span>Updated {ts()}</span>}</Show>
+                <Show when={latestTs()}>{(ts) => <span>Updated {formatTs(ts())}</span>}</Show>
               </div>
             </Show>
 
@@ -205,7 +205,7 @@ export function AmicodeEntityView(props: {
                         <Show when={event.source?.tool ?? event.source?.stage}>
                           {(source) => <span class="src">{source()}</span>}
                         </Show>
-                        <Show when={event.ts}>{(ts) => <span class="when">{ts()}</span>}</Show>
+                        <Show when={event.ts}>{(ts) => <span class="when">{formatTs(ts())}</span>}</Show>
                       </div>
                       <div class="summary">
                         <Show

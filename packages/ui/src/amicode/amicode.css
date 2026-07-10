@@ -647,7 +647,11 @@
    width. Grid/flex children default to min-width:auto (content-based), so a long
    value (history notes, params) forces the content wider than the dialog and
    clips the right edge (timestamps). Let children shrink + wrap long values. ---- */
-[data-component="amicode-entity-view"] { min-width: 0; max-width: 100%; }
+[data-component="amicode-entity-view"] { min-width: 0; max-width: 100%; overflow-x: hidden; }
+[data-component="amicode-entity-view"] .amc-timeline,
+[data-component="amicode-entity-view"] .amc-event,
+[data-component="amicode-entity-view"] .amc-event .erow { min-width: 0; max-width: 100%; }
+[data-component="amicode-entity-view"] .amc-event .when { white-space: nowrap; }
 [data-component="amicode-entity-view"] .amc-event .summary,
 [data-component="amicode-entity-view"] .amc-event .summary .v { overflow-wrap: anywhere; min-width: 0; }
 [data-component="amicode-system-view"] .amc-systbl-row > * { min-width: 0; }

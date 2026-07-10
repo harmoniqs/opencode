@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test"
 import { systemProjection } from "./problem"
-import { systemSchematicModel, systemTableModel } from "./system-render"
+import { systemSchematicModel, systemTableModel, systemHamiltonianLatex } from "./system-render"
 
 const twoTransmon = {
   platform: "transmon",
@@ -47,6 +47,27 @@ describe("systemSchematicModel", () => {
     const s = systemSchematicModel(systemProjection(hyper))
     expect(s.edges).toEqual([])
     expect(s.looseCouplings).toEqual([{ between: ["q1", "q3"], kind: "vdW" }])
+  })
+})
+
+describe("systemHamiltonianLatex", () => {
+  it("composes drift + coupling + drive for a cavity+qubit dispersive system", () => {
+    const cavQubit = {
+      platform: "cavity",
+      drive: { arch: "per-component" },
+      components: [
+        { id: "q1", role: "qubit", levels: 3, params: { omega: 4, delta: -0.2 } },
+        { id: "c1", role: "cavity", levels: 10, params: { K_c_Hz: 3.25 } },
+      ],
+      couplings: [{ between: ["q1", "c1"], kind: "dispersive-chi", params: { chi_kHz: 32.8 } }],
+    }
+    const h = systemHamiltonianLatex(systemProjection(cavQubit))!
+    expect(h).toContain("\\hat H/\\hbar")
+    expect(h).toContain("\\chi") // the dispersive interaction term
+    expect(h).toContain("\\varepsilon(t)") // drive term
+  })
+  it("returns undefined for a system with no components", () => {
+    expect(systemHamiltonianLatex(systemProjection({ platform: "x", components: [], couplings: [] }))).toBeUndefined()
   })
 })
 

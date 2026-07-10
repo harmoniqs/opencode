@@ -1,23 +1,26 @@
 import { For, Show, createMemo } from "solid-js"
 import katex from "katex"
 import { systemProjection } from "./problem"
-import { systemSchematicModel, systemTableModel, type SchematicModel } from "./system-render"
+import { systemSchematicModel, systemTableModel, systemHamiltonianLatex, type SchematicModel } from "./system-render"
 
 // AMICODE System hero (spec §6.1 / plan Task 5): schematic (nodes + coupling
 // edges) + component/coupling table + Hamiltonian LaTeX. Thin — all logic is in
 // the pure systemProjection / system-render models; this file just maps them to
 // DOM. Styling in ./amicode.css. Katex is the fork's existing math dep.
 
-const HAMILTONIAN_LATEX: Record<string, string> = {
-  transmon:
-    "\\hat H = \\omega \\hat a^\\dagger \\hat a + \\tfrac{\\delta}{2}\\hat a^\\dagger \\hat a^\\dagger \\hat a \\hat a + u(t)(\\hat a + \\hat a^\\dagger)",
-  rydberg:
-    "\\hat H = \\tfrac{\\Omega(t)}{2}\\sum_i \\sigma_x^{(i)} - \\Delta(t)\\sum_i \\hat n_i + \\sum_{i<j} \\tfrac{C_6}{r_{ij}^6}\\hat n_i \\hat n_j",
+// Unitless params get a math symbol; unit-suffixed keys (chi_kHz, K_c_Hz, N_fock)
+// keep their name so the unit isn't lost.
+const PARAM_SYMBOL: Record<string, string> = {
+  omega: "ω",
+  delta: "δ",
+  chi: "χ",
+  strength: "J",
+  drive_max: "|u|",
+  du_bound: "|u̇|",
 }
-
 const paramsText = (params: Record<string, number>): string =>
   Object.entries(params)
-    .map(([k, v]) => `${k} ${v}`)
+    .map(([k, v]) => `${PARAM_SYMBOL[k] ?? k} ${v}`)
     .join(" · ")
 
 const edgeLabel = (schem: SchematicModel, a: string, b: string): string | undefined =>
@@ -28,8 +31,7 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
   const schem = createMemo(() => systemSchematicModel(proj()))
   const table = createMemo(() => systemTableModel(proj()))
   const hamiltonian = createMemo(() => {
-    const platform = proj().platform
-    const latex = platform ? HAMILTONIAN_LATEX[platform] : undefined
+    const latex = systemHamiltonianLatex(proj())
     return latex ? katex.renderToString(latex, { throwOnError: false }) : undefined
   })
 
