@@ -55,8 +55,11 @@ import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
+import { inAmicode } from "@/pages/session/use-amicode-commands"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
+import { readClipboardViaBridge } from "./prompt-input/clipboard-bridge"
+import { normalizePaste } from "./prompt-input/paste"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
@@ -1087,7 +1090,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     },
     addPart,
     readClipboardImage: platform.readClipboardImage,
-    readClipboardText: platform.readClipboardText,
+    // Webview-iframe paste fallback; self-gates to a no-op outside the webview.
+    readClipboardText: () => readClipboardViaBridge(),
   })
 
   const fileAttachmentInput = () => (
@@ -1139,6 +1143,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    // Amicode webview: the framed app has no clipboard-read permission, so the
+    // browser dispatches no usable paste event on ⌘V (unlike plain web/desktop,
+    // where onPaste handles it). Intercept the keystroke and read the OS
+    // clipboard over the extension bridge instead (see clipboard-bridge.ts).
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === "v" &&
+      inAmicode()
+    ) {
+      event.preventDefault()
+      void readClipboardViaBridge().then((text) => {
+        if (text) addPart({ type: "text", content: normalizePaste(text), start: 0, end: 0 })
+      })
+      return
+    }
+
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
       if (store.mode !== "normal") return

@@ -64,11 +64,10 @@
   max-width: 100%;
   min-width: 0;
   text-align: left;
-  /* No side rail — identity comes from the accent-tinted wash + hairline and
-     the bright H-mark. A faint gold border reads as "AMICO" without a bar. */
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 22%, var(--v2-border-border-base));
+  /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
+  border: 1px solid var(--v2-border-border-base);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 6%, var(--v2-background-bg-layer-01));
+  background: var(--v2-background-bg-layer-01);
   padding: 5px 9px 5px 10px;
   font-size: 12.5px;
   line-height: 17px;
@@ -84,11 +83,9 @@
   cursor: pointer;
 }
 [data-component="amicode-card"][data-clickable="true"]:hover {
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 11%, var(--v2-background-bg-layer-01));
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
-  box-shadow:
-    var(--v2-elevation-raised, 0 1px 2px rgba(0, 0, 0, 0.25)),
-    0 0 0 3px color-mix(in srgb, var(--v2-icon-icon-accent) 8%, transparent);
+  background: var(--v2-background-bg-layer-02);
+  border-color: var(--v2-border-border-strong);
+  box-shadow: var(--v2-elevation-raised, 0 1px 2px rgba(0, 0, 0, 0.25));
 }
 [data-component="amicode-card"][data-clickable="true"]:active {
   transform: translateY(0.5px);
@@ -209,7 +206,7 @@
 [data-component="amicode-entity-view"] {
   display: flex;
   flex-direction: column;
-  padding: 4px 4px 0;
+  padding: 4px 20px 20px;
   color: var(--v2-text-text-base);
 }
 
@@ -527,11 +524,10 @@
 [data-component="amicode-entity-rail"],
 [data-component="amicode-ask-card"],
 [data-component="amicode-run-window"] {
-  /* Same rail-free treatment as the receipt card: gold-tinted hairline + a
-     whisper of accent wash, so the whole AMICO family shares one identity. */
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-border-border-base));
+  /* Rail-free and tint-free: neutral hairline + surface across the AMICO family. */
+  border: 1px solid var(--v2-border-border-base);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 5%, var(--v2-background-bg-layer-01));
+  background: var(--v2-background-bg-layer-01);
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
 }
 
@@ -572,8 +568,8 @@
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 [data-component="amicode-run-window"]:hover {
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+  border-color: var(--v2-border-border-strong);
+  background: var(--v2-background-bg-layer-02);
 }
 
 /* ---- System hero (spec §6.1): schematic + table + Hamiltonian ---- */
