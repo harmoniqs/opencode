@@ -338,7 +338,7 @@ export function MessageTimeline(props: {
         <Dialog title={`AMICO · ${entityLabel(kind)}`} fit>
           {/* fit-to-content goes near-fullscreen on run entities (long paths +
               history) — cap the panel and let it scroll internally instead */}
-          <div style={{ width: "min(680px, 90vw)", "max-height": "68vh", "overflow-y": "auto" }}>
+          <div style={{ width: "100%", "max-height": "68vh", "overflow-y": "auto" }}>
             <AmicodeEntityView
               view={problemView()}
               kind={kind}
@@ -362,17 +362,19 @@ export function MessageTimeline(props: {
     dialog.show(
       () => (
         <Dialog title={language.t("amicode.problems.title")} fit>
-          <AmicodeProblemSwitcher
-            view={problemsView()}
-            onStartPrompt={(text) => {
-              dialog.close()
-              startPrompt(prompt, text)
-            }}
-            onRetry={() => void refetchProblems()}
-            retryLabel={language.t("amicode.retry")}
-            openLabel={language.t("amicode.problems.open")}
-            newLabel={language.t("amicode.problems.new")}
-          />
+          <div style={{ width: "100%", "max-height": "68vh", "overflow-y": "auto" }}>
+            <AmicodeProblemSwitcher
+              view={problemsView()}
+              onStartPrompt={(text) => {
+                dialog.close()
+                startPrompt(prompt, text)
+              }}
+              onRetry={() => void refetchProblems()}
+              retryLabel={language.t("amicode.retry")}
+              openLabel={language.t("amicode.problems.open")}
+              newLabel={language.t("amicode.problems.new")}
+            />
+          </div>
         </Dialog>
       ),
       () => setSwitcherOpen(false),

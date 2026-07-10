@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from "solid-js"
+import { DateTime } from "luxon"
 import type { ProblemsView } from "./problem"
 
 // AMICODE ring-2 problem switcher (spec B): dialog BODY opened from the rail's
@@ -7,6 +8,12 @@ import type { ProblemsView } from "./problem"
 // WRITE-FREE: "Open" and "New problem" are startPrompt SUBMIT handoffs — the
 // agent calls amicode_problem, which moves the active pointer (all writes
 // through ring 0). Presentation-only; the app owns fetching + the Dialog.
+
+// Raw ISO recorded-at → relative ("2 hours ago"); falls back to the raw string.
+function relTime(iso: string): string {
+  const dt = DateTime.fromISO(iso)
+  return dt.isValid ? (dt.toRelative() ?? iso) : iso
+}
 
 export function AmicodeProblemSwitcher(props: {
   view: ProblemsView | undefined // undefined → loading skeleton
@@ -22,7 +29,7 @@ export function AmicodeProblemSwitcher(props: {
   })
 
   return (
-    <div class="flex flex-col gap-2 pl-6 pr-2.5 pb-3" data-component="amicode-problem-switcher">
+    <div class="flex flex-col gap-2 px-5 pt-1 pb-3" data-component="amicode-problem-switcher">
       <Show
         when={props.view}
         fallback={<div class="h-8 rounded-md bg-surface-raised-base animate-pulse" aria-hidden />}
@@ -70,7 +77,7 @@ export function AmicodeProblemSwitcher(props: {
                   <div class="flex-1" />
                   <span class="text-12-regular text-text-weak shrink-0">{problem.entityKinds.length} entities</span>
                   <Show when={problem.recorded}>
-                    <span class="text-11-regular text-text-weaker shrink-0">{problem.recorded}</span>
+                    <span class="text-11-regular text-text-weaker shrink-0">{relTime(problem.recorded ?? "")}</span>
                   </Show>
                   <button
                     type="button"
