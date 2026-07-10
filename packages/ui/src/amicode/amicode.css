@@ -642,3 +642,22 @@
   padding: 2px 0; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 45%, transparent);
 }
 [data-component="amicode-formulation-view"] .amc-solve { font-size: 0.82rem; color: var(--v2-text-text-muted); font-variant-numeric: tabular-nums; }
+
+/* ---- overflow hardening: keep the entity-view dialog from bleeding past its
+   width. Grid/flex children default to min-width:auto (content-based), so a long
+   value (history notes, params) forces the content wider than the dialog and
+   clips the right edge (timestamps). Let children shrink + wrap long values. ---- */
+[data-component="amicode-entity-view"] { min-width: 0; max-width: 100%; }
+[data-component="amicode-entity-view"] .amc-event .summary,
+[data-component="amicode-entity-view"] .amc-event .summary .v { overflow-wrap: anywhere; min-width: 0; }
+[data-component="amicode-system-view"] .amc-systbl-row > * { min-width: 0; }
+[data-component="amicode-system-view"] .amc-c-params,
+[data-component="amicode-system-view"] .amc-loose,
+[data-component="amicode-formulation-view"] .amc-obj-latex,
+[data-component="amicode-formulation-view"] .amc-obj-term,
+[data-component="amicode-formulation-view"] .amc-constraint,
+[data-component="amicode-formulation-view"] .amc-solve { overflow-wrap: anywhere; min-width: 0; }
+[data-component="amicode-system-view"] .amc-schematic,
+[data-component="amicode-formulation-view"] .amc-modebar { max-width: 100%; }
+[data-component="amicode-system-view"] .amc-ev-formula,
+[data-component="amicode-formulation-view"] .amc-obj-latex { overflow-x: auto; }
