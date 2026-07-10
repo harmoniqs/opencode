@@ -604,13 +604,26 @@ export function AssistantParts(props: {
 
   const last = createMemo(() => grouped().at(-1)?.key)
 
+  // amicode: does this turn already carry an amicode_* tool card? Those cards
+  // (card.tsx) render their OWN AMICO signature, so a turn-level one would
+  // double up. The turn-level signature exists precisely for the OTHER case —
+  // plain prose replies, which otherwise show no Amico identity at all.
+  const hasAmicodeCard = createMemo(() =>
+    props.messages.some((message) =>
+      list(data.store.part?.[message.id], emptyParts).some(
+        (p) => p.type === "tool" && /^amicode_/.test((p as ToolPart).tool ?? ""),
+      ),
+    ),
+  )
+
   return (
     <>
-      {/* amicode: the AMICO signature heads EVERY assistant turn, not just the
-          interview receipt cards — the brand identity shouldn't vanish in plain
-          chat. Shown once the turn has renderable parts; running-state animates
-          the mark. Styling is Kate's restyle (amc-sig/amc-wordmark), untouched. */}
-      <Show when={grouped().length > 0}>
+      {/* amicode: the AMICO signature heads assistant turns so the brand
+          identity doesn't vanish in plain chat (it only lived on interview
+          receipt cards before). Suppressed when a turn already has an
+          amicode_* card — that card brings its own signature. Kate's restyle
+          (amc-sig/amc-wordmark) is reused untouched. */}
+      <Show when={grouped().length > 0 && !hasAmicodeCard()}>
         <span class="amc-sig" data-slot="amicode-turn-signature">
           <AmicoMark running={props.working && last() === grouped().at(-1)?.key} />
           <span class="amc-wordmark">AMICO</span>
