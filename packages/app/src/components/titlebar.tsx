@@ -491,8 +491,10 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                               }}
                               onClose={() => tabsStoreActions.removeTab(i())}
                               onCloseOthers={() => tabsStoreActions.closeOthers(i())}
+                              onCloseLeft={() => tabsStoreActions.closeToLeft(i())}
                               onCloseRight={() => tabsStoreActions.closeToRight(i())}
                               canCloseOthers={tabsStore.length > 1}
+                              canCloseLeft={i() > 0}
                               canCloseRight={i() < tabsStore.length - 1}
                               active={currentTab() === tab}
                               activeServer={tab.server === server.key}
@@ -771,8 +773,10 @@ function TabNavItem(props: {
   hideClose?: boolean
   onClose: () => void
   onCloseOthers: () => void
+  onCloseLeft: () => void
   onCloseRight: () => void
   canCloseOthers: boolean
+  canCloseLeft: boolean
   canCloseRight: boolean
   onNavigate: () => void
   active?: boolean
@@ -871,6 +875,9 @@ function TabNavItem(props: {
           </ContextMenu.Item>
           <ContextMenu.Item disabled={!props.canCloseOthers} onSelect={() => props.onCloseOthers()}>
             <ContextMenu.ItemLabel>{language.t("common.closeOtherTabs")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+          <ContextMenu.Item disabled={!props.canCloseLeft} onSelect={() => props.onCloseLeft()}>
+            <ContextMenu.ItemLabel>{language.t("common.closeTabsToLeft")}</ContextMenu.ItemLabel>
           </ContextMenu.Item>
           <ContextMenu.Item disabled={!props.canCloseRight} onSelect={() => props.onCloseRight()}>
             <ContextMenu.ItemLabel>{language.t("common.closeTabsToRight")}</ContextMenu.ItemLabel>

@@ -262,6 +262,24 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         })
         for (const draftID of draftIDs) removeDraftPersisted(draftID)
       },
+      // Close all tabs before `index`. Re-navigate to the anchor only if the
+      // active tab was one of the removed (mirrors editor "close to the left").
+      closeToLeft: (index: number) => {
+        const anchor = store[index]
+        if (!anchor || index <= 0) return
+        const draftIDs = store.slice(0, index).flatMap((tab) => (tab.type === "draft" ? [tab.draftID] : []))
+        const active = currentTabIndex()
+        const removedActive = active >= 0 && active < index
+        void startTransition(() => {
+          setStore(
+            produce((tabs) => {
+              tabs.splice(0, index)
+            }),
+          )
+          if (removedActive) navigateTab(anchor)
+        })
+        for (const draftID of draftIDs) removeDraftPersisted(draftID)
+      },
     }
 
     return { ...actions, store, ready }

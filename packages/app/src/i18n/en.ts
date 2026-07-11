@@ -723,6 +723,7 @@ export const dict = {
 
   "common.closeTab": "Close tab",
   "common.closeOtherTabs": "Close other tabs",
+  "common.closeTabsToLeft": "Close tabs to the left",
   "common.closeTabsToRight": "Close tabs to the right",
   "common.dismiss": "Dismiss",
   "common.moreCountSuffix": " (+{{count}} more)",
