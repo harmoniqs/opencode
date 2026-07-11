@@ -6,7 +6,7 @@
 // every field, drop non-conforming array entries, never throw. JSX-free so it
 // is directly testable under `bun test`.
 import { entityLabel } from "./receipt"
-import { compactValue } from "./facets"
+import { compactValue, formatSci } from "./facets"
 
 // --- view types --------------------------------------------------------------
 
@@ -187,7 +187,7 @@ export function chipText(kind: string, entity: Record<string, unknown>): string 
     const parts = [
       str(entity.platform),
       typeof entity.levels === "number" ? `${entity.levels} lvl` : undefined,
-      typeof params.drive_max === "number" ? `cap ${params.drive_max}` : undefined,
+      typeof params.drive_max === "number" ? `cap ${formatSci(params.drive_max)}` : undefined,
     ].filter((p): p is string => Boolean(p))
     return parts.length > 0 ? parts.join(" · ") : undefined
   }
@@ -358,7 +358,7 @@ export function compositeChip(entity: Record<string, unknown>): string | undefin
     const c = components[0]
     if (typeof c.levels === "number") parts.push(`${c.levels} lvl`)
     const params = (typeof c.params === "object" && c.params !== null ? c.params : {}) as Record<string, unknown>
-    if (typeof params.drive_max === "number") parts.push(`cap ${params.drive_max}`)
+    if (typeof params.drive_max === "number") parts.push(`cap ${formatSci(params.drive_max)}`)
   } else if (components.length > 1) {
     const roles = new Set(components.map((c) => str(c.role)).filter(Boolean))
     parts.push(roles.size === 1 ? `${components.length}×${[...roles][0]}` : `${components.length} comps`)

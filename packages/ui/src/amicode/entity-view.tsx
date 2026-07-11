@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js"
+import { For, Show, createMemo, createSignal } from "solid-js"
 import { AmicoMark } from "./spinner"
 import { receiptParts } from "./receipt"
 import { type ProblemView, editPromptText, entityRows, fieldGroup, formatTs, historyRows, humanizeKey } from "./problem"
@@ -24,6 +24,11 @@ import { FormulationView } from "./formulation-view"
 
 type DiffPiece = { key: string; from?: string; to?: string }
 
+// Freeform `notes` are long prose paragraphs — pure noise in a one-line history
+// diff. Drop them from the event pieces (they live in the current fields, not
+// the change log).
+const isNotesKey = (key: string) => key === "notes" || key.endsWith(".notes")
+
 // One event's change list, keys humanized, rendered as discrete pieces. Empty
 // diff → the bare action (e.g. "Created").
 function eventPieces(
@@ -32,13 +37,15 @@ function eventPieces(
   diff?: Record<string, { from: unknown; to: unknown }>,
 ): DiffPiece[] {
   const { changes } = receiptParts({ problem: "", entity, action, diff: diff ?? {} })
-  return changes.map((change) =>
-    change.kind === "elision"
-      ? { key: "…" }
-      : change.kind === "set"
-        ? { key: humanizeKey(change.key), to: change.to }
-        : { key: humanizeKey(change.key), from: change.from, to: change.to },
-  )
+  return changes
+    .filter((change) => change.kind === "elision" || !isNotesKey(change.key))
+    .map((change) =>
+      change.kind === "elision"
+        ? { key: "…" }
+        : change.kind === "set"
+          ? { key: humanizeKey(change.key), to: change.to }
+          : { key: humanizeKey(change.key), from: change.from, to: change.to },
+    )
 }
 
 export function AmicodeEntityView(props: {
@@ -93,6 +100,21 @@ export function AmicodeEntityView(props: {
     })
   })
   const latestTs = createMemo(() => history()[0]?.ts)
+  // History is collapsed by default (it was the card's biggest noise source) —
+  // but auto-expand when the view was opened from a specific diff (anchorSeq),
+  // so "jump to the change I clicked" still works.
+  const [showHistory, setShowHistory] = createSignal(props.anchorSeq !== undefined)
+  const historySummary = createMemo(() => {
+    const events = history()
+    const n = events.length
+    if (n === 0) return ""
+    const created = events[n - 1]?.ts
+    const latest = events[0]?.ts
+    if (n === 1) return created ? `Set ${formatTs(created)}` : "1 update"
+    const setPart = created ? `Set ${formatTs(created)}` : ""
+    const lastPart = latest ? `last changed ${formatTs(latest)}` : ""
+    return [setPart, lastPart, `${n} updates`].filter(Boolean).join(" · ")
+  })
   const runTier = createMemo(() => {
     if (props.kind !== "run" || !props.view) return undefined
     const refs = props.view.runs
@@ -188,7 +210,21 @@ export function AmicodeEntityView(props: {
             </Show>
 
             <Show when={history().length > 0}>
-              <div class="amc-ev-sec">History</div>
+              <div class="amc-ev-hist-head">
+                <span class="amc-ev-hist-summary" data-slot="amicode-entity-history-summary">
+                  {historySummary()}
+                </span>
+                <button
+                  type="button"
+                  class="amc-ev-hist-toggle"
+                  data-slot="amicode-entity-history-toggle"
+                  aria-expanded={showHistory()}
+                  onClick={() => setShowHistory((value) => !value)}
+                >
+                  {showHistory() ? "Hide history" : "Show history"}
+                </button>
+              </div>
+              <Show when={showHistory()}>
               <div class="amc-timeline" data-slot="amicode-entity-history">
                 <For each={history()}>
                   {(event) => (
@@ -202,9 +238,6 @@ export function AmicodeEntityView(props: {
                     >
                       <div class="erow">
                         <span class="seq">#{event.seq}</span>
-                        <Show when={event.source?.tool ?? event.source?.stage}>
-                          {(source) => <span class="src">{source()}</span>}
-                        </Show>
                         <Show when={event.ts}>{(ts) => <span class="when">{formatTs(ts())}</span>}</Show>
                       </div>
                       <div class="summary">
@@ -239,6 +272,7 @@ export function AmicodeEntityView(props: {
                   )}
                 </For>
               </div>
+              </Show>
             </Show>
 
             <div class="amc-ev-foot">

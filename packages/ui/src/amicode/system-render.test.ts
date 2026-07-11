@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test"
 import { systemProjection } from "./problem"
-import { systemSchematicModel, systemTableModel, systemHamiltonianLatex } from "./system-render"
+import { systemSchematicModel, systemTableModel, systemHamiltonianLatex, systemIdentityLine } from "./system-render"
 
 const twoTransmon = {
   platform: "transmon",
@@ -120,5 +120,30 @@ describe("systemTableModel", () => {
     expect(t.components[0]).toMatchObject({ id: "q1", role: "qubit", levels: 3 })
     expect(t.components[0].params).toMatchObject({ omega: 4.0, delta: -0.2 })
     expect(t.couplings[0]).toMatchObject({ between: ["q1", "q2"], kind: "ZZ" })
+  })
+})
+
+describe("systemIdentityLine", () => {
+  it("summarizes platform · N role(s) × levels · arch", () => {
+    expect(systemIdentityLine(systemProjection(twoTransmon))).toBe(
+      "transmon · 2 qubits × 3 levels · per-component drive",
+    )
+  })
+  it("singular role + global drive for a legacy flat rydberg (N=1)", () => {
+    const p = systemProjection({ platform: "rydberg", levels: 3, params: {} })
+    expect(systemIdentityLine(p)).toBe("rydberg · 1 atom × 3 levels · global drive")
+  })
+  it("omits the levels segment when components disagree", () => {
+    const p = systemProjection({
+      platform: "transmon",
+      drive: { arch: "global" },
+      components: [
+        { id: "q1", role: "qubit", levels: 3, params: {} },
+        { id: "c1", role: "cavity", levels: 10, params: {} },
+      ],
+      couplings: [],
+    })
+    // mixed roles → "component", mixed levels → no "× L levels"
+    expect(systemIdentityLine(p)).toBe("transmon · 2 components · global drive")
   })
 })

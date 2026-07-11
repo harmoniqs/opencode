@@ -361,9 +361,40 @@
   opacity: 1;
 }
 
+/* Collapsed-by-default provenance: one summary line + a show/hide toggle. */
+[data-component="amicode-entity-view"] .amc-ev-hist-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 4px 0;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--v2-text-text-faint);
+  overflow-wrap: anywhere;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--v2-text-text-accent);
+  cursor: pointer;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
+  outline: 2px solid var(--v2-icon-icon-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 [data-component="amicode-entity-view"] .amc-timeline {
   display: flex;
   flex-direction: column;
+  margin-top: 8px;
   margin-left: 6px;
   padding-left: 2px;
   border-left: 1.5px solid var(--v2-border-border-muted);
@@ -572,8 +603,14 @@
   background: var(--v2-background-bg-layer-02);
 }
 
-/* ---- System hero (spec §6.1): schematic + table + Hamiltonian ---- */
+/* ---- System hero (spec §6.1): identity + schematic + table + Hamiltonian ---- */
 [data-component="amicode-system-view"] { display: flex; flex-direction: column; gap: 12px; }
+[data-component="amicode-system-view"] .amc-sys-identity {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--v2-text-text-base);
+  padding: 2px 4px 0;
+}
 [data-component="amicode-system-view"] .amc-schematic {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 4px;
 }

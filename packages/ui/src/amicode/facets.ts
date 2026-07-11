@@ -1,6 +1,19 @@
 // facets.ts — pure, dependency-free rendering helpers for the amicode entity
 // visualization language (spec-20260709 §4). No SolidJS, no imports.
 
+/** Physicists' number formatter for display. Drive/detuning bounds are integer
+ *  multiples of π, so 125.66370614359172 → "40π", 62.83… → "20π"; other values
+ *  trim to ~4 significant figures with trailing zeros dropped (0.2 → "0.2",
+ *  28.9 → "28.9"). Keeps the full float out of chips, tables, and history. */
+export function formatSci(value: number): string {
+  if (!Number.isFinite(value)) return String(value)
+  if (value === 0) return "0"
+  const ratio = value / Math.PI
+  const n = Math.round(ratio)
+  if (n !== 0 && Math.abs(ratio - n) < 1e-6) return n === 1 ? "π" : n === -1 ? "-π" : `${n}π`
+  return String(Number(value.toPrecision(4)))
+}
+
 /** Array/object-aware compact renderer. Replaces the JSON.stringify branch that
  *  the old short()/shortValue() used, so a components[]/constraints[] value never
  *  becomes a raw blob. Scalars pass through; arrays → "N items" (+ head id/kind if

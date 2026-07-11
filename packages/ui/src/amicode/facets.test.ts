@@ -1,7 +1,26 @@
 import { describe, it, expect } from "bun:test"
-import { compactValue, setDiff, modeBadges, systemReceiptPieces, formulationReceiptPieces } from "./facets"
+import { compactValue, setDiff, modeBadges, systemReceiptPieces, formulationReceiptPieces, formatSci } from "./facets"
 
 const byKind = (t: { kind: string; label?: string }, i: number) => `${t.kind}:${t.label ?? i}`
+
+describe("formatSci", () => {
+  it("renders integer π-multiples as Nπ (drive/detuning bounds)", () => {
+    expect(formatSci(125.66370614359172)).toBe("40π") // 40π
+    expect(formatSci(62.83185307179586)).toBe("20π") // 20π
+    expect(formatSci(Math.PI)).toBe("π")
+    expect(formatSci(-Math.PI)).toBe("-π")
+  })
+  it("trims non-π values to ~4 significant figures", () => {
+    expect(formatSci(0.2)).toBe("0.2")
+    expect(formatSci(28.9)).toBe("28.9")
+    expect(formatSci(0.005)).toBe("0.005")
+    expect(formatSci(4.83729)).toBe("4.837")
+  })
+  it("handles 0 and non-finite defensively", () => {
+    expect(formatSci(0)).toBe("0")
+    expect(formatSci(NaN)).toBe("NaN")
+  })
+})
 
 describe("compactValue", () => {
   it("passes scalars through unchanged", () => {

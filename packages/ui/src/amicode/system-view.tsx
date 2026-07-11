@@ -1,7 +1,14 @@
 import { For, Show, createMemo } from "solid-js"
 import katex from "katex"
 import { systemProjection } from "./problem"
-import { systemSchematicModel, systemTableModel, systemHamiltonianLatex, type SchematicModel } from "./system-render"
+import { formatSci } from "./facets"
+import {
+  systemSchematicModel,
+  systemTableModel,
+  systemHamiltonianLatex,
+  systemIdentityLine,
+  type SchematicModel,
+} from "./system-render"
 
 // AMICODE System hero (spec §6.1 / plan Task 5): schematic (nodes + coupling
 // edges) + component/coupling table + Hamiltonian LaTeX. Thin — all logic is in
@@ -18,9 +25,12 @@ const PARAM_SYMBOL: Record<string, string> = {
   drive_max: "|u|",
   du_bound: "|u̇|",
 }
+// Drop unset (zero) params — "ω 0 · δ 0" is noise — and format the rest with
+// the π-aware formatter so a drive bound reads "|u| 40π", not "|u| 125.66…".
 const paramsText = (params: Record<string, number>): string =>
   Object.entries(params)
-    .map(([k, v]) => `${PARAM_SYMBOL[k] ?? k} ${v}`)
+    .filter(([, v]) => typeof v === "number" && v !== 0)
+    .map(([k, v]) => `${PARAM_SYMBOL[k] ?? k} ${formatSci(v)}`)
     .join(" · ")
 
 const edgeLabel = (schem: SchematicModel, a: string, b: string): string | undefined =>
@@ -35,8 +45,15 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
     return latex ? katex.renderToString(latex, { throwOnError: false }) : undefined
   })
 
+  const identity = createMemo(() => systemIdentityLine(proj()))
+
   return (
     <div class="amc-system" data-component="amicode-system-view">
+      <Show when={identity()}>
+        <div class="amc-sys-identity" data-slot="amicode-system-identity">
+          {identity()}
+        </div>
+      </Show>
       <div class="amc-schematic" data-slot="amicode-system-schematic">
         <For each={schem().nodes}>
           {(node, i) => (

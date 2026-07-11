@@ -3,6 +3,25 @@
 // no SolidJS. Never throws.
 import { systemProjection, type SystemProjection } from "./problem"
 
+/** One-line "what is this system" identity: platform · N role(s) × L levels ·
+ *  <arch> drive. e.g. "rydberg · 2 atoms × 3 levels · global drive". Collapses
+ *  the schematic+table into a scannable header line. Never throws. */
+export function systemIdentityLine(proj: SystemProjection): string {
+  const parts: string[] = []
+  if (proj.platform) parts.push(proj.platform)
+  const comps = proj.components ?? []
+  if (comps.length > 0) {
+    const roles = new Set(comps.map((c) => c.role))
+    const levels = new Set(comps.map((c) => c.levels).filter((l): l is number => typeof l === "number"))
+    const role = roles.size === 1 ? [...roles][0] : "component"
+    let seg = `${comps.length} ${comps.length === 1 ? role : `${role}s`}`
+    if (levels.size === 1) seg += ` × ${[...levels][0]} levels`
+    parts.push(seg)
+  }
+  if (proj.driveArch) parts.push(`${proj.driveArch} drive`)
+  return parts.join(" · ")
+}
+
 export type SchematicNode = { id: string; label: string; levels?: number }
 export type SchematicEdge = { a: string; b: string; label: string }
 export type SchematicModel = {
