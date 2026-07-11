@@ -26,6 +26,28 @@ function heal(text: string) {
   return remend(text, { linkMode: "text-only" })
 }
 
+// marked-katex only tokenizes $$…$$ display math in two shapes: all on one line
+// (its inline rule's body class [^\\\n] forbids newlines) or with the $$ alone
+// on their own lines (its block rule needs ^$$\n … \n$$). LLMs routinely emit a
+// third shape — `label: $$\n…\n$$`, opening mid-line with a multi-line body —
+// which matches NEITHER, so the span falls through to markdown, which then eats
+// the LaTeX backslash-escapes (\; → ;, \! → !, \text → text) and renders a raw,
+// mangled `$$ … $$`. Normalize every complete display-math span onto its own
+// block lines so the block rule always matches. Fenced/inline code is skipped
+// so LaTeX shown as code stays literal; an unclosed trailing `$$` (mid-stream)
+// has no match and is left untouched until its closer arrives.
+export function normalizeDisplayMath(text: string): string {
+  const codePattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g
+  return text
+    .split(codePattern)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part.replace(/\$\$([\s\S]*?)\$\$/g, (_match, body: string) => `\n\n$$\n${body.trim()}\n$$\n\n`),
+    )
+    .join("")
+}
+
 export function stream(text: string, live: boolean) {
   if (!live) return [{ raw: text, src: text, mode: "full" }] satisfies Block[]
   const src = heal(text)
