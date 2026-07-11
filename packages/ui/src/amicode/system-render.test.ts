@@ -69,6 +69,48 @@ describe("systemHamiltonianLatex", () => {
   it("returns undefined for a system with no components", () => {
     expect(systemHamiltonianLatex(systemProjection({ platform: "x", components: [], couplings: [] }))).toBeUndefined()
   })
+  it("rydberg atom → Rabi drive on |1⟩↔|r⟩, NO bosonic quadrature drive", () => {
+    const rydberg = {
+      platform: "rydberg",
+      drive: { arch: "global" },
+      components: [{ id: "q1", role: "atom", levels: 3, params: {} }],
+      couplings: [],
+    }
+    const h = systemHamiltonianLatex(systemProjection(rydberg))!
+    expect(h).toContain("-\\Delta\\,|r\\rangle\\langle r|") // detuning on the Rydberg level, not -Δ n̂
+    expect(h).toContain("\\Omega(t)") // laser Rabi drive
+    expect(h).toContain("|r\\rangle\\langle 1|")
+    expect(h).not.toContain("\\varepsilon(t)") // no cavity-style drive on a bare atom
+    expect(h).not.toContain("\\hat a") // no bosonic ladder operators at all
+  })
+  it("two rydberg atoms + vdW → single deduped drift/drive pair + blockade term", () => {
+    const pair = {
+      platform: "rydberg",
+      drive: { arch: "global" },
+      components: [
+        { id: "q1", role: "atom", levels: 3, params: {} },
+        { id: "q2", role: "atom", levels: 3, params: {} },
+      ],
+      couplings: [{ between: ["q1", "q2"], kind: "vdW", params: {} }],
+    }
+    const h = systemHamiltonianLatex(systemProjection(pair))!
+    expect(h).toContain("C_6") // blockade interaction
+    expect(h.split("\\Omega(t)")).toHaveLength(2) // drive appears exactly once
+  })
+  it("mixed atom + cavity → both drive flavors", () => {
+    const mixed = {
+      platform: "hybrid",
+      drive: { arch: "per-component" },
+      components: [
+        { id: "q1", role: "atom", levels: 3, params: {} },
+        { id: "c1", role: "cavity", levels: 10, params: {} },
+      ],
+      couplings: [],
+    }
+    const h = systemHamiltonianLatex(systemProjection(mixed))!
+    expect(h).toContain("\\Omega(t)")
+    expect(h).toContain("\\varepsilon(t)")
+  })
 })
 
 describe("systemTableModel", () => {

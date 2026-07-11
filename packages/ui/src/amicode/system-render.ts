@@ -68,9 +68,21 @@ function driftTerm(role: string, params: Record<string, number>): string {
     case "mode":
       return anharmonic ? "\\omega_c\\,\\hat a^\\dagger \\hat a + \\tfrac{K}{2}\\,\\hat a^{\\dagger 2}\\hat a^2" : "\\omega_c\\,\\hat a^\\dagger \\hat a"
     case "atom":
-      return "-\\Delta\\,\\hat n"
+      return "-\\Delta\\,|r\\rangle\\langle r|"
     default:
       return "\\hat H_{\\mathrm{drift}}"
+  }
+}
+
+/** Drive term per component role. Atoms are laser-driven on the |1⟩↔|r⟩
+ *  transition (3-level Rydberg convention: |0⟩ dark); everything bosonic or
+ *  bosonic-truncated keeps the quadrature drive. */
+function driveTerm(role: string): string {
+  switch (role) {
+    case "atom":
+      return "\\tfrac{\\Omega(t)}{2}\\,(|r\\rangle\\langle 1| + \\mathrm{h.c.})"
+    default:
+      return "\\varepsilon(t)\\,(\\hat a + \\hat a^\\dagger)"
   }
 }
 
@@ -88,7 +100,13 @@ export function systemHamiltonianLatex(proj: SystemProjection): string | undefin
     if (t && !seen.has(cp.kind)) { seen.add(cp.kind); terms.push(t) }
   }
   if (terms.length === 0) return undefined
-  terms.push("\\varepsilon(t)\\,(\\hat a + \\hat a^\\dagger)")
+  for (const c of proj.components) {
+    const t = driveTerm(c.role)
+    if (!seen.has(t)) {
+      seen.add(t)
+      terms.push(t)
+    }
+  }
   return "\\hat H/\\hbar = " + terms.join(" + ")
 }
 
