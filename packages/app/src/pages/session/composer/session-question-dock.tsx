@@ -366,7 +366,12 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
       toggle(opt.label)
       return
     }
+    // Single-select: picking an option commits it — advance to the next
+    // question, or submit if this is the last one. No separate Submit click.
+    // (Multi-select above still accumulates toggles → manual Submit; the
+    // free-text "type your own" option opens its editor via customOpen instead.)
     pick(opt.label)
+    next()
   }
 
   const commitCustom = () => {
