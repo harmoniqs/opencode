@@ -46,6 +46,7 @@ import { ToolErrorCard } from "./tool-error-card"
 import { Checkbox } from "./checkbox"
 import { DiffChanges } from "./diff-changes"
 import { Markdown } from "./markdown"
+import { skillBody } from "./message-part-skill"
 import { ImagePreview } from "./image-preview"
 import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/core/util/path"
 import { checksum } from "@opencode-ai/core/util/encode"
@@ -2503,6 +2504,7 @@ ToolRegistry.register({
     const i18n = useI18n()
     const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
     const running = createMemo(() => props.status === "pending" || props.status === "running")
+    const body = createMemo(() => skillBody(props.output))
 
     const titleContent = () => <TextShimmer text={title()} active={running()} />
 
@@ -2516,6 +2518,14 @@ ToolRegistry.register({
       </div>
     )
 
-    return <BasicTool icon="brain" status={props.status} trigger={trigger()} hideDetails />
+    return (
+      <BasicTool icon="brain" status={props.status} trigger={trigger()}>
+        <Show when={body()}>
+          <div data-component="tool-output" data-scrollable>
+            <Markdown text={body()} />
+          </div>
+        </Show>
+      </BasicTool>
+    )
   },
 })
