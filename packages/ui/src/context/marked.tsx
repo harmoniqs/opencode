@@ -6,6 +6,23 @@ import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
 
+// KaTeX ships no \Tr, \tr, braket, etc. — they are LaTeX packages (physics /
+// \DeclareMathOperator), not core TeX — so an assistant writing quantum-control
+// math ("\Tr(\rho)", "\ket{0}") produced red "undefined control sequence"
+// errors. Register the operators/notation as macros so chat math renders. This
+// is passed to every KaTeX call in this module (both manual renderToString and
+// the marked-katex extension).
+const KATEX_MACROS: Record<string, string> = {
+  "\\Tr": "\\operatorname{Tr}",
+  "\\tr": "\\operatorname{tr}",
+  "\\rank": "\\operatorname{rank}",
+  "\\diag": "\\operatorname{diag}",
+  "\\ket": "{\\left|#1\\right\\rangle}",
+  "\\bra": "{\\left\\langle#1\\right|}",
+  "\\braket": "{\\left\\langle#1\\right\\rangle}",
+  "\\ketbra": "{\\left|#1\\right\\rangle\\!\\left\\langle#2\\right|}",
+}
+
 registerCustomTheme("OpenCode", () => {
   return Promise.resolve({
     name: "OpenCode",
@@ -386,6 +403,7 @@ function renderMathInText(text: string): string {
       return katex.renderToString(math, {
         displayMode: true,
         throwOnError: false,
+        macros: KATEX_MACROS,
       })
     } catch {
       return `$$${math}$$`
@@ -399,6 +417,7 @@ function renderMathInText(text: string): string {
       return katex.renderToString(math, {
         displayMode: false,
         throwOnError: false,
+        macros: KATEX_MACROS,
       })
     } catch {
       return `$${math}$`
@@ -480,6 +499,7 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       markedKatex({
         throwOnError: false,
         nonStandard: true,
+        macros: KATEX_MACROS,
       }),
       markedShiki({
         async highlight(code, lang) {
