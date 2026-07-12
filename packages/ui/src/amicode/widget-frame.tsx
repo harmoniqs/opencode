@@ -32,6 +32,8 @@ export function WidgetFrame(props: {
   density: Density
   callbacks: WidgetHostCallbacks
   onHeight?: (h: number) => void
+  /** explicit empty-state (never inferred from height — hidden frames have no layout) */
+  onEmpty?: (empty: boolean) => void
 }) {
   const [error, setError] = createSignal<string | undefined>(undefined)
   const [height, setHeight] = createSignal<number>(props.widget.height)
@@ -67,9 +69,10 @@ export function WidgetFrame(props: {
         })
       },
       height: (h) => {
-        setHeight(h)
+        if (h > 0) setHeight(h)
         props.onHeight?.(h)
       },
+      empty: (empty) => props.onEmpty?.(empty),
       error: (message) => setError(message),
       post: postToFrame,
     })

@@ -30,7 +30,7 @@ export function WidgetGrid(props: {
 }) {
   const [editing, setEditing] = createSignal(false)
   const [configOpen, setConfigOpen] = createSignal<string | undefined>(undefined)
-  const [heights, setHeights] = createSignal<Record<string, number>>({})
+  const [empties, setEmpties] = createSignal<Record<string, boolean>>({})
 
   const infoFor = (id: string) => props.widgets.find((w) => w.id === id)
   const visible = createMemo(() => props.dashboard.widget.filter((e) => !e.hidden))
@@ -79,7 +79,7 @@ export function WidgetGrid(props: {
 
   const Cell = (p: { entry: DashboardEntry }) => {
     const info = createMemo(() => infoFor(p.entry.id))
-    const empty = createMemo(() => (heights()[p.entry.key] ?? -1) === 0)
+    const empty = createMemo(() => empties()[p.entry.key] === true)
     return (
       <Show
         when={info()}
@@ -154,7 +154,7 @@ export function WidgetGrid(props: {
                 tokens={props.tokens}
                 density={props.density}
                 callbacks={props.callbacks}
-                onHeight={(h) => setHeights((prev) => ({ ...prev, [p.entry.key]: h }))}
+                onEmpty={(e) => setEmpties((prev) => ({ ...prev, [p.entry.key]: e }))}
               />
             </Show>
           </div>

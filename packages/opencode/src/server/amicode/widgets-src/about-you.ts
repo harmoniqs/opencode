@@ -247,7 +247,12 @@ export default {
     amico.fetch('/amicode/profile').then(function (data) {
       profile = data
       render()
-    }).catch(function () {})
+    }).catch(function (e) {
+      // a hero card must never fail invisibly — show the reason
+      el.innerHTML =
+        '<div style="border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad);font-size:11px;color:var(--amc-text-muted)">' +
+        'About you: profile unavailable (' + String(e && e.message ? e.message : e) + ')</div>'
+    })
     amico.onConfig(function () { render() })
   },
 }

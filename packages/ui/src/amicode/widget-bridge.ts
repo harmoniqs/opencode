@@ -10,6 +10,7 @@ export const HOST_BRIDGE_VERSION = 1
 export type FrameMessage =
   | { t: "amc:ready" }
   | { t: "amc:height"; h: number }
+  | { t: "amc:empty"; empty: boolean }
   | { t: "amc:fetch"; id: number; path: unknown }
   | { t: "amc:action"; id: number; verb: unknown; payload?: unknown }
   | { t: "amc:prompt"; text: string }
@@ -25,6 +26,8 @@ export interface BridgeDeps {
   open: (entity: string) => void
   ready: () => void
   height: (h: number) => void
+  /** explicit empty-state signal (MutationObserver-driven; layout-independent) */
+  empty: (empty: boolean) => void
   error: (message: string) => void
   /** post amc:result back into the frame */
   post: (msg: { t: "amc:result"; id: number; ok: boolean; data?: unknown; error?: string }) => void
@@ -41,6 +44,9 @@ export async function handleWidgetMessage(raw: unknown, deps: BridgeDeps): Promi
       return
     case "amc:height":
       if (typeof msg.h === "number" && Number.isFinite(msg.h) && msg.h >= 0) deps.height(msg.h)
+      return
+    case "amc:empty":
+      if (typeof msg.empty === "boolean") deps.empty(msg.empty)
       return
     case "amc:prompt":
       if (typeof msg.text === "string") deps.prompt(msg.text)

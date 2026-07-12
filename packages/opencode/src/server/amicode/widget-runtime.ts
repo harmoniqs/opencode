@@ -111,10 +111,30 @@ export const RUNTIME_JS = `
             throw new Error('widget module must export default { mount }')
           var root = document.getElementById('amc-root')
           mod.default.mount(root, amico)
+          // Emptiness is an EXPLICIT signal, not inferred from height: a
+          // hidden (display:none) frame has no layout, so ResizeObserver
+          // stays silent and a height-based hide can never un-hide — the
+          // empty-state deadlock. MutationObserver fires regardless of
+          // layout: content arriving in a hidden frame un-hides the cell,
+          // layout starts, and the ResizeObserver takes over for sizing.
+          var isEmpty = function () {
+            return root.childElementCount === 0 && (root.textContent || '').trim() === ''
+          }
+          var lastEmpty = null
+          var postEmpty = function () {
+            var e = isEmpty()
+            if (e !== lastEmpty) {
+              lastEmpty = e
+              post({ t: 'amc:empty', empty: e })
+            }
+          }
+          var mo = new MutationObserver(postEmpty)
+          mo.observe(root, { childList: true, subtree: true, characterData: true })
           var ro = new ResizeObserver(function () {
             post({ t: 'amc:height', h: Math.ceil(root.getBoundingClientRect().height) })
           })
           ro.observe(root)
+          postEmpty()
           post({ t: 'amc:height', h: Math.ceil(root.getBoundingClientRect().height) })
         })
         .catch(function (e) {
