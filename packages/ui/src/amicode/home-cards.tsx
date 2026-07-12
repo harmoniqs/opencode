@@ -902,13 +902,12 @@ function AboutYouCard(props: {
               <div
                 style={{
                   display: "grid",
-                  "grid-template-columns": "repeat(4, minmax(0, 1fr))",
+                  "grid-template-columns": "repeat(3, minmax(0, 1fr))",
                   gap: "8px",
                 }}
               >
                 <Stat value={String(y().stats.problems)} label="problems" />
                 <Stat value={String(y().stats.runs)} label="runs" />
-                <Stat value={fidelity(y().stats.best_fidelity)} label="best F" />
                 <Stat value={String(y().stats.banked)} label="banked" />
               </div>
 
@@ -1224,9 +1223,6 @@ export function AmicodeHomeCards(props: {
           <ActionCard eyebrow="Pulse bank" slot="amicode-card-bank" onClick={props.onWarmStart}>
             <div style={CARD_TITLE}>
               {stats()!.banked} pulse{stats()!.banked === 1 ? "" : "s"} banked
-            </div>
-            <div style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
-              best F {fidelity(stats()!.best_fidelity)}
             </div>
             <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
               Warm-start →
