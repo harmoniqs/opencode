@@ -1,4 +1,5 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
+import { ThinkingLine } from "../amicode/thinking-line"
 import {
   Component,
   createEffect,
@@ -628,6 +629,13 @@ export function AssistantParts(props: {
         <span class="amc-sig" data-slot="amicode-turn-signature">
           <AmicoMark running={props.working && last() === grouped().at(-1)?.key} />
           <span class="amc-wordmark">AMICO</span>
+          {/* amicode: while this (last) turn is still streaming, the H-mark
+              pulses AND a Claude-Code-esque thinking line rides alongside —
+              cycling shimmer word + live elapsed. Hidden the moment working
+              flips false or a newer group arrives. */}
+          <Show when={props.working && last() === grouped().at(-1)?.key}>
+            <ThinkingLine />
+          </Show>
         </span>
       </Show>
       <Index each={grouped()}>
