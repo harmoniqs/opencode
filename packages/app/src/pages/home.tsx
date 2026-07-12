@@ -324,6 +324,9 @@ function HomeDesign() {
       iteration: run?.iteration ?? solving.iteration,
       fidelity: derivedF,
       series,
+      // pulse-first sparkline: the tile shows the artifact once a snapshot streams
+      pulse: run?.pulse?.values,
+      drives: run?.pulseMeta?.drives,
     }
   })
   createEffect(() => {
