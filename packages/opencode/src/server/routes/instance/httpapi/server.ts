@@ -60,6 +60,8 @@ import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors
 import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeProblems from "@/server/amicode/problems"
+import * as AmicodeWidgets from "@/server/amicode/widgets"
+import * as AmicodeDashboard from "@/server/amicode/dashboard"
 import * as AmicodeLibrary from "@/server/amicode/library"
 import * as AmicodeProfile from "@/server/amicode/profile"
 import { ServerAuth } from "@/server/auth"
@@ -260,6 +262,47 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 
+// amicode: widget kernel data sources (spec T2.4) — registry, code serving,
+// fork, and dashboard layout state. Same raw-route idiom + auth as the
+// problems routes; body-builders live in amicode/widgets.ts + dashboard.ts.
+const amicodeWidgetsRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/amicode/widgets", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeWidgets.widgetsResponse(), { contentType: "application/json" }),
+      ),
+    )
+    yield* router.add("GET", "/amicode/widget-code", (request) =>
+      Effect.sync(() => {
+        const id = new URL(request.url, "http://localhost").searchParams.get("id") ?? undefined
+        return HttpServerResponse.text(AmicodeWidgets.widgetCodeResponse(id), { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("POST", "/amicode/widget-fork", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        return HttpServerResponse.text(AmicodeWidgets.forkWidgetResponse(body), { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("GET", "/amicode/dashboard", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeDashboard.dashboardResponse(AmicodeWidgets.loadRegistry().widgets), {
+          contentType: "application/json",
+        }),
+      ),
+    )
+    yield* router.add("POST", "/amicode/dashboard", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        return HttpServerResponse.text(
+          AmicodeDashboard.saveDashboardResponse(body, AmicodeWidgets.loadRegistry().widgets),
+          { contentType: "application/json" },
+        )
+      }),
+    )
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -290,6 +333,7 @@ export function createRoutes(
     docRoute,
     amicodeVaultsRoute,
     amicodeProblemsRoute,
+    amicodeWidgetsRoute,
     uiRoute,
   ).pipe(
     Layer.provide([

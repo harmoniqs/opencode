@@ -40,7 +40,9 @@ describe("parseManifest", () => {
     expect(m.bridge).toBe(1) // defaults
     expect(m.height).toBe(96)
     expect(m.config.stats.type).toBe("multi-select")
-    expect(m.config.plot.options).toEqual(["pulse", "objective"])
+    const plot = m.config.plot
+    expect(plot.type).toBe("select")
+    if (plot.type === "select") expect(plot.options).toEqual(["pulse", "objective"])
   })
 
   test("id must equal dirname", () => {
