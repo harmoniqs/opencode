@@ -1,0 +1,27 @@
+import { describe, expect, test } from "bun:test"
+import { densityFor, resolveTokens } from "./widget-tokens"
+
+describe("densityFor", () => {
+  test("boundaries match COMPACT_CSS (≤880 compact, ≤760 tight)", () => {
+    expect(densityFor(881)).toBe("normal")
+    expect(densityFor(880)).toBe("compact")
+    expect(densityFor(761)).toBe("compact")
+    expect(densityFor(760)).toBe("tight")
+    expect(densityFor(500)).toBe("tight")
+  })
+})
+
+describe("resolveTokens", () => {
+  test("maps resolved v2 values and falls back when empty", () => {
+    const tokens = resolveTokens((name) => (name === "--v2-text-text-base" ? " #fff " : ""), "normal")
+    expect(tokens["--amc-text"]).toBe("#fff")
+    expect(tokens["--amc-bg"]).toBe("#0B0E15") // fallback
+    expect(tokens["--amc-accent"]).toBe("#F2C94C")
+    expect(tokens["--amc-font-mono"]).toContain("monospace")
+    expect(Object.keys(tokens)).toHaveLength(15) // 11 colors + 2 fonts + 2 pads
+  })
+  test("padding tokens follow density", () => {
+    expect(resolveTokens(() => "", "normal")["--amc-pad"]).toBe("14px 16px")
+    expect(resolveTokens(() => "", "tight")["--amc-pad"]).toBe("8px 12px")
+  })
+})

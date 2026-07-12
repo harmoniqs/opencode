@@ -1,6 +1,5 @@
 import { Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js"
 import { HOST_BRIDGE_VERSION, handleWidgetMessage } from "./widget-bridge"
-import { buildSrcdoc } from "./widget-srcdoc"
 import type { WidgetInfo } from "./widget-schema"
 import type { Density } from "./widget-tokens"
 
@@ -11,6 +10,9 @@ import type { Density } from "./widget-tokens"
 // that reports height 0 is an empty-state: the host collapses the cell
 // (grid hides it outside edit mode). Bridge-version gate: a widget declaring
 // a newer bridge than this host supports never mounts — error card instead.
+// The frame loads a SERVER-SERVED document (/amicode/widget-frame?id=), not
+// srcdoc: srcdoc inherits the app's CSP, which forbids the inline runtime.
+// sandbox="allow-scripts" keeps the origin opaque regardless of the src.
 
 const LOAD_TIMEOUT_MS = 5000
 
@@ -23,7 +25,7 @@ export interface WidgetHostCallbacks {
 
 export function WidgetFrame(props: {
   widget: WidgetInfo
-  code: string | undefined // undefined while loading
+  frameSrc: string | undefined // full /amicode/widget-frame URL; undefined while resolving
   config: Record<string, unknown>
   context: Record<string, unknown>
   tokens: Record<string, string>
@@ -39,11 +41,7 @@ export function WidgetFrame(props: {
 
   const versionBlocked = createMemo(() => props.widget.bridge > HOST_BRIDGE_VERSION)
 
-  const srcdoc = createMemo(() => {
-    if (versionBlocked() || props.code === undefined) return undefined
-    // tokens/density at assembly time; later changes ride amc:theme
-    return buildSrcdoc({ code: props.code, tokens: props.tokens, density: props.density })
-  })
+  const src = createMemo(() => (versionBlocked() ? undefined : props.frameSrc))
 
   const postToFrame = (msg: unknown) => {
     iframe?.contentWindow?.postMessage(msg, "*")
@@ -78,7 +76,7 @@ export function WidgetFrame(props: {
   }
 
   createEffect(() => {
-    if (srcdoc() === undefined) return
+    if (src() === undefined) return
     window.addEventListener("message", onMessage)
     timeout = setTimeout(() => {
       if (!booted()) setError("widget did not boot within 5s")
@@ -138,7 +136,7 @@ export function WidgetFrame(props: {
         ref={iframe}
         title={props.widget.name}
         sandbox="allow-scripts"
-        srcdoc={srcdoc()}
+        src={src()}
         style={{
           display: "block",
           width: "100%",

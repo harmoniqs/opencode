@@ -62,6 +62,7 @@ import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeWidgets from "@/server/amicode/widgets"
 import * as AmicodeDashboard from "@/server/amicode/dashboard"
+import * as AmicodeWidgetFrame from "@/server/amicode/widget-frame-html"
 import * as AmicodeLibrary from "@/server/amicode/library"
 import * as AmicodeProfile from "@/server/amicode/profile"
 import { ServerAuth } from "@/server/auth"
@@ -271,6 +272,21 @@ const amicodeWidgetsRoute = HttpRouter.use((router) =>
       Effect.sync(() =>
         HttpServerResponse.text(AmicodeWidgets.widgetsResponse(), { contentType: "application/json" }),
       ),
+    )
+    // The frame document is served (not srcdoc) so it carries its OWN CSP
+    // header — srcdoc would inherit the app's CSP, which forbids the inline
+    // runtime (see widget-frame-html.ts).
+    yield* router.add("GET", "/amicode/widget-frame", (request) =>
+      Effect.sync(() => {
+        const id = new URL(request.url, "http://localhost").searchParams.get("id") ?? undefined
+        const r = AmicodeWidgetFrame.widgetFrameHtml(id)
+        return HttpServerResponse.text(r.html, {
+          headers: new Headers({
+            "content-type": "text/html",
+            "content-security-policy": AmicodeWidgetFrame.WIDGET_CSP,
+          }),
+        })
+      }),
     )
     yield* router.add("GET", "/amicode/widget-code", (request) =>
       Effect.sync(() => {

@@ -20,7 +20,7 @@ import type { Density } from "./widget-tokens"
 export function WidgetGrid(props: {
   widgets: WidgetInfo[]
   dashboard: DashboardState
-  codes: Record<string, string> // widget id → module source (app-fetched)
+  frameSrcs: Record<string, string> // widget id → /amicode/widget-frame URL
   tokens: Record<string, string>
   density: Density
   context: Record<string, unknown>
@@ -148,7 +148,7 @@ export function WidgetGrid(props: {
             <Show when={!(empty() && editing())}>
               <WidgetFrame
                 widget={w()}
-                code={props.codes[w().id]}
+                frameSrc={props.frameSrcs[w().id]}
                 config={p.entry.config}
                 context={props.context}
                 tokens={props.tokens}

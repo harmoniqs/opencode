@@ -412,21 +412,17 @@ function HomeDesign() {
     const raw = dashboardRaw()
     return raw === undefined ? undefined : parseDashboardResponse(raw)
   })
-  const [widgetCodes, { refetch: refetchWidgetCodes }] = createResource(
-    () => (widgetInfos().length > 0 ? widgetInfos().map((w) => w.id) : undefined),
-    async (ids) => {
-      const out: Record<string, string> = {}
-      await Promise.all(
-        ids.map(async (id) => {
-          const raw = (await amicodeGet(focusedServer(), `/amicode/widget-code?id=${encodeURIComponent(id)}`).catch(
-            () => undefined,
-          )) as { ok?: boolean; code?: string } | undefined
-          if (raw?.ok === true && typeof raw.code === "string") out[id] = raw.code
-        }),
-      )
-      return out
-    },
-  )
+  // Frame documents are server-served (own CSP header — srcdoc would inherit
+  // the app CSP and kill the inline runtime). The registry hash rides the URL
+  // so a widget edit busts the frame cache.
+  const widgetFrameSrcs = createMemo(() => {
+    const conn = focusedServer()
+    if (!conn) return {}
+    const out: Record<string, string> = {}
+    for (const w of widgetInfos())
+      out[w.id] = new URL(`/amicode/widget-frame?id=${encodeURIComponent(w.id)}&h=${w.hash}`, conn.http.url).toString()
+    return out
+  })
 
   // --amc-* theme tokens + density: recomputed on resize and on root-element
   // attribute flips (theme toggle). Widgets receive updates over the bridge.
@@ -517,10 +513,7 @@ function HomeDesign() {
   }
   const forkWidget = (id: string) => {
     void amicodePost(focusedServer(), "/amicode/widget-fork", { id })
-      .then(() => {
-        void refetchWidgets()
-        void refetchWidgetCodes()
-      })
+      .then(() => void refetchWidgets())
       .catch(() => {})
   }
 
@@ -894,7 +887,7 @@ function HomeDesign() {
               <WidgetGrid
                 widgets={widgetInfos()}
                 dashboard={dash()}
-                codes={widgetCodes() ?? {}}
+                frameSrcs={widgetFrameSrcs()}
                 tokens={themeState().tokens}
                 density={themeState().density}
                 context={widgetContext()}
