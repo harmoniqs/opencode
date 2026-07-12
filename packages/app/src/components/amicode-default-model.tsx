@@ -20,13 +20,19 @@ function syncDefaultModelPin(model: string, win: Window = window): void {
 export function AmicodeDefaultModel() {
   const models = useModels()
 
-  const visibleModels = createMemo(() =>
-    models.list().filter((m) => models.visible({ providerID: m.provider.id, modelID: m.id })),
-  )
+  const available = createMemo(() => models.list())
+  // opencode's default visibility hides dated, non-"latest" models — which can
+  // hide EVERY model and leave the control empty. Prefer the visible set, but
+  // fall back to all available models so the picker is never blank when models
+  // exist. (Guarded below on available(), so it only hides with zero models.)
+  const selectable = createMemo(() => {
+    const vis = available().filter((m) => models.visible({ providerID: m.provider.id, modelID: m.id }))
+    return vis.length > 0 ? vis : available()
+  })
 
   const groups = createMemo(() => {
     const byProvider = new Map<string, { provider: string; items: { value: string; name: string }[] }>()
-    for (const m of visibleModels()) {
+    for (const m of selectable()) {
       const group = byProvider.get(m.provider.id) ?? { provider: m.provider.name, items: [] }
       group.items.push({ value: formatModelValue({ providerID: m.provider.id, modelID: m.id }), name: m.name })
       byProvider.set(m.provider.id, group)
@@ -47,7 +53,7 @@ export function AmicodeDefaultModel() {
   }
 
   return (
-    <Show when={visibleModels().length > 0}>
+    <Show when={available().length > 0}>
       <label
         data-component="amicode-default-model"
         title="Default model for new chats"
