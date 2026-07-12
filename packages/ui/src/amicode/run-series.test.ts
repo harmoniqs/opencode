@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { elapsedLabel, headlineMetric, parseRunSeriesResponse, type RunSeries } from "./run-series"
+import { elapsedLabel, headlineMetric, humanTail, parseRunSeriesResponse, type RunSeries } from "./run-series"
 
 const okRun = (over: Partial<Record<string, unknown>> = {}) => ({
   ok: true,
@@ -95,6 +95,24 @@ describe("headlineMetric", () => {
   })
   test("no data → em dash", () => {
     expect(headlineMetric(base)).toEqual({ label: "F", value: "—" })
+  })
+})
+
+describe("humanTail", () => {
+  test("drops AMICODE_* machine lines, keeps human solver output", () => {
+    expect(
+      humanTail([
+        "AMICODE_ITER iter=60 f=1.5e-03",
+        "AMICODE_PULSE iter=59 dt=0.205 a=0,-0.0531869,-0.0863969",
+        "  AMICODE_PULSE indented still machine",
+        "  60  1.5091416e-03 0.00e+00",
+        "EXIT: Optimal Solution Found.",
+      ]),
+    ).toEqual(["  60  1.5091416e-03 0.00e+00", "EXIT: Optimal Solution Found."])
+  })
+  test("empty and all-machine tails → empty", () => {
+    expect(humanTail([])).toEqual([])
+    expect(humanTail(["AMICODE_PULSE x", "AMICODE_ITER y"])).toEqual([])
   })
 })
 
