@@ -36,6 +36,26 @@ export function formatElapsed(ms: number): string {
   return m > 0 ? `${m}m ${s.toString().padStart(2, "0")}s` : `${s}s`
 }
 
+/** Minimal shape of the per-message token accounting we read
+ *  (SDK v2 AssistantMessage.tokens — we only need the two growing fields). */
+export interface TokenUsage {
+  output?: number
+  reasoning?: number
+}
+
+/** Tokens generated so far this turn — output + reasoning summed across the
+ *  turn's assistant messages. This is the number that grows while Amico works;
+ *  input/cache are excluded (they're static context, not "thinking" output). */
+export function turnTokens(messages: ReadonlyArray<{ tokens?: TokenUsage | null }>): number {
+  let n = 0
+  for (const m of messages) {
+    const t = m.tokens
+    if (!t) continue
+    n += (t.output ?? 0) + (t.reasoning ?? 0)
+  }
+  return n
+}
+
 /** Compact token label: 42 -> "42", 2400 -> "2.4k", 1_200_000 -> "1.2M". */
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0"

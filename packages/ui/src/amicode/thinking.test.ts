@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { THINKING_WORDS, wordAt, formatElapsed, formatTokens } from "./thinking"
+import { THINKING_WORDS, wordAt, formatElapsed, formatTokens, turnTokens } from "./thinking"
 
 describe("thinking words", () => {
   test("non-empty; no trailing ellipsis (the component appends it)", () => {
@@ -27,6 +27,21 @@ describe("formatElapsed", () => {
   test("minutes with zero-padded seconds", () => {
     expect(formatElapsed(63_000)).toBe("1m 03s")
     expect(formatElapsed(725_000)).toBe("12m 05s")
+  })
+})
+
+describe("turnTokens", () => {
+  test("sums output + reasoning across messages; ignores input/cache/missing", () => {
+    expect(turnTokens([])).toBe(0)
+    expect(turnTokens([{ tokens: { output: 100, reasoning: 20 } }])).toBe(120)
+    expect(
+      turnTokens([
+        { tokens: { output: 100, reasoning: 20 } },
+        { tokens: { output: 5 } },
+        { tokens: null },
+        {},
+      ]),
+    ).toBe(125)
   })
 })
 

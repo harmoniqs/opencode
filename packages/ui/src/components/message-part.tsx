@@ -1,5 +1,6 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import { ThinkingLine } from "../amicode/thinking-line"
+import { turnTokens } from "../amicode/thinking"
 import {
   Component,
   createEffect,
@@ -606,6 +607,11 @@ export function AssistantParts(props: {
 
   const last = createMemo(() => grouped().at(-1)?.key)
 
+  // amicode: tokens generated so far this turn (output + reasoning across the
+  // turn's assistant messages) — feeds the thinking line's live token chip.
+  // Reactive: re-runs as the store updates message.tokens.* while streaming.
+  const turnTokenCount = createMemo(() => turnTokens(props.messages))
+
   // amicode: does this turn already carry an amicode_* tool card? Those cards
   // (card.tsx) render their OWN AMICO signature, so a turn-level one would
   // double up. The turn-level signature exists precisely for the OTHER case —
@@ -634,7 +640,7 @@ export function AssistantParts(props: {
               cycling shimmer word + live elapsed. Hidden the moment working
               flips false or a newer group arrives. */}
           <Show when={props.working && last() === grouped().at(-1)?.key}>
-            <ThinkingLine />
+            <ThinkingLine tokens={turnTokenCount() || undefined} />
           </Show>
         </span>
       </Show>
