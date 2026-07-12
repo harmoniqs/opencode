@@ -67,6 +67,18 @@ import { AmicodeSolverToggle } from "@opencode-ai/ui/amicode-solver-toggle"
 import { AmicodeDefaultModel } from "@/components/amicode-default-model"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
+import {
+  WidgetGrid,
+  parseWidgetsResponse,
+  parseDashboardResponse,
+  resolveTokens,
+  densityFor,
+  suggestInstitutions,
+  resolveBrandLogo,
+  type DashboardState,
+  type Density,
+  type WidgetHostCallbacks,
+} from "@opencode-ai/ui/amicode-widget-grid"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
@@ -374,6 +386,142 @@ function HomeDesign() {
     const res = await amicodePost(focusedServer(), "/amicode/library", { filename, data_b64: dataB64 })
     if ((res as { ok?: boolean } | undefined)?.ok !== true) throw new Error("library save rejected")
     await refetchLibrary()
+  }
+
+  // amicode (widget kernel): registry + dashboard state + per-widget module
+  // code. Everything degrades to undefined → the page falls back to the
+  // legacy hardcoded cards, so a server without the widget routes still
+  // renders a full home.
+  const [widgetsRaw, { refetch: refetchWidgets }] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/widgets").catch(() => undefined),
+  )
+  const widgetInfos = createMemo(() => {
+    const raw = widgetsRaw()
+    return raw === undefined ? [] : parseWidgetsResponse(raw)
+  })
+  const [dashboardRaw] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/dashboard").catch(() => undefined),
+  )
+  // local state wins after a save (POST returns the stored merged result)
+  const [savedDashboard, setSavedDashboard] = createSignal<DashboardState | undefined>(undefined)
+  const dashboard = createMemo<DashboardState | undefined>(() => {
+    const local = savedDashboard()
+    if (local) return local
+    const raw = dashboardRaw()
+    return raw === undefined ? undefined : parseDashboardResponse(raw)
+  })
+  const [widgetCodes, { refetch: refetchWidgetCodes }] = createResource(
+    () => (widgetInfos().length > 0 ? widgetInfos().map((w) => w.id) : undefined),
+    async (ids) => {
+      const out: Record<string, string> = {}
+      await Promise.all(
+        ids.map(async (id) => {
+          const raw = (await amicodeGet(focusedServer(), `/amicode/widget-code?id=${encodeURIComponent(id)}`).catch(
+            () => undefined,
+          )) as { ok?: boolean; code?: string } | undefined
+          if (raw?.ok === true && typeof raw.code === "string") out[id] = raw.code
+        }),
+      )
+      return out
+    },
+  )
+
+  // --amc-* theme tokens + density: recomputed on resize and on root-element
+  // attribute flips (theme toggle). Widgets receive updates over the bridge.
+  const readTokens = () => {
+    const style = getComputedStyle(document.documentElement)
+    const density: Density = densityFor(window.innerHeight)
+    return { tokens: resolveTokens((name) => style.getPropertyValue(name), density), density }
+  }
+  const [themeState, setThemeState] = createSignal(readTokens())
+  createEffect(() => {
+    const refresh = () => setThemeState(readTokens())
+    window.addEventListener("resize", refresh)
+    const observer = new MutationObserver(refresh)
+    observer.observe(document.documentElement, { attributes: true })
+    onCleanup(() => {
+      window.removeEventListener("resize", refresh)
+      observer.disconnect()
+    })
+  })
+
+  const widgetContext = createMemo(() => ({
+    resume: resumeProblem()?.name ? { name: resumeProblem()!.name, meta: resumeMeta() } : undefined,
+    liveRun: liveRun(),
+    library: libraryView(),
+  }))
+
+  const widgetCallbacks: WidgetHostCallbacks = {
+    fetch: (path) => amicodeGet(focusedServer(), path),
+    action: async (verb, payload) => {
+      const p = (payload ?? {}) as Record<string, unknown>
+      const str = (k: string) => (typeof p[k] === "string" ? (p[k] as string) : "")
+      switch (verb) {
+        case "resume-session": {
+          const name = resumeProblem()?.name
+          if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+          return { ok: true }
+        }
+        case "save-profile": {
+          await saveProfileFields({
+            name: str("name") || undefined,
+            affiliation: str("affiliation") || undefined,
+            focus: str("focus") || undefined,
+            scholar: str("scholar") || undefined,
+            affiliation_logo: str("affiliation_logo") || undefined,
+          })
+          return { ok: true }
+        }
+        case "lookup-institution":
+          return suggestInstitutions(str("query"))
+        case "resolve-logo":
+          return { logo: await resolveBrandLogo(str("name"), str("domain")) }
+        case "open-external": {
+          const url = str("url")
+          if (url && window.parent !== window)
+            window.parent.postMessage({ source: "amicode", kind: "open-external", url }, "*")
+          return { ok: true }
+        }
+        case "upload-library":
+          await uploadPaper(str("filename"), str("dataB64"))
+          return { ok: true }
+        case "open-gallery":
+          setGalleryOpen(true)
+          return { ok: true }
+        case "warm-start":
+          startWithPrompt("warm-start a new solve from my pulse bank")
+          return { ok: true }
+        default:
+          throw new Error(`unknown action: ${verb}`)
+      }
+    },
+    prompt: startWithPrompt,
+    open: (entity) => {
+      if (entity === "run") {
+        const name = resumeProblem()?.name
+        if (name) startWithPrompt(`Open the problem "${name}" and show me the running solve`)
+      }
+    },
+  }
+
+  const saveDashboard = (next: DashboardState) => {
+    setSavedDashboard(next) // optimistic — instant reorder/hide feedback
+    void amicodePost(focusedServer(), "/amicode/dashboard", next)
+      .then((res) => {
+        const merged = parseDashboardResponse(res)
+        if (merged) setSavedDashboard(merged)
+      })
+      .catch(() => {})
+  }
+  const forkWidget = (id: string) => {
+    void amicodePost(focusedServer(), "/amicode/widget-fork", { id })
+      .then(() => {
+        void refetchWidgets()
+        void refetchWidgetCodes()
+      })
+      .catch(() => {})
   }
 
   const WIZARD_DISMISS_KEY = "amicode-onboarding-dismissed"
@@ -714,27 +862,48 @@ function HomeDesign() {
             <AmicodeDefaultModel />
             <AmicodeSolverToggle />
           </div>
-          <AmicodeHomeCards
-            profile={profileView()}
-            onStart={startWithPrompt}
-            library={libraryView()}
-            onUploadPaper={uploadPaper}
-            onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
-            onSaveProfile={saveProfileFields}
-            resumeName={resumeProblem()?.name}
-            resumeMeta={resumeMeta()}
-            onResume={() => {
-              const name = resumeProblem()?.name
-              if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
-            }}
-            onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
-            onOpenGallery={() => setGalleryOpen(true)}
-            liveRun={liveRun()}
-            onOpenLiveRun={() => {
-              const name = resumeProblem()?.name
-              if (name) startWithPrompt(`Open the problem "${name}" and show me the running solve`)
-            }}
-          />
+          <Show
+            when={widgetInfos().length > 0 && dashboard()}
+            fallback={
+              /* legacy fallback: server without the widget routes (or a failed
+                 registry fetch) still gets the full hardcoded home */
+              <AmicodeHomeCards
+                profile={profileView()}
+                onStart={startWithPrompt}
+                library={libraryView()}
+                onUploadPaper={uploadPaper}
+                onEditProfile={() => startWithPrompt("update my profile — my name, affiliation, and what I work on")}
+                onSaveProfile={saveProfileFields}
+                resumeName={resumeProblem()?.name}
+                resumeMeta={resumeMeta()}
+                onResume={() => {
+                  const name = resumeProblem()?.name
+                  if (name) startWithPrompt(`Open the problem "${name}" and continue where we left off`)
+                }}
+                onWarmStart={() => startWithPrompt("warm-start a new solve from my pulse bank")}
+                onOpenGallery={() => setGalleryOpen(true)}
+                liveRun={liveRun()}
+                onOpenLiveRun={() => {
+                  const name = resumeProblem()?.name
+                  if (name) startWithPrompt(`Open the problem "${name}" and show me the running solve`)
+                }}
+              />
+            }
+          >
+            {(dash) => (
+              <WidgetGrid
+                widgets={widgetInfos()}
+                dashboard={dash()}
+                codes={widgetCodes() ?? {}}
+                tokens={themeState().tokens}
+                density={themeState().density}
+                context={widgetContext()}
+                callbacks={widgetCallbacks}
+                onSave={saveDashboard}
+                onFork={forkWidget}
+              />
+            )}
+          </Show>
         </div>
         <AmicodeFooter />
         <Show when={wizardOpen()}>
