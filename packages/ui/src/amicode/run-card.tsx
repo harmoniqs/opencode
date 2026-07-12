@@ -117,11 +117,11 @@ export function renderRunCardSvg(d: RunCardData): string {
     .filter(Boolean)
     .join("   ·   ")
 
-  // convergence panel (log10 f)
+  // convergence panel (log10 f) — right column; pulse reads first
   const logs = d.series.map((p) => Math.log10(Math.max(p.f, 1e-12)))
-  const curvePath = logs.length >= 2 ? pathFor(logs, 80, 388, 480, 150, Math.min(...logs), Math.max(...logs)) : ""
+  const curvePath = logs.length >= 2 ? pathFor(logs, 640, 388, 480, 150, Math.min(...logs), Math.max(...logs)) : ""
 
-  // pulse panel — one path per drive, shared scale
+  // pulse panel — one path per drive, shared scale — left column (the artifact leads)
   const drives = Math.max(1, d.pulseMeta?.drives ?? 1)
   const values = d.pulse?.values ?? []
   const knots = Math.floor(values.length / drives)
@@ -131,7 +131,7 @@ export function renderRunCardSvg(d: RunCardData): string {
     const max = Math.max(...values)
     for (let k = 0; k < drives; k++) {
       const seg = values.slice(k * knots, (k + 1) * knots)
-      pulsePaths += `<path d="${pathFor(seg, 640, 388, 480, 150, min, max)}" fill="none" stroke="${GOLD}" stroke-width="2.5" stroke-linejoin="round" opacity="${k === 0 ? 1 : 0.55}"/>`
+      pulsePaths += `<path d="${pathFor(seg, 80, 388, 480, 150, min, max)}" fill="none" stroke="${GOLD}" stroke-width="2.5" stroke-linejoin="round" opacity="${k === 0 ? 1 : 0.55}"/>`
     }
   }
 
@@ -153,12 +153,12 @@ export function renderRunCardSvg(d: RunCardData): string {
   <text x="80" y="345" font-family="${sans}" font-size="16" fill="${MUTED}">${esc(meta)}</text>
 
   <rect x="64" y="372" width="512" height="182" rx="10" fill="${PANEL}" stroke="${LINE}"/>
-  <text x="80" y="558" font-family="${sans}" font-size="13" letter-spacing="2" fill="${MUTED}">CONVERGENCE  (log f)</text>
-  ${curvePath ? `<path d="${curvePath}" fill="none" stroke="${CURVE}" stroke-width="2.5" stroke-linejoin="round"/>` : `<text x="270" y="470" font-family="${sans}" font-size="14" fill="${MUTED}">no iteration data</text>`}
+  <text x="80" y="558" font-family="${sans}" font-size="13" letter-spacing="2" fill="${MUTED}">FINAL PULSE${drives > 1 ? `  (${drives} drives)` : ""}</text>
+  ${pulsePaths || `<text x="270" y="470" font-family="${sans}" font-size="14" fill="${MUTED}">no pulse data</text>`}
 
   <rect x="624" y="372" width="512" height="182" rx="10" fill="${PANEL}" stroke="${LINE}"/>
-  <text x="640" y="558" font-family="${sans}" font-size="13" letter-spacing="2" fill="${MUTED}">FINAL PULSE${drives > 1 ? `  (${drives} drives)` : ""}</text>
-  ${pulsePaths || `<text x="830" y="470" font-family="${sans}" font-size="14" fill="${MUTED}">no pulse data</text>`}
+  <text x="640" y="558" font-family="${sans}" font-size="13" letter-spacing="2" fill="${MUTED}">CONVERGENCE  (log f)</text>
+  ${curvePath ? `<path d="${curvePath}" fill="none" stroke="${CURVE}" stroke-width="2.5" stroke-linejoin="round"/>` : `<text x="830" y="470" font-family="${sans}" font-size="14" fill="${MUTED}">no iteration data</text>`}
 
   <text x="80" y="602" font-family="${sans}" font-size="15" fill="${MUTED}">Solved with <tspan fill="${TEXT}" font-weight="650">Amico</tspan> — your friendly Quantum Computing Agent</text>
   <text x="${W - 80}" y="602" text-anchor="end" font-family="${sans}" font-size="15" fill="${GOLD}">harmoniqs.ai</text>
