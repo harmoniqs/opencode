@@ -259,7 +259,10 @@ export function runStatusBody(root: string, runs: string, slug: string | undefin
 // F = 1 - f; we ship the raw objective f so one convention lives in one place. ---
 
 const SERIES_MAX_POINTS = 160
-const TAIL_LINES = 8
+// 24 raw lines: solve scripts emit AMICODE_ITER + AMICODE_PULSE every
+// iteration, and the client filters those out (humanTail) — a smaller window
+// can leave the filtered view empty mid-solve.
+const TAIL_LINES = 24
 
 export function synthesizeRunSeries(code: string, detail: string): string {
   return JSON.stringify({ ok: false, run: null, error: `${code}: ${detail}` })
