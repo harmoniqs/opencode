@@ -64,6 +64,7 @@ import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
 import { AmicodeSolverToggle } from "@opencode-ai/ui/amicode-solver-toggle"
+import { AmicodeDefaultModel } from "@/components/amicode-default-model"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import { parseRunSeriesResponse } from "@opencode-ai/ui/amicode-run-window"
@@ -697,8 +698,17 @@ function HomeDesign() {
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
         <div class="relative z-[1] flex-none pt-1">
-          {/* solver mode (show-only v1, spec-20260709-093000): right-aligned above the cards */}
-          <div style={{ display: "flex", "justify-content": "flex-end", "margin-bottom": "8px" }}>
+          {/* solver mode + default model: right-aligned above the cards */}
+          <div
+            style={{
+              display: "flex",
+              "justify-content": "flex-end",
+              "align-items": "center",
+              gap: "16px",
+              "margin-bottom": "8px",
+            }}
+          >
+            <AmicodeDefaultModel />
             <AmicodeSolverToggle />
           </div>
           <AmicodeHomeCards

@@ -1,0 +1,92 @@
+import { For, Show, createMemo } from "solid-js"
+import { useModels } from "@/context/models"
+import { formatModelValue, parseModelValue } from "./amicode-default-model-value"
+
+// Dashboard "Default model" control. Drives opencode's GLOBAL model store
+// (useModels — mounted app-wide, persisted via Persist.global), which is what
+// new chats inherit as their starting model (see local.tsx recentModel()), so
+// a change takes effect immediately with no server restart. It ALSO mirrors the
+// choice into the `amicode.defaultModel` VS Code setting over the iframe→parent
+// bridge (chat_panel.ts), keeping the headless/first-turn config pin in sync.
+// The in-chat picker still overrides per session.
+
+/** Post the chosen model to the extension host so it updates amicode.defaultModel.
+ *  No-op when unframed (plain web/desktop): there's no parent shell to relay it. */
+function syncDefaultModelPin(model: string, win: Window = window): void {
+  if (win.parent === win) return
+  win.parent.postMessage({ source: "amicode", kind: "set-default-model", model }, "*")
+}
+
+export function AmicodeDefaultModel() {
+  const models = useModels()
+
+  const visibleModels = createMemo(() =>
+    models.list().filter((m) => models.visible({ providerID: m.provider.id, modelID: m.id })),
+  )
+
+  const groups = createMemo(() => {
+    const byProvider = new Map<string, { provider: string; items: { value: string; name: string }[] }>()
+    for (const m of visibleModels()) {
+      const group = byProvider.get(m.provider.id) ?? { provider: m.provider.name, items: [] }
+      group.items.push({ value: formatModelValue({ providerID: m.provider.id, modelID: m.id }), name: m.name })
+      byProvider.set(m.provider.id, group)
+    }
+    return [...byProvider.values()]
+  })
+
+  const current = createMemo(() => {
+    const recent = models.recent.list()[0]
+    return recent ? formatModelValue(recent) : ""
+  })
+
+  const choose = (value: string) => {
+    const key = parseModelValue(value)
+    if (!key) return
+    models.recent.push(key)
+    syncDefaultModelPin(value)
+  }
+
+  return (
+    <Show when={visibleModels().length > 0}>
+      <label
+        data-component="amicode-default-model"
+        title="Default model for new chats"
+        style={{
+          display: "inline-flex",
+          "align-items": "center",
+          gap: "8px",
+          "font-size": "12px",
+          color: "var(--v2-text-text-muted)",
+        }}
+      >
+        <span data-slot="amicode-default-model-label" style={{ "font-weight": "550" }}>
+          Model
+        </span>
+        <select
+          data-slot="amicode-default-model-select"
+          value={current()}
+          onChange={(event) => choose(event.currentTarget.value)}
+          style={{
+            "font-size": "12px",
+            color: "var(--v2-text-text-base)",
+            background: "var(--v2-background-bg-layer-01)",
+            border: "1px solid var(--v2-border-border-base)",
+            "border-radius": "6px",
+            padding: "3px 6px",
+            "max-width": "220px",
+            cursor: "pointer",
+          }}
+        >
+          <option value="">Auto</option>
+          <For each={groups()}>
+            {(group) => (
+              <optgroup label={group.provider}>
+                <For each={group.items}>{(item) => <option value={item.value}>{item.name}</option>}</For>
+              </optgroup>
+            )}
+          </For>
+        </select>
+      </label>
+    </Show>
+  )
+}
