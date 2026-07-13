@@ -72,7 +72,7 @@ import {
   parseWidgetsResponse,
   parseDashboardResponse,
   resolveTokens,
-  densityFor,
+  densityForViewport,
   suggestInstitutions,
   resolveBrandLogo,
   type DashboardState,
@@ -428,7 +428,8 @@ function HomeDesign() {
   // attribute flips (theme toggle). Widgets receive updates over the bridge.
   const readTokens = () => {
     const style = getComputedStyle(document.documentElement)
-    const density: Density = densityFor(window.innerHeight)
+    // panel-first (spec T3.4): width axis matters when Amicode is half an editor
+    const density: Density = densityForViewport(window.innerWidth, window.innerHeight)
     return { tokens: resolveTokens((name) => style.getPropertyValue(name), density), density }
   }
   const [themeState, setThemeState] = createSignal(readTokens())
@@ -579,13 +580,42 @@ function HomeDesign() {
     closeSearch()
   }
 
+  // Chrome strip state (spec T3.1/T3.3): sessions flyout + controlled grid edit
+  const [sessionsOpen, setSessionsOpen] = createSignal(false)
+  const [gridEditing, setGridEditing] = createSignal(false)
+  let flyoutRoot: HTMLDivElement | undefined
+  createEffect(() => {
+    if (!sessionsOpen()) return
+    const onDown = (e: MouseEvent) => {
+      if (flyoutRoot && !flyoutRoot.contains(e.target as Node)) setSessionsOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSessionsOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    document.addEventListener("keydown", onKey)
+    onCleanup(() => {
+      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("keydown", onKey)
+    })
+  })
+  const totalSessions = createMemo(() => groups().reduce((n, g) => n + g.sessions.length, 0))
+  const unseenTotal = createMemo(() => {
+    const conn = focusedServer()
+    if (!conn) return 0
+    return projects().reduce((n, p) => n + unseenCount(conn, p), 0)
+  })
+
   command.register("home", () => [
     {
       id: "home.sessions.search.focus",
       title: language.t("home.sessions.search.placeholder"),
       keybind: "mod+f",
       hidden: true,
-      onSelect: () => focusSessionSearch?.(),
+      onSelect: () => {
+        setSessionsOpen(true) // search lives in the flyout now
+        setTimeout(() => focusSessionSearch?.(), 0)
+      },
     },
   ])
 
@@ -708,35 +738,121 @@ function HomeDesign() {
         data-slot="amicode-home-shell"
         class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"
       >
-        {/* Top band: Projects (left) + chat sessions (right), fused as one element (~1/3) */}
+        {/* Chrome strip (spec T3.1): brand · settings | model · solver · sessions · customize.
+            One flex-wrap container — two calm rows at panel width, one when wide. */}
         <div
-          data-slot="amicode-home-band"
-          class="grid min-h-[96px] flex-none gap-8 md:max-h-[420px] md:grid-cols-[300px_minmax(0,1fr)]"
+          data-slot="amicode-chrome-strip"
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "14px",
+            "row-gap": "8px",
+            "flex-wrap": "wrap",
+            "min-height": "32px",
+          }}
         >
-          <HomeProjectColumn
-            projects={projects()}
-            selected={state.selection}
-            focusServer={focusServer}
-            selectProject={selectProject}
-            openNewSession={openProjectNewSession}
-            chooseProject={(conn) => void chooseProject(conn)}
-            editProject={editProject}
-            closeProject={(conn, directory) => {
-              const next = closeHomeProject(
-                state.selection,
-                ServerConnection.key(conn),
-                global.createServerCtx(conn).projects,
-                directory,
-              )
-              if (next) setSelection(next)
-            }}
-            clearNotifications={clearNotifications}
-            unseenCount={unseenCount}
-            openSettings={openSettings}
-            language={language}
-          />
-
-          <section
+          <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0" }}>
+            <Mark class="size-6 shrink-0" />
+            <span style={{ "font-size": "14px", "font-weight": "650", color: "var(--v2-text-text-base)" }}>
+              Amicode
+            </span>
+            <IconButtonV2
+              data-action="home-open-settings"
+              variant="ghost-muted"
+              size="small"
+              icon={<IconV2 name="settings-gear" />}
+              onClick={openSettings}
+              aria-label={language.t("sidebar.settings")}
+            />
+          </div>
+          <div style={{ flex: "1" }} />
+          <AmicodeDefaultModel />
+          <AmicodeSolverToggle />
+          <div ref={flyoutRoot} style={{ position: "relative" }}>
+            <button
+              type="button"
+              data-action="home-sessions-toggle-flyout"
+              onClick={() => setSessionsOpen(!sessionsOpen())}
+              style={{
+                display: "inline-flex",
+                "align-items": "center",
+                gap: "6px",
+                border: "1px solid var(--v2-border-border-base)",
+                "border-radius": "7px",
+                background: "var(--v2-background-bg-layer-01)",
+                color: "var(--v2-text-text-base)",
+                padding: "4px 10px",
+                "font-size": "12px",
+                "font-weight": "600",
+                cursor: "pointer",
+              }}
+            >
+              Sessions
+              <span
+                style={{
+                  "font-size": "10px",
+                  "border-radius": "8px",
+                  padding: "1px 7px",
+                  background: unseenTotal() > 0 ? "var(--v2-icon-icon-accent)" : "var(--v2-background-bg-layer-02)",
+                  color: unseenTotal() > 0 ? "var(--v2-background-bg-base)" : "var(--v2-text-text-muted)",
+                  "font-variant-numeric": "tabular-nums",
+                }}
+              >
+                {unseenTotal() > 0 ? unseenTotal() : totalSessions()}
+              </span>
+              <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
+                ▾
+              </span>
+            </button>
+            <Show when={sessionsOpen()}>
+              {/* Sessions flyout (spec T3.3): servers + projects (all existing
+                  affordances preserved via HomeProjectColumn) above the
+                  search + grouped sessions list. */}
+              <div
+                data-slot="amicode-sessions-flyout"
+                style={{
+                  position: "absolute",
+                  right: "0",
+                  top: "calc(100% + 8px)",
+                  "z-index": "40",
+                  width: "min(440px, 88vw)",
+                  "max-height": "min(70vh, 680px)",
+                  display: "flex",
+                  "flex-direction": "column",
+                  gap: "10px",
+                  overflow: "hidden auto",
+                  border: "1px solid var(--v2-border-border-base)",
+                  "border-radius": "10px",
+                  background: "var(--v2-background-bg-layer-01)",
+                  "box-shadow": "var(--v2-elevation-raised, 0 10px 32px rgba(0,0,0,0.28))",
+                  padding: "12px 14px",
+                }}
+              >
+                <HomeProjectColumn
+                  compact
+                  projects={projects()}
+                  selected={state.selection}
+                  focusServer={focusServer}
+                  selectProject={selectProject}
+                  openNewSession={openProjectNewSession}
+                  chooseProject={(conn) => void chooseProject(conn)}
+                  editProject={editProject}
+                  closeProject={(conn, directory) => {
+                    const next = closeHomeProject(
+                      state.selection,
+                      ServerConnection.key(conn),
+                      global.createServerCtx(conn).projects,
+                      directory,
+                    )
+                    if (next) setSelection(next)
+                  }}
+                  clearNotifications={clearNotifications}
+                  unseenCount={unseenCount}
+                  openSettings={openSettings}
+                  language={language}
+                />
+                <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
+                <section
             class="isolate min-h-0 min-w-0 flex flex-col"
             aria-label={language.t("sidebar.project.recentSessions")}
           >
@@ -838,23 +954,30 @@ function HomeDesign() {
                 </Show>
               </div>
             </ScrollView>
-          </section>
+                </section>
+              </div>
+            </Show>
+          </div>
+          <Show when={widgetInfos().length > 0 && dashboard()}>
+            <button
+              type="button"
+              data-slot="amicode-grid-customize"
+              onClick={() => setGridEditing(!gridEditing())}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: gridEditing() ? "var(--v2-text-text-accent)" : "var(--v2-text-text-faint)",
+                "font-size": "11px",
+                cursor: "pointer",
+                padding: "0",
+              }}
+            >
+              {gridEditing() ? "done" : "customize"}
+            </button>
+          </Show>
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
         <div class="relative z-[1] flex-none pt-1">
-          {/* solver mode + default model: right-aligned above the cards */}
-          <div
-            style={{
-              display: "flex",
-              "justify-content": "flex-end",
-              "align-items": "center",
-              gap: "16px",
-              "margin-bottom": "8px",
-            }}
-          >
-            <AmicodeDefaultModel />
-            <AmicodeSolverToggle />
-          </div>
           <Show
             when={widgetInfos().length > 0 && dashboard()}
             fallback={
@@ -890,6 +1013,8 @@ function HomeDesign() {
                 frameSrcs={widgetFrameSrcs()}
                 tokens={themeState().tokens}
                 density={themeState().density}
+                editing={gridEditing()}
+                onEditingChange={setGridEditing}
                 context={widgetContext()}
                 callbacks={widgetCallbacks}
                 onSave={saveDashboard}
@@ -929,6 +1054,8 @@ function HomeDesign() {
 function HomeProjectColumn(props: {
   projects: LocalProject[]
   selected: HomeProjectSelection
+  /** flyout mode (spec T3.3): brand + settings live in the chrome strip, hide them here */
+  compact?: boolean
   focusServer: (server: ServerConnection.Any) => void
   selectProject: (server: ServerConnection.Any, directory: string) => void
   openNewSession: (server: ServerConnection.Any, directory: string) => void
@@ -945,27 +1072,46 @@ function HomeProjectColumn(props: {
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
     <aside class="isolate flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
-      <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5">
+      <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5" classList={{ "mt-0": props.compact }}>
         {/* amicode: brand block replaces the bare "Projects" label — the lone
-            letter-avatar project row underneath read as a stray "A amicode". */}
-        <div class="flex min-w-0 items-center gap-2">
-          <Mark class="size-6 shrink-0" />
-          <div class="min-w-0">
-            <div
+            letter-avatar project row underneath read as a stray "A amicode".
+            In flyout mode (compact) the strip owns the brand: show a quiet
+            "Projects" label instead. */}
+        <Show
+          when={!props.compact}
+          fallback={
+            <span
               style={{
-                "font-size": "15px",
-                "font-weight": "650",
-                "line-height": "18px",
-                color: "var(--v2-text-text-base)",
+                "font-size": "10px",
+                "font-weight": "700",
+                "letter-spacing": "0.1em",
+                "text-transform": "uppercase",
+                color: "var(--v2-text-text-faint)",
               }}
             >
-              Amicode
-            </div>
-            <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>
-              by Harmoniqs
+              {props.language.t("home.projects")}
+            </span>
+          }
+        >
+          <div class="flex min-w-0 items-center gap-2">
+            <Mark class="size-6 shrink-0" />
+            <div class="min-w-0">
+              <div
+                style={{
+                  "font-size": "15px",
+                  "font-weight": "650",
+                  "line-height": "18px",
+                  color: "var(--v2-text-text-base)",
+                }}
+              >
+                Amicode
+              </div>
+              <div style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)" }}>
+                by Harmoniqs
+              </div>
             </div>
           </div>
-        </div>
+        </Show>
         <Show when={global.servers.list().length === 1}>
           <IconButtonV2
             data-action="home-add-project"
@@ -1009,16 +1155,18 @@ function HomeProjectColumn(props: {
           }}
         </For>
       </Show>
-      <div class="mt-4 flex min-w-0 flex-col gap-1">
-        <button
-          type="button"
-          class={`${HOME_PROJECT_NAV_ROW} text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted`}
-          onClick={props.openSettings}
-        >
-          <IconV2 name="settings-gear" size="small" />
-          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.settings")}</span>
-        </button>
-      </div>
+      <Show when={!props.compact}>
+        <div class="mt-4 flex min-w-0 flex-col gap-1">
+          <button
+            type="button"
+            class={`${HOME_PROJECT_NAV_ROW} text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted`}
+            onClick={props.openSettings}
+          >
+            <IconV2 name="settings-gear" size="small" />
+            <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.settings")}</span>
+          </button>
+        </div>
+      </Show>
     </aside>
   )
 }

@@ -14,6 +14,17 @@ export function densityFor(webviewHeightPx: number): Density {
   return "normal"
 }
 
+const DENSITY_RANK: Record<Density, number> = { normal: 0, compact: 1, tight: 2 }
+
+/** Panel-first (spec T3.4): width is the scarce axis when Amicode lives as
+ *  half an editor. Effective density = max(height tier, width tier);
+ *  width ≤820 → compact, ≤600 → tight. */
+export function densityForViewport(widthPx: number, heightPx: number): Density {
+  const byWidth: Density = widthPx <= 600 ? "tight" : widthPx <= 820 ? "compact" : "normal"
+  const byHeight = densityFor(heightPx)
+  return DENSITY_RANK[byWidth] >= DENSITY_RANK[byHeight] ? byWidth : byHeight
+}
+
 const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace"
 

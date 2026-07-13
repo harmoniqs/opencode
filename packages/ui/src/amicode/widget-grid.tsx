@@ -27,8 +27,18 @@ export function WidgetGrid(props: {
   callbacks: WidgetHostCallbacks
   onSave: (state: DashboardState) => void
   onFork: (id: string) => void
+  /** controlled edit mode (spec T3.1: `customize` lives in the chrome strip);
+   *  omit both to keep the grid's internal toggle */
+  editing?: boolean
+  onEditingChange?: (editing: boolean) => void
 }) {
-  const [editing, setEditing] = createSignal(false)
+  const [internalEditing, setInternalEditing] = createSignal(false)
+  const controlled = () => props.editing !== undefined
+  const editing = () => (controlled() ? props.editing === true : internalEditing())
+  const setEditing = (v: boolean) => {
+    if (controlled()) props.onEditingChange?.(v)
+    else setInternalEditing(v)
+  }
   const [configOpen, setConfigOpen] = createSignal<string | undefined>(undefined)
   const [empties, setEmpties] = createSignal<Record<string, boolean>>({})
 
@@ -166,29 +176,32 @@ export function WidgetGrid(props: {
 
   return (
     <div data-component="amicode-widget-grid" style={{ display: "flex", "flex-direction": "column", gap: "12px" }}>
-      <div style={{ display: "flex", "justify-content": "flex-end" }}>
-        <button
-          type="button"
-          data-slot="amicode-grid-customize"
-          onClick={() => {
-            setEditing(!editing())
-            setConfigOpen(undefined)
-          }}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: editing() ? "var(--v2-text-text-accent)" : "var(--v2-text-text-faint)",
-            "font-size": "11px",
-            cursor: "pointer",
-            padding: "0",
-          }}
-        >
-          {editing() ? "done" : "customize"}
-        </button>
-      </div>
+      <Show when={!controlled()}>
+        <div style={{ display: "flex", "justify-content": "flex-end" }}>
+          <button
+            type="button"
+            data-slot="amicode-grid-customize"
+            onClick={() => {
+              setEditing(!editing())
+              setConfigOpen(undefined)
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: editing() ? "var(--v2-text-text-accent)" : "var(--v2-text-text-faint)",
+              "font-size": "11px",
+              cursor: "pointer",
+              padding: "0",
+            }}
+          >
+            {editing() ? "done" : "customize"}
+          </button>
+        </div>
+      </Show>
 
       <Show when={heroes().length > 0}>
-        <div style={{ display: "grid", "grid-template-columns": "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+        {/* panel-first (spec T3.4): 2-up when the canvas allows, stacked below */}
+        <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}>
           <For each={heroes()}>{(entry) => <Cell entry={entry} />}</For>
         </div>
       </Show>

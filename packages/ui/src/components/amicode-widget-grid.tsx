@@ -12,5 +12,5 @@ export {
   type DashboardState,
   type DashboardEntry,
 } from "../amicode/widget-schema"
-export { resolveTokens, densityFor, type Density } from "../amicode/widget-tokens"
+export { resolveTokens, densityFor, densityForViewport, type Density } from "../amicode/widget-tokens"
 export { suggestInstitutions, resolveBrandLogo } from "../amicode/institution-lookup"

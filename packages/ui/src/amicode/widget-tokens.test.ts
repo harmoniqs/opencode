@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { densityFor, resolveTokens } from "./widget-tokens"
+import { densityFor, densityForViewport, resolveTokens } from "./widget-tokens"
 
 describe("densityFor", () => {
   test("boundaries match COMPACT_CSS (≤880 compact, ≤760 tight)", () => {
@@ -8,6 +8,20 @@ describe("densityFor", () => {
     expect(densityFor(761)).toBe("compact")
     expect(densityFor(760)).toBe("tight")
     expect(densityFor(500)).toBe("tight")
+  })
+})
+
+describe("densityForViewport (spec T3.4 width axis)", () => {
+  test("width tiers: ≤820 compact, ≤600 tight", () => {
+    expect(densityForViewport(821, 1000)).toBe("normal")
+    expect(densityForViewport(820, 1000)).toBe("compact")
+    expect(densityForViewport(601, 1000)).toBe("compact")
+    expect(densityForViewport(600, 1000)).toBe("tight")
+  })
+  test("effective density is the max of both axes", () => {
+    expect(densityForViewport(1200, 880)).toBe("compact") // height wins
+    expect(densityForViewport(600, 1000)).toBe("tight") // width wins
+    expect(densityForViewport(820, 760)).toBe("tight") // tighter axis wins
   })
 })
 
