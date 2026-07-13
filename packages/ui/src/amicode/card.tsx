@@ -97,10 +97,12 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
   // (<div>) shells. Split so the shell can be a real button only when there is
   // an entity to open — a bare <button> would inherit type="submit" and fire
   // the composer form; a plain onClick <div> would be invisible to the keyboard.
+  // amicode: the "AMICO" wordmark is gone from cards — identity lives in the
+  // entity rail now (spec-20260712-amico-third-actor). The H-mark stays as a
+  // subtle leading glyph so a de-stamped card still reads as Amico's work.
   const Sig = () => (
     <span class="amc-sig">
       <AmicoMark running={running()} />
-      <span class="amc-wordmark">AMICO</span>
     </span>
   )
   const Body = () => (

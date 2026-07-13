@@ -154,13 +154,12 @@ export function RunWindow(props: { run: string; lab?: string }) {
         cursor: "pointer",
       }}
     >
-      {/* header: AMICO · Run · status · iter · metric · elapsed */}
+      {/* header: [H] Run · status · iter · metric · elapsed (AMICO wordmark
+          dropped — identity lives in the rail; spec-20260712-amico-third-actor) */}
       <div style={{ display: "flex", "align-items": "center", gap: "8px", "flex-wrap": "wrap", "min-width": "0" }}>
         <span class="amc-sig">
           <AmicoMark />
-          <span class="amc-wordmark">AMICO</span>
         </span>
-        <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Run</span>
         <Show
           when={run()}

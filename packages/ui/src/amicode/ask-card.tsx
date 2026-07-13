@@ -52,9 +52,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
       <div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
         <span class="amc-sig">
           <AmicoMark />
-          <span class="amc-wordmark">AMICO</span>
         </span>
-        <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Question</span>
       </div>
       <div data-slot="amicode-ask-question" style={{ "font-size": "13px", color: "var(--v2-text-text-base)" }}>

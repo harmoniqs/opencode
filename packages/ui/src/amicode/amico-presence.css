@@ -93,6 +93,10 @@
   .amc-lane.is-stepping-in { animation: amc-lane-in 260ms ease-out both; }
   .amc-lane.is-settling    { animation: amc-lane-settle 400ms ease-out both; }
   .amc-rail.is-waking      { animation: amc-rail-wake 240ms ease-out both; }
+  /* the real rail is session-sticky (mounts once when Amico first engages) — so
+     targeting it directly plays the wake exactly once, on entry, with no edit to
+     entity-rail.tsx (keeps that hot file out of this change). */
+  [data-component="amicode-entity-rail"] { animation: amc-rail-wake 260ms ease-out both; }
   .amc-rail.is-live .amc-livedot,
   .amc-entity[data-status="live"] .amc-entity-dot {
     animation: amc-livedot-pulse 1.4s ease-in-out infinite;
