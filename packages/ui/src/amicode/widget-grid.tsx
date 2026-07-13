@@ -6,16 +6,18 @@ import type { Density } from "./widget-tokens"
 
 // AMICODE (widget kernel): the dashboard — replaces the hardcoded
 // AmicodeHomeCards strip. Renders the state's visible entries as sandboxed
-// WidgetFrames: hero widgets in the top 2-column grid, tiles in the auto-fit
-// row (same layout as the old cards at defaults). "Customize" flips edit
-// mode: ▲▼ reorder within a row, × hide, ⚙ generated config form, a tray of
-// hidden widgets to re-add, Fork on built-ins. Every change calls
-// props.onSave immediately — the app POSTs and feeds the merged state back
-// down. Reorder v1 is buttons, not drag (declared spec deviation): controls
-// sit in a strip above each cell, so iframes never need a drag shield.
-// Empty-state cells (widget reported height 0) leave the flow entirely
-// outside edit mode; in edit mode they show as labeled placeholders so a
-// tile that currently renders nothing stays reachable.
+// WidgetFrames: hero widgets in the top auto-fit grid, tiles in the auto-fit
+// row below. "Customize" (in the chrome strip) flips edit mode. In edit mode
+// the cards STAY VISIBLE — a light scrim + dashed ring signal "you're
+// arranging, not using" — and each card gets ONE compact control pill in its
+// top-right corner: ↑↓ reorder within its row, ⚙ config, fork (built-ins),
+// × hide. A banner up top orients; a tray at the bottom re-adds hidden
+// widgets. Every change calls props.onSave immediately (the app POSTs and
+// feeds merged state back down). Reorder is button-based, not drag (declared
+// spec deviation), so the corner pill can safely overlay the iframe: clicks
+// land host-side above the frame; only a click-DRAG through a frame is eaten.
+
+type Bucket = "hero" | "tile"
 
 export function WidgetGrid(props: {
   widgets: WidgetInfo[]
@@ -43,10 +45,11 @@ export function WidgetGrid(props: {
   const [empties, setEmpties] = createSignal<Record<string, boolean>>({})
 
   const infoFor = (id: string) => props.widgets.find((w) => w.id === id)
+  const bucketOf = (id: string): Bucket => (infoFor(id)?.size === "hero" ? "hero" : "tile")
   const visible = createMemo(() => props.dashboard.widget.filter((e) => !e.hidden))
   const hidden = createMemo(() => props.dashboard.widget.filter((e) => e.hidden))
-  const heroes = createMemo(() => visible().filter((e) => infoFor(e.id)?.size === "hero"))
-  const tiles = createMemo(() => visible().filter((e) => infoFor(e.id)?.size !== "hero"))
+  const heroes = createMemo(() => visible().filter((e) => bucketOf(e.id) === "hero"))
+  const tiles = createMemo(() => visible().filter((e) => bucketOf(e.id) === "tile"))
 
   const save = (mutate: (entries: DashboardEntry[]) => DashboardEntry[]) => {
     // spread first: reserved top-level keys (views, scope — spec T3.6) survive
@@ -58,7 +61,9 @@ export function WidgetGrid(props: {
     save((entries) => entries.map((e) => (e.key === key ? { ...e, config: { ...e.config, [field]: value } } : e)))
   const move = (key: string, dir: -1 | 1) =>
     save((entries) => {
-      const group = entries.filter((e) => !e.hidden && infoFor(e.id)?.size === infoFor(entries.find((x) => x.key === key)!.id)?.size)
+      const target = entries.find((x) => x.key === key)
+      if (!target) return entries
+      const group = entries.filter((e) => !e.hidden && bucketOf(e.id) === bucketOf(target.id))
       const gi = group.findIndex((e) => e.key === key)
       const swapWith = group[gi + dir]
       if (gi < 0 || !swapWith) return entries
@@ -69,108 +74,135 @@ export function WidgetGrid(props: {
       return next
     })
 
-  const EditButton = (p: { label: string; title: string; onClick: () => void }) => (
-    <button
-      type="button"
-      title={p.title}
-      onClick={p.onClick}
-      style={{
-        border: "1px solid var(--v2-border-border-base)",
-        "border-radius": "4px",
-        background: "var(--v2-background-bg-layer-02)",
-        color: "var(--v2-text-text-muted)",
-        "font-size": "10px",
-        padding: "1px 6px",
-        cursor: "pointer",
-      }}
-    >
+  // position within the visible row (used to disable ↑ on first / ↓ on last)
+  const posInRow = (key: string, id: string) => {
+    const group = visible().filter((e) => bucketOf(e.id) === bucketOf(id))
+    return { idx: group.findIndex((e) => e.key === key), len: group.length }
+  }
+
+  const PillButton = (p: {
+    label: string
+    title: string
+    onClick: () => void
+    disabled?: boolean
+    class?: string
+  }) => (
+    <button type="button" title={p.title} disabled={p.disabled} class={p.class} onClick={p.onClick}>
       {p.label}
     </button>
   )
 
+  // the floating corner control cluster — one grouped pill, not five loose boxes
+  const ControlPill = (p: { entry: DashboardEntry; w: WidgetInfo }) => {
+    const pos = createMemo(() => posInRow(p.entry.key, p.w.id))
+    const hasConfig = createMemo(() => Object.keys(p.w.config).length > 0)
+    return (
+      <div class="amc-wg-pill">
+        <PillButton label="↑" title="Move earlier" disabled={pos().idx <= 0} onClick={() => move(p.entry.key, -1)} />
+        <PillButton
+          label="↓"
+          title="Move later"
+          disabled={pos().idx < 0 || pos().idx >= pos().len - 1}
+          onClick={() => move(p.entry.key, 1)}
+        />
+        <Show when={hasConfig() || p.w.builtin}>
+          <span class="amc-wg-sep" />
+        </Show>
+        <Show when={hasConfig()}>
+          <PillButton
+            label="⚙"
+            title="Configure"
+            onClick={() => setConfigOpen(configOpen() === p.entry.key ? undefined : p.entry.key)}
+          />
+        </Show>
+        <Show when={p.w.builtin}>
+          <PillButton
+            label="fork"
+            class="amc-wg-fork"
+            title="Duplicate into ~/.amico/widgets as your own editable copy"
+            onClick={() => props.onFork(p.w.id)}
+          />
+        </Show>
+        <span class="amc-wg-sep" />
+        <PillButton label="×" class="amc-wg-danger" title="Remove from dashboard" onClick={() => setHidden(p.entry.key, true)} />
+      </div>
+    )
+  }
+
   const Cell = (p: { entry: DashboardEntry }) => {
     const info = createMemo(() => infoFor(p.entry.id))
     const empty = createMemo(() => empties()[p.entry.key] === true)
+    // a cell shows a labeled placeholder (rather than the frame) when it has
+    // nothing to render but must stay reachable in edit mode
+    const asPlaceholder = createMemo(() => editing() && (!info() || empty()))
+
     return (
-      <Show
-        when={info()}
-        fallback={
-          // unknown id (not-yet-synced user widget): quiet placeholder, kept in state
-          <div
-            style={{
-              border: "1px dashed var(--v2-border-border-base)",
-              "border-radius": "10px",
-              padding: "10px 12px",
-              "font-size": "11px",
-              color: "var(--v2-text-text-faint)",
-            }}
-          >
-            {p.entry.id} (missing)
-            <Show when={editing()}>
-              <span style={{ "margin-left": "8px" }}>
-                <EditButton label="×" title="Remove from dashboard" onClick={() => setHidden(p.entry.key, true)} />
-              </span>
-            </Show>
-          </div>
-        }
-      >
-        {(w) => (
-          <div
-            data-component="amicode-widget-cell"
-            data-widget={w().id}
-            style={{ display: empty() && !editing() ? "none" : "flex", "flex-direction": "column", gap: "4px", "min-width": "0" }}
-          >
-            <Show when={editing()}>
-              <div style={{ display: "flex", gap: "4px", "align-items": "center" }}>
-                <span
-                  style={{
-                    "font-size": "10px",
-                    color: "var(--v2-text-text-faint)",
-                    overflow: "hidden",
-                    "text-overflow": "ellipsis",
-                    "white-space": "nowrap",
-                    flex: "1",
-                  }}
-                >
-                  {w().name}
-                  {empty() ? " (empty right now)" : ""}
-                </span>
-                <EditButton label="▲" title="Move earlier" onClick={() => move(p.entry.key, -1)} />
-                <EditButton label="▼" title="Move later" onClick={() => move(p.entry.key, 1)} />
-                <Show when={Object.keys(w().config).length > 0}>
-                  <EditButton
-                    label="⚙"
-                    title="Configure"
-                    onClick={() => setConfigOpen(configOpen() === p.entry.key ? undefined : p.entry.key)}
-                  />
-                </Show>
-                <Show when={w().builtin}>
-                  <EditButton label="Fork" title="Copy into ~/.amico/widgets as a template" onClick={() => props.onFork(w().id)} />
-                </Show>
-                <EditButton label="×" title="Hide" onClick={() => setHidden(p.entry.key, true)} />
+      <div data-component="amicode-widget-cell" data-widget={p.entry.id} data-editing={editing() ? "true" : "false"}>
+        <Show
+          when={info()}
+          fallback={
+            // unknown id (not-yet-synced user widget): kept in state, reachable in edit mode
+            <Show
+              when={editing()}
+              fallback={<span style={{ display: "none" }} />}
+            >
+              <div class="amc-wg-placeholder">
+                <span style={{ flex: "1" }}>{p.entry.id} — not installed</span>
+                <div class="amc-wg-pill" style={{ position: "static", "box-shadow": "none" }}>
+                  <PillButton label="×" class="amc-wg-danger" title="Remove from dashboard" onClick={() => setHidden(p.entry.key, true)} />
+                </div>
               </div>
             </Show>
-            <Show when={editing() && configOpen() === p.entry.key}>
-              <WidgetConfigForm
-                fields={formModel(w().config, p.entry.config)}
-                onChange={(field, value) => setConfig(p.entry.key, field, value)}
-              />
-            </Show>
-            <Show when={!(empty() && editing())}>
-              <WidgetFrame
-                widget={w()}
-                frameSrc={props.frameSrcs[w().id]}
-                config={p.entry.config}
-                context={props.context}
-                tokens={props.tokens}
-                density={props.density}
-                callbacks={props.callbacks}
-                onEmpty={(e) => setEmpties((prev) => ({ ...prev, [p.entry.key]: e }))}
-              />
-            </Show>
-          </div>
-        )}
-      </Show>
+          }
+        >
+          {(w) => (
+            <>
+              <Show when={asPlaceholder()}>
+                <div class="amc-wg-framewrap">
+                  <div class="amc-wg-placeholder">
+                    <span style={{ flex: "1" }}>
+                      {w().name} <span class="amc-wg-empty">· nothing to show right now</span>
+                    </span>
+                  </div>
+                  <ControlPill entry={p.entry} w={w()} />
+                </div>
+              </Show>
+
+              <Show when={!asPlaceholder()}>
+                <div
+                  class="amc-wg-framewrap"
+                  style={{ display: empty() && !editing() ? "none" : "block" }}
+                >
+                  <WidgetFrame
+                    widget={w()}
+                    frameSrc={props.frameSrcs[w().id]}
+                    config={p.entry.config}
+                    context={props.context}
+                    tokens={props.tokens}
+                    density={props.density}
+                    callbacks={props.callbacks}
+                    onEmpty={(e) => setEmpties((prev) => ({ ...prev, [p.entry.key]: e }))}
+                  />
+                  <Show when={editing()}>
+                    <div class="amc-wg-scrim" />
+                    <div class="amc-wg-name">{w().name}</div>
+                    <ControlPill entry={p.entry} w={w()} />
+                  </Show>
+                </div>
+              </Show>
+
+              <Show when={editing() && configOpen() === p.entry.key}>
+                <div style={{ "margin-top": "6px" }}>
+                  <WidgetConfigForm
+                    fields={formModel(w().config, p.entry.config)}
+                    onChange={(field, value) => setConfig(p.entry.key, field, value)}
+                  />
+                </div>
+              </Show>
+            </>
+          )}
+        </Show>
+      </div>
     )
   }
 
@@ -199,6 +231,25 @@ export function WidgetGrid(props: {
         </div>
       </Show>
 
+      <Show when={editing()}>
+        <div data-component="amicode-widget-editbar">
+          <span>
+            <b>Customizing your dashboard</b> — use each card's corner controls to reorder <b>↑↓</b>, configure <b>⚙</b>, or
+            remove <b>×</b>. Changes save as you go.
+          </span>
+          <button
+            type="button"
+            class="amc-wg-editdone"
+            onClick={() => {
+              setEditing(false)
+              setConfigOpen(undefined)
+            }}
+          >
+            Done
+          </button>
+        </div>
+      </Show>
+
       <Show when={heroes().length > 0}>
         {/* panel-first (spec T3.4): 2-up when the canvas allows, stacked below */}
         <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}>
@@ -212,35 +263,20 @@ export function WidgetGrid(props: {
         </div>
       </Show>
 
-      {/* hidden tray — edit mode only */}
+      {/* add-back tray — edit mode only, only when something is hidden */}
       <Show when={editing() && hidden().length > 0}>
         <div
+          data-component="amicode-widget-tray"
           style={{
-            display: "flex",
-            gap: "8px",
-            "flex-wrap": "wrap",
-            "align-items": "center",
             padding: "8px 10px",
             border: "1px dashed var(--v2-border-border-base)",
             "border-radius": "8px",
           }}
         >
-          <span style={{ "font-size": "10px", color: "var(--v2-text-text-faint)" }}>hidden:</span>
+          <span class="amc-wg-traylabel">add a widget</span>
           <For each={hidden()}>
             {(entry) => (
-              <button
-                type="button"
-                onClick={() => setHidden(entry.key, false)}
-                style={{
-                  border: "1px solid var(--v2-border-border-base)",
-                  "border-radius": "6px",
-                  background: "var(--v2-background-bg-layer-02)",
-                  color: "var(--v2-text-text-muted)",
-                  "font-size": "11px",
-                  padding: "2px 8px",
-                  cursor: "pointer",
-                }}
-              >
+              <button type="button" class="amc-wg-add" onClick={() => setHidden(entry.key, false)}>
                 + {infoFor(entry.id)?.name ?? entry.id}
               </button>
             )}

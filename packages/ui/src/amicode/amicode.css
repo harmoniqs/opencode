@@ -758,3 +758,83 @@
 [data-component="amicode-formulation-view"] .amc-modebar { max-width: 100%; }
 [data-component="amicode-system-view"] .amc-ev-formula,
 [data-component="amicode-formulation-view"] .amc-obj-latex { overflow-x: auto; }
+
+/* ---- Widget grid edit mode (spec T3.1/T2.6) ------------------------------
+   Rebuilt for clarity: instead of a heavy row of buttons floating above each
+   card (which reads as its own UI and drowns the content), the cards stay
+   visible and a light scrim + dashed ring signal "you're arranging, not
+   using". A single grouped control pill floats in each card's top-right
+   corner. Overlaying host DOM over an iframe is safe for CLICKS — only a
+   click-drag THROUGH the frame gets eaten, and reorder here is button-based.
+   The scrim also intercepts pointer events so the widget beneath can't be
+   clicked while arranging. ------------------------------------------------- */
+[data-component="amicode-widget-cell"] { position: relative; }
+.amc-wg-framewrap { position: relative; border-radius: 10px; transition: outline-color 0.16s ease; }
+[data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-framewrap {
+  outline: 1px dashed var(--v2-border-border-base);
+  outline-offset: 3px;
+}
+.amc-wg-scrim {
+  position: absolute; inset: 0; z-index: 1; border-radius: 10px; cursor: default;
+  background: color-mix(in srgb, var(--v2-background-bg-base) 44%, transparent);
+}
+.amc-wg-name {
+  position: absolute; top: 9px; left: 11px; z-index: 2; pointer-events: none;
+  font-size: 11px; font-weight: 600; color: var(--v2-text-text-base);
+  text-shadow: 0 1px 4px color-mix(in srgb, var(--v2-background-bg-base) 85%, transparent);
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.amc-wg-name .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
+.amc-wg-pill {
+  position: absolute; top: 7px; right: 7px; z-index: 2;
+  display: flex; align-items: center; gap: 1px; padding: 3px;
+  border-radius: 9px; background: var(--v2-background-bg-layer-01);
+  border: 1px solid var(--v2-border-border-base);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--v2-background-bg-base) 70%, transparent);
+}
+.amc-wg-pill button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 5px;
+  border: none; background: transparent; border-radius: 6px;
+  color: var(--v2-text-text-muted); font-size: 12px; line-height: 1; cursor: pointer;
+}
+.amc-wg-pill button:hover:not(:disabled) {
+  background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
+}
+.amc-wg-pill button:disabled { opacity: 0.28; cursor: default; }
+.amc-wg-pill .amc-wg-danger:hover:not(:disabled) { color: var(--v2-state-fg-danger); }
+.amc-wg-pill .amc-wg-fork { font-size: 10px; letter-spacing: 0.02em; color: var(--v2-text-text-faint); }
+.amc-wg-pill .amc-wg-sep { width: 1px; height: 14px; background: var(--v2-border-border-base); margin: 0 3px; flex: 0 0 auto; }
+
+[data-component="amicode-widget-editbar"] {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 7%, var(--v2-background-bg-layer-01));
+  font-size: 11px; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-widget-editbar"] b { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-widget-editbar"] .amc-wg-editdone {
+  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: 6px;
+  background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
+  font-size: 11px; padding: 3px 12px; cursor: pointer;
+}
+[data-component="amicode-widget-editbar"] .amc-wg-editdone:hover { border-color: var(--v2-border-border-strong); }
+
+.amc-wg-placeholder {
+  display: flex; align-items: center; min-height: 68px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  background: var(--v2-background-bg-layer-01);
+  padding: 10px 12px; font-size: 11px; color: var(--v2-text-text-faint);
+}
+
+[data-component="amicode-widget-tray"] { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+[data-component="amicode-widget-tray"] .amc-wg-traylabel { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--v2-text-text-faint); }
+[data-component="amicode-widget-tray"] .amc-wg-add {
+  border: 1px solid var(--v2-border-border-base); border-radius: 999px;
+  background: var(--v2-background-bg-layer-01); color: var(--v2-text-text-muted);
+  font-size: 11px; padding: 3px 11px; cursor: pointer;
+}
+[data-component="amicode-widget-tray"] .amc-wg-add:hover {
+  border-color: var(--v2-border-border-strong); color: var(--v2-text-text-base);
+}
