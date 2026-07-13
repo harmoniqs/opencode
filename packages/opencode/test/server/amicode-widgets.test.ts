@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync
 import { tmpdir } from "node:os"
 import path from "node:path"
 import {
+  authorWidget,
   forkManifestToml,
   forkWidgetResponse,
   loadRegistry,
@@ -115,5 +116,79 @@ describe("widget routes", () => {
     expect(out).toContain('id = "b"')
     expect(out).toContain('name = "A"')
     expect(out).toContain("[origin]")
+  })
+})
+
+describe("authorWidget (Stage 2 chat authoring)", () => {
+  const validJs = "export default { mount: function (el, amico) { el.innerHTML = 'hi' } }"
+
+  test("writes a user widget the registry then loads, returns a hash", () => {
+    userDir()
+    const r = authorWidget({ id: "recent-runs", name: "Recent Runs", size: "hero", height: 220, js: validJs })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.id).toBe("recent-runs")
+    expect(r.size).toBe("hero")
+    expect(r.height).toBe(220)
+    expect(r.hash).toMatch(/^[0-9a-f]{16}$/)
+    expect(existsSync(path.join(dir!, "recent-runs", "manifest.toml"))).toBe(true)
+    expect(existsSync(path.join(dir!, "recent-runs", "widget.js"))).toBe(true)
+    const { widgets } = loadRegistry()
+    const w = widgets.find((x) => x.manifest.id === "recent-runs")
+    expect(w?.manifest.name).toBe("Recent Runs")
+    expect(w?.builtin).toBe(false)
+  })
+
+  test("re-authoring the same id overwrites and changes the hash (hot-reload)", () => {
+    userDir()
+    const first = authorWidget({ id: "records", name: "Records", size: "tile", height: 160, js: validJs })
+    const second = authorWidget({
+      id: "records",
+      name: "Records",
+      size: "tile",
+      height: 160,
+      js: validJs.replace("hi", "bye"),
+    })
+    expect(first.ok && second.ok).toBe(true)
+    if (!first.ok || !second.ok) return
+    expect(second.hash).not.toBe(first.hash)
+    expect(readFileSync(path.join(dir!, "records", "widget.js"), "utf8")).toContain("bye")
+  })
+
+  test("a user id overriding a builtin wins in the registry", () => {
+    userDir()
+    authorWidget({ id: "pulse-bank", name: "My Bank", size: "tile", height: 120, js: validJs })
+    const { widgets } = loadRegistry()
+    const w = widgets.find((x) => x.manifest.id === "pulse-bank")
+    expect(w?.builtin).toBe(false)
+    expect(w?.overridden).toBe(true)
+    expect(w?.manifest.name).toBe("My Bank")
+  })
+
+  test("names with quotes/punctuation round-trip through the manifest", () => {
+    userDir()
+    const r = authorWidget({
+      id: "coverage-map",
+      name: 'Coverage "Map" (β)',
+      size: "tile",
+      height: 140,
+      description: "platform x gate",
+      js: validJs,
+    })
+    expect(r.ok).toBe(true)
+    const { widgets, warnings } = loadRegistry()
+    expect(warnings.find((w) => w.id === "coverage-map")).toBeUndefined()
+    expect(widgets.find((x) => x.manifest.id === "coverage-map")?.manifest.name).toBe('Coverage "Map" (β)')
+  })
+
+  test("rejects bad input without writing", () => {
+    userDir()
+    expect(authorWidget({ id: "Bad_Id", name: "x", size: "tile", height: 100, js: validJs }).ok).toBe(false)
+    expect(authorWidget({ id: "ok", name: "", size: "tile", height: 100, js: validJs }).ok).toBe(false)
+    expect(authorWidget({ id: "ok", name: "x", size: "big", height: 100, js: validJs }).ok).toBe(false)
+    expect(authorWidget({ id: "ok", name: "x", size: "tile", height: 5, js: validJs }).ok).toBe(false)
+    expect(authorWidget({ id: "ok", name: "x", size: "tile", height: 100, js: "" }).ok).toBe(false)
+    expect(authorWidget({ id: "ok", name: "x", size: "tile", height: 100, js: "export default {}" }).ok).toBe(false)
+    expect(existsSync(path.join(dir!, "ok"))).toBe(false)
   })
 })

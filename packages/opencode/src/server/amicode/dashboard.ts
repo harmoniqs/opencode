@@ -83,10 +83,14 @@ export function mergeDashboard(stored: StoredState | null, registry: RegistryWid
       ...(reg ? {} : { missing: true }),
     })
   }
-  // registry widgets absent from state appear at the end, visible (new
-  // built-ins surface automatically after an upgrade)
+  // BUILT-IN registry widgets absent from state appear at the end, visible (new
+  // built-ins surface automatically after an upgrade). USER widgets (authored
+  // in chat, or forked) do NOT auto-appear — they are opt-in via an explicit
+  // pin/add (Stage 2), so iterating on a widget in a conversation never
+  // clutters home before the user chooses to keep it.
   for (const w of registry) {
     if (seen.has(w.manifest.id)) continue
+    if (!w.builtin) continue
     out.push({
       key: entryKey(w.manifest.id),
       id: w.manifest.id,

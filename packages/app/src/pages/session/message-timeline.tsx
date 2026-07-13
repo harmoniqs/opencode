@@ -45,7 +45,7 @@ import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
+import { ThinkingLine } from "@opencode-ai/ui/thinking-line"
 import type {
   AssistantMessage,
   Message as MessageType,
@@ -72,7 +72,8 @@ import { useSDK } from "@/context/sdk"
 import { useServer } from "@/context/server"
 import { usePrompt } from "@/context/prompt"
 import { startPrompt, draftPrompt } from "@/utils/start-prompt"
-import { amicodeGet } from "@/utils/amicode-fetch"
+import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
+import { parseDashboardResponse, type DashboardState } from "@opencode-ai/ui/amicode-widget-grid"
 import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
 import { useSync } from "@/context/sync"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
@@ -167,11 +168,13 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean }) {
-  const language = useLanguage()
-
+  // amicode: the Claude-Code-esque working indicator (cycling shimmer gerund +
+  // live elapsed) replaces the plain localized "Thinking" shimmer. It lives HERE,
+  // in the app's own timeline renderer — the packages/ui AssistantParts copy of
+  // this line is not on this fork's render path (root-caused 2026-07-13).
   return (
     <div data-slot="session-turn-thinking">
-      <TextShimmer text={language.t("ui.sessionTurn.status.thinking")} />
+      <ThinkingLine />
       <Show when={!props.showReasoningSummaries}>
         <TextReveal text={props.reasoningHeading} class="session-turn-thinking-heading" travel={25} duration={700} />
       </Show>
@@ -1708,6 +1711,38 @@ export function MessageTimeline(props: {
                   `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
                 )
               }
+              widgetHost={{
+                // Stage 2: the in-chat widget preview reuses the home grid's
+                // frame kernel; server context is resolved live per call.
+                frameSrc: (id, hash) => {
+                  const url = server.current?.http.url
+                  return url
+                    ? new URL(
+                        `/amicode/widget-frame?id=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`,
+                        url,
+                      ).toString()
+                    : ""
+                },
+                callbacks: {
+                  fetch: (path) => amicodeGet(server.current, path),
+                  action: async () => ({ ok: true }),
+                  prompt: (text) => {
+                    const id = sessionID()
+                    if (id) void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+                  },
+                  open: () => {},
+                },
+                // pin = GET current dashboard, append this widget if absent, POST
+                // the full state back (applySave treats the body as the whole
+                // state, so a partial POST would wipe other tiles).
+                pin: async (id) => {
+                  const raw = await amicodeGet(server.current, "/amicode/dashboard")
+                  const state: DashboardState = parseDashboardResponse(raw) ?? { version: 1, widget: [] }
+                  if (!state.widget.some((e) => e.id === id))
+                    state.widget = [...state.widget, { key: id, id, hidden: false, config: {} }]
+                  return amicodePost(server.current, "/amicode/dashboard", state)
+                },
+              }}
               onOpenEntity={openEntityView}
               onOpenSwitcher={openSwitcher}
               onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}

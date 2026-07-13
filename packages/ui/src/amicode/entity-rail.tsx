@@ -2,7 +2,7 @@ import { For, Show, createEffect, createMemo, createResource, createSignal, onCl
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
 import { AmicoMark } from "./spinner"
-import { registerAmicodeUiBridge } from "./ui-bridge"
+import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
   type ProblemView,
   type RunStatusView,
@@ -47,6 +47,9 @@ export function AmicodeEntityRail(props: {
   fetchProblem: () => Promise<unknown>
   fetchRunStatus: () => Promise<unknown>
   fetchRunSeries?: (run: string, lab?: string) => Promise<unknown>
+  // Stage 2: transport for the in-chat widget preview (frame src + host
+  // callbacks + pin). Optional so hosts that can't render widgets omit it.
+  widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
   onOpenSwitcher: () => void
   onAsk?: (text: string) => void
@@ -68,6 +71,7 @@ export function AmicodeEntityRail(props: {
     openEntity: (kind, seq) => props.onOpenEntity(kind, seq),
     openSwitcher: () => props.onOpenSwitcher(),
     fetchRunSeries: props.fetchRunSeries,
+    widgetHost: props.widgetHost,
   })
   onCleanup(disposeUiBridge)
 

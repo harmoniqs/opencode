@@ -838,3 +838,57 @@
 [data-component="amicode-widget-tray"] .amc-wg-add:hover {
   border-color: var(--v2-border-border-strong); color: var(--v2-text-text-base);
 }
+
+/* ---- In-chat widget preview (Stage 2 chat authoring) --------------------- */
+[data-component="amicode-widget-preview"] {
+  display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid var(--v2-border-border-base); border-radius: 12px;
+  background: var(--v2-background-bg-layer-01); padding: 10px 12px; max-width: 100%;
+}
+[data-component="amicode-widget-preview"] .amc-wp-head {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+}
+[data-component="amicode-widget-preview"] .amc-wp-eyebrow {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--v2-text-text-faint);
+}
+[data-component="amicode-widget-preview"] .amc-wp-name {
+  font-size: 12px; font-weight: 600; color: var(--v2-text-text-base);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+[data-component="amicode-widget-preview"] .amc-wp-badge {
+  font-size: 10px; color: var(--v2-text-text-muted);
+  border: 1px solid var(--v2-border-border-base); border-radius: 999px; padding: 1px 7px;
+}
+[data-component="amicode-widget-preview"] .amc-wp-stage {
+  border-radius: 10px; overflow: hidden;
+  /* faint checker so a widget's own transparent areas read as "canvas" */
+  background:
+    repeating-linear-gradient(45deg,
+      color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent) 0 6px,
+      transparent 6px 12px);
+}
+[data-component="amicode-widget-preview"] .amc-wp-note,
+[data-component="amicode-widget-preview"] .amc-wp-hint {
+  font-size: 11px; color: var(--v2-text-text-faint);
+}
+[data-component="amicode-widget-preview"] .amc-wp-warnings {
+  margin: 0; padding-left: 16px; font-size: 11px; color: var(--v2-state-fg-warning);
+}
+[data-component="amicode-widget-preview"] .amc-wp-foot {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin {
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
+  border-radius: 7px; background: color-mix(in srgb, var(--v2-icon-icon-accent) 12%, var(--v2-background-bg-layer-02));
+  color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-background-bg-layer-02));
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
+[data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {
+  color: var(--v2-state-fg-success);
+  border-color: color-mix(in srgb, var(--v2-state-fg-success) 40%, var(--v2-border-border-base));
+  background: transparent;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin[data-state="error"] { color: var(--v2-state-fg-danger); }

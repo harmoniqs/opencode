@@ -8,6 +8,8 @@ import { compositeChip, chipText } from "./problem"
 import { AmicoMark } from "./spinner"
 import { openAmicodeEntity } from "./ui-bridge"
 import { RunWindow } from "./run-window"
+import { parseWidgetSentinel } from "./widget-preview"
+import { WidgetPreviewCard } from "./widget-preview-card"
 
 // spec C: when an amicode_solve recorded a run_dir, its sentinel carries the
 // path (well under the 120-char truncation cap) — extract lab/run_id from the
@@ -238,6 +240,9 @@ export function AmicodeToolCard(props: {
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
+  const authored = createMemo(() =>
+    props.tool === "amicode_author_widget" ? parseWidgetSentinel(props.output) : undefined,
+  )
 
   return (
     <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
@@ -245,6 +250,7 @@ export function AmicodeToolCard(props: {
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
+      <Match when={authored()}>{(preview) => <WidgetPreviewCard preview={preview()} />}</Match>
     </Switch>
   )
 }

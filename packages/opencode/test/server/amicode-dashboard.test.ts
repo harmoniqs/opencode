@@ -52,6 +52,21 @@ describe("mergeDashboard", () => {
     expect(out.widget[3].hidden).toBe(false)
   })
 
+  test("user (non-builtin) registry widgets do NOT auto-append — opt-in pin only (Stage 2)", () => {
+    const withUser: RegistryWidget[] = [...REGISTRY, { manifest: manifest("recent-runs"), builtin: false }]
+    // absent from stored state → must NOT appear until explicitly pinned
+    const fresh = mergeDashboard(null, withUser)
+    expect(fresh.widget.map((w) => w.id)).not.toContain("recent-runs")
+    // once pinned (present in stored state) → kept
+    const pinned = mergeDashboard(
+      { version: 1, widget: [{ key: "w-r", id: "recent-runs", hidden: false, config: {} }] },
+      withUser,
+    )
+    const rr = pinned.widget.find((w) => w.id === "recent-runs")
+    expect(rr).toBeDefined()
+    expect(rr!.missing).toBeUndefined() // it's in the registry, not missing
+  })
+
   test("config sanitized per manifest schema", () => {
     const stored = {
       version: 1,
