@@ -24,7 +24,9 @@ export interface WidgetManifest {
   origin: { session?: string; date?: string } | null
 }
 
-export type ManifestResult = { ok: true; manifest: WidgetManifest } | { ok: false; error: string }
+export type ManifestResult =
+  | { ok: true; manifest: WidgetManifest; warning?: string }
+  | { ok: false; error: string }
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
@@ -96,8 +98,17 @@ export function parseManifest(tomlSrc: string, dirname: string): ManifestResult 
   const name = v.name
   if (typeof name !== "string" || name.trim() === "") return bad("name required")
 
-  const size = v.size ?? "tile"
-  if (size !== "hero" && size !== "tile") return bad('size must be "hero" or "tile"')
+  // T3.6 forward-compat: unknown sizes (e.g. the reserved "strip") degrade to
+  // tile with a warning instead of rejecting the widget — a newer widget must
+  // render on an older host, not vanish.
+  const rawSize = v.size ?? "tile"
+  let sizeWarning: string | undefined
+  let size: "hero" | "tile"
+  if (rawSize === "hero" || rawSize === "tile") size = rawSize
+  else {
+    size = "tile"
+    sizeWarning = `unknown size ${JSON.stringify(rawSize)} rendered as "tile"`
+  }
   const bridge = v.bridge ?? 1
   if (typeof bridge !== "number" || !Number.isInteger(bridge) || bridge < 1) return bad("bridge must be a positive int")
   const height = v.height ?? 96
@@ -129,6 +140,7 @@ export function parseManifest(tomlSrc: string, dirname: string): ManifestResult 
 
   return {
     ok: true,
+    ...(sizeWarning ? { warning: sizeWarning } : {}),
     manifest: {
       id,
       name,

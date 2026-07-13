@@ -23,12 +23,21 @@ export interface DashboardEntry {
   hidden: boolean
   config: Record<string, unknown>
   missing?: boolean
+  /** reserved-key pass-through (spec T3.6): group, view, future keys survive */
+  [reserved: string]: unknown
 }
 
 export interface DashboardState {
   version: 1
   widget: DashboardEntry[]
+  /** reserved top-level keys (spec T3.6): views, scope */
+  [reserved: string]: unknown
 }
+
+/** Top-level reserved keys carried through merge/save (spec: views, scope). */
+const RESERVED_TOP_KEYS = ["views", "scope"] as const
+/** Entry keys owned by the merge — everything else passes through untouched. */
+const CORE_ENTRY_KEYS = new Set(["key", "id", "hidden", "config", "missing"])
 
 export function dashboardFile(): string {
   const env = process.env.AMICODE_DASHBOARD_FILE
@@ -59,7 +68,14 @@ export function mergeDashboard(stored: StoredState | null, registry: RegistryWid
     seen.add(id)
     const reg = byId.get(id)
     const config = typeof raw.config === "object" && raw.config !== null ? (raw.config as Record<string, unknown>) : {}
+    // T3.6: unrecognized keys (group, view, …) pass through; core keys are
+    // recomputed after the spread so passthrough can never override them.
+    const passthrough: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!CORE_ENTRY_KEYS.has(k)) passthrough[k] = v
+    }
     out.push({
+      ...passthrough,
       key: typeof raw.key === "string" && raw.key !== "" ? raw.key : entryKey(id),
       id,
       hidden: raw.hidden === true,
@@ -78,7 +94,12 @@ export function mergeDashboard(stored: StoredState | null, registry: RegistryWid
       config: sanitizeConfig(w.manifest.config, undefined),
     })
   }
-  return { version: 1, widget: out }
+  const state: DashboardState = { version: 1, widget: out }
+  for (const k of RESERVED_TOP_KEYS) {
+    const v = (stored as Record<string, unknown> | null)?.[k]
+    if (v !== undefined) state[k] = v
+  }
+  return state
 }
 
 export type SaveResult = { ok: true; state: DashboardState } | { ok: false; error: string }

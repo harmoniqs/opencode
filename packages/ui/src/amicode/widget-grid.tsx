@@ -39,7 +39,8 @@ export function WidgetGrid(props: {
   const tiles = createMemo(() => visible().filter((e) => infoFor(e.id)?.size !== "hero"))
 
   const save = (mutate: (entries: DashboardEntry[]) => DashboardEntry[]) => {
-    props.onSave({ version: 1, widget: mutate(props.dashboard.widget.map((e) => ({ ...e }))) })
+    // spread first: reserved top-level keys (views, scope — spec T3.6) survive
+    props.onSave({ ...props.dashboard, version: 1, widget: mutate(props.dashboard.widget.map((e) => ({ ...e }))) })
   }
   const setHidden = (key: string, value: boolean) =>
     save((entries) => entries.map((e) => (e.key === key ? { ...e, hidden: value } : e)))

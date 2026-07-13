@@ -31,12 +31,19 @@ export interface DashboardEntry {
   hidden: boolean
   config: Record<string, unknown>
   missing?: boolean
+  /** reserved-key pass-through (spec T3.6): group, view, … survive the client round-trip */
+  [reserved: string]: unknown
 }
 
 export interface DashboardState {
   version: 1
   widget: DashboardEntry[]
+  /** reserved top-level keys (spec T3.6): views, scope */
+  [reserved: string]: unknown
 }
+
+const CLIENT_CORE_ENTRY_KEYS = new Set(["key", "id", "hidden", "config", "missing"])
+const CLIENT_RESERVED_TOP_KEYS = ["views", "scope"] as const
 
 const FIELD_TYPES = new Set(["boolean", "select", "multi-select", "string", "number"])
 
@@ -84,14 +91,25 @@ export function parseDashboardResponse(raw: unknown): DashboardState | undefined
   const widget: DashboardEntry[] = d.widget
     .filter((e): e is Record<string, unknown> => typeof e === "object" && e !== null)
     .filter((e) => typeof e.id === "string")
-    .map((e) => ({
-      key: typeof e.key === "string" ? e.key : (e.id as string),
-      id: e.id as string,
-      hidden: e.hidden === true,
-      config: typeof e.config === "object" && e.config !== null ? (e.config as Record<string, unknown>) : {},
-      ...(e.missing === true ? { missing: true } : {}),
-    }))
-  return { version: 1, widget }
+    .map((e) => {
+      // T3.6: unrecognized keys pass through so a grid save can't erase them
+      const passthrough: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(e)) if (!CLIENT_CORE_ENTRY_KEYS.has(k)) passthrough[k] = v
+      return {
+        ...passthrough,
+        key: typeof e.key === "string" ? e.key : (e.id as string),
+        id: e.id as string,
+        hidden: e.hidden === true,
+        config: typeof e.config === "object" && e.config !== null ? (e.config as Record<string, unknown>) : {},
+        ...(e.missing === true ? { missing: true } : {}),
+      }
+    })
+  const state: DashboardState = { version: 1, widget }
+  for (const k of CLIENT_RESERVED_TOP_KEYS) {
+    const v = (data.dashboard as Record<string, unknown>)[k]
+    if (v !== undefined) state[k] = v
+  }
+  return state
 }
 
 // --- config form model -------------------------------------------------------

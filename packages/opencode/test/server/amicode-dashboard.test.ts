@@ -63,6 +63,47 @@ describe("mergeDashboard", () => {
   })
 })
 
+describe("reserved-key pass-through (spec T3.6)", () => {
+  test("unrecognized entry keys survive the merge", () => {
+    const stored = {
+      version: 1,
+      widget: [{ key: "w-1", id: "pulse-bank", hidden: false, config: {}, group: "lab", view: "home" }],
+    }
+    const out = mergeDashboard(stored, REGISTRY)
+    const bank = out.widget.find((w) => w.id === "pulse-bank") as Record<string, unknown>
+    expect(bank.group).toBe("lab")
+    expect(bank.view).toBe("home")
+  })
+
+  test("reserved top-level keys survive merge and save round-trip", () => {
+    const stored = {
+      version: 1,
+      views: [{ id: "lab", name: "Lab" }],
+      scope: "home",
+      widget: [{ key: "w-1", id: "pulse-bank", hidden: true, config: {} }],
+    }
+    const out = mergeDashboard(stored, REGISTRY) as Record<string, unknown>
+    expect(out.views).toEqual([{ id: "lab", name: "Lab" }])
+    expect(out.scope).toBe("home")
+
+    const saved = applySave(JSON.stringify(stored), REGISTRY)
+    expect(saved.ok).toBe(true)
+    if (saved.ok) expect((saved.state as Record<string, unknown>).views).toEqual([{ id: "lab", name: "Lab" }])
+  })
+
+  test("core keys still win over passthrough collisions", () => {
+    const stored = {
+      version: 99, // not a reserved key — core version stays 1
+      widget: [{ key: "w-1", id: "pulse-bank", hidden: "maybe", config: {}, missing: true }],
+    }
+    const out = mergeDashboard(stored, REGISTRY)
+    expect(out.version).toBe(1)
+    const bank = out.widget.find((w) => w.id === "pulse-bank")!
+    expect(bank.hidden).toBe(false) // sanitized, not passthrough
+    expect(bank.missing).toBeUndefined() // computed, not passthrough
+  })
+})
+
 describe("applySave", () => {
   test("structurally valid body → sanitized merged state", () => {
     const r = applySave(

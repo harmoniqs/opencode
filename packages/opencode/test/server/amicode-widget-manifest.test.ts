@@ -55,11 +55,18 @@ describe("parseManifest", () => {
     expect(parseManifest('id = "Bad_Id"\nname = "x"', "Bad_Id").ok).toBe(false)
   })
 
-  test("name required; size defaults tile; bad size rejected", () => {
+  test("name required; size defaults tile", () => {
     expect(parseManifest('id = "a"', "a").ok).toBe(false)
     const m = parsed('id = "a"\nname = "A"', "a")
     expect(m.size).toBe("tile")
-    expect(parseManifest('id = "a"\nname = "A"\nsize = "huge"', "a").ok).toBe(false)
+  })
+
+  test("unknown size degrades to tile with a warning (spec T3.6, reserved 'strip')", () => {
+    const r = parseManifest('id = "a"\nname = "A"\nsize = "strip"', "a")
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.manifest.size).toBe("tile")
+    expect(r.warning).toContain("strip")
   })
 
   test("hero size accepted; bridge respected", () => {

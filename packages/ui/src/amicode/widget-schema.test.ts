@@ -55,6 +55,21 @@ describe("parseDashboardResponse", () => {
     expect(parseDashboardResponse({ ok: true, dashboard: { widget: "x" } })).toBeUndefined()
     expect(parseDashboardResponse("nope")).toBeUndefined()
   })
+
+  test("reserved keys pass through the client parse (spec T3.6)", () => {
+    const d = parseDashboardResponse({
+      ok: true,
+      dashboard: {
+        version: 1,
+        views: [{ id: "lab", name: "Lab" }],
+        scope: "home",
+        widget: [{ key: "w-1", id: "a", hidden: false, config: {}, group: "lab" }],
+      },
+    }) as Record<string, unknown> & { widget: Record<string, unknown>[] }
+    expect(d.views).toEqual([{ id: "lab", name: "Lab" }])
+    expect(d.scope).toBe("home")
+    expect(d.widget[0].group).toBe("lab")
+  })
 })
 
 describe("formModel", () => {
