@@ -40,15 +40,23 @@ export function AmicodeDefaultModel() {
     return [...byProvider.values()]
   })
 
+  // Bound to the DURABLE pin (models.pin), not the recents head — chats using
+  // other models must not move the dashboard's declared default. Empty = Auto
+  // (no pin; new chats fall back to recents/provider default).
   const current = createMemo(() => {
-    const recent = models.recent.list()[0]
-    return recent ? formatModelValue(recent) : ""
+    const pin = models.pin.get()
+    return pin ? formatModelValue(pin) : ""
   })
 
   const choose = (value: string) => {
+    if (value === "") {
+      models.pin.set(undefined) // Auto: clear the pin, mirror the cleared setting
+      syncDefaultModelPin("")
+      return
+    }
     const key = parseModelValue(value)
     if (!key) return
-    models.recent.push(key)
+    models.pin.set(key)
     syncDefaultModelPin(value)
   }
 
