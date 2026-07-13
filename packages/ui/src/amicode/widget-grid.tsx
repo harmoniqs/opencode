@@ -136,16 +136,26 @@ export function WidgetGrid(props: {
     // nothing to render but must stay reachable in edit mode
     const asPlaceholder = createMemo(() => editing() && (!info() || empty()))
 
+    // when NOT editing, a cell with nothing to render (missing widget or an
+    // empty-state) collapses out of the grid entirely — otherwise it would
+    // hold an empty column track. The frame (when present) stays MOUNTED under
+    // display:none so its amc:empty signal keeps flowing and the cell can
+    // re-appear if the widget later has content (hidden frames have no layout,
+    // so emptiness is never inferred from height — it's an explicit signal).
+    const collapsed = createMemo(() => !editing() && (!info() || empty()))
+
     return (
-      <div data-component="amicode-widget-cell" data-widget={p.entry.id} data-editing={editing() ? "true" : "false"}>
+      <div
+        data-component="amicode-widget-cell"
+        data-widget={p.entry.id}
+        data-editing={editing() ? "true" : "false"}
+        style={{ display: collapsed() ? "none" : undefined }}
+      >
         <Show
           when={info()}
           fallback={
-            // unknown id (not-yet-synced user widget): kept in state, reachable in edit mode
-            <Show
-              when={editing()}
-              fallback={<span style={{ display: "none" }} />}
-            >
+            // unknown id (not-yet-synced user widget): reachable only in edit mode
+            <Show when={editing()}>
               <div class="amc-wg-placeholder">
                 <span style={{ flex: "1" }}>{p.entry.id} — not installed</span>
                 <div class="amc-wg-pill" style={{ position: "static", "box-shadow": "none" }}>
@@ -169,10 +179,7 @@ export function WidgetGrid(props: {
               </Show>
 
               <Show when={!asPlaceholder()}>
-                <div
-                  class="amc-wg-framewrap"
-                  style={{ display: empty() && !editing() ? "none" : "block" }}
-                >
+                <div class="amc-wg-framewrap">
                   <WidgetFrame
                     widget={w()}
                     frameSrc={props.frameSrcs[w().id]}
