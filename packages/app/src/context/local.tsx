@@ -156,6 +156,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
+    // amicode: the dashboard's durable default-model pin outranks recents —
+    // "default" must mean default, not "whatever the last chat used".
+    const pinnedModel = () => {
+      const pin = models.pin.get()
+      if (pin && validModel(pin)) return pin
+    }
+
     const defaultModel = () => {
       const defaults = providers.default()
       for (const provider of providers.connected()) {
@@ -172,7 +179,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const fallback = createMemo<ModelKey | undefined>(() => configuredModel() ?? recentModel() ?? defaultModel())
+    const fallback = createMemo<ModelKey | undefined>(
+      () => configuredModel() ?? pinnedModel() ?? recentModel() ?? defaultModel(),
+    )
 
     const agent = {
       list,

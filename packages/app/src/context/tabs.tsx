@@ -92,6 +92,25 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       })
     }
 
+    // Index of the tab the route currently points at (session by href, draft by
+    // draftId), or -1. Used by the bulk-close actions to decide whether the
+    // active tab was among those removed and therefore needs re-navigation.
+    const currentTabIndex = () => {
+      if (location.pathname === "/new-session" && location.query.draftId) {
+        return store.findIndex((tab) => tab.type === "draft" && tab.draftID === location.query.draftId)
+      }
+      if (params.dir && params.id) {
+        const href = tabHref({
+          type: "session",
+          server: server.key,
+          dirBase64: params.dir,
+          sessionId: params.id,
+        })
+        return store.findIndex((tab) => tab.type === "session" && tab.server === server.key && tabHref(tab) === href)
+      }
+      return -1
+    }
+
     const actions = {
       addSessionTab: (tab: Omit<SessionTab, "type">) => {
         const next = { type: "session" as const, ...tab }
@@ -208,6 +227,58 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
             }),
           )
         })
+      },
+      // Close every tab except the one at `index`. The kept tab always becomes
+      // active (all others, including whatever was active, are gone).
+      closeOthers: (index: number) => {
+        const keep = store[index]
+        if (!keep || store.length <= 1) return
+        const draftIDs = store.flatMap((tab, i) => (i !== index && tab.type === "draft" ? [tab.draftID] : []))
+        void startTransition(() => {
+          setStore(
+            produce((tabs) => {
+              const kept = tabs[index]
+              if (kept) tabs.splice(0, tabs.length, kept)
+            }),
+          )
+          navigateTab(keep)
+        })
+        for (const draftID of draftIDs) removeDraftPersisted(draftID)
+      },
+      // Close all tabs after `index`. Re-navigate to the anchor only if the
+      // active tab was one of the removed (mirrors editor "close to the right").
+      closeToRight: (index: number) => {
+        const anchor = store[index]
+        if (!anchor || index >= store.length - 1) return
+        const draftIDs = store.slice(index + 1).flatMap((tab) => (tab.type === "draft" ? [tab.draftID] : []))
+        const removedActive = currentTabIndex() > index
+        void startTransition(() => {
+          setStore(
+            produce((tabs) => {
+              tabs.splice(index + 1)
+            }),
+          )
+          if (removedActive) navigateTab(anchor)
+        })
+        for (const draftID of draftIDs) removeDraftPersisted(draftID)
+      },
+      // Close all tabs before `index`. Re-navigate to the anchor only if the
+      // active tab was one of the removed (mirrors editor "close to the left").
+      closeToLeft: (index: number) => {
+        const anchor = store[index]
+        if (!anchor || index <= 0) return
+        const draftIDs = store.slice(0, index).flatMap((tab) => (tab.type === "draft" ? [tab.draftID] : []))
+        const active = currentTabIndex()
+        const removedActive = active >= 0 && active < index
+        void startTransition(() => {
+          setStore(
+            produce((tabs) => {
+              tabs.splice(0, index)
+            }),
+          )
+          if (removedActive) navigateTab(anchor)
+        })
+        for (const draftID of draftIDs) removeDraftPersisted(draftID)
       },
     }
 

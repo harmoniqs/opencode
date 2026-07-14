@@ -1,4 +1,6 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
+import { ThinkingLine } from "../amicode/thinking-line"
+import { turnTokens } from "../amicode/thinking"
 import {
   Component,
   createEffect,
@@ -46,6 +48,7 @@ import { ToolErrorCard } from "./tool-error-card"
 import { Checkbox } from "./checkbox"
 import { DiffChanges } from "./diff-changes"
 import { Markdown } from "./markdown"
+import { skillBody } from "./message-part-skill"
 import { ImagePreview } from "./image-preview"
 import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/core/util/path"
 import { checksum } from "@opencode-ai/core/util/encode"
@@ -604,11 +607,17 @@ export function AssistantParts(props: {
 
   const last = createMemo(() => grouped().at(-1)?.key)
 
-  // amicode: does this turn already carry an amicode_* tool card? Those cards
-  // (card.tsx) render their OWN AMICO signature, so a turn-level one would
-  // double up. The turn-level signature exists precisely for the OTHER case —
-  // plain prose replies, which otherwise show no Amico identity at all.
-  const hasAmicodeCard = createMemo(() =>
+  // amicode: tokens generated so far this turn (output + reasoning across the
+  // turn's assistant messages) — feeds the thinking line's live token chip.
+  // Reactive: re-runs as the store updates message.tokens.* while streaming.
+  const turnTokenCount = createMemo(() => turnTokens(props.messages))
+
+  // amicode: is THIS turn in Amico's domain? (does it carry an amicode_* tool
+  // part). The only turn-level domain signal available in the UI — Amico's
+  // presence (the working lane below; the rail waking) keys off it. Plain-prose
+  // turns are the *normal chat*: no Amico chrome in the flow
+  // (spec-20260712-amico-third-actor).
+  const inDomainTurn = createMemo(() =>
     props.messages.some((message) =>
       list(data.store.part?.[message.id], emptyParts).some(
         (p) => p.type === "tool" && /^amicode_/.test((p as ToolPart).tool ?? ""),
@@ -618,17 +627,11 @@ export function AssistantParts(props: {
 
   return (
     <>
-      {/* amicode: the AMICO signature heads assistant turns so the brand
-          identity doesn't vanish in plain chat (it only lived on interview
-          receipt cards before). Suppressed when a turn already has an
-          amicode_* card — that card brings its own signature. Kate's restyle
-          (amc-sig/amc-wordmark) is reused untouched. */}
-      <Show when={grouped().length > 0 && !hasAmicodeCard()}>
-        <span class="amc-sig" data-slot="amicode-turn-signature">
-          <AmicoMark running={props.working && last() === grouped().at(-1)?.key} />
-          <span class="amc-wordmark">AMICO</span>
-        </span>
-      </Show>
+      {/* amicode: identity lives in the entity rail now (Amico's body), NOT a
+          per-turn stamp — plain-prose turns read as the normal chat. On an
+          in-domain turn, Amico's working presence rides in an offset accent
+          lane BELOW the streamed parts (see the lane after </Index>).
+          spec-20260712-amico-third-actor. */}
       <Index each={grouped()}>
         {(entryAccessor) => {
           const entryType = createMemo(() => entryAccessor().type)
@@ -711,6 +714,19 @@ export function AssistantParts(props: {
           )
         }}
       </Index>
+      {/* amicode: Amico's working presence — the offset accent lane. Shown only
+          while an in-domain turn streams (state === "on"), decoupled from any
+          card-suppression: the H-mark pulses + the thinking line runs
+          (cycling shimmer word + live elapsed/tokens). Pops out the moment
+          working flips false. spec-20260712-amico-third-actor. */}
+      <Show when={inDomainTurn() && props.working && last() === grouped().at(-1)?.key}>
+        <div class="amc-lane" data-slot="amico-working">
+          <span class="amc-lane-head">
+            <AmicoMark running />
+          </span>
+          <ThinkingLine tokens={turnTokenCount() || undefined} />
+        </div>
+      </Show>
     </>
   )
 }
@@ -2503,6 +2519,7 @@ ToolRegistry.register({
     const i18n = useI18n()
     const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
     const running = createMemo(() => props.status === "pending" || props.status === "running")
+    const body = createMemo(() => skillBody(props.output))
 
     const titleContent = () => <TextShimmer text={title()} active={running()} />
 
@@ -2516,6 +2533,14 @@ ToolRegistry.register({
       </div>
     )
 
-    return <BasicTool icon="brain" status={props.status} trigger={trigger()} hideDetails />
+    return (
+      <BasicTool icon="brain" status={props.status} trigger={trigger()}>
+        <Show when={body()}>
+          <div data-component="tool-output" data-scrollable>
+            <Markdown text={body()} />
+          </div>
+        </Show>
+      </BasicTool>
+    )
   },
 })

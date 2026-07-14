@@ -52,6 +52,66 @@
   flex-shrink: 0;
 }
 
+/* ---- thinking line (Claude-Code-esque working indicator) ----------------- */
+/* Sits after the AMICO wordmark while a reply streams (thinking-line.tsx). The
+ * gerund word cycles + shimmers; the meta line ticks elapsed (· tokens · esc).
+ * Leading dot separates it from the wordmark. */
+.amc-thinking {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--v2-text-text-muted);
+}
+.amc-thinking::before {
+  content: "";
+  align-self: center;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--v2-border-border-base);
+  flex-shrink: 0;
+}
+.amc-thinking-word {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--v2-text-text-accent);
+}
+/* The shimmer: a bright band sweeps across otherwise-dimmed accent text.
+ * Motion-gated — under reduced motion (or .is-still) the word is plain accent. */
+@media (prefers-reduced-motion: no-preference) {
+  .amc-thinking:not(.is-still) .amc-thinking-word {
+    color: transparent;
+    background-image: linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 0%,
+      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 38%,
+      var(--v2-text-text-accent) 50%,
+      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 62%,
+      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: amc-text-shimmer 1.6s linear infinite;
+  }
+}
+@keyframes amc-text-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -20% 0; }
+}
+.amc-thinking-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--v2-text-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.amc-thinking-sep { opacity: 0.55; }
+.amc-thinking-hint { font-style: italic; }
+
 /* ============================================================
    THE CHIP — [data-component="amicode-card"]
    ============================================================ */
@@ -361,9 +421,40 @@
   opacity: 1;
 }
 
+/* Collapsed-by-default provenance: one summary line + a show/hide toggle. */
+[data-component="amicode-entity-view"] .amc-ev-hist-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 4px 0;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--v2-text-text-faint);
+  overflow-wrap: anywhere;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--v2-text-text-accent);
+  cursor: pointer;
+}
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
+[data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
+  outline: 2px solid var(--v2-icon-icon-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 [data-component="amicode-entity-view"] .amc-timeline {
   display: flex;
   flex-direction: column;
+  margin-top: 8px;
   margin-left: 6px;
   padding-left: 2px;
   border-left: 1.5px solid var(--v2-border-border-muted);
@@ -571,3 +662,233 @@
   border-color: var(--v2-border-border-strong);
   background: var(--v2-background-bg-layer-02);
 }
+
+/* ---- System hero (spec §6.1): identity + schematic + table + Hamiltonian ---- */
+[data-component="amicode-system-view"] { display: flex; flex-direction: column; gap: 12px; }
+[data-component="amicode-system-view"] .amc-sys-identity {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--v2-text-text-base);
+  padding: 2px 4px 0;
+}
+[data-component="amicode-system-view"] .amc-schematic {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 4px;
+}
+[data-component="amicode-system-view"] .amc-node {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--v2-border-border-base);
+  background: var(--v2-background-bg-layer-01);
+}
+[data-component="amicode-system-view"] .amc-node-id { font-weight: 600; color: var(--v2-text-text-base); }
+[data-component="amicode-system-view"] .amc-node-lvl { font-size: 0.72rem; color: var(--v2-text-text-muted); }
+[data-component="amicode-system-view"] .amc-edge {
+  display: inline-flex; flex-direction: column; align-items: center; min-width: 40px; padding: 0 4px;
+}
+[data-component="amicode-system-view"] .amc-edge-line { color: var(--v2-border-border-base); line-height: 1; }
+[data-component="amicode-system-view"] .amc-edge-label {
+  font-size: 0.7rem; letter-spacing: 0.02em; color: var(--v2-text-text-accent);
+}
+[data-component="amicode-system-view"] .amc-loose {
+  display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.78rem; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-system-view"] .amc-systbl { display: flex; flex-direction: column; }
+[data-component="amicode-system-view"] .amc-systbl-row {
+  display: grid; grid-template-columns: 3rem 5rem auto 1fr; gap: 8px; align-items: baseline;
+  padding: 4px 2px; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 55%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+[data-component="amicode-system-view"] .amc-systbl-row.amc-coupling { grid-template-columns: 8rem 5rem 1fr; }
+[data-component="amicode-system-view"] .amc-c-id { font-weight: 600; color: var(--v2-text-text-base); }
+[data-component="amicode-system-view"] .amc-c-role,
+[data-component="amicode-system-view"] .amc-c-lvl { color: var(--v2-text-text-muted); font-size: 0.8rem; }
+[data-component="amicode-system-view"] .amc-c-params { color: var(--v2-text-text-base); font-size: 0.8rem; }
+[data-component="amicode-system-view"] .amc-ev-formula { margin-top: 4px; }
+[data-component="amicode-system-view"] .amc-ev-formula-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v2-text-text-muted); margin-bottom: 2px;
+}
+
+/* ---- Formulation hero (spec §6.2): mode badges + objective + constraints ---- */
+[data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }
+[data-component="amicode-formulation-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-component="amicode-formulation-view"] .amc-badge {
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
+  font-size: 0.76rem;
+}
+[data-component="amicode-formulation-view"] .amc-badge.active {
+  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+}
+[data-component="amicode-formulation-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
+[data-component="amicode-formulation-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-formulation-view"] .amc-obj { display: flex; flex-direction: column; gap: 4px; }
+[data-component="amicode-formulation-view"] .amc-obj-primary { display: flex; align-items: baseline; gap: 8px; }
+[data-component="amicode-formulation-view"] .amc-obj-name { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-formulation-view"] .amc-obj-tag {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-formulation-view"] .amc-obj-latex { margin: 2px 0; }
+[data-component="amicode-formulation-view"] .amc-obj-term,
+[data-component="amicode-formulation-view"] .amc-constraint {
+  font-size: 0.82rem; color: var(--v2-text-text-base); font-variant-numeric: tabular-nums;
+  padding: 2px 0; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 45%, transparent);
+}
+[data-component="amicode-formulation-view"] .amc-solve { font-size: 0.82rem; color: var(--v2-text-text-muted); font-variant-numeric: tabular-nums; }
+
+/* ---- overflow hardening: keep the entity-view dialog from bleeding past its
+   width. Grid/flex children default to min-width:auto (content-based), so a long
+   value (history notes, params) forces the content wider than the dialog and
+   clips the right edge (timestamps). Let children shrink + wrap long values. ---- */
+[data-component="amicode-entity-view"] { min-width: 0; max-width: 100%; overflow-x: hidden; }
+[data-component="amicode-entity-view"] .amc-timeline,
+[data-component="amicode-entity-view"] .amc-event,
+[data-component="amicode-entity-view"] .amc-event .erow { min-width: 0; max-width: 100%; }
+[data-component="amicode-entity-view"] .amc-event .when { white-space: nowrap; }
+[data-component="amicode-entity-view"] .amc-event .summary,
+[data-component="amicode-entity-view"] .amc-event .summary .v { overflow-wrap: anywhere; min-width: 0; }
+[data-component="amicode-system-view"] .amc-systbl-row > * { min-width: 0; }
+[data-component="amicode-system-view"] .amc-c-params,
+[data-component="amicode-system-view"] .amc-loose,
+[data-component="amicode-formulation-view"] .amc-obj-latex,
+[data-component="amicode-formulation-view"] .amc-obj-term,
+[data-component="amicode-formulation-view"] .amc-constraint,
+[data-component="amicode-formulation-view"] .amc-solve { overflow-wrap: anywhere; min-width: 0; }
+[data-component="amicode-system-view"] .amc-schematic,
+[data-component="amicode-formulation-view"] .amc-modebar { max-width: 100%; }
+[data-component="amicode-system-view"] .amc-ev-formula,
+[data-component="amicode-formulation-view"] .amc-obj-latex { overflow-x: auto; }
+
+/* ---- Widget grid edit mode (spec T3.1/T2.6) ------------------------------
+   Rebuilt for clarity: instead of a heavy row of buttons floating above each
+   card (which reads as its own UI and drowns the content), the cards stay
+   visible and a light scrim + dashed ring signal "you're arranging, not
+   using". A single grouped control pill floats in each card's top-right
+   corner. Overlaying host DOM over an iframe is safe for CLICKS — only a
+   click-drag THROUGH the frame gets eaten, and reorder here is button-based.
+   The scrim also intercepts pointer events so the widget beneath can't be
+   clicked while arranging. ------------------------------------------------- */
+[data-component="amicode-widget-cell"] { position: relative; }
+.amc-wg-framewrap { position: relative; border-radius: 10px; transition: outline-color 0.16s ease; }
+[data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-framewrap {
+  outline: 1px dashed var(--v2-border-border-base);
+  outline-offset: 3px;
+}
+.amc-wg-scrim {
+  position: absolute; inset: 0; z-index: 1; border-radius: 10px; cursor: default;
+  background: color-mix(in srgb, var(--v2-background-bg-base) 44%, transparent);
+}
+.amc-wg-name {
+  position: absolute; top: 9px; left: 11px; z-index: 2; pointer-events: none;
+  font-size: 11px; font-weight: 600; color: var(--v2-text-text-base);
+  text-shadow: 0 1px 4px color-mix(in srgb, var(--v2-background-bg-base) 85%, transparent);
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.amc-wg-name .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
+.amc-wg-pill {
+  position: absolute; top: 7px; right: 7px; z-index: 2;
+  display: flex; align-items: center; gap: 1px; padding: 3px;
+  border-radius: 9px; background: var(--v2-background-bg-layer-01);
+  border: 1px solid var(--v2-border-border-base);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--v2-background-bg-base) 70%, transparent);
+}
+.amc-wg-pill button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 5px;
+  border: none; background: transparent; border-radius: 6px;
+  color: var(--v2-text-text-muted); font-size: 12px; line-height: 1; cursor: pointer;
+}
+.amc-wg-pill button:hover:not(:disabled) {
+  background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
+}
+.amc-wg-pill button:disabled { opacity: 0.28; cursor: default; }
+.amc-wg-pill .amc-wg-danger:hover:not(:disabled) { color: var(--v2-state-fg-danger); }
+.amc-wg-pill .amc-wg-fork { font-size: 10px; letter-spacing: 0.02em; color: var(--v2-text-text-faint); }
+.amc-wg-pill .amc-wg-sep { width: 1px; height: 14px; background: var(--v2-border-border-base); margin: 0 3px; flex: 0 0 auto; }
+
+[data-component="amicode-widget-editbar"] {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, var(--v2-border-border-base));
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 7%, var(--v2-background-bg-layer-01));
+  font-size: 11px; color: var(--v2-text-text-muted);
+}
+[data-component="amicode-widget-editbar"] b { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-widget-editbar"] .amc-wg-editdone {
+  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: 6px;
+  background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
+  font-size: 11px; padding: 3px 12px; cursor: pointer;
+}
+[data-component="amicode-widget-editbar"] .amc-wg-editdone:hover { border-color: var(--v2-border-border-strong); }
+
+.amc-wg-placeholder {
+  display: flex; align-items: center; min-height: 68px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  background: var(--v2-background-bg-layer-01);
+  padding: 10px 12px; font-size: 11px; color: var(--v2-text-text-faint);
+}
+
+[data-component="amicode-widget-tray"] { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+[data-component="amicode-widget-tray"] .amc-wg-traylabel { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--v2-text-text-faint); }
+[data-component="amicode-widget-tray"] .amc-wg-add {
+  border: 1px solid var(--v2-border-border-base); border-radius: 999px;
+  background: var(--v2-background-bg-layer-01); color: var(--v2-text-text-muted);
+  font-size: 11px; padding: 3px 11px; cursor: pointer;
+}
+[data-component="amicode-widget-tray"] .amc-wg-add:hover {
+  border-color: var(--v2-border-border-strong); color: var(--v2-text-text-base);
+}
+
+/* ---- In-chat widget preview (Stage 2 chat authoring) --------------------- */
+[data-component="amicode-widget-preview"] {
+  display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid var(--v2-border-border-base); border-radius: 12px;
+  background: var(--v2-background-bg-layer-01); padding: 10px 12px; max-width: 100%;
+}
+[data-component="amicode-widget-preview"] .amc-wp-head {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+}
+[data-component="amicode-widget-preview"] .amc-wp-eyebrow {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--v2-text-text-faint);
+}
+[data-component="amicode-widget-preview"] .amc-wp-name {
+  font-size: 12px; font-weight: 600; color: var(--v2-text-text-base);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+[data-component="amicode-widget-preview"] .amc-wp-badge {
+  font-size: 10px; color: var(--v2-text-text-muted);
+  border: 1px solid var(--v2-border-border-base); border-radius: 999px; padding: 1px 7px;
+}
+[data-component="amicode-widget-preview"] .amc-wp-stage {
+  border-radius: 10px; overflow: hidden;
+  /* faint checker so a widget's own transparent areas read as "canvas" */
+  background:
+    repeating-linear-gradient(45deg,
+      color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent) 0 6px,
+      transparent 6px 12px);
+}
+[data-component="amicode-widget-preview"] .amc-wp-note,
+[data-component="amicode-widget-preview"] .amc-wp-hint {
+  font-size: 11px; color: var(--v2-text-text-faint);
+}
+[data-component="amicode-widget-preview"] .amc-wp-warnings {
+  margin: 0; padding-left: 16px; font-size: 11px; color: var(--v2-state-fg-warning);
+}
+[data-component="amicode-widget-preview"] .amc-wp-foot {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin {
+  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
+  border-radius: 7px; background: color-mix(in srgb, var(--v2-icon-icon-accent) 12%, var(--v2-background-bg-layer-02));
+  color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-background-bg-layer-02));
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
+[data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {
+  color: var(--v2-state-fg-success);
+  border-color: color-mix(in srgb, var(--v2-state-fg-success) 40%, var(--v2-border-border-base));
+  background: transparent;
+}
+[data-component="amicode-widget-preview"] .amc-wp-pin[data-state="error"] { color: var(--v2-state-fg-danger); }

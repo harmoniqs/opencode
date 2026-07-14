@@ -81,6 +81,13 @@ export function elapsedLabel(ms: number | null): string | undefined {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`
 }
 
+/** Human-facing tail: drop AMICODE_* protocol lines (pulse/iter dumps the run
+ *  window must never show raw); solver output passes through untouched. The
+ *  server keeps shipping the raw tail — this is a presentation filter. */
+export function humanTail(lines: string[]): string[] {
+  return lines.filter((line) => !line.trimStart().startsWith("AMICODE_"))
+}
+
 /** Headline metric: authoritative fidelity if finished, else F = 1 - f once the
  *  objective is a valid infidelity (< 1), else the raw objective early on. */
 export function headlineMetric(run: RunSeries): { label: string; value: string } {

@@ -5,7 +5,7 @@ import morphdom from "morphdom"
 import { checksum } from "@opencode-ai/core/util/encode"
 import { ComponentProps, createEffect, createResource, createSignal, onCleanup, splitProps } from "solid-js"
 import { isServer } from "solid-js/web"
-import { stream } from "./markdown-stream"
+import { stream, normalizeDisplayMath } from "./markdown-stream"
 
 type Entry = {
   hash: string
@@ -275,7 +275,7 @@ export function Markdown(
             }
           }
 
-          const next = await Promise.resolve(marked.parse(block.src))
+          const next = await Promise.resolve(marked.parse(normalizeDisplayMath(block.src)))
           const safe = sanitize(next)
           if (key && hash) touch(key, { hash, html: safe })
           return safe

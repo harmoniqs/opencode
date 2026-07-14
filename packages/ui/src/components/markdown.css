@@ -16,26 +16,46 @@
     margin-bottom: 0;
   }
 
-  /* Headings: Same size, distinguished by color and spacing */
+  /* Headings: real hierarchy — larger + heavier than body, space ABOVE the
+     title (binds it to its section), tight below. (amicode patch #20; the
+     upstream same-size-as-body rule made section titles indistinguishable
+     from prose.) */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    font-size: 14px;
     color: var(--text-strong);
-    font-weight: var(--font-weight-medium);
-    margin-top: 0px;
-    margin-bottom: 24px;
+    font-weight: 600;
+    margin-top: 24px;
+    margin-bottom: 8px;
     line-height: var(--line-height-large);
   }
 
-  /* Emphasis & Strong: Neutral strong color */
+  h1 {
+    font-size: 18px;
+  }
+
+  h2 {
+    font-size: var(--font-size-large); /* 16px */
+  }
+
+  h3 {
+    font-size: 15px;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-size: var(--font-size-base); /* 14px — weight alone distinguishes */
+  }
+
+  /* Emphasis & Strong: visibly bolder than the 400-weight body */
   strong,
   b {
     color: var(--text-strong);
-    font-weight: var(--font-weight-medium);
+    font-weight: 600;
   }
 
   /* Paragraphs */

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { stream } from "./markdown-stream"
+import { marked } from "marked"
+import markedKatex from "marked-katex-extension"
+import { stream, normalizeDisplayMath } from "./markdown-stream"
 
 describe("markdown stream", () => {
   test("heals incomplete emphasis while streaming", () => {
@@ -28,5 +30,38 @@ describe("markdown stream", () => {
         mode: "live",
       },
     ])
+  })
+})
+
+describe("normalizeDisplayMath", () => {
+  const katexMarked = marked.use(markedKatex({ throwOnError: false, nonStandard: true }))
+  const renders = async (src: string) => (await katexMarked.parse(normalizeDisplayMath(src))).includes("katex")
+
+  test("moves mid-line-opened, multi-line display math onto its own block lines", () => {
+    // The exact shape LLMs emit and marked-katex silently drops (matches neither
+    // the newline-free inline rule nor the ^$$-alone block rule).
+    expect(normalizeDisplayMath("label: $$\n\\rho = 1\n$$")).toBe("label: \n\n$$\n\\rho = 1\n$$\n\n")
+    expect(normalizeDisplayMath("a: $$ x\n= y $$ b")).toBe("a: \n\n$$\nx\n= y\n$$\n\n b")
+  })
+
+  test("the normalized output actually renders where the raw form does not", async () => {
+    // Regression guard for the raw-$$-with-stripped-backslashes bug.
+    expect(await katexMarked.parse("label: $$\n\\rho \\;=\\; 1\n$$")).not.toContain("katex") // raw form fails
+    expect(await renders("label: $$\n\\rho \\;=\\; 1\n$$")).toBe(true)
+    expect(await renders("a: $$ x\n= y $$")).toBe(true)
+  })
+
+  test("does not regress one-line inline or single-dollar math", async () => {
+    expect(await renders("value $$ x = 1 $$ here")).toBe(true)
+    expect(await renders("value $\\alpha$ here")).toBe(true)
+  })
+
+  test("leaves $$ inside fenced or inline code untouched", () => {
+    expect(normalizeDisplayMath("```\n$$ not math $$\n```")).toBe("```\n$$ not math $$\n```")
+    expect(normalizeDisplayMath("use `$$ x $$` inline")).toBe("use `$$ x $$` inline")
+  })
+
+  test("leaves an unclosed trailing $$ (mid-stream) untouched", () => {
+    expect(normalizeDisplayMath("label: $$\n\\rho = 1")).toBe("label: $$\n\\rho = 1")
   })
 })

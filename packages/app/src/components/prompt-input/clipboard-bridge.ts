@@ -12,6 +12,20 @@
 
 const BRIDGE_TIMEOUT_MS = 1500
 
+// ⌘C inside the Amicode chat is the mirror image of ⌘V: the sandboxed iframe's
+// native copy (and navigator.clipboard.writeText) never reaches the OS
+// clipboard, so a subsequent ⌘V — which DOES read the OS clipboard over the
+// bridge — pastes whatever stale thing was there before, not what you copied.
+// Push the copied text to the extension host, which writes vscode.env.clipboard
+// so read and write hit the same clipboard. Fire-and-forget: the host write is
+// near-instant and callers have nothing to await. Resolves false (no-op) when
+// unframed — native copy already works there.
+export function writeClipboardViaBridge(text: string, win: Window = window): boolean {
+  if (win.parent === win) return false
+  win.parent.postMessage({ source: "amicode", kind: "clipboard-write", text }, "*")
+  return true
+}
+
 export function readClipboardViaBridge(win: Window = window, timeoutMs = BRIDGE_TIMEOUT_MS): Promise<string> {
   return new Promise<string>((resolve) => {
     // Unframed: native paste works — don't post into the void or wait out the timeout.
@@ -39,4 +53,55 @@ export function readClipboardViaBridge(win: Window = window, timeoutMs = BRIDGE_
     win.parent.postMessage({ source: "amicode", kind: "clipboard-request", nonce }, "*")
     timer = setTimeout(() => finish(""), timeoutMs)
   })
+}
+
+// ⌘V image paste inside the Amicode chat. Unlike text (which the extension host
+// reads via vscode.env.clipboard — text-only, no image API), an image can only
+// come from the OUTER webview reading navigator.clipboard.read() client-side.
+// So we ask the parent relay (chat_panel.ts) rather than the host: it grabs the
+// first image/* clipboard item, encodes it as a data URL, and replies. We
+// rebuild a File from the reply so callers reuse the normal attachment path.
+// Resolves null when unframed, on a text-only clipboard, or after `timeoutMs`.
+export function readClipboardImageViaBridge(win: Window = window, timeoutMs = BRIDGE_TIMEOUT_MS): Promise<File | null> {
+  return new Promise<File | null>((resolve) => {
+    if (win.parent === win) {
+      resolve(null)
+      return
+    }
+
+    const nonce = Math.random().toString(36).slice(2)
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const finish = (file: File | null) => {
+      win.removeEventListener("message", onMessage)
+      if (timer !== undefined) clearTimeout(timer)
+      resolve(file)
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as
+        | { source?: string; kind?: string; nonce?: string; dataUrl?: string; mime?: string; filename?: string }
+        | undefined
+      if (data?.source !== "amicode" || data.kind !== "clipboard-image" || data.nonce !== nonce) return
+      finish(fileFromDataUrl(data.dataUrl, data.mime, data.filename))
+    }
+
+    win.addEventListener("message", onMessage)
+    win.parent.postMessage({ source: "amicode", kind: "clipboard-image-request", nonce }, "*")
+    timer = setTimeout(() => finish(null), timeoutMs)
+  })
+}
+
+function fileFromDataUrl(dataUrl?: string, mime?: string, filename?: string): File | null {
+  if (!dataUrl || !mime) return null
+  const comma = dataUrl.indexOf(",")
+  if (comma === -1) return null
+  try {
+    const binary = atob(dataUrl.slice(comma + 1))
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return new File([bytes], filename || "pasted-image.png", { type: mime })
+  } catch {
+    return null
+  }
 }

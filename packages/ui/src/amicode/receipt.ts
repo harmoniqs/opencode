@@ -4,6 +4,8 @@
 // Strict parse; ANY failure → undefined and callers fall back to the legacy
 // chip, so old sessions keep rendering. Never throws.
 
+import { compactValue } from "./facets"
+
 const PREFIX = "AMICODE_DIFF "
 
 export type DiffEntry = { from: unknown; to: unknown }
@@ -56,9 +58,7 @@ export function entityLabel(kind: string): string {
 }
 
 function short(value: unknown): string {
-  if (value === null || value === undefined) return "—"
-  if (typeof value === "string") return value
-  return JSON.stringify(value)
+  return compactValue(value) // spec §4: array/object-aware, never a JSON blob
 }
 
 // A receipt's body, broken into typed pieces so the UI can render each change

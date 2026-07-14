@@ -39,6 +39,10 @@ describe("renderRunCardSvg", () => {
     expect(svg.match(/stroke="#F2C94C" stroke-width="2\.5"/g)?.length).toBe(2)
     expect(svg).toContain('opacity="0.55"')
   })
+  test("pulse panel reads first (left column), convergence second", () => {
+    const svg = renderRunCardSvg(CARD)
+    expect(svg.indexOf("FINAL PULSE")).toBeLessThan(svg.indexOf("CONVERGENCE"))
+  })
   test("escapes hostile strings", () => {
     const svg = renderRunCardSvg({ ...CARD, problem: 'x"/><script>alert(1)</script>' })
     expect(svg).not.toContain("<script>")

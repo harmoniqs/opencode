@@ -14,6 +14,8 @@ type Store = {
   user: User[]
   recent: ModelKey[]
   variant?: Record<string, string | undefined>
+  /** amicode: durable default-model pin; optional so persisted model.v1 stores predate it */
+  pinned?: ModelKey
 }
 
 const RECENT_LIMIT = 5
@@ -133,6 +135,13 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       setStore("recent", uniq)
     }
 
+    // amicode: the DURABLE default-model pin (dashboard "Model" control).
+    // Unlike recents, nothing moves it except an explicit set/clear — chats
+    // using other models must not change the user's declared default.
+    const setPinned = (model: ModelKey | undefined) => {
+      setStore("pinned", model)
+    }
+
     const variantKey = (model: ModelKey) => `${model.providerID}/${model.modelID}`
     const getVariant = (model: ModelKey) => store.variant?.[variantKey(model)]
 
@@ -154,6 +163,10 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       recent: {
         list: createMemo(() => store.recent),
         push,
+      },
+      pin: {
+        get: createMemo(() => store.pinned),
+        set: setPinned,
       },
       variant: {
         get: getVariant,

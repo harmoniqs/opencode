@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { readClipboardViaBridge } from "./clipboard-bridge"
+import { readClipboardViaBridge, writeClipboardViaBridge } from "./clipboard-bridge"
 
 type Listener = (event: MessageEvent) => void
 
@@ -71,6 +71,29 @@ describe("readClipboardViaBridge", () => {
     ;(win as unknown as { parent: Window }).parent = win
 
     expect(await readClipboardViaBridge(win)).toBe("")
+    expect(posted).toHaveLength(0)
+  })
+})
+
+describe("writeClipboardViaBridge", () => {
+  test("pushes the copied text to the host so the OS clipboard matches ⌘V's read", () => {
+    const bridge = fakeFramedWindow()
+
+    expect(writeClipboardViaBridge("solve a CZ gate", bridge.win)).toBe(true)
+    expect(bridge.posted).toHaveLength(1)
+    const message = bridge.posted[0]
+    expect(message.source).toBe("amicode")
+    expect(message.kind).toBe("clipboard-write")
+    expect(message.text).toBe("solve a CZ gate")
+  })
+
+  test("is a no-op that posts nothing when the app is not framed", () => {
+    const posted: unknown[] = []
+    const win = { postMessage: (message: unknown) => posted.push(message) } as unknown as Window
+    // parent === self → plain web/desktop, where native copy already works
+    ;(win as unknown as { parent: Window }).parent = win
+
+    expect(writeClipboardViaBridge("ignored", win)).toBe(false)
     expect(posted).toHaveLength(0)
   })
 })

@@ -5,6 +5,7 @@ import type { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Permission } from "@/permission"
 import type { Agent } from "@/agent/agent"
+import PROMPT_COMMUNICATING from "../prompt/communicating.txt"
 import type { MessageV2 } from "../message-v2"
 import type { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
@@ -57,7 +58,14 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
   const system = [
     [
-      ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
+      // amicode patch #18: user-facing agents with a custom prompt also get the
+      // shared communication rules; subagents are excluded — their final text is
+      // consumed by the calling model, not rendered to the user.
+      ...(input.agent.prompt
+        ? input.agent.mode === "subagent"
+          ? [input.agent.prompt]
+          : [input.agent.prompt, PROMPT_COMMUNICATING]
+        : SystemPrompt.provider(input.model)),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
     ]

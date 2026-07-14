@@ -722,6 +722,9 @@ export const dict = {
     "The terminal connection was interrupted. This can happen when the server restarts.",
 
   "common.closeTab": "Close tab",
+  "common.closeOtherTabs": "Close other tabs",
+  "common.closeTabsToLeft": "Close tabs to the left",
+  "common.closeTabsToRight": "Close tabs to the right",
   "common.dismiss": "Dismiss",
   "common.moreCountSuffix": " (+{{count}} more)",
   "common.requestFailed": "Request failed",

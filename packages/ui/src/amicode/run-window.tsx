@@ -1,13 +1,23 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { AmicoMark } from "./spinner"
 import { fetchAmicodeRunSeries, openAmicodeEntity } from "./ui-bridge"
-import { type RunSeries, type RunSeriesView, elapsedLabel, headlineMetric, parseRunSeriesResponse } from "./run-series"
+import { heroPaths, objectivePath } from "./run-plot"
+import {
+  type RunSeries,
+  type RunSeriesView,
+  elapsedLabel,
+  headlineMetric,
+  humanTail,
+  parseRunSeriesResponse,
+} from "./run-series"
 
 export { parseRunSeriesResponse, type RunSeries, type RunSeriesView } from "./run-series"
 
 // AMICODE (spec C): compact in-chat run window rendered where amicode_solve
-// launched a run (run_dir known). Streams the objective-vs-iteration curve, the
-// latest pulse trace, and a log tail from GET /amicode/run-series via the ui
+// launched a run (run_dir known). Pulse-first: the latest pulse trace owns the
+// plot (the pulse IS the artifact); convergence shrinks to a header sparkline
+// next to the F chip; the log tail streams human solver lines only (AMICODE_*
+// protocol dumps filtered). Data from GET /amicode/run-series via the ui
 // bridge; polls while solving; click opens the full Run entity. Transport lives
 // in the app (rail registers fetchRunSeries) so this stays self-contained but
 // context-free — no-op until the rail is mounted, exactly like the entity view.
@@ -15,43 +25,8 @@ export { parseRunSeriesResponse, type RunSeries, type RunSeriesView } from "./ru
 const POLL_MS = 2500
 const PLOT_W = 100
 const PLOT_H = 34
-
-// Descending log-objective curve (the classic convergence plot): map each f to
-// log10(f), then min/max-scale into the viewBox. Non-scaling stroke keeps the
-// line crisp under the non-uniform x-stretch.
-function objectivePath(values: number[]): string | undefined {
-  if (values.length < 2) return undefined
-  const logs = values.map((f) => Math.log10(Math.max(f, 1e-12)))
-  return linePath(logs)
-}
-
-function linePath(ys: number[]): string | undefined {
-  if (ys.length < 2) return undefined
-  return scaledPath(ys, Math.min(...ys), Math.max(...ys))
-}
-
-function scaledPath(ys: number[], min: number, max: number): string {
-  const span = max - min || 1
-  const step = PLOT_W / (ys.length - 1)
-  return ys
-    .map((y, i) => {
-      const px = (i * step).toFixed(2)
-      const py = (PLOT_H - 2 - ((y - min) / span) * (PLOT_H - 4)).toFixed(2)
-      return `${i === 0 ? "M" : "L"}${px},${py}`
-    })
-    .join(" ")
-}
-
-/** One path per drive, sharing a min/max scale so amplitudes stay comparable.
- *  The wire ships drives flattened back-to-back; pulse_meta says how to slice. */
-function drivePaths(values: number[], drives: number): string[] {
-  const n = Math.max(1, drives)
-  const knots = Math.floor(values.length / n)
-  if (knots < 2) return []
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  return Array.from({ length: n }, (_, d) => scaledPath(values.slice(d * knots, (d + 1) * knots), min, max))
-}
+const SPARK_W = 40
+const SPARK_H = 14
 
 function statusColor(status: string): string {
   if (status === "finished") return "var(--v2-state-fg-success)"
@@ -116,7 +91,6 @@ function Chip(props: { label: string; value: string; color?: string }) {
 
 export function RunWindow(props: { run: string; lab?: string }) {
   const [view, setView] = createSignal<RunSeriesView | undefined>(undefined)
-  const [mode, setMode] = createSignal<"objective" | "pulse">("objective")
   let timer: ReturnType<typeof setInterval> | undefined
   const stop = () => {
     if (timer !== undefined) clearInterval(timer)
@@ -149,36 +123,20 @@ export function RunWindow(props: { run: string; lab?: string }) {
   const plotPath = createMemo<string[] | undefined>(() => {
     const r = run()
     if (!r) return undefined
-    if (mode() === "objective") {
-      const d = objectivePath(r.series.map((p) => p.f))
-      return d ? [d] : undefined
-    }
-    const values = r.pulse?.values ?? []
-    return drivePaths(values, r.pulseMeta?.drives ?? 1)
+    const paths = heroPaths(r, PLOT_W, PLOT_H)
+    return paths.length > 0 ? paths : undefined
   })
-
-  const ToggleButton = (p: { mode: "objective" | "pulse"; label: string; disabled?: boolean }) => (
-    <button
-      type="button"
-      disabled={p.disabled}
-      onClick={(e) => {
-        e.stopPropagation()
-        setMode(p.mode)
-      }}
-      style={{
-        "font-size": "10px",
-        padding: "1px 6px",
-        "border-radius": "4px",
-        border: "none",
-        cursor: p.disabled ? "default" : "pointer",
-        opacity: p.disabled ? "0.4" : "1",
-        background: mode() === p.mode ? "var(--v2-background-bg-layer-03)" : "transparent",
-        color: mode() === p.mode ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
-      }}
-    >
-      {p.label}
-    </button>
-  )
+  // convergence shrinks to a header chip: glanceable progress, pulse owns the canvas
+  const sparkPath = createMemo<string | undefined>(() => {
+    const r = run()
+    if (!r) return undefined
+    return objectivePath(
+      r.series.map((p) => p.f),
+      SPARK_W,
+      SPARK_H,
+    )
+  })
+  const tailLines = createMemo<string[]>(() => humanTail(run()?.tail ?? []).slice(-4))
 
   return (
     <div
@@ -196,13 +154,12 @@ export function RunWindow(props: { run: string; lab?: string }) {
         cursor: "pointer",
       }}
     >
-      {/* header: AMICO · Run · status · iter · metric · elapsed */}
+      {/* header: [H] Run · status · iter · metric · elapsed (AMICO wordmark
+          dropped — identity lives in the rail; spec-20260712-amico-third-actor) */}
       <div style={{ display: "flex", "align-items": "center", gap: "8px", "flex-wrap": "wrap", "min-width": "0" }}>
         <span class="amc-sig">
           <AmicoMark />
-          <span class="amc-wordmark">AMICO</span>
         </span>
-        <span style={{ color: "var(--v2-text-text-faint)" }}>·</span>
         <span style={{ "font-weight": "600", color: "var(--v2-text-text-base)" }}>Run</span>
         <Show
           when={run()}
@@ -224,21 +181,36 @@ export function RunWindow(props: { run: string; lab?: string }) {
                 const m = headlineMetric(r())
                 return <Chip label={m.label} value={m.value} />
               })()}
+              <Show when={sparkPath()}>
+                {(d) => (
+                  <svg
+                    width={SPARK_W}
+                    height={SPARK_H}
+                    viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+                    style={{ "flex-shrink": "0" }}
+                  >
+                    <path
+                      d={d()}
+                      fill="none"
+                      stroke="var(--v2-icon-icon-accent)"
+                      stroke-width="1"
+                      stroke-linejoin="round"
+                      opacity="0.8"
+                    />
+                  </svg>
+                )}
+              </Show>
               <Show when={elapsedLabel(r().elapsedMs)}>{(t) => <Chip label="" value={t()} />}</Show>
             </>
           )}
         </Show>
-        <span style={{ "margin-left": "auto", display: "inline-flex", gap: "2px", "flex-shrink": "0" }}>
-          <ToggleButton mode="objective" label="F" />
-          <ToggleButton mode="pulse" label="pulse" disabled={!run()?.pulse} />
-        </span>
       </div>
 
       {/* plot */}
       <Plot d={plotPath()} />
 
-      {/* log tail */}
-      <Show when={(run()?.tail.length ?? 0) > 0}>
+      {/* log tail — human solver lines only (AMICODE_* protocol dumps filtered) */}
+      <Show when={tailLines().length > 0}>
         <div
           style={{
             "font-family": "var(--font-family-mono, ui-monospace, monospace)",
@@ -251,7 +223,7 @@ export function RunWindow(props: { run: string; lab?: string }) {
             "word-break": "break-all",
           }}
         >
-          <For each={run()!.tail.slice(-4)}>{(line) => <div>{line}</div>}</For>
+          <For each={tailLines()}>{(line) => <div>{line}</div>}</For>
         </div>
       </Show>
     </div>

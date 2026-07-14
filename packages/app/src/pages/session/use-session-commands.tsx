@@ -129,6 +129,12 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     return permission.isAutoAcceptingDirectory(sdk.directory)
   }
   const write = async (value: string) => {
+    // Amicode webview: native copy and navigator.clipboard don't reach the OS
+    // clipboard the ⌘V paste bridge reads back, so mirror through the host
+    // first. Resolves false on plain web (unframed) / desktop, where the
+    // native paths below already work.
+    if (platform.writeClipboardText && (await platform.writeClipboardText(value))) return true
+
     const body = typeof document === "undefined" ? undefined : document.body
     if (body) {
       const textarea = document.createElement("textarea")

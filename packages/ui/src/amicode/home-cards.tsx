@@ -7,6 +7,7 @@ import {
   type InstitutionSuggestion,
 } from "./institution-lookup"
 import { fileToBase64 } from "./upload"
+import { drivePaths, linePath } from "./run-plot"
 
 // AMICODE: home-screen card strip (the "central screen" Aaron wanted the H-bot
 // and useful practitioner info on). Two identity heroes — MEET AMICO (who your
@@ -902,13 +903,12 @@ function AboutYouCard(props: {
               <div
                 style={{
                   display: "grid",
-                  "grid-template-columns": "repeat(4, minmax(0, 1fr))",
+                  "grid-template-columns": "repeat(3, minmax(0, 1fr))",
                   gap: "8px",
                 }}
               >
                 <Stat value={String(y().stats.problems)} label="problems" />
                 <Stat value={String(y().stats.runs)} label="runs" />
-                <Stat value={fidelity(y().stats.best_fidelity)} label="best F" />
                 <Stat value={String(y().stats.banked)} label="banked" />
               </div>
 
@@ -976,29 +976,35 @@ const CARD_SUB: JSX.CSSProperties = {
 }
 const SPARK_W = 96
 const SPARK_H = 22
-function Sparkline(props: { values: number[] }) {
-  const path = createMemo(() => {
-    const v = props.values
-    if (v.length < 2) return undefined
-    const min = Math.min(...v)
-    const max = Math.max(...v)
-    const span = max - min || 1
-    const step = SPARK_W / (v.length - 1)
-    return v
-      .map((y, i) => {
-        const px = (i * step).toFixed(1)
-        const py = (SPARK_H - 2 - ((y - min) / span) * (SPARK_H - 4)).toFixed(1)
-        return `${i === 0 ? "M" : "L"}${px},${py}`
-      })
-      .join(" ")
-  })
+/** Pulse-first: the latest pulse trace when a snapshot exists (per-drive paths
+ *  on a shared scale, companions at 0.55), else the convergence series. */
+function liveSparkPaths(run: HomeLiveRun): string[] {
+  const pulse = run.pulse ?? []
+  if (pulse.length >= 2) {
+    const paths = drivePaths(pulse, run.drives ?? 1, SPARK_W, SPARK_H)
+    if (paths.length > 0) return paths
+  }
+  const d = linePath(run.series ?? [], SPARK_W, SPARK_H)
+  return d ? [d] : []
+}
+
+function Sparkline(props: { paths: string[] }) {
   return (
-    <Show when={path()}>
-      {(d) => (
-        <svg width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} style={{ "flex-shrink": "0" }}>
-          <path d={d()} fill="none" stroke="var(--v2-icon-icon-accent)" stroke-width="1.5" stroke-linejoin="round" />
-        </svg>
-      )}
+    <Show when={props.paths.length > 0}>
+      <svg width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} style={{ "flex-shrink": "0" }}>
+        <For each={props.paths}>
+          {(d, i) => (
+            <path
+              d={d}
+              fill="none"
+              stroke="var(--v2-icon-icon-accent)"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+              opacity={i() === 0 ? 1 : 0.55}
+            />
+          )}
+        </For>
+      </svg>
     </Show>
   )
 }
@@ -1099,6 +1105,9 @@ export interface HomeLiveRun {
   iteration?: number | null
   fidelity?: number | null
   series?: number[]
+  // latest pulse snapshot, drives flattened back-to-back (see run-plot drivePaths)
+  pulse?: number[]
+  drives?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -1213,7 +1222,7 @@ export function AmicodeHomeCards(props: {
                 </span>
               </div>
               <div style={{ "margin-top": "auto" }}>
-                <Sparkline values={run().series ?? []} />
+                <Sparkline paths={liveSparkPaths(run())} />
               </div>
             </ActionCard>
           )}
@@ -1224,9 +1233,6 @@ export function AmicodeHomeCards(props: {
           <ActionCard eyebrow="Pulse bank" slot="amicode-card-bank" onClick={props.onWarmStart}>
             <div style={CARD_TITLE}>
               {stats()!.banked} pulse{stats()!.banked === 1 ? "" : "s"} banked
-            </div>
-            <div style={{ ...CARD_SUB, "font-variant-numeric": "tabular-nums" }}>
-              best F {fidelity(stats()!.best_fidelity)}
             </div>
             <div style={{ "font-size": "11px", color: "var(--v2-text-text-accent)", "margin-top": "auto" }}>
               Warm-start →

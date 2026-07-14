@@ -40,6 +40,7 @@ import { decode64 } from "@/utils/base64"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import { Mark } from "@opencode-ai/ui/logo"
+import { ContextMenu } from "@opencode-ai/ui/context-menu"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 
 type TauriDesktopWindow = {
@@ -489,6 +490,12 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                                 ref.scrollIntoView({ behavior: "instant" })
                               }}
                               onClose={() => tabsStoreActions.removeTab(i())}
+                              onCloseOthers={() => tabsStoreActions.closeOthers(i())}
+                              onCloseLeft={() => tabsStoreActions.closeToLeft(i())}
+                              onCloseRight={() => tabsStoreActions.closeToRight(i())}
+                              canCloseOthers={tabsStore.length > 1}
+                              canCloseLeft={i() > 0}
+                              canCloseRight={i() < tabsStore.length - 1}
                               active={currentTab() === tab}
                               activeServer={tab.server === server.key}
                               forceTruncate={tabsAreOverflowing()}
@@ -765,11 +772,18 @@ function TabNavItem(props: {
   sessionId?: string
   hideClose?: boolean
   onClose: () => void
+  onCloseOthers: () => void
+  onCloseLeft: () => void
+  onCloseRight: () => void
+  canCloseOthers: boolean
+  canCloseLeft: boolean
+  canCloseRight: boolean
   onNavigate: () => void
   active?: boolean
   activeServer: boolean
   forceTruncate?: boolean
 }) {
+  const language = useLanguage()
   const closeTab = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -796,15 +810,17 @@ function TabNavItem(props: {
   )
 
   return (
-    <div
-      ref={props.ref}
-      class="group relative flex h-7 min-w-24 max-w-60 flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[6px] bg-[var(--tab-bg)] px-1.5 [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-background-bg-layer-02)]"
-      data-active={props.active}
-      onMouseDown={(event) => {
-        if (event.button !== 1) return
-        closeTab(event)
-      }}
-    >
+    <ContextMenu modal={false}>
+      <ContextMenu.Trigger
+        as="div"
+        ref={props.ref}
+        class="group relative flex h-7 min-w-24 max-w-60 flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[6px] bg-[var(--tab-bg)] px-1.5 [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-background-bg-layer-02)]"
+        data-active={props.active}
+        onMouseDown={(event: MouseEvent) => {
+          if (event.button !== 1) return
+          closeTab(event)
+        }}
+      >
       <Show when={session.latest}>
         {(session) => {
           const project = createMemo(() => projectForSession(session(), serverCtx()?.projects.list() ?? []))
@@ -851,7 +867,24 @@ function TabNavItem(props: {
           icon={<IconV2 name="xmark-small" />}
         />
       </div>
-    </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content>
+          <ContextMenu.Item onSelect={() => props.onClose()}>
+            <ContextMenu.ItemLabel>{language.t("common.closeTab")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+          <ContextMenu.Item disabled={!props.canCloseOthers} onSelect={() => props.onCloseOthers()}>
+            <ContextMenu.ItemLabel>{language.t("common.closeOtherTabs")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+          <ContextMenu.Item disabled={!props.canCloseLeft} onSelect={() => props.onCloseLeft()}>
+            <ContextMenu.ItemLabel>{language.t("common.closeTabsToLeft")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+          <ContextMenu.Item disabled={!props.canCloseRight} onSelect={() => props.onCloseRight()}>
+            <ContextMenu.ItemLabel>{language.t("common.closeTabsToRight")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu>
   )
 }
 

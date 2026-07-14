@@ -3,9 +3,13 @@ import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseDiffSentinel, receiptParts } from "./receipt"
+import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
+import { compositeChip, chipText } from "./problem"
 import { AmicoMark } from "./spinner"
 import { openAmicodeEntity } from "./ui-bridge"
 import { RunWindow } from "./run-window"
+import { parseWidgetSentinel } from "./widget-preview"
+import { WidgetPreviewCard } from "./widget-preview-card"
 
 // spec C: when an amicode_solve recorded a run_dir, its sentinel carries the
 // path (well under the 120-char truncation cap) — extract lab/run_id from the
@@ -62,6 +66,27 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
             : { key: change.key, from: change.from, to: change.to },
       ) ?? [],
   )
+  // Hero entities (system, formulation): a semantic receipt (spec §5) instead of
+  // JSON pieces — a post-state chip on creation/large/elided, else a delta.
+  const heroReceipt = createMemo(() => {
+    const p = parts()
+    if (!p) return undefined
+    if (p.sentinel.entity === "system") return systemReceiptPieces(p.sentinel.diff)
+    if (p.sentinel.entity === "formulation") return formulationReceiptPieces(p.sentinel.diff)
+    return undefined
+  })
+  const heroChip = createMemo(() => {
+    const p = parts()
+    const sr = heroReceipt()
+    if (!p || sr?.kind !== "chip") return undefined
+    return p.sentinel.entity === "system"
+      ? (compositeChip(sr.entity) ?? "updated")
+      : (chipText(p.sentinel.entity, sr.entity) ?? "updated")
+  })
+  const heroPieces = createMemo(() => {
+    const sr = heroReceipt()
+    return sr?.kind === "pieces" ? sr.pieces : undefined
+  })
   const state = () =>
     errored() ? "error" : running() ? "running" : parts() ? "receipt" : props.status === "completed" ? "done" : "idle"
   const openLabel = () => `Open ${parts()?.receipt.label ?? stage()} details`
@@ -74,10 +99,12 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
   // (<div>) shells. Split so the shell can be a real button only when there is
   // an entity to open — a bare <button> would inherit type="submit" and fire
   // the composer form; a plain onClick <div> would be invisible to the keyboard.
+  // amicode: the "AMICO" wordmark is gone from cards — identity lives in the
+  // entity rail now (spec-20260712-amico-third-actor). The H-mark stays as a
+  // subtle leading glyph so a de-stamped card still reads as Amico's work.
   const Sig = () => (
     <span class="amc-sig">
       <AmicoMark running={running()} />
-      <span class="amc-wordmark">AMICO</span>
     </span>
   )
   const Body = () => (
@@ -103,22 +130,46 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
       {(active) => (
         <span class="amc-body" data-slot="amicode-card-receipt">
           <span class="amc-label">{active().receipt.label}</span>
-          <For each={diffPieces()}>
-            {(piece) => (
-              <span class="amc-diff">
-                <span class="k">{piece.key}</span>
-                <Show when={piece.from !== undefined}>
-                  <span class="v from">{piece.from}</span>
-                  <span class="arw" aria-hidden="true">
-                    →
+          <Show
+            when={heroReceipt()}
+            fallback={
+              <For each={diffPieces()}>
+                {(piece) => (
+                  <span class="amc-diff">
+                    <span class="k">{piece.key}</span>
+                    <Show when={piece.from !== undefined}>
+                      <span class="v from">{piece.from}</span>
+                      <span class="arw" aria-hidden="true">
+                        →
+                      </span>
+                    </Show>
+                    <Show when={piece.to !== undefined}>
+                      <span class="v">{piece.to}</span>
+                    </Show>
                   </span>
-                </Show>
-                <Show when={piece.to !== undefined}>
-                  <span class="v">{piece.to}</span>
-                </Show>
-              </span>
-            )}
-          </For>
+                )}
+              </For>
+            }
+          >
+            <Show
+              when={heroChip()}
+              fallback={
+                <For each={heroPieces()}>
+                  {(p) => (
+                    <span class="amc-diff" data-tone={p.tone}>
+                      <span class="v">{p.text}</span>
+                    </span>
+                  )}
+                </For>
+              }
+            >
+              {(chip) => (
+                <span class="amc-diff">
+                  <span class="v">{chip()}</span>
+                </span>
+              )}
+            </Show>
+          </Show>
         </span>
       )}
     </Show>
@@ -189,6 +240,9 @@ export function AmicodeToolCard(props: {
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
+  const authored = createMemo(() =>
+    props.tool === "amicode_author_widget" ? parseWidgetSentinel(props.output) : undefined,
+  )
 
   return (
     <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
@@ -196,6 +250,7 @@ export function AmicodeToolCard(props: {
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
+      <Match when={authored()}>{(preview) => <WidgetPreviewCard preview={preview()} />}</Match>
     </Switch>
   )
 }

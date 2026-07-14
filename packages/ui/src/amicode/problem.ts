@@ -6,6 +6,7 @@
 // every field, drop non-conforming array entries, never throw. JSX-free so it
 // is directly testable under `bun test`.
 import { entityLabel } from "./receipt"
+import { compactValue, formatSci } from "./facets"
 
 // --- view types --------------------------------------------------------------
 
@@ -169,14 +170,16 @@ export function parseRunStatusResponse(raw: unknown): RunStatusView[] {
 const CHIP_ORDER = ["system", "formulation", "run", "device_session", "calibration"]
 
 function shortValue(value: unknown): string {
-  if (value === null || value === undefined) return "—"
-  if (typeof value === "string") return value
-  return JSON.stringify(value)
+  return compactValue(value) // spec §4: array/object-aware, never a JSON blob
 }
 
 /** Compact per-kind chip text; undefined when the entity has nothing to show. */
 export function chipText(kind: string, entity: Record<string, unknown>): string | undefined {
   if (kind === "system") {
+    // composite (spec-20260709): a components[] array → summarize the composite.
+    // Defensive in-place parse (this fork repo CANNOT import the plugin-side
+    // normalizeSystem — spec §3 cross-repo note); a legacy flat entity falls through.
+    if (Array.isArray(entity.components)) return compositeChip(entity)
     const params = (typeof entity.params === "object" && entity.params !== null ? entity.params : {}) as Record<
       string,
       unknown
@@ -184,14 +187,21 @@ export function chipText(kind: string, entity: Record<string, unknown>): string 
     const parts = [
       str(entity.platform),
       typeof entity.levels === "number" ? `${entity.levels} lvl` : undefined,
-      typeof params.drive_max === "number" ? `cap ${params.drive_max}` : undefined,
+      typeof params.drive_max === "number" ? `cap ${formatSci(params.drive_max)}` : undefined,
     ].filter((p): p is string => Boolean(p))
     return parts.length > 0 ? parts.join(" · ") : undefined
   }
   if (kind === "formulation") {
-    const parts = [str(entity.target), str(entity.objective)].filter((p): p is string => Boolean(p))
-    if (parts.length > 0) return parts.join(" · ")
-    return str(entity.problem_type)
+    // Structured facets via formulationProjection (dual-shape) — NOT the phantom
+    // `problem_type` the plugin never writes (spec §6.3 drift fix).
+    const p = formulationProjection(entity)
+    const parts = [
+      p.trajectory_type,
+      p.time_mode === "min_time" ? "min-time" : undefined,
+      p.robustness.kind !== "none" ? p.robustness.kind : undefined,
+      p.free_phase ? "free-phase" : undefined,
+    ].filter((x): x is string => Boolean(x))
+    return parts.length > 0 ? parts.join(" · ") : undefined
   }
   if (kind === "run") return undefined // run chip text comes from runChipText
   // generic: flatten one level of nesting to bare keys, skip null/notes/recorded
@@ -296,6 +306,9 @@ export function fieldGroup(key: string): string | undefined {
 /** Stable field rows: scalars in object order, one level of object nesting
  *  flattened to dotted keys, undefined skipped. */
 export function entityRows(entity: Record<string, unknown>): EntityRow[] {
+  // composite system (spec-20260709): a components[] array → component-table +
+  // coupling-list rows instead of one JSON blob. Defensive; legacy flat falls through.
+  if (Array.isArray(entity.components)) return compositeSystemRows(entity)
   const rows: EntityRow[] = []
   for (const [key, value] of Object.entries(entity)) {
     if (value === undefined) continue
@@ -319,4 +332,284 @@ export function historyRows(events: EventView[], kind: string): EventView[] {
 export function editPromptText(kind: string, key: string, value: unknown): string {
   const bare = key.split(".").pop() ?? key
   return `Change the ${kind} ${bare} (currently ${shortValue(value)}) to `
+}
+
+// --- composite system display (spec-20260709 §3) -----------------------------
+// All of the below parse BOTH the flat-legacy and composite shapes defensively
+// in place — this fork repo cannot import the plugin-side normalizeSystem, so
+// tolerance lives in the reader (spec §3 cross-repo note). Never throw.
+
+const paramBits = (params: unknown): string[] => {
+  if (typeof params !== "object" || params === null) return []
+  return Object.entries(params as Record<string, unknown>).map(([k, v]) => `${k}=${shortValue(v)}`)
+}
+
+/** Compact composite chip, e.g. "transmon · 3 lvl · cap 0.2" (N=1, back-compat look)
+ *  or "transmon · 2×qubit · cross-resonance · per-component" (N>1). */
+export function compositeChip(entity: Record<string, unknown>): string | undefined {
+  const components = Array.isArray(entity.components) ? (entity.components as Record<string, unknown>[]) : []
+  const couplings = Array.isArray(entity.couplings) ? (entity.couplings as Record<string, unknown>[]) : []
+  const driveArch =
+    entity.drive && typeof entity.drive === "object" ? str((entity.drive as Record<string, unknown>).arch) : undefined
+  const parts: string[] = []
+  const platform = str(entity.platform)
+  if (platform) parts.push(platform)
+  if (components.length === 1) {
+    const c = components[0]
+    if (typeof c.levels === "number") parts.push(`${c.levels} lvl`)
+    const params = (typeof c.params === "object" && c.params !== null ? c.params : {}) as Record<string, unknown>
+    if (typeof params.drive_max === "number") parts.push(`cap ${formatSci(params.drive_max)}`)
+  } else if (components.length > 1) {
+    const roles = new Set(components.map((c) => str(c.role)).filter(Boolean))
+    parts.push(roles.size === 1 ? `${components.length}×${[...roles][0]}` : `${components.length} comps`)
+  }
+  if (couplings.length === 1) parts.push(str(couplings[0].kind) ?? "1 coupling")
+  else if (couplings.length > 1) parts.push(`${couplings.length} couplings`)
+  if (components.length > 1 && driveArch) parts.push(driveArch)
+  return parts.length > 0 ? parts.join(" · ") : undefined
+}
+
+/** Component-table + coupling-list rows for a composite system entity. */
+export function compositeSystemRows(entity: Record<string, unknown>): EntityRow[] {
+  const rows: EntityRow[] = []
+  const platform = str(entity.platform)
+  if (platform) rows.push({ key: "platform", value: platform })
+  const driveArch =
+    entity.drive && typeof entity.drive === "object" ? str((entity.drive as Record<string, unknown>).arch) : undefined
+  if (driveArch) rows.push({ key: "drive", value: driveArch })
+  if (typeof entity.topology === "string") rows.push({ key: "topology", value: entity.topology })
+  for (const c of (Array.isArray(entity.components) ? entity.components : []) as Record<string, unknown>[]) {
+    const bits = [
+      str(c.role),
+      typeof c.levels === "number" ? `${c.levels} lvl` : undefined,
+      ...paramBits(c.params),
+    ].filter((b): b is string => Boolean(b))
+    rows.push({ key: `component ${str(c.id) ?? "?"}`, value: bits.join(", ") || "—" })
+  }
+  for (const cp of (Array.isArray(entity.couplings) ? entity.couplings : []) as Record<string, unknown>[]) {
+    const between = Array.isArray(cp.between) ? (cp.between as unknown[]).map(String).join("↔") : ""
+    const params = paramBits(cp.params).join(", ")
+    rows.push({ key: `coupling ${between}`, value: `${str(cp.kind) ?? "?"}${params ? ` (${params})` : ""}` })
+  }
+  if (typeof entity.notes === "string") rows.push({ key: "notes", value: entity.notes })
+  return rows
+}
+
+export interface SystemProjection {
+  platform?: string
+  driveArch?: string
+  topology?: string
+  components: { id: string; role: string; levels?: number; params: Record<string, number> }[]
+  couplings: { between: string[]; kind: string; params: Record<string, number> }[]
+  notes?: string
+  /** false = a legacy FLAT entity read-collapsed to N=1 (no couplings). */
+  isComposite: boolean
+}
+
+const asNumberRecord = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {}
+  if (typeof v === "object" && v !== null) {
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (typeof val === "number") out[k] = val
+  }
+  return out
+}
+
+/** Structured projection for the entity view (spec §3 point 3). Composite → read
+ *  through; legacy flat → collapse to N=1 in place (role from platform: rydberg→atom
+ *  else qubit — mirrors normalizeSystem without importing it). Never throws. */
+export function systemProjection(input: Record<string, unknown>): SystemProjection {
+  const entity = (input ?? {}) as Record<string, unknown>
+  const platform = str(entity.platform)
+  const driveArch =
+    entity.drive && typeof entity.drive === "object" ? str((entity.drive as Record<string, unknown>).arch) : undefined
+  if (Array.isArray(entity.components)) {
+    return {
+      platform,
+      driveArch,
+      topology: typeof entity.topology === "string" ? entity.topology : undefined,
+      components: (entity.components as Record<string, unknown>[]).map((c) => ({
+        id: str(c.id) ?? "?",
+        role: str(c.role) ?? "?",
+        ...(typeof c.levels === "number" ? { levels: c.levels } : {}),
+        params: asNumberRecord(c.params),
+      })),
+      couplings: (Array.isArray(entity.couplings) ? (entity.couplings as Record<string, unknown>[]) : []).map((cp) => ({
+        between: Array.isArray(cp.between) ? (cp.between as unknown[]).map(String) : [],
+        kind: str(cp.kind) ?? "?",
+        params: asNumberRecord(cp.params),
+      })),
+      ...(typeof entity.notes === "string" ? { notes: entity.notes } : {}),
+      isComposite: true,
+    }
+  }
+  // legacy flat → N=1
+  const role = platform?.toLowerCase() === "rydberg" ? "atom" : "qubit"
+  const comp: SystemProjection["components"][number] = { id: "q1", role, params: asNumberRecord(entity.params) }
+  if (typeof entity.levels === "number") comp.levels = entity.levels
+  return {
+    platform,
+    driveArch: driveArch ?? (platform?.toLowerCase() === "rydberg" ? "global" : "per-component"),
+    components: [comp],
+    couplings: [],
+    ...(typeof entity.notes === "string" ? { notes: entity.notes } : {}),
+    isComposite: false,
+  }
+}
+
+// --- formulation projection (spec §6.2) --------------------------------------
+// Dual-shape (legacy free-form OR structured facets). The fork CANNOT import the
+// plugin's normalizeFormulation, so this re-implements the §10 mapping IN PLACE,
+// pinned by the shared fixture corpus (formulation-projection.test.ts). Never
+// throws; unknown enums pass through raw.
+
+export type PrimaryObjectiveKey =
+  | "ket_infidelity"
+  | "unitary_infidelity"
+  | "unitary_free_phase"
+  | "density_infidelity"
+  | "min_time"
+export interface FormulationTerm {
+  kind: string
+  params: Record<string, number>
+  label?: string
+}
+export interface FormulationProjection {
+  trajectory_type: string
+  time_mode: string
+  parameterization: string
+  robustness: { kind: string; params: Record<string, unknown> }
+  free_phase: boolean
+  leakage: boolean
+  leakage_params?: Record<string, number>
+  time_params?: Record<string, number>
+  target: string
+  objectives: FormulationTerm[]
+  constraints: FormulationTerm[]
+  primaryKey: PrimaryObjectiveKey
+  derivedFinalFidelity?: number
+  solve?: Record<string, unknown>
+  isStructured: boolean
+}
+
+const fmtTerm = (o: any): FormulationTerm => {
+  const out: FormulationTerm = {
+    kind: typeof o?.kind === "string" ? o.kind : "custom",
+    params: o?.params && typeof o.params === "object" ? o.params : {},
+  }
+  if (typeof o?.label === "string") out.label = o.label
+  return out
+}
+const fmtRobustness = (r: any): { kind: string; params: Record<string, unknown> } =>
+  r && typeof r === "object" && typeof r.kind === "string"
+    ? { kind: r.kind, params: r.params && typeof r.params === "object" ? r.params : {} }
+    : { kind: "none", params: {} }
+const inferTrajFromTarget = (target: string): string => (/^\s*\||prep|state/i.test(target) ? "ket" : "gate")
+const fmtConstraintKind = (lc: string): string => {
+  if (/slew|\bdu\b/.test(lc)) return "du_bound"
+  if (/ddu|accel/.test(lc)) return "ddu_bound"
+  if (/Δt|timestep|\bdt\b/.test(lc)) return "dt_bounds"
+  if (/calibration|\bpin\b/.test(lc)) return "calibration_pin"
+  if (/amplitude|bound/.test(lc)) return "bounds"
+  return "custom"
+}
+const derivePrimaryKey = (trajectory_type: string, free_phase: boolean, time_mode: string): PrimaryObjectiveKey => {
+  if (time_mode === "min_time") return "min_time"
+  if (trajectory_type === "ket" || trajectory_type === "multiket") return "ket_infidelity"
+  if (trajectory_type === "density" || trajectory_type === "multidensity") return "density_infidelity"
+  if (trajectory_type === "gate") return free_phase ? "unitary_free_phase" : "unitary_infidelity"
+  return "unitary_infidelity"
+}
+
+export function formulationProjection(input: Record<string, unknown>): FormulationProjection {
+  const r = (input ?? {}) as Record<string, any>
+  let trajectory_type: string
+  let time_mode: string
+  let parameterization: string
+  let free_phase: boolean
+  let leakage: boolean
+  let target: string
+  let robustness: { kind: string; params: Record<string, unknown> }
+  let objectives: FormulationTerm[]
+  let constraints: FormulationTerm[]
+  let time_params: Record<string, number> | undefined
+  let leakage_params: Record<string, number> | undefined
+  let solve: Record<string, unknown> | undefined
+  let isStructured: boolean
+
+  if (typeof r.trajectory_type === "string") {
+    isStructured = true
+    trajectory_type = r.trajectory_type
+    time_mode = r.time_mode === "min_time" ? "min_time" : "fixed"
+    parameterization = typeof r.parameterization === "string" ? r.parameterization : "smooth"
+    robustness = fmtRobustness(r.robustness)
+    free_phase = r.free_phase === true
+    leakage = r.leakage === true
+    target = typeof r.target === "string" ? r.target : ""
+    objectives = Array.isArray(r.objectives) ? r.objectives.map(fmtTerm) : []
+    constraints = Array.isArray(r.constraints) ? r.constraints.map(fmtTerm) : []
+    if (r.time_params && typeof r.time_params === "object") time_params = r.time_params
+    if (r.leakage_params && typeof r.leakage_params === "object") leakage_params = r.leakage_params
+    if (r.solve && typeof r.solve === "object") solve = r.solve
+  } else {
+    isStructured = false
+    const problem = typeof r.problem === "string" ? r.problem : ""
+    target = typeof r.target === "string" ? r.target : ""
+    trajectory_type = "gate"
+    time_mode = "fixed"
+    if (problem === "state_prep") trajectory_type = "ket"
+    else if (problem === "min_time") {
+      time_mode = "min_time"
+      trajectory_type = inferTrajFromTarget(target)
+    }
+    parameterization = "smooth"
+    robustness = { kind: "none", params: {} }
+    free_phase = false
+    leakage = false
+    objectives = []
+    const objStr = typeof r.objective === "string" ? r.objective.trim() : ""
+    if (objStr && !/infidelity/i.test(objStr)) objectives.push({ kind: "custom", params: {}, label: objStr })
+    constraints = []
+    for (const c of Array.isArray(r.constraints) ? r.constraints : []) {
+      if (typeof c !== "string") continue
+      const lc = c.toLowerCase()
+      if (/leakage/.test(lc)) {
+        leakage = true
+        continue
+      }
+      if (/final.?fidelity/.test(lc)) {
+        const m = c.match(/[\d.]+/)
+        time_params = { ...(time_params ?? {}), final_fidelity: m ? Number(m[0]) : 0.99 }
+        continue
+      }
+      constraints.push({ kind: fmtConstraintKind(lc), params: {}, label: c })
+    }
+    if (r.solve && typeof r.solve === "object") solve = r.solve
+  }
+
+  const out: FormulationProjection = {
+    trajectory_type,
+    time_mode,
+    parameterization,
+    robustness,
+    free_phase,
+    leakage,
+    target,
+    objectives,
+    constraints,
+    primaryKey: derivePrimaryKey(trajectory_type, free_phase, time_mode),
+    isStructured,
+  }
+  if (time_params) out.time_params = time_params
+  if (leakage_params) out.leakage_params = leakage_params
+  if (solve) out.solve = solve
+  if (time_mode === "min_time" && time_params && typeof time_params.final_fidelity === "number")
+    out.derivedFinalFidelity = time_params.final_fidelity
+  return out
+}
+
+/** Compact an ISO timestamp for the entity-view ("2026-07-10T15:53:30.450Z" →
+ *  "07-10 15:53") — the full ISO is wide and clips the dialog. Non-ISO passes through. */
+export function formatTs(ts: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(ts)
+  return m ? `${m[2]}-${m[3]} ${m[4]}` : ts
 }
