@@ -152,6 +152,45 @@ const installGlobalPasteFallback = () => {
   })
 }
 
+// Amicode webview: the write side of readClipboardText. The sandboxed iframe's
+// native copy (and navigator.clipboard.writeText) never lands in the OS
+// clipboard, so ⌘V — which reads the OS clipboard over the bridge — would paste
+// stale content. Push the text to the extension host, which writes
+// vscode.env.clipboard, keeping read and write on one clipboard. Framed
+// contexts only; plain browser tabs use native copy and never reach here.
+const writeClipboardText: Platform["writeClipboardText"] = (text) => {
+  if (window.parent === window) return Promise.resolve(false)
+  window.parent.postMessage({ source: "amicode", kind: "clipboard-write", text }, "*")
+  return Promise.resolve(true)
+}
+
+// The copy-side companion to installGlobalPasteFallback: mirror every ⌘C/⌘X
+// selection to the OS clipboard via the bridge so a following ⌘V pastes what
+// was actually copied in-chat. Mirror-only (no preventDefault) — the native
+// selection copy / cut-removal still runs; we just also update the OS clipboard
+// the paste bridge reads. Reads the document selection, falling back to a
+// form field's own selection (which window.getSelection() does not expose).
+const installGlobalCopyBridge = () => {
+  if (window.parent === window) return
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+      const key = event.key.toLowerCase()
+      if (key !== "c" && key !== "x") return
+      let text = window.getSelection()?.toString() ?? ""
+      const target = event.target
+      if (!text && isFormField(target)) {
+        const start = target.selectionStart ?? 0
+        const end = target.selectionEnd ?? 0
+        text = target.value.slice(start, end)
+      }
+      if (text) void writeClipboardText(text)
+    },
+    true,
+  )
+}
+
 const root = document.getElementById("root")
 if (!(root instanceof HTMLElement) && import.meta.env.DEV) {
   throw new Error(getRootNotFoundError())
@@ -191,6 +230,7 @@ const platform: Platform = {
   },
   setDefaultServer: writeDefaultServerUrl,
   readClipboardText,
+  writeClipboardText,
 }
 
 if (import.meta.env.VITE_SENTRY_DSN) {
@@ -214,6 +254,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 if (root instanceof HTMLElement) {
   installGlobalPasteFallback()
+  installGlobalCopyBridge()
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {

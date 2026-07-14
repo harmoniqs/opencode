@@ -108,6 +108,12 @@ type PlatformBase = {
    *  navigator.clipboard or the native paste event's clipboardData */
   readClipboardText?(): Promise<string | null>
 
+  /** Write text to the OS clipboard via the extension-host bridge (amicode VS
+   *  Code webview only) — the mirror of readClipboardText. Without it, an
+   *  in-chat copy never reaches the OS clipboard the paste bridge reads back,
+   *  so ⌘V pastes stale content. Resolves true when the bridge handled it. */
+  writeClipboardText?(text: string): Promise<boolean>
+
   /** Export collected diagnostic logs (desktop only) */
   exportDebugLogs?(): Promise<string>
 
