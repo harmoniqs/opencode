@@ -1,6 +1,7 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import { ThinkingLine } from "../amicode/thinking-line"
 import { turnTokens } from "../amicode/thinking"
+import { amicoBrainRef, emitAmicoBrainHover } from "../amicode/brain-ref"
 import {
   Component,
   createEffect,
@@ -977,6 +978,10 @@ export function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean; onS
     setOpen(value)
     props.onSizeChange?.()
   }
+  // amicode: hovering the group chip glances at every member node on the map
+  const glanceAll = () => {
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+  }
 
   return (
     <Collapsible
@@ -987,7 +992,7 @@ export function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean; onS
       data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
     >
       <Collapsible.Trigger>
-        <div data-component="context-tool-group-trigger">
+        <div data-component="context-tool-group-trigger" onMouseEnter={glanceAll}>
           <span
             data-slot="context-tool-group-title"
             class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
@@ -1088,6 +1093,10 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
     setOpen(value)
     props.onSizeChange?.()
   }
+  // amicode: hovering the group chip glances at every member node on the map
+  const glanceAll = () => {
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+  }
 
   return (
     <Collapsible
@@ -1098,7 +1107,7 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
       data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
     >
       <Collapsible.Trigger>
-        <div data-component="context-tool-group-trigger">
+        <div data-component="context-tool-group-trigger" onMouseEnter={glanceAll}>
           <span
             data-slot="context-tool-group-title"
             class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
@@ -1514,9 +1523,15 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const controlledOpen = () => (props.onToolOpenChange ? (props.toolOpen ?? props.defaultOpen) : undefined)
   const handleToolOpenChange = (open: boolean) => props.onToolOpenChange?.(open)
 
+  // amicode: hovering the row glances at its node on the brain's map
+  const brainRef = createMemo(() => amicoBrainRef(part().tool, input()))
   return (
     <Show when={!hideQuestion()}>
-      <div data-component="tool-part-wrapper" data-timeline-part-id={part().id}>
+      <div
+        data-component="tool-part-wrapper"
+        data-timeline-part-id={part().id}
+        onMouseEnter={() => emitAmicoBrainHover(brainRef())}
+      >
         <Switch>
           <Match when={part().state.status === "error" && (part().state as any).error}>
             {(error) => {

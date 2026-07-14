@@ -1,0 +1,273 @@
+<!-- GENERATED from amicode packages/extension/media/brain/brain.html — CSP-split
+     (external brain.js; the font rides the app's own JuliaMono asset).
+     Re-split to update; do not hand-edit. -->
+<title>amico is thinking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@font-face {
+  font-family: "JuliaMono";
+  src: url("/assets/JuliaMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* tokens — dark is the native habitat (VS Code editor surface); light is the
+   Obsidian-paper variant. Canvas reads these at runtime, so both themes drive
+   the graph too. Series hues are Amicode brand.css fallbacks (dark) and
+   darker steps of the same hues validated for the light surface. */
+:root {
+  --surface: #131312;
+  --panel: rgba(22, 22, 21, 0.82);
+  --fg: #d6d6d2;
+  --muted: #8a8a84;
+  --hairline: rgba(255, 255, 255, 0.10);
+  --edge-rest: rgba(255, 255, 255, 0.13);
+  --node-rest-fill: #242423;
+  --node-rest-border: rgba(255, 255, 255, 0.24);
+  --accent: #fff676;
+  --on-accent: #000000;
+  --thought: #fff676;        /* live-signal color: pulses, flares, live survey lines */
+  --thought-text: #d8cf6a;   /* accent-adjacent, legible as text on this surface */
+  --cat-knowledge: #3794ff;  /* series-1 — notes, insights, charter, strategy */
+  --cat-results: #c17800;    /* series-2 — experiments, catalog pulses */
+  --cat-skills: #9b6bc4;     /* series-3 — skills */
+  --cat-code: #4d9e51;       /* series-4 — packages */
+  --cat-agents: #c9c9c4;     /* neutral — agents wear a double border, not a hue */
+  --ember: rgba(232, 230, 218, 1);
+  --label-halo: rgba(19, 19, 18, 0.72);
+  --vignette: rgba(0, 0, 0, 0.25);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --surface: #faf9f6;
+    --panel: rgba(255, 255, 254, 0.86);
+    --fg: #22221f;
+    --muted: #6f6f68;
+    --hairline: rgba(0, 0, 0, 0.12);
+    --edge-rest: rgba(0, 0, 0, 0.15);
+    --node-rest-fill: #eae7dd;
+    --node-rest-border: rgba(0, 0, 0, 0.26);
+    --thought: #8f8000;
+    --thought-text: #7a6e00;
+    --cat-knowledge: #1866c9;
+    --cat-results: #8f5800;
+    --cat-skills: #7b4fa8;
+    --cat-code: #33753a;
+    --cat-agents: #4a4a44;
+    --ember: rgba(64, 62, 50, 1);
+    --label-halo: rgba(250, 249, 246, 0.78);
+    --vignette: rgba(120, 115, 95, 0.06);
+  }
+}
+:root[data-theme="light"] {
+  --surface: #faf9f6;
+  --panel: rgba(255, 255, 254, 0.86);
+  --fg: #22221f;
+  --muted: #6f6f68;
+  --hairline: rgba(0, 0, 0, 0.12);
+  --edge-rest: rgba(0, 0, 0, 0.15);
+  --node-rest-fill: #eae7dd;
+  --node-rest-border: rgba(0, 0, 0, 0.26);
+  --thought: #8f8000;
+  --thought-text: #7a6e00;
+  --cat-knowledge: #1866c9;
+  --cat-results: #8f5800;
+  --cat-skills: #7b4fa8;
+  --cat-code: #33753a;
+  --cat-agents: #4a4a44;
+  --ember: rgba(64, 62, 50, 1);
+  --label-halo: rgba(250, 249, 246, 0.78);
+  --vignette: rgba(120, 115, 95, 0.06);
+}
+:root[data-theme="dark"] {
+  --surface: #131312;
+  --panel: rgba(22, 22, 21, 0.82);
+  --fg: #d6d6d2;
+  --muted: #8a8a84;
+  --hairline: rgba(255, 255, 255, 0.10);
+  --edge-rest: rgba(255, 255, 255, 0.13);
+  --node-rest-fill: #242423;
+  --node-rest-border: rgba(255, 255, 255, 0.24);
+  --accent: #fff676;
+  --thought: #fff676;
+  --thought-text: #d8cf6a;
+  --cat-knowledge: #3794ff;
+  --cat-results: #c17800;
+  --cat-skills: #9b6bc4;
+  --cat-code: #4d9e51;
+  --cat-agents: #c9c9c4;
+  --ember: rgba(232, 230, 218, 1);
+  --label-halo: rgba(19, 19, 18, 0.72);
+  --vignette: rgba(0, 0, 0, 0.25);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--fg);
+  font-family: "JuliaMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+}
+#stage { position: fixed; inset: 0; display: block; cursor: grab; }
+#stage.dragging { cursor: grabbing; }
+#stage.overnode { cursor: pointer; }
+
+.chrome {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+}
+.chrome > * { pointer-events: auto; }
+
+#mast {
+  top: 20px; left: 22px;
+  display: flex; flex-direction: column; gap: 6px;
+  user-select: none;
+}
+#wordmark {
+  font-size: 21px;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  display: flex; align-items: baseline; gap: 10px;
+}
+#wordmark .amico { font-weight: 400; }
+#wordmark .verb { color: var(--muted); }
+/* the ellipsis is three squares that fill in accent, left to right, on the
+   beat — an integrate-and-fire timer, not a decorative "..." */
+#ifire { display: inline-flex; gap: 4px; align-self: center; }
+#ifire i {
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1px solid var(--hairline);
+  background: transparent;
+}
+#ifire i.lit { background: var(--thought); border-color: var(--thought); }
+#tempo-mark {
+  font-size: 11px; color: var(--muted); letter-spacing: 0.06em;
+}
+#statusline {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+  max-width: 52ch;
+}
+#statusline .path { color: var(--fg); }
+#statusline .caret {
+  display: inline-block; width: 7px; height: 13px;
+  background: var(--thought);
+  vertical-align: text-bottom;
+  margin-left: 2px;
+}
+#statusline .caret.off { background: transparent; }
+
+#legend {
+  bottom: 20px; left: 22px;
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 11px; color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 10px 12px;
+  backdrop-filter: blur(6px);
+}
+#legend .row { display: flex; align-items: center; gap: 8px; }
+#legend .sw {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+}
+#legend .sw.agents { background: transparent; border: 1px solid var(--cat-agents); box-shadow: inset 0 0 0 2.5px var(--surface), inset 0 0 0 3.5px var(--cat-agents); }
+#legend .sw.thought { background: var(--thought); }
+#legend .count { color: var(--muted); opacity: 0.8; margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+
+#controls {
+  bottom: 20px; right: 22px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 8px 10px;
+  backdrop-filter: blur(6px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: min(92vw, 560px);
+}
+#controls select, #controls button, #controls label {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-height: 34px;
+  cursor: pointer;
+}
+#controls select { max-width: 24ch; }
+#controls button:hover, #controls select:hover, #controls label:hover { border-color: var(--muted); }
+#controls button:focus-visible, #controls select:focus-visible, #controls label:focus-within {
+  outline: 2px solid var(--thought); outline-offset: 1px;
+}
+#controls label { display: inline-flex; align-items: center; gap: 6px; user-select: none; }
+#controls input[type="checkbox"] { accent-color: var(--thought); margin: 0; }
+#controls button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+#colophon {
+  bottom: 21px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.65;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+@media (max-width: 900px) { #colophon { display: none; } }
+
+#tooltip {
+  position: fixed; z-index: 20;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 7px 9px;
+  font-size: 11px;
+  color: var(--fg);
+  display: none;
+  max-width: 40ch;
+  backdrop-filter: blur(6px);
+}
+#tooltip .type { color: var(--muted); font-size: 10px; letter-spacing: 0.05em; }
+
+@media (prefers-reduced-motion: reduce) {
+  #statusline .caret { animation: none; }
+}
+</style>
+
+<canvas id="stage" aria-label="animated map of the amico knowledge graph; live status is announced below"></canvas>
+
+<div class="chrome" id="mast">
+  <div id="wordmark">
+    <span class="amico">amico</span>
+    <span class="verb">is thinking</span>
+    <span id="ifire" aria-hidden="true"><i></i><i></i><i></i></span>
+  </div>
+  <div id="tempo-mark">andante &middot; &#9833;= 84</div>
+  <div id="statusline" role="status" aria-live="polite"><span id="status-text"></span><span class="caret" id="caret"></span></div>
+</div>
+
+<div class="chrome" id="legend" aria-label="node categories"></div>
+
+<div class="chrome" id="controls">
+  <select id="scenario" aria-label="scenario"></select>
+  <button id="play">pause</button>
+  <button id="replay">replay</button>
+  <button id="tempo" title="tempo">&#9833;=84</button>
+  <label><input type="checkbox" id="auto" checked>auto</label>
+  <button id="clear">clear atlas</button>
+</div>
+
+<div class="chrome" id="colophon">prototype &middot; nodes &amp; links sampled from the armonissima vault &middot; brand.css tokens &middot; JuliaMono</div>
+
+<div id="tooltip" role="presentation"></div>
+
+<script src="/brain.js"></script>
