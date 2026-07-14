@@ -749,6 +749,11 @@ function HomeDesign() {
             "row-gap": "8px",
             "flex-wrap": "wrap",
             "min-height": "32px",
+            // Never let the shrinking home height (e.g. when the inspector panel
+            // opens) compress or clip this row — including a wrapped second row
+            // carrying `customize`. It stays fully rendered; the cards below
+            // scroll instead.
+            "flex-shrink": "0",
           }}
         >
           <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0" }}>
