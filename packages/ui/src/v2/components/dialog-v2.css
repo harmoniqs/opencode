@@ -4,7 +4,9 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background-color: var(--v2-overlay-simple-overlay-scrim);
+  background-color: transparent;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 [data-component="dialog-v2"] {
