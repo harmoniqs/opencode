@@ -235,8 +235,13 @@
 [data-component="amicode-card"] .amc-livedot {
   width: 6px;
   height: 6px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: var(--v2-icon-icon-accent);
+  /* Brand fill + edge: lemon on both themes. The edge is a 1px dark hairline on
+     light (icon-accent resolves to a neutral dark there) and lemon-on-lemon —
+     invisible — on dark. Yellow stays a fill, never an ink. */
+  background: var(--v2-background-bg-accent);
+  border: 1px solid var(--v2-icon-icon-accent);
 }
 @media (prefers-reduced-motion: no-preference) {
   [data-component="amicode-card"][data-state="running"] .amc-livedot { animation: amc-blip 1.2s ease-in-out infinite; }
@@ -479,7 +484,9 @@
   background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
 }
 [data-component="amicode-entity-view"] .amc-event[data-anchored]::before {
-  background: var(--v2-icon-icon-accent);
+  /* Lemon fill + edge (see .amc-livedot): the anchored timeline node keeps the
+     brand lemon on both themes, gaining a dark hairline on light. */
+  background: var(--v2-background-bg-accent);
   border-color: var(--v2-icon-icon-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-icon-icon-accent) 18%, transparent);
 }
