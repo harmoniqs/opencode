@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { WidgetFrame, type WidgetHostCallbacks } from "./widget-frame"
 import { WidgetConfigForm } from "./widget-config-form"
 import { formModel, type DashboardEntry, type DashboardState, type WidgetInfo } from "./widget-schema"
@@ -43,6 +43,9 @@ export function WidgetGrid(props: {
   }
   const [configOpen, setConfigOpen] = createSignal<string | undefined>(undefined)
   const [empties, setEmpties] = createSignal<Record<string, boolean>>({})
+  // per-card ⋯ menu (customize rethink, Kate 2026-07-15): at most one open,
+  // keyed by entry. Editing is initiated FROM a card, not a standing button.
+  const [menuOpen, setMenuOpen] = createSignal<string | undefined>(undefined)
 
   const infoFor = (id: string) => props.widgets.find((w) => w.id === id)
   const bucketOf = (id: string): Bucket => (infoFor(id)?.size === "hero" ? "hero" : "tile")
@@ -80,13 +83,7 @@ export function WidgetGrid(props: {
     return { idx: group.findIndex((e) => e.key === key), len: group.length }
   }
 
-  const PillButton = (p: {
-    label: string
-    title: string
-    onClick: () => void
-    disabled?: boolean
-    class?: string
-  }) => (
+  const PillButton = (p: { label: string; title: string; onClick: () => void; disabled?: boolean; class?: string }) => (
     <button type="button" title={p.title} disabled={p.disabled} class={p.class} onClick={p.onClick}>
       {p.label}
     </button>
@@ -124,7 +121,103 @@ export function WidgetGrid(props: {
           />
         </Show>
         <span class="amc-wg-sep" />
-        <PillButton label="×" class="amc-wg-danger" title="Remove from dashboard" onClick={() => setHidden(p.entry.key, true)} />
+        <PillButton
+          label="×"
+          class="amc-wg-danger"
+          title="Remove from dashboard"
+          onClick={() => setHidden(p.entry.key, true)}
+        />
+      </div>
+    )
+  }
+
+  // The card's own ⋯ menu — direct actions on the card in hand, plus the two
+  // grid-level entries (add / arrange) that open the full edit mode. Reuses the
+  // exact operations the edit-mode ControlPill calls.
+  const CardMenu = (p: { entry: DashboardEntry; w: WidgetInfo }) => {
+    let root: HTMLDivElement | undefined
+    const open = () => menuOpen() === p.entry.key
+    const pos = createMemo(() => posInRow(p.entry.key, p.w.id))
+    const hasConfig = createMemo(() => Object.keys(p.w.config).length > 0)
+    const onDocPointer = (e: PointerEvent) => {
+      if (root && !root.contains(e.target as Node)) setMenuOpen(undefined)
+    }
+    const onDocKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(undefined)
+    }
+    createEffect(() => {
+      if (!open()) return
+      document.addEventListener("pointerdown", onDocPointer, true)
+      document.addEventListener("keydown", onDocKey, true)
+      onCleanup(() => {
+        document.removeEventListener("pointerdown", onDocPointer, true)
+        document.removeEventListener("keydown", onDocKey, true)
+      })
+    })
+    const close = () => setMenuOpen(undefined)
+    return (
+      <div ref={root} class="amc-wg-menuroot">
+        <button
+          type="button"
+          class="amc-wg-more"
+          title={`${p.w.name} — options`}
+          aria-haspopup="menu"
+          aria-expanded={open()}
+          onClick={() => setMenuOpen(open() ? undefined : p.entry.key)}
+        >
+          ⋯
+        </button>
+        <Show when={open()}>
+          <div class="amc-wg-menu" role="menu" aria-label={`${p.w.name} options`}>
+            <button type="button" role="menuitem" disabled={pos().idx <= 0} onClick={() => move(p.entry.key, -1)}>
+              ↑ Move up
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={pos().idx < 0 || pos().idx >= pos().len - 1}
+              onClick={() => move(p.entry.key, 1)}
+            >
+              ↓ Move down
+            </button>
+            <Show when={hasConfig()}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setEditing(true)
+                  setConfigOpen(p.entry.key)
+                  close()
+                }}
+              >
+                ⚙ Configure
+              </button>
+            </Show>
+            <button
+              type="button"
+              role="menuitem"
+              class="amc-wg-danger"
+              title="Hides the widget — bring it back via Add widget"
+              onClick={() => {
+                setHidden(p.entry.key, true)
+                close()
+              }}
+            >
+              × Remove
+            </button>
+            <div class="amc-wg-menusep" role="separator" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setEditing(true)
+                close()
+              }}
+            >
+              ✎ Arrange dashboard…
+            </button>
+          </div>
+        </Show>
       </div>
     )
   }
@@ -159,7 +252,12 @@ export function WidgetGrid(props: {
               <div class="amc-wg-placeholder">
                 <span style={{ flex: "1" }}>{p.entry.id} — not installed</span>
                 <div class="amc-wg-pill" style={{ position: "static", "box-shadow": "none" }}>
-                  <PillButton label="×" class="amc-wg-danger" title="Remove from dashboard" onClick={() => setHidden(p.entry.key, true)} />
+                  <PillButton
+                    label="×"
+                    class="amc-wg-danger"
+                    title="Remove from dashboard"
+                    onClick={() => setHidden(p.entry.key, true)}
+                  />
                 </div>
               </div>
             </Show>
@@ -195,6 +293,9 @@ export function WidgetGrid(props: {
                     <div class="amc-wg-name">{w().name}</div>
                     <ControlPill entry={p.entry} w={w()} />
                   </Show>
+                  <Show when={!editing()}>
+                    <CardMenu entry={p.entry} w={w()} />
+                  </Show>
                 </div>
               </Show>
 
@@ -215,34 +316,14 @@ export function WidgetGrid(props: {
 
   return (
     <div data-component="amicode-widget-grid" style={{ display: "flex", "flex-direction": "column", gap: "12px" }}>
-      <Show when={!controlled()}>
-        <div style={{ display: "flex", "justify-content": "flex-end" }}>
-          <button
-            type="button"
-            data-slot="amicode-grid-customize"
-            onClick={() => {
-              setEditing(!editing())
-              setConfigOpen(undefined)
-            }}
-            style={{
-              border: "none",
-              background: "transparent",
-              color: editing() ? "var(--v2-text-text-accent)" : "var(--v2-text-text-faint)",
-              "font-size": "11px",
-              cursor: "pointer",
-              padding: "0",
-            }}
-          >
-            {editing() ? "done" : "customize"}
-          </button>
-        </div>
-      </Show>
+      {/* No standing customize button (rethink, Kate 2026-07-15): editing is
+          initiated from any card's ⋯ menu; the edit bar's Done closes it. */}
 
       <Show when={editing()}>
         <div data-component="amicode-widget-editbar">
           <span>
-            <b>Customizing your dashboard</b> — use each card's corner controls to reorder <b>↑↓</b>, configure <b>⚙</b>, or
-            remove <b>×</b>. Changes save as you go.
+            <b>Customizing your dashboard</b> — use each card's corner controls to reorder <b>↑↓</b>, configure{" "}
+            <b>⚙</b>, or remove <b>×</b>. Changes save as you go.
           </span>
           <button
             type="button"
