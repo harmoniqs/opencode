@@ -778,13 +778,7 @@
   position: absolute; inset: 0; z-index: 1; border-radius: 10px; cursor: default;
   background: color-mix(in srgb, var(--v2-background-bg-base) 44%, transparent);
 }
-.amc-wg-name {
-  position: absolute; top: 9px; left: 11px; z-index: 2; pointer-events: none;
-  font-size: 11px; font-weight: 600; color: var(--v2-text-text-base);
-  text-shadow: 0 1px 4px color-mix(in srgb, var(--v2-background-bg-base) 85%, transparent);
-  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.amc-wg-name .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
+.amc-wg-placeholder .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
 .amc-wg-pill {
   position: absolute; top: 7px; right: 7px; z-index: 2;
   display: flex; align-items: center; gap: 1px; padding: 3px;
@@ -803,8 +797,6 @@
 }
 .amc-wg-pill button:disabled { opacity: 0.28; cursor: default; }
 .amc-wg-pill .amc-wg-danger:hover:not(:disabled) { color: var(--v2-state-fg-danger); }
-.amc-wg-pill .amc-wg-fork { font-size: 10px; letter-spacing: 0.02em; color: var(--v2-text-text-faint); }
-.amc-wg-pill .amc-wg-sep { width: 1px; height: 14px; background: var(--v2-border-border-base); margin: 0 3px; flex: 0 0 auto; }
 
 [data-component="amicode-widget-editbar"] {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -994,3 +986,23 @@
   background: var(--v2-border-border-base);
   margin: 4px 2px;
 }
+
+/* ---- widget grid: drag reorder + Add-widget menu (widget UX PR) ----------
+ * Move mode: the whole scrimmed card is the drag handle. No overlay ghost, no
+ * fade (Kate: widgets must look the SAME while dragging) — the card itself
+ * follows the pointer via the sortable transform, riding above its neighbors.
+ * Reduced motion kills the slide transitions. */
+.amc-wg-sortable { touch-action: none; min-width: 0; }
+.amc-wg-sortable.amc-wg-active { position: relative; z-index: 5; }
+.amc-wg-sortable:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 2px; border-radius: 10px; }
+[data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-scrim { cursor: grab; }
+.amc-wg-sortable.amc-wg-active .amc-wg-scrim { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  .amc-wg-sortable { transition: none !important; }
+}
+/* empty board (nothing visible) — quiet entry back into Add widget */
+.amc-wg-empty-actions { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--v2-text-text-faint); }
+.amc-wg-empty-actions button { border: none; background: transparent; padding: 0; font-size: 11px;
+  color: var(--v2-text-text-muted); cursor: pointer; }
+.amc-wg-empty-actions button:hover { color: var(--v2-text-text-base); }
+.amc-wg-empty-actions button:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 1px; }
