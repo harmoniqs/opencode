@@ -3,6 +3,22 @@
      Re-split to update; do not hand-edit. -->
 <title>amico is thinking</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Pre-paint embed gate: the demo chrome (mast/controls/legend/colophon) is
+   static HTML, but embeds hide it from brain.js — which runs AFTER first
+   paint, so the chrome flashed for a beat in the chat's thinking strip
+   (Kate). Stamp the mode on <html> before anything paints; the CSS below
+   hides chrome instantly. brain.js re-applies the same rules at boot. */
+(function () {
+  var m = /[?&]mode=(live|inline|loader)\b/.exec(location.search);
+  if (m) document.documentElement.className += " embed-" + m[1];
+})();
+</script>
+<style>
+html.embed-live .chrome, html.embed-inline .chrome { display: none !important; }
+html.embed-loader #controls, html.embed-loader #legend, html.embed-loader #colophon { display: none !important; }
+html.embed-live, html.embed-live body, html.embed-inline, html.embed-inline body { background: transparent; }
+</style>
 <style>
 @font-face {
   font-family: "JuliaMono";
