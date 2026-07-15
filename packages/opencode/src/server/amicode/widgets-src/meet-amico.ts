@@ -19,6 +19,34 @@ var CAN = [
   'tune & calibrate on real hardware',
 ]
 
+// The H-robot's FACE only — the inner circuit-pattern accents of amicode's
+// amico.svg, WITHOUT the outer H-shaped bracket (MARK_PATH). Same 3600-space
+// geometry as logo.tsx's MarkDetailed (elements verbatim, minus MARK_PATH); the
+// viewBox is the face's exact bounding box, so it renders bare (no tile) at its
+// native ~2:1 proportions. Keep these element strings in sync with MarkDetailed
+// by hand if the mark changes.
+var FACE =
+  '<svg viewBox="621.31 1309.27 2415.32 1084.97" width="89" height="40" preserveAspectRatio="xMidYMid meet" aria-hidden="true" fill="var(--amc-accent)" style="flex-shrink:0;display:block" xmlns="http://www.w3.org/2000/svg">' +
+  '<rect x="1778.31" y="1312.43" width="107.11" height="692.38"/>' +
+  '<polygon points="2769.41 1463.57 2903.01 1463.57 2903.01 1601.01 2769.39 1601.01 2769.39 1463.6 2635.79 1463.6 2635.79 1326.16 2769.41 1326.16 2769.41 1463.57"/>' +
+  '<polygon points="3036.63 1738.45 2903.03 1738.45 2903.03 1875.89 2769.41 1875.89 2769.41 1738.45 2903.01 1738.45 2903.01 1601.01 3036.63 1601.01 3036.63 1738.45"/>' +
+  '<polygon points="2903.02 1875.89 2769.43 1875.89 2769.43 2013.33 2635.81 2013.33 2635.81 1875.89 2769.4 1875.89 2769.4 1738.45 2903.02 1738.45 2903.02 1875.89"/>' +
+  '<rect x="2373.03" y="1451.19" width="133.62" height="423.84" transform="translate(4879.6781 3326.2281) rotate(-180)"/>' +
+  '<rect x="2009.75" y="1451.19" width="133.62" height="423.84" transform="translate(4153.1112 3326.2281) rotate(-180)"/>' +
+  '<rect x="2143.56" y="1313.76" width="229.47" height="137.44" transform="translate(4516.5887 2764.9517) rotate(-180)"/>' +
+  '<rect x="2143.56" y="1875.03" width="229.47" height="137.44" transform="translate(4516.5887 3887.5046) rotate(-180)"/>' +
+  '<rect x="1503.05" y="1446.71" width="133.62" height="423.84" transform="translate(3139.725 3317.2494) rotate(-180)"/>' +
+  '<rect x="1139.77" y="1446.71" width="133.62" height="423.84" transform="translate(2413.1581 3317.2494) rotate(-180)"/>' +
+  '<rect x="1273.58" y="1309.27" width="229.47" height="137.44" transform="translate(2776.6357 2755.9729) rotate(-180)"/>' +
+  '<rect x="1273.58" y="1870.54" width="229.47" height="137.44" transform="translate(2776.6357 3878.5258) rotate(-180)"/>' +
+  '<polygon points="888.52 1864.8 754.93 1864.8 754.93 1727.36 888.55 1727.36 888.55 1864.77 1022.15 1864.77 1022.15 2002.21 888.52 2002.21 888.52 1864.8"/>' +
+  '<polygon points="621.31 1589.92 754.9 1589.92 754.9 1452.48 888.52 1452.48 888.52 1589.92 754.93 1589.92 754.93 1727.36 621.31 1727.36 621.31 1589.92"/>' +
+  '<polygon points="754.92 1452.48 888.51 1452.48 888.51 1315.04 1022.13 1315.04 1022.13 1452.48 888.54 1452.48 888.54 1589.92 754.92 1589.92 754.92 1452.48"/>' +
+  '<rect x="1648.65" y="2256.8" width="349.19" height="137.44" transform="translate(3646.502 4651.0383) rotate(-180)"/>' +
+  '<rect x="1510.91" y="2119.73" width="138.82" height="138.82"/>' +
+  '<rect x="1997.85" y="2117.98" width="138.82" height="138.82"/>' +
+  '</svg>'
+
 export default {
   mount: function (el, amico) {
     var on = function (sel, fn) {
@@ -36,7 +64,7 @@ export default {
       '<div data-card style="display:flex;flex-direction:column;min-width:0;height:100vh;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad);cursor:pointer">' +
       '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">Meet Amico</div>' +
       '<div style="display:flex;gap:12px;align-items:center;margin-top:10px">' +
-      '<div aria-hidden="true" style="width:44px;height:44px;flex-shrink:0;border-radius:10px;border:2px solid var(--amc-accent);color:var(--amc-accent);display:flex;align-items:center;justify-content:center;font-family:var(--amc-font-mono);font-size:11px;font-weight:700">&lt;o|o&gt;</div>' +
+      FACE +
       '<div style="min-width:0">' +
       '<div style="font-size:18px;font-weight:600;color:var(--amc-text)">Amico</div>' +
       '<div style="font-size:12px;line-height:16px;color:var(--amc-text-muted)">Your friendly Quantum Computing Agent</div>' +
