@@ -818,8 +818,14 @@ function HomeDesign() {
               {/* Sessions flyout (spec T3.3): servers + projects (all existing
                   affordances preserved via HomeProjectColumn) above the
                   search + grouped sessions list. */}
+              {/* Panel styling mirrors the defaults capsule popover
+                  (amicode-defaults-pop): bg-base surface, same floating
+                  shadow, 14px padding, 12px gap, dialog semantics. Width and
+                  max-height stay flyout-specific — the list needs the room. */}
               <div
                 data-slot="amicode-sessions-flyout"
+                role="dialog"
+                aria-label={language.t("sidebar.project.recentSessions")}
                 style={{
                   position: "absolute",
                   right: "0",
@@ -829,13 +835,13 @@ function HomeDesign() {
                   "max-height": "min(70vh, 680px)",
                   display: "flex",
                   "flex-direction": "column",
-                  gap: "10px",
+                  gap: "12px",
                   overflow: "hidden auto",
                   border: "1px solid var(--v2-border-border-base)",
                   "border-radius": "10px",
-                  background: "var(--v2-background-bg-layer-01)",
-                  "box-shadow": "var(--v2-elevation-raised, 0 10px 32px rgba(0,0,0,0.28))",
-                  padding: "12px 14px",
+                  background: "var(--v2-background-bg-base)",
+                  "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
+                  padding: "14px",
                 }}
               >
                 <HomeProjectColumn
@@ -1097,11 +1103,12 @@ function HomeProjectColumn(props: {
         <Show
           when={!props.compact}
           fallback={
+            // Same section-label spec as the capsule popover's "Solver".
             <span
               style={{
                 "font-size": "10px",
                 "font-weight": "700",
-                "letter-spacing": "0.1em",
+                "letter-spacing": "0.08em",
                 "text-transform": "uppercase",
                 color: "var(--v2-text-text-faint)",
               }}
