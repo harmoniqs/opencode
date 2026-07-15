@@ -19,7 +19,6 @@ import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
-import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
@@ -884,7 +883,13 @@ function HomeDesign() {
                     onClose={closeSearch}
                     onSelect={selectSearchSession}
                   />
-                  <ScrollView class="mt-3 min-h-0 flex-1">
+                  {/* The scroll container must be this element itself (used flex
+                      size + overflow-y), NOT ScrollView: its viewport needs
+                      height:100%, and percentage heights never resolve under the
+                      flyout's max-height-only auto-height chain — the viewport
+                      inflates to content size and the root just clips it. Same
+                      pattern as the project list / search results lists. */}
+                  <div class="mt-3 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div class="pt-3 flex flex-col gap-6">
                       <Show
                         when={!sessionLoad.isLoading}
@@ -967,7 +972,7 @@ function HomeDesign() {
                         </Show>
                       </Show>
                     </div>
-                  </ScrollView>
+                  </div>
                 </section>
               </div>
             </Show>
@@ -1074,7 +1079,16 @@ function HomeProjectColumn(props: {
   const dialog = useDialog()
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
-    <aside class="isolate flex min-h-0 min-w-0 flex-col gap-4" aria-label={props.language.t("home.projects")}>
+    // Flyout mode: never let the sessions list below squeeze this column into
+    // visible overflow — keep natural height (capped, scrolling internally if
+    // a pathological project count exceeds the cap).
+    <aside
+      class="isolate flex min-h-0 min-w-0 flex-col gap-4"
+      classList={{
+        "shrink-0 max-h-[38vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden": props.compact,
+      }}
+      aria-label={props.language.t("home.projects")}
+    >
       <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5" classList={{ "mt-0": props.compact }}>
         {/* amicode: brand block replaces the bare "Projects" label — the lone
             letter-avatar project row underneath read as a stray "A amicode".
@@ -1494,7 +1508,7 @@ function HomeSessionSearch(props: {
   )
 
   return (
-    <div class="ml-4 mr-2 w-[calc(100%_-_24px)]">
+    <div class="ml-4 mr-2 w-[calc(100%_-_24px)] shrink-0">
       <div ref={root} data-component="home-session-search" class="relative z-10 w-full">
         <Show when={props.open}>
           <div
