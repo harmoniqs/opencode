@@ -886,11 +886,46 @@
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="error"] { color: var(--v2-state-fg-danger); }
 
 /* ---- Home chrome strip (nav redesign 2026-07-15) ------------------------
- * One row at every width; the wordmark is the only element that yields. */
-@media (max-width: 399.98px) {
-  [data-slot="amicode-chrome-word"] {
-    display: none;
+ * Comfortable widths: brand mark left, the three controls (defaults capsule ·
+ * sessions · settings) inline right, hamburger hidden.
+ *
+ * Below the breakpoint the three controls collapse behind a single hamburger
+ * and re-flow into a vertical dropdown anchored to the strip's right edge. The
+ * controls are rendered once (home.tsx) and only their layout changes, so each
+ * keeps its own popover/flyout state. The query reads the home panel's OWN
+ * inline size (container: amicode-chrome), not the viewport — the panel narrows
+ * independently when the sidebar/inspector open. */
+[data-slot="amicode-chrome-actions"] { display: flex; align-items: center; gap: 12px; min-width: 0; }
+[data-slot="amicode-chrome-hamburger"] { display: none; }
+
+@container amicode-chrome (max-width: 519.98px) {
+  /* Collapsed: actions leave the flow and become a dropdown the hamburger toggles. */
+  [data-slot="amicode-chrome-actions"] {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 40;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 220px;
+    max-width: min(320px, 92cqw);
+    padding: 12px;
+    border: 1px solid var(--v2-border-border-base);
+    border-radius: 10px;
+    background: var(--v2-background-bg-base);
+    box-shadow: 0 14px 40px -18px rgba(0, 0, 0, 0.55);
   }
+  [data-slot="amicode-chrome-actions"]:not([data-open="true"]) { display: none; }
+  [data-slot="amicode-chrome-hamburger"] { display: inline-flex; }
+  /* The two pill controls fill the column so it reads as a menu; each keeps its
+     own popover, which still anchors to its trigger. */
+  [data-slot="amicode-chrome-actions"] > [data-component="amicode-defaults-capsule"],
+  [data-slot="amicode-chrome-actions"] > [data-slot="amicode-chrome-sessions"],
+  [data-slot="amicode-chrome-actions"] [data-slot="amicode-defaults-face"],
+  [data-slot="amicode-chrome-actions"] [data-action="home-sessions-toggle-flyout"] { width: 100%; }
+  /* The settings gear keeps its natural size, parked at the row start. */
+  [data-slot="amicode-chrome-actions"] > [data-action="home-open-settings"] { align-self: flex-start; }
 }
 
 /* ---- per-card ⋯ menu (customize rethink 2026-07-15) ----------------------
