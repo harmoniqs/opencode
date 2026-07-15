@@ -4,15 +4,6 @@
 <title>amico is thinking</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-/* Embed flash gate — CSS-only (this page's CSP forbids inline scripts; that
-   is why brain.js is external). The demo chrome starts INVISIBLE, so embeds
-   never flash it before brain.js boots; brain.js reveals it by stamping
-   html.standalone (full demo) or html.loader-embed (mast only). */
-.chrome { visibility: hidden; }
-html.standalone .chrome { visibility: visible; }
-html.loader-embed #mast { visibility: visible; }
-</style>
-<style>
 @font-face {
   font-family: "JuliaMono";
   src: url("/assets/JuliaMono-Regular.woff2") format("woff2");
@@ -263,6 +254,11 @@ body {
 
 <canvas id="stage" aria-label="animated map of the amico knowledge graph; live status is announced below"></canvas>
 
+<!-- The demo chrome ships INERT: template content is not rendered, not in
+     the DOM, not in the a11y tree — embeds simply never have it (no flash,
+     nothing to hide). brain.js stamps it at boot for the standalone page
+     (all of it) or a loader embed (mast only). -->
+<template id="demo-chrome">
 <div class="chrome" id="mast">
   <div id="wordmark">
     <span class="amico">amico</span>
@@ -285,6 +281,7 @@ body {
 </div>
 
 <div class="chrome" id="colophon">prototype &middot; nodes &amp; links sampled from the armonissima vault &middot; brand.css tokens &middot; JuliaMono</div>
+</template>
 
 <div id="tooltip" role="presentation"></div>
 
