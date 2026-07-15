@@ -1,4 +1,12 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import {
+  DragDropProvider,
+  DragDropSensors,
+  SortableProvider,
+  closestCenter,
+  createSortable,
+} from "@thisbeyond/solid-dnd"
+import type { DragEvent as DndDragEvent } from "@thisbeyond/solid-dnd"
 import { WidgetFrame, type WidgetHostCallbacks } from "./widget-frame"
 import { WidgetConfigForm } from "./widget-config-form"
 import { formModel, type DashboardEntry, type DashboardState, type WidgetInfo } from "./widget-schema"
@@ -7,15 +15,19 @@ import type { Density } from "./widget-tokens"
 // AMICODE (widget kernel): the dashboard — replaces the hardcoded
 // AmicodeHomeCards strip. Renders the state's visible entries as sandboxed
 // WidgetFrames: hero widgets in the top auto-fit grid, tiles in the auto-fit
-// row below. "Customize" (in the chrome strip) flips edit mode. In edit mode
-// the cards STAY VISIBLE — a light scrim + dashed ring signal "you're
-// arranging, not using" — and each card gets ONE compact control pill in its
-// top-right corner: ↑↓ reorder within its row, ⚙ config, fork (built-ins),
-// × hide. A banner up top orients; a tray at the bottom re-adds hidden
-// widgets. Every change calls props.onSave immediately (the app POSTs and
-// feeds merged state back down). Reorder is button-based, not drag (declared
-// spec deviation), so the corner pill can safely overlay the iframe: clicks
-// land host-side above the frame; only a click-DRAG through a frame is eaten.
+// row below. Each card's ⋯ menu carries its actions (Move, ⚙ Configure,
+// × Remove, ＋ Add widget — opens the TRAY, the one place every available
+// widget collects: hidden entries restore, never-pinned registry widgets pin,
+// "create new widget…" hands off to the chat);
+// "Move" flips MOVE MODE (Kate 2026-07-15:
+// no control pill, no name overlay — just a light scrim + dashed ring and the
+// cards become draggable). Drag is solid-dnd sortables, move mode only — the
+// scrims make the whole grid surface host-owned, so no iframe can eat a
+// pointermove; arrow keys on a focused card are the invisible keyboard path.
+// Hover reorders a local key order and the save lands ONCE on drop, because
+// every save (props.onSave → app POST, merged echo fed back) remounts each
+// widget iframe. Move and Add are SEPARATE modes (Kate): Move never shows the
+// tray, Add never makes cards draggable; a per-mode banner orients + Done exits.
 
 type Bucket = "hero" | "tile"
 
@@ -28,19 +40,16 @@ export function WidgetGrid(props: {
   context: Record<string, unknown>
   callbacks: WidgetHostCallbacks
   onSave: (state: DashboardState) => void
-  onFork: (id: string) => void
-  /** controlled edit mode (spec T3.1: `customize` lives in the chrome strip);
-   *  omit both to keep the grid's internal toggle */
-  editing?: boolean
-  onEditingChange?: (editing: boolean) => void
+  /** hands off to the chat with a prefilled "create a widget" prompt —
+   *  authoring is a conversation (amicode_author_widget), not a form */
+  onNewWidget?: () => void
 }) {
-  const [internalEditing, setInternalEditing] = createSignal(false)
-  const controlled = () => props.editing !== undefined
-  const editing = () => (controlled() ? props.editing === true : internalEditing())
-  const setEditing = (v: boolean) => {
-    if (controlled()) props.onEditingChange?.(v)
-    else setInternalEditing(v)
-  }
+  // Grid mode (Kate 2026-07-15: SEPARATE surfaces) — "move" is drag-only
+  // (scrim + ring + sortables, no tray); "add" is the tray only (cards stay
+  // live and un-draggable). Done exits either.
+  const [mode, setMode] = createSignal<"move" | "add" | undefined>(undefined)
+  const moving = () => mode() === "move"
+  const busyMode = () => mode() !== undefined
   const [configOpen, setConfigOpen] = createSignal<string | undefined>(undefined)
   const [empties, setEmpties] = createSignal<Record<string, boolean>>({})
   // per-card ⋯ menu (customize rethink, Kate 2026-07-15): at most one open,
@@ -60,6 +69,23 @@ export function WidgetGrid(props: {
   }
   const setHidden = (key: string, value: boolean) =>
     save((entries) => entries.map((e) => (e.key === key ? { ...e, hidden: value } : e)))
+  /** Pin a registry widget that has no dashboard entry yet — the same shape the
+   *  chat's "Pin to dashboard" appends (key = id; the server normalizes). */
+  const pinWidget = (id: string) => save((entries) => [...entries, { key: id, id, hidden: false, config: {} }])
+  /** Registry widgets with no dashboard entry at all (chat-authored, unpinned). */
+  const unpinned = createMemo(() => props.widgets.filter((w) => !props.dashboard.widget.some((e) => e.id === w.id)))
+  /** Tray candidates among hidden entries: never offer a widget that is already
+   *  visible on the board (stale hidden duplicates can exist — the pin flows
+   *  append key=id while the server mints hashed keys), and offer each id once. */
+  const trayHidden = createMemo(() => {
+    const onBoard = new Set(visible().map((e) => e.id))
+    const seen = new Set<string>()
+    return hidden().filter((e) => {
+      if (onBoard.has(e.id) || seen.has(e.id)) return false
+      seen.add(e.id)
+      return true
+    })
+  })
   const setConfig = (key: string, field: string, value: unknown) =>
     save((entries) => entries.map((e) => (e.key === key ? { ...e, config: { ...e.config, [field]: value } } : e)))
   const move = (key: string, dir: -1 | 1) =>
@@ -77,59 +103,58 @@ export function WidgetGrid(props: {
       return next
     })
 
-  // position within the visible row (used to disable ↑ on first / ↓ on last)
-  const posInRow = (key: string, id: string) => {
-    const group = visible().filter((e) => bucketOf(e.id) === bucketOf(id))
-    return { idx: group.findIndex((e) => e.key === key), len: group.length }
-  }
+  // ---- drag reorder (move mode) -------------------------------------------
+  // The move-mode scrim makes the whole grid surface host-owned (no iframe can
+  // eat a pointermove), so drag is safe here. CRITICAL: the rendered list must
+  // NOT reorder mid-drag — solid-dnd previews the shuffle purely with
+  // transforms (the active card rides the pointer, neighbors slide), and a DOM
+  // reorder mid-drag moves the active card's transform origin, detaching it
+  // from the pointer. The array commit (one save — each save is a POST that
+  // remounts every widget iframe) happens ONCE, at drop.
 
+  /** Persist one bucket's new visible order in a single save: the bucket's
+   *  existing flat-array slots are refilled in `keys` order; hidden and
+   *  other-bucket entries keep their exact positions. */
+  const applyBucketOrder = (bucket: Bucket, keys: string[]) =>
+    save((entries) => {
+      const slots: number[] = []
+      entries.forEach((e, i) => {
+        if (!e.hidden && bucketOf(e.id) === bucket) slots.push(i)
+      })
+      const byKey = new Map(entries.map((e) => [e.key, e]))
+      const ordered = keys.map((k) => byKey.get(k))
+      if (slots.length !== keys.length || ordered.some((e) => !e)) return entries // drifted mid-drag — bail
+      const next = [...entries]
+      slots.forEach((slot, idx) => {
+        next[slot] = ordered[idx]!
+      })
+      return next
+    })
+
+  const onDragEnd = ({ draggable, droppable }: DndDragEvent) => {
+    if (!draggable || !droppable) return
+    const key = String(draggable.id)
+    const over = String(droppable.id)
+    if (key === over) return
+    const target = props.dashboard.widget.find((e) => e.key === key)
+    if (!target) return
+    const bucket = bucketOf(target.id)
+    const keys = (bucket === "hero" ? heroes() : tiles()).map((e) => e.key)
+    const from = keys.indexOf(key)
+    const to = keys.indexOf(over)
+    if (from < 0 || to < 0 || from === to) return // cross-bucket drop lands here (to === -1) and is a no-op
+    keys.splice(to, 0, ...keys.splice(from, 1))
+    applyBucketOrder(bucket, keys)
+  }
   const PillButton = (p: { label: string; title: string; onClick: () => void; disabled?: boolean; class?: string }) => (
     <button type="button" title={p.title} disabled={p.disabled} class={p.class} onClick={p.onClick}>
       {p.label}
     </button>
   )
 
-  // the floating corner control cluster — one grouped pill, not five loose boxes
-  const ControlPill = (p: { entry: DashboardEntry; w: WidgetInfo }) => {
-    const pos = createMemo(() => posInRow(p.entry.key, p.w.id))
-    const hasConfig = createMemo(() => Object.keys(p.w.config).length > 0)
-    return (
-      <div class="amc-wg-pill">
-        <PillButton label="↑" title="Move earlier" disabled={pos().idx <= 0} onClick={() => move(p.entry.key, -1)} />
-        <PillButton
-          label="↓"
-          title="Move later"
-          disabled={pos().idx < 0 || pos().idx >= pos().len - 1}
-          onClick={() => move(p.entry.key, 1)}
-        />
-        <Show when={hasConfig() || p.w.builtin}>
-          <span class="amc-wg-sep" />
-        </Show>
-        <Show when={hasConfig()}>
-          <PillButton
-            label="⚙"
-            title="Configure"
-            onClick={() => setConfigOpen(configOpen() === p.entry.key ? undefined : p.entry.key)}
-          />
-        </Show>
-        <Show when={p.w.builtin}>
-          <PillButton
-            label="fork"
-            class="amc-wg-fork"
-            title="Duplicate into ~/.amico/widgets as your own editable copy"
-            onClick={() => props.onFork(p.w.id)}
-          />
-        </Show>
-        <span class="amc-wg-sep" />
-        <PillButton
-          label="×"
-          class="amc-wg-danger"
-          title="Remove from dashboard"
-          onClick={() => setHidden(p.entry.key, true)}
-        />
-      </div>
-    )
-  }
+  // Move mode carries NO per-card controls (Kate 2026-07-15: no pill, no name
+  // overlay — just scrim + ring + drag). Configure/remove/fork live in the
+  // ⋯ menu; arrow keys on a focused card remain the invisible keyboard path.
 
   // The card's own ⋯ menu — direct actions on the card in hand, plus the two
   // grid-level entries (add / arrange) that open the full edit mode. Reuses the
@@ -137,7 +162,6 @@ export function WidgetGrid(props: {
   const CardMenu = (p: { entry: DashboardEntry; w: WidgetInfo }) => {
     let root: HTMLDivElement | undefined
     const open = () => menuOpen() === p.entry.key
-    const pos = createMemo(() => posInRow(p.entry.key, p.w.id))
     const hasConfig = createMemo(() => Object.keys(p.w.config).length > 0)
     const onDocPointer = (e: PointerEvent) => {
       if (root && !root.contains(e.target as Node)) setMenuOpen(undefined)
@@ -169,23 +193,23 @@ export function WidgetGrid(props: {
         </button>
         <Show when={open()}>
           <div class="amc-wg-menu" role="menu" aria-label={`${p.w.name} options`}>
-            <button type="button" role="menuitem" disabled={pos().idx <= 0} onClick={() => move(p.entry.key, -1)}>
-              ↑ Move up
-            </button>
             <button
               type="button"
               role="menuitem"
-              disabled={pos().idx < 0 || pos().idx >= pos().len - 1}
-              onClick={() => move(p.entry.key, 1)}
+              title="Cards become draggable — drop where you want them, then Done"
+              onClick={() => {
+                setMode("move")
+                close()
+              }}
             >
-              ↓ Move down
+              ⠿ Move
             </button>
             <Show when={hasConfig()}>
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  setEditing(true)
+                  setMode("move")
                   setConfigOpen(p.entry.key)
                   close()
                 }}
@@ -209,15 +233,43 @@ export function WidgetGrid(props: {
             <button
               type="button"
               role="menuitem"
+              title="Opens the widget tray — every available widget collects there"
               onClick={() => {
-                setEditing(true)
+                setMode("add")
                 close()
               }}
             >
-              ✎ Arrange dashboard…
+              ＋ Add widget
             </button>
           </div>
         </Show>
+      </div>
+    )
+  }
+
+  // Edit-mode wrapper: the whole scrimmed card is the drag handle (pointer
+  // events bubble from the scrim); the pill's buttons stay clickable above it —
+  // the sensor's activation threshold disambiguates click from drag (same
+  // proof as the close buttons inside sortable session tabs).
+  const SortableCell = (p: { entry: DashboardEntry }) => {
+    const sortable = createSortable(p.entry.key)
+    return (
+      <div
+        use:sortable
+        class="amc-wg-sortable"
+        classList={{ "amc-wg-active": sortable.isActiveDraggable }}
+        aria-roledescription="sortable widget"
+        tabIndex={0}
+        onKeyDown={(e: KeyboardEvent) => {
+          // invisible keyboard path (no visible ↑↓ controls in move mode)
+          const dir =
+            e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : 0
+          if (dir === 0) return
+          e.preventDefault()
+          move(p.entry.key, dir)
+        }}
+      >
+        <Cell entry={p.entry} />
       </div>
     )
   }
@@ -227,7 +279,7 @@ export function WidgetGrid(props: {
     const empty = createMemo(() => empties()[p.entry.key] === true)
     // a cell shows a labeled placeholder (rather than the frame) when it has
     // nothing to render but must stay reachable in edit mode
-    const asPlaceholder = createMemo(() => editing() && (!info() || empty()))
+    const asPlaceholder = createMemo(() => moving() && (!info() || empty()))
 
     // when NOT editing, a cell with nothing to render (missing widget or an
     // empty-state) collapses out of the grid entirely — otherwise it would
@@ -235,20 +287,20 @@ export function WidgetGrid(props: {
     // display:none so its amc:empty signal keeps flowing and the cell can
     // re-appear if the widget later has content (hidden frames have no layout,
     // so emptiness is never inferred from height — it's an explicit signal).
-    const collapsed = createMemo(() => !editing() && (!info() || empty()))
+    const collapsed = createMemo(() => !moving() && (!info() || empty()))
 
     return (
       <div
         data-component="amicode-widget-cell"
         data-widget={p.entry.id}
-        data-editing={editing() ? "true" : "false"}
+        data-editing={moving() ? "true" : "false"}
         style={{ display: collapsed() ? "none" : undefined }}
       >
         <Show
           when={info()}
           fallback={
-            // unknown id (not-yet-synced user widget): reachable only in edit mode
-            <Show when={editing()}>
+            // unknown id (not-yet-synced user widget): reachable only in move mode
+            <Show when={moving()}>
               <div class="amc-wg-placeholder">
                 <span style={{ flex: "1" }}>{p.entry.id} — not installed</span>
                 <div class="amc-wg-pill" style={{ position: "static", "box-shadow": "none" }}>
@@ -271,8 +323,15 @@ export function WidgetGrid(props: {
                     <span style={{ flex: "1" }}>
                       {w().name} <span class="amc-wg-empty">· nothing to show right now</span>
                     </span>
+                    <div class="amc-wg-pill" style={{ position: "static", "box-shadow": "none" }}>
+                      <PillButton
+                        label="×"
+                        class="amc-wg-danger"
+                        title="Remove from dashboard"
+                        onClick={() => setHidden(p.entry.key, true)}
+                      />
+                    </div>
                   </div>
-                  <ControlPill entry={p.entry} w={w()} />
                 </div>
               </Show>
 
@@ -288,18 +347,16 @@ export function WidgetGrid(props: {
                     callbacks={props.callbacks}
                     onEmpty={(e) => setEmpties((prev) => ({ ...prev, [p.entry.key]: e }))}
                   />
-                  <Show when={editing()}>
+                  <Show when={moving()}>
                     <div class="amc-wg-scrim" />
-                    <div class="amc-wg-name">{w().name}</div>
-                    <ControlPill entry={p.entry} w={w()} />
                   </Show>
-                  <Show when={!editing()}>
+                  <Show when={!busyMode()}>
                     <CardMenu entry={p.entry} w={w()} />
                   </Show>
                 </div>
               </Show>
 
-              <Show when={editing() && configOpen() === p.entry.key}>
+              <Show when={moving() && configOpen() === p.entry.key}>
                 <div style={{ "margin-top": "6px" }}>
                   <WidgetConfigForm
                     fields={formModel(w().config, p.entry.config)}
@@ -319,17 +376,25 @@ export function WidgetGrid(props: {
       {/* No standing customize button (rethink, Kate 2026-07-15): editing is
           initiated from any card's ⋯ menu; the edit bar's Done closes it. */}
 
-      <Show when={editing()}>
+      <Show when={busyMode()}>
         <div data-component="amicode-widget-editbar">
-          <span>
-            <b>Customizing your dashboard</b> — use each card's corner controls to reorder <b>↑↓</b>, configure{" "}
-            <b>⚙</b>, or remove <b>×</b>. Changes save as you go.
-          </span>
+          <Show
+            when={moving()}
+            fallback={
+              <span>
+                <b>Add a widget</b> — pick one from the tray below; removed widgets collect there too.
+              </span>
+            }
+          >
+            <span>
+              <b>Moving widgets</b> — drag cards where you want them (arrow keys work too). Changes save as you go.
+            </span>
+          </Show>
           <button
             type="button"
             class="amc-wg-editdone"
             onClick={() => {
-              setEditing(false)
+              setMode(undefined)
               setConfigOpen(undefined)
             }}
           >
@@ -338,21 +403,49 @@ export function WidgetGrid(props: {
         </div>
       </Show>
 
-      <Show when={heroes().length > 0}>
-        {/* panel-first (spec T3.4): 2-up when the canvas allows, stacked below */}
-        <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}>
-          <For each={heroes()}>{(entry) => <Cell entry={entry} />}</For>
+      <DragDropProvider onDragEnd={onDragEnd} collisionDetector={closestCenter}>
+        <Show when={moving()}>
+          <DragDropSensors />
+        </Show>
+
+        <Show when={heroes().length > 0}>
+          {/* panel-first (spec T3.4): 2-up when the canvas allows, stacked below */}
+          <div
+            style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}
+          >
+            <Show when={moving()} fallback={<For each={heroes()}>{(entry) => <Cell entry={entry} />}</For>}>
+              <SortableProvider ids={heroes().map((e) => e.key)}>
+                <For each={heroes()}>{(entry) => <SortableCell entry={entry} />}</For>
+              </SortableProvider>
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={tiles().length > 0}>
+          <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
+            <Show when={moving()} fallback={<For each={tiles()}>{(entry) => <Cell entry={entry} />}</For>}>
+              <SortableProvider ids={tiles().map((e) => e.key)}>
+                <For each={tiles()}>{(entry) => <SortableCell entry={entry} />}</For>
+              </SortableProvider>
+            </Show>
+          </div>
+        </Show>
+      </DragDropProvider>
+
+      {/* every widget hidden → no cards → no ⋯ menus: keep an entry point */}
+      <Show when={!busyMode() && visible().length === 0}>
+        <div class="amc-wg-empty-actions">
+          <span>No widgets on the board.</span>
+          <button type="button" onClick={() => setMode("add")}>
+            Add widget…
+          </button>
         </div>
       </Show>
 
-      <Show when={tiles().length > 0}>
-        <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
-          <For each={tiles()}>{(entry) => <Cell entry={entry} />}</For>
-        </div>
-      </Show>
-
-      {/* add-back tray — edit mode only, only when something is hidden */}
-      <Show when={editing() && hidden().length > 0}>
+      {/* the widget tray — the ONE place every available widget collects
+          (⋯ → Add widget lands here): hidden entries restore, never-pinned
+          registry widgets pin, and create hands off to the chat. */}
+      <Show when={mode() === "add"}>
         <div
           data-component="amicode-widget-tray"
           style={{
@@ -362,13 +455,30 @@ export function WidgetGrid(props: {
           }}
         >
           <span class="amc-wg-traylabel">add a widget</span>
-          <For each={hidden()}>
+          <For each={trayHidden()}>
             {(entry) => (
               <button type="button" class="amc-wg-add" onClick={() => setHidden(entry.key, false)}>
                 + {infoFor(entry.id)?.name ?? entry.id}
               </button>
             )}
           </For>
+          <For each={unpinned()}>
+            {(w) => (
+              <button type="button" class="amc-wg-add" onClick={() => pinWidget(w.id)}>
+                + {w.name}
+              </button>
+            )}
+          </For>
+          <Show when={props.onNewWidget}>
+            <button
+              type="button"
+              class="amc-wg-add"
+              title="Opens the chat with a prefilled prompt — describe the widget and amico builds it"
+              onClick={() => props.onNewWidget?.()}
+            >
+              + create new widget…
+            </button>
+          </Show>
         </div>
       </Show>
     </div>

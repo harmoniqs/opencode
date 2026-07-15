@@ -511,12 +511,6 @@ function HomeDesign() {
       })
       .catch(() => {})
   }
-  const forkWidget = (id: string) => {
-    void amicodePost(focusedServer(), "/amicode/widget-fork", { id })
-      .then(() => void refetchWidgets())
-      .catch(() => {})
-  }
-
   const WIZARD_DISMISS_KEY = "amicode-onboarding-dismissed"
   const [wizardOpen, setWizardOpen] = createSignal(false)
   let wizardDecided = false
@@ -1021,7 +1015,13 @@ function HomeDesign() {
                 context={widgetContext()}
                 callbacks={widgetCallbacks}
                 onSave={saveDashboard}
-                onFork={forkWidget}
+                onNewWidget={() =>
+                  // Authoring is a conversation: hand off to a fresh chat with the
+                  // composer prefilled (not auto-sent — the user completes the
+                  // sentence). amicode_author_widget takes it from there and the
+                  // preview card's "Pin to dashboard" closes the loop.
+                  startWithPrompt("I want to create a new widget for my home dashboard. It should show ")
+                }
               />
             )}
           </Show>
