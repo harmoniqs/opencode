@@ -12,7 +12,7 @@ export function NewSessionDesignView(props: { children: JSX.Element; gettingStar
     <div data-component="session-new-design" class="relative size-full overflow-y-auto bg-v2-background-bg-deep">
       <div class="absolute inset-x-0 top-[12%] flex justify-center px-6 pb-24">
         <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
-          <MarkDetailed class="w-36 h-auto mb-4" brand />
+          <MarkDetailed class="w-36 h-auto mb-4" />
           <Logo class="w-72 max-w-full h-auto mb-6" />
           <Show when={props.gettingStarted}>
             <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>

@@ -110,8 +110,8 @@ export function AmicodeGettingStarted(props: {
               style={{
                 border: "1px solid var(--v2-icon-icon-accent)",
                 "border-radius": "6px",
-                background: "var(--v2-background-bg-layer-02)",
-                color: "var(--v2-text-text-base)",
+                background: "var(--v2-background-bg-accent, #FFF676)",
+                color: "#000",
                 padding: "4px 12px",
                 "font-size": "12px",
                 "line-height": "16px",
@@ -130,8 +130,8 @@ export function AmicodeGettingStarted(props: {
             style={{
               border: "1px solid var(--v2-icon-icon-accent)",
               "border-radius": "6px",
-              background: "var(--v2-background-bg-layer-02)",
-              color: "var(--v2-text-text-base)",
+              background: "var(--v2-background-bg-accent, #FFF676)",
+              color: "#000",
               padding: "4px 12px",
               "font-size": "12px",
               "line-height": "16px",

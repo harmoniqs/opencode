@@ -49,6 +49,9 @@ function readTokens() {
   css.surface = g("--surface"); css.fg = g("--fg"); css.muted = g("--muted");
   css.edgeRest = g("--edge-rest"); css.nodeFill = g("--node-rest-fill");
   css.nodeBorder = g("--node-rest-border"); css.thought = g("--thought");
+  // Light-only (unset on dark → ""): the dark hairline that bounds the lemon
+  // signal — yellow is a fill, never a bare line on paper.
+  css.thoughtEdge = g("--thought-edge");
   css.ember = g("--ember"); css.vignette = g("--vignette");
   css.labelHalo = g("--label-halo"); css.accent = g("--accent") || "#fff676";
   css.cat = {
@@ -624,6 +627,14 @@ function draw(nowMs) {
       ctx.beginPath();
       ctx.moveTo(nx(a), ny(a));
       ctx.lineTo(nx(a) + (nx(b) - nx(a)) * segT, ny(a) + (ny(b) - ny(a)) * segT);
+      if (drain > 0 && css.thoughtEdge) {
+        // two-pass: dark under-stroke, lemon core (the fill+edge model as a line)
+        ctx.strokeStyle = rgba(css.thoughtEdge, (0.25 + drain * 0.5) * con.alpha);
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = rgba(css.thought, (0.2 + drain * 0.5) * con.alpha);
+      }
       ctx.stroke();
     }
   }
@@ -686,6 +697,12 @@ function draw(nowMs) {
     }
     ctx.fillStyle = rgba(css.thought, Math.min(dim + 0.15, 1));
     ctx.beginPath(); ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2); ctx.fill();
+    if (css.thoughtEdge) {
+      // the lemon pulse gets a hairline ring so it reads on paper
+      ctx.strokeStyle = rgba(css.thoughtEdge, Math.min(dim + 0.15, 1));
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
 
   // ---- nodes
@@ -720,11 +737,18 @@ function draw(nowMs) {
     if (n.flash > 0.55) {
       ctx.fillStyle = css.thought; // all-or-nothing: the attack is pure accent
       ctx.fill();
+      if (css.thoughtEdge) {
+        // bounded lemon: the flash fill takes the light-mode hairline
+        ctx.strokeStyle = rgba(css.thoughtEdge, 0.9);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
     } else if (n.claimed) {
       const sustain = n.atlasKeep && !player.running ? 0.55 : 0.85;
       ctx.fillStyle = rgba(catColor, sustain * (n.flash > 0 ? 1 : 0.9) + coreBr);
       ctx.fill();
-      ctx.strokeStyle = rgba(catColor, 0.9);
+      // light: a lemon node can't bound itself — the edge goes dark (hairline)
+      ctx.strokeStyle = css.thoughtEdge ? rgba(css.thoughtEdge, 0.9) : rgba(catColor, 0.9);
       ctx.lineWidth = 1;
       ctx.stroke();
     } else {
@@ -756,6 +780,12 @@ function draw(nowMs) {
         const rh = half + rt * half * 2.6;
         ctx.beginPath();
         ctx.arc(x, y, rh, 0, Math.PI * 2);
+        if (css.thoughtEdge) {
+          // two-pass ring: dark under-stroke keeps the lemon visible on paper
+          ctx.strokeStyle = rgba(css.thoughtEdge, (1 - rt) * 0.85);
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
         ctx.strokeStyle = rgba(css.thought, (1 - rt) * 0.8);
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -787,6 +817,12 @@ function draw(nowMs) {
     const rr = curNode.half + 5 + (reduceMotion ? 0 : Math.sin(nowMs / 600) * 1.5);
     ctx.beginPath();
     ctx.arc(cxp, cyp, rr, 0, Math.PI * 2);
+    if (css.thoughtEdge) {
+      // the position marker must actually be legible on paper: dark under-ring
+      ctx.strokeStyle = rgba(css.thoughtEdge, 0.9);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
     ctx.strokeStyle = rgba(css.thought, 0.85);
     ctx.lineWidth = 1.5;
     ctx.stroke();
