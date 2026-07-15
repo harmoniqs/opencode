@@ -3,21 +3,14 @@
      Re-split to update; do not hand-edit. -->
 <title>amico is thinking</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>
-/* Pre-paint embed gate: the demo chrome (mast/controls/legend/colophon) is
-   static HTML, but embeds hide it from brain.js — which runs AFTER first
-   paint, so the chrome flashed for a beat in the chat's thinking strip
-   (Kate). Stamp the mode on <html> before anything paints; the CSS below
-   hides chrome instantly. brain.js re-applies the same rules at boot. */
-(function () {
-  var m = /[?&]mode=(live|inline|loader)\b/.exec(location.search);
-  if (m) document.documentElement.className += " embed-" + m[1];
-})();
-</script>
 <style>
-html.embed-live .chrome, html.embed-inline .chrome { display: none !important; }
-html.embed-loader #controls, html.embed-loader #legend, html.embed-loader #colophon { display: none !important; }
-html.embed-live, html.embed-live body, html.embed-inline, html.embed-inline body { background: transparent; }
+/* Embed flash gate — CSS-only (this page's CSP forbids inline scripts; that
+   is why brain.js is external). The demo chrome starts INVISIBLE, so embeds
+   never flash it before brain.js boots; brain.js reveals it by stamping
+   html.standalone (full demo) or html.loader-embed (mast only). */
+.chrome { visibility: hidden; }
+html.standalone .chrome { visibility: visible; }
+html.loader-embed #mast { visibility: visible; }
 </style>
 <style>
 @font-face {

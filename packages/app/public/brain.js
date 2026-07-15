@@ -1008,6 +1008,10 @@ const isLoaderEmbed = EMBED_MODE === "loader";
 const isInlineEmbed = EMBED_MODE === "inline";
 const isLiveEmbed = EMBED_MODE === "live"; // event-driven: the host streams the REAL session
 const isTransparentEmbed = isInlineEmbed || isLiveEmbed;
+// Reveal the demo chrome (starts visibility:hidden in the HTML so embeds
+// never flash it pre-boot — the page's CSP forbids an inline pre-paint gate).
+if (isLoaderEmbed) document.documentElement.classList.add("loader-embed");
+else if (!isTransparentEmbed) document.documentElement.classList.add("standalone");
 function applyEmbedTheme(cs) {
   if (cs !== "dark" && cs !== "light") return;
   document.documentElement.dataset.theme = cs;
