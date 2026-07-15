@@ -62,6 +62,15 @@ export default {
     }
     var render = function () {
       var run = amico.context && amico.context.liveRun
+      // tray preview (context.preview): sample run instead of the empty state
+      if (!run && amico.context && amico.context.preview) {
+        run = {
+          name: 'CZ gate \\u2014 transmon pair',
+          iteration: 42,
+          fidelity: 0.99871,
+          series: [1, 0.62, 0.41, 0.28, 0.2, 0.14, 0.1, 0.07, 0.05, 0.035, 0.022, 0.013, 0.008],
+        }
+      }
       if (!run) {
         el.innerHTML = ''
         return
@@ -78,7 +87,7 @@ export default {
       var f = typeof run.fidelity === 'number' ? run.fidelity.toFixed(5) : '\\u2014'
       var iter = run.iteration == null ? '\\u2014' : String(run.iteration)
       el.innerHTML =
-        '<div data-card style="display:flex;flex-direction:column;gap:6px;min-width:0;min-height:88px;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile);cursor:pointer">' +
+        '<div data-card style="display:flex;flex-direction:column;gap:6px;min-width:0;height:100vh;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile);cursor:pointer">' +
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">Now solving</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--amc-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(run.name || 'current run') + '</div>' +
         '<div style="font-size:11px;color:var(--amc-text-muted);font-variant-numeric:tabular-nums">iter ' + iter + ' \\u00b7 F ' + f + '</div>' +

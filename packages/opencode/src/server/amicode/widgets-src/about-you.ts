@@ -108,7 +108,7 @@ export default {
         '<div style="display:flex;align-items:baseline;gap:8px">' +
         '<div style="font-size:18px;font-weight:600;color:var(--amc-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(you.name || 'You') + '</div>' +
         (you.scholar ? '<span data-scholar style="font-size:11px;color:var(--amc-accent);cursor:pointer;flex-shrink:0">scholar &#8599;</span>' : '') +
-        '<span data-edit title="Edit profile" style="margin-left:auto;color:var(--amc-text-faint);cursor:pointer;flex-shrink:0">&#9998;</span>' +
+        '<span data-edit title="Edit profile" style="margin-left:auto;color:var(--amc-text-faint);cursor:pointer;flex-shrink:0;font-size:18px;line-height:1;display:inline-block;transform:scaleX(-1)">&#9998;</span>' +
         '</div>' +
         (editing
           ? editForm
@@ -147,9 +147,8 @@ export default {
       }
 
       el.innerHTML =
-        '<div style="display:flex;flex-direction:column;min-width:0;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad)">' +
-        '<div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">About you</span>' +
-        '<span style="font-size:10px;color:var(--amc-text-faint)">self-improving \\u2014 Amico refines this as you work</span></div>' +
+        '<div style="display:flex;flex-direction:column;min-width:0;height:100vh;overflow-y:auto;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad)">' +
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">About you</div>' +
         identity + body + '</div>'
 
       on('[data-edit]', 'click', function () {

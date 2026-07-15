@@ -25,7 +25,7 @@ export default {
     var render = function () {
       var lib = (amico.context && amico.context.library) || { count: 0 }
       el.innerHTML =
-        '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;height:132px;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile)">' +
+        '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;height:100vh;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile)">' +
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">Library</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--amc-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Make Amico smarter</div>' +
         '<div style="font-size:11px;color:var(--amc-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
