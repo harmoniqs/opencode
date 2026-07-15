@@ -8,7 +8,7 @@ name = "Jump back in"
 version = "1.0.0"
 description = "Resume your most recent problem session"
 size = "tile"
-height = 96
+height = 140
 `
 
 export const widgetJs = `
@@ -28,7 +28,7 @@ export default {
         return
       }
       el.innerHTML =
-        '<div data-card style="display:flex;flex-direction:column;gap:6px;min-width:0;min-height:88px;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile);cursor:pointer">' +
+        '<div data-card style="display:flex;flex-direction:column;gap:6px;min-width:0;height:132px;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad-tile);cursor:pointer">' +
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">Jump back in</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--amc-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(resume.name) + '</div>' +
         (resume.meta
