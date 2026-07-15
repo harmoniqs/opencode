@@ -245,7 +245,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         data-slot="amicode-meet-identity"
         style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}
       >
-        <MarkDetailed class="w-10 h-auto shrink-0" />
+        <MarkDetailed class="w-8 h-auto shrink-0" />
         <div style={{ "min-width": "0" }}>
           <div style={{ "font-size": "18px", "font-weight": "600", color: "var(--v2-text-text-base)" }}>Amico</div>
           <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--v2-text-text-muted)" }}>
@@ -285,14 +285,15 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           gap: "10px",
           "margin-top": "4px",
           padding: "12px 22px",
-          border: "none",
+          border: "1px solid var(--v2-icon-icon-accent)",
+          "box-sizing": "border-box",
           "border-radius": "10px",
           cursor: "pointer",
-          background: "var(--v2-icon-icon-accent)",
-          color: "var(--v2-background-bg-base, #000)",
+          background: "var(--v2-background-bg-accent)",
+          color: "#000",
           "font-size": "15px",
           "font-weight": "650",
-          "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
+          "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-background-bg-accent) 30%, transparent)",
         }}
       >
         Open chat
@@ -596,8 +597,10 @@ function AboutYouCard(props: {
                         height: "44px",
                         "border-radius": "8px",
                         flex: "none",
-                        background: "var(--v2-icon-icon-accent)",
-                        color: "var(--v2-background-bg-base, #000)",
+                        background: "var(--v2-background-bg-accent)",
+                        color: "#000",
+                        border: "1px solid var(--v2-icon-icon-accent)",
+                        "box-sizing": "border-box",
                         "font-size": "15px",
                         "font-weight": "700",
                         "letter-spacing": "0.5px",
@@ -837,9 +840,10 @@ function AboutYouCard(props: {
                             disabled={saving() || resolvingLogo() > 0}
                             onClick={() => void save()}
                             style={{
-                              background: "var(--v2-icon-icon-accent)",
-                              color: "var(--v2-background-bg-base, #000)",
-                              border: "none",
+                              background: "var(--v2-background-bg-accent)",
+                              color: "#000",
+                              border: "1px solid var(--v2-icon-icon-accent)",
+                              "box-sizing": "border-box",
                               "border-radius": "6px",
                               padding: "4px 10px",
                               "font-size": "12px",
