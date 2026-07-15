@@ -895,7 +895,7 @@ function HomeDesign() {
                       flyout's max-height-only auto-height chain — the viewport
                       inflates to content size and the root just clips it. Same
                       pattern as the project list / search results lists. */}
-                  <div class="mt-3 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <div class="min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div class="pt-3 flex flex-col gap-6">
                       <Show
                         when={!sessionLoad.isLoading}
@@ -1089,13 +1089,14 @@ function HomeProjectColumn(props: {
     // visible overflow — keep natural height (capped, scrolling internally if
     // a pathological project count exceeds the cap).
     <aside
-      class="isolate flex min-h-0 min-w-0 flex-col gap-4"
+      class="isolate flex min-h-0 min-w-0 flex-col"
       classList={{
-        "shrink-0 max-h-[38vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden": props.compact,
+        "gap-4": !props.compact,
+        "gap-3 shrink-0 max-h-[38vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden": props.compact,
       }}
       aria-label={props.language.t("home.projects")}
     >
-      <div class="mt-2 flex h-7 min-w-0 items-center justify-between pl-1.5" classList={{ "mt-0": props.compact }}>
+      <div class="flex h-7 min-w-0 items-center justify-between" classList={{ "mt-2 pl-1.5": !props.compact }}>
         {/* amicode: brand block replaces the bare "Projects" label — the lone
             letter-avatar project row underneath read as a stray "A amicode".
             In flyout mode (compact) the strip owns the brand: show a quiet
@@ -1515,7 +1516,7 @@ function HomeSessionSearch(props: {
   )
 
   return (
-    <div class="ml-4 mr-2 w-[calc(100%_-_24px)] shrink-0">
+    <div class="w-full shrink-0">
       <div ref={root} data-component="home-session-search" class="relative z-10 w-full">
         <Show when={props.open}>
           <div
