@@ -13,14 +13,19 @@ import { AmicodeTagline } from "./tagline"
 // The set spans the lifetime: onboard (first run routes any chip into the
 // overture) → design with memory/recommendations → warm-start from the pulse
 // bank → go fast with Veloce.
-export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
+// Each starter carries a stroke-icon path (24-grid, one family: 1.75px round
+// strokes) suggesting its action — rendered on a small lemon tile so the chip
+// reads branded without the whole component going yellow (Kate).
+export const AMICODE_STARTERS: readonly { label: string; prompt: string; icon: string }[] = [
   {
     label: "Design a pulse — walk me through it",
     prompt: "walk me through designing a pulse",
+    icon: "M2 12h4l3-7 4 14 3-7h6", // a pulse trace
   },
   {
     label: "Optimize an X gate on my transmon",
     prompt: "optimize an X gate on my transmon — use what you know from my history",
+    icon: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3", // a target
   },
   // NOTE(spec B): the static "Resume my pulse design" chip was replaced by the
   // conditional resumeName-driven chip below — Resume renders only when a
@@ -28,16 +33,58 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
     label: "Warm-start from my pulse bank",
     prompt: "warm-start a new solve from my pulse bank",
+    icon: "M20 12a8 8 0 1 1-2.3-5.7M20 3v4h-4", // restart arc
   },
   {
     label: "Go fast with Veloce",
     prompt: "turn on Veloce — auto-accept your high-confidence recommendations, and still confirm before any solve",
+    icon: "M13 3 5 14h5l-1 7 8-11h-5l1-7Z", // a bolt
   },
   {
     label: "What can Amico do?",
     prompt: "what can Amico do?",
+    icon: "M9.3 9.3a2.8 2.8 0 1 1 3.9 2.6c-.9.4-1.2.9-1.2 1.9M12 17.2v.1", // a question
   },
 ]
+
+// Resume is play-shaped.
+const RESUME_ICON = "M8 5.5v13l10.5-6.5Z"
+
+// The one place the chip carries the brand: a small lemon tile (fill + 1px
+// icon-accent edge — dark hairline on light, invisible on dark) holding the
+// action glyph in ink. SVG only, never emoji; 12px glyph on a 20px tile.
+const GLYPH_TILE: Record<string, string> = {
+  display: "inline-flex",
+  "align-items": "center",
+  "justify-content": "center",
+  width: "20px",
+  height: "20px",
+  "box-sizing": "border-box",
+  "flex-shrink": "0",
+  "border-radius": "5px",
+  background: "var(--v2-background-bg-accent, #FFF676)",
+  border: "1px solid var(--v2-icon-icon-accent)",
+  color: "#000",
+}
+
+function StarterGlyph(props: { d: string }) {
+  return (
+    <span style={GLYPH_TILE} aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        width="12"
+        height="12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.75"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d={props.d} />
+      </svg>
+    </span>
+  )
+}
 
 // The three-beat arc of a pulse-design session, from setup to hardware.
 const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Execute and tune on hardware"]
@@ -108,16 +155,20 @@ export function AmicodeGettingStarted(props: {
               data-slot="amicode-gs-starter"
               onClick={() => props.onStart(starter.prompt)}
               style={{
+                display: "inline-flex",
+                "align-items": "center",
+                gap: "7px",
                 border: "1px solid var(--v2-icon-icon-accent)",
                 "border-radius": "6px",
-                background: "var(--v2-background-bg-accent, #FFF676)",
-                color: "#000",
-                padding: "4px 12px",
+                background: "var(--v2-background-bg-layer-02)",
+                color: "var(--v2-text-text-base)",
+                padding: "4px 12px 4px 5px",
                 "font-size": "12px",
                 "line-height": "16px",
                 cursor: "pointer",
               }}
             >
+              <StarterGlyph d={starter.icon} />
               {starter.label}
             </button>
           )}
@@ -128,16 +179,20 @@ export function AmicodeGettingStarted(props: {
             data-slot="amicode-gs-resume"
             onClick={() => props.onResume?.()}
             style={{
+              display: "inline-flex",
+              "align-items": "center",
+              gap: "7px",
               border: "1px solid var(--v2-icon-icon-accent)",
               "border-radius": "6px",
-              background: "var(--v2-background-bg-accent, #FFF676)",
-              color: "#000",
-              padding: "4px 12px",
+              background: "var(--v2-background-bg-layer-02)",
+              color: "var(--v2-text-text-base)",
+              padding: "4px 12px 4px 5px",
               "font-size": "12px",
               "line-height": "16px",
               cursor: "pointer",
             }}
           >
+            <StarterGlyph d={RESUME_ICON} />
             Resume “{props.resumeName}”
           </button>
         )}
