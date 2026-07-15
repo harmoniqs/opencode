@@ -20,6 +20,7 @@ import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
+import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
@@ -465,6 +466,25 @@ export function SessionHeader() {
                           <Icon size="small" name={view().terminal.opened() ? "terminal-active" : "terminal"} />
                         </Button>
                       </TooltipKeybind>
+                    </Show>
+
+                    {/* amicode: open the Run Inspector (VS Code bottom panel) from
+                        inside the chat. Framed-only — the bridge relays the
+                        allowlisted command to the extension host. Lives beside the
+                        terminal toggle so it stays visible in narrow embeds
+                        (the md:flex cluster below vanishes in a slim column).
+                        en-only by design, like the Amico palette commands. */}
+                    <Show when={inAmicode()}>
+                      <Tooltip placement="bottom" value="Open Run Inspector">
+                        <Button
+                          variant="ghost"
+                          class="titlebar-icon w-8 h-6 p-0 box-border shrink-0"
+                          onClick={() => postAmicode("amicode.openInspector")}
+                          aria-label="Open Run Inspector"
+                        >
+                          <Icon size="small" name="pulse" />
+                        </Button>
+                      </Tooltip>
                     </Show>
 
                     <div class="hidden md:flex items-center gap-1 shrink-0">
