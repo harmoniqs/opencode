@@ -63,8 +63,7 @@ import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
-import { AmicodeSolverToggle } from "@opencode-ai/ui/amicode-solver-toggle"
-import { AmicodeDefaultModel } from "@/components/amicode-default-model"
+import { AmicodeDefaultsCapsule } from "@/components/amicode-defaults-capsule"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import {
@@ -580,9 +579,9 @@ function HomeDesign() {
     closeSearch()
   }
 
-  // Chrome strip state (spec T3.1/T3.3): sessions flyout + controlled grid edit
+  // Chrome strip state (spec T3.3): sessions flyout. Grid editing is the
+  // WidgetGrid's own affair now (uncontrolled — it renders its own customize).
   const [sessionsOpen, setSessionsOpen] = createSignal(false)
-  const [gridEditing, setGridEditing] = createSignal(false)
   let flyoutRoot: HTMLDivElement | undefined
   createEffect(() => {
     if (!sessionsOpen()) return
@@ -738,41 +737,42 @@ function HomeDesign() {
         data-slot="amicode-home-shell"
         class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"
       >
-        {/* Chrome strip (spec T3.1): brand · settings | model · solver · sessions · customize.
-            One flex-wrap container — two calm rows at panel width, one when wide. */}
+        {/* Chrome strip (nav redesign, Kate 2026-07-15): brand | defaults capsule ·
+            sessions · settings. Four compact things → ONE row at every panel width
+            (~350px worst case); the only responsive rule is the wordmark fading
+            below 400px (amicode.css). Model+solver live in the capsule popover;
+            "customize" moved home to the widget grid it edits. */}
         <div
           data-slot="amicode-chrome-strip"
           style={{
             display: "flex",
             "align-items": "center",
-            gap: "14px",
-            "row-gap": "8px",
-            "flex-wrap": "wrap",
-            "min-height": "32px",
-            // Never let the shrinking home height (e.g. when the inspector panel
-            // opens) compress or clip this row — including a wrapped second row
-            // carrying `customize`. It stays fully rendered; the cards below
-            // scroll instead.
+            gap: "12px",
+            "min-height": "34px",
+            // Never let a shrinking home height (e.g. the inspector panel
+            // opening) compress this row (#21's guard, carried into the
+            // redesigned strip) — the cards below scroll instead.
             "flex-shrink": "0",
           }}
         >
-          <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0" }}>
+          <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0", flex: "0 1 auto" }}>
             <Mark class="size-6 shrink-0" />
-            <span style={{ "font-size": "14px", "font-weight": "650", color: "var(--v2-text-text-base)" }}>
+            <span
+              data-slot="amicode-chrome-word"
+              style={{
+                "font-size": "14px",
+                "font-weight": "650",
+                color: "var(--v2-text-text-base)",
+                "white-space": "nowrap",
+                overflow: "hidden",
+                "text-overflow": "ellipsis",
+              }}
+            >
               Amicode
             </span>
-            <IconButtonV2
-              data-action="home-open-settings"
-              variant="ghost-muted"
-              size="small"
-              icon={<IconV2 name="settings-gear" />}
-              onClick={openSettings}
-              aria-label={language.t("sidebar.settings")}
-            />
           </div>
-          <div style={{ flex: "1" }} />
-          <AmicodeDefaultModel />
-          <AmicodeSolverToggle />
+          <div style={{ flex: "1 1 0", "min-width": "8px" }} />
+          <AmicodeDefaultsCapsule />
           <div ref={flyoutRoot} style={{ position: "relative" }}>
             <button
               type="button"
@@ -793,13 +793,19 @@ function HomeDesign() {
               }}
             >
               Sessions
+              {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
+                  border, 10% currentColor tint — accent ink only when unseen. */}
               <span
                 style={{
                   "font-size": "10px",
-                  "border-radius": "8px",
-                  padding: "1px 7px",
-                  background: unseenTotal() > 0 ? "var(--v2-icon-icon-accent)" : "var(--v2-background-bg-layer-02)",
-                  color: unseenTotal() > 0 ? "var(--v2-background-bg-base)" : "var(--v2-text-text-muted)",
+                  "font-weight": "600",
+                  "letter-spacing": "0.5px",
+                  "border-radius": "999px",
+                  border: "1px solid currentColor",
+                  padding: "4px 7px",
+                  "line-height": "1",
+                  background: "color-mix(in srgb, currentColor 10%, transparent)",
+                  color: unseenTotal() > 0 ? "var(--v2-text-text-accent)" : "var(--v2-text-text-muted)",
                   "font-variant-numeric": "tabular-nums",
                 }}
               >
@@ -858,128 +864,122 @@ function HomeDesign() {
                 />
                 <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
                 <section
-            class="isolate min-h-0 min-w-0 flex flex-col"
-            aria-label={language.t("sidebar.project.recentSessions")}
-          >
-            <HomeSessionSearch
-              value={state.search}
-              placeholder={language.t("home.sessions.search.placeholder")}
-              open={searchOpen()}
-              loading={sessionLoad.isLoading}
-              results={searchResults()}
-              server={state.selection.server}
-              activeServer={state.selection.server === server.key}
-              noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
-              bindFocus={(focus) => {
-                focusSessionSearch = focus
-              }}
-              onInput={(value) => setState("search", value)}
-              onFocus={() => setState("searchFocused", true)}
-              onClose={closeSearch}
-              onSelect={selectSearchSession}
-            />
-            <ScrollView class="mt-3 min-h-0 flex-1">
-              <div class="pt-3 flex flex-col gap-6">
-                <Show
-                  when={!sessionLoad.isLoading}
-                  fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
+                  class="isolate min-h-0 min-w-0 flex flex-col"
+                  aria-label={language.t("sidebar.project.recentSessions")}
                 >
-                  <Show
-                    when={groups().length > 0}
-                    fallback={
-                      <div class="flex min-w-0 flex-col gap-4">
-                        <HomeSessionGroupHeader
-                          title={language.t("home.sessions.empty")}
-                          onNewSession={newSessionProject() ? openNewSession : undefined}
-                        />
-                      </div>
-                    }
-                  >
-                    {(() => {
-                      // amicode: collapsed = the 3 most recent sessions across all
-                      // groups; "Show all (N)" expands. Pure derivation off the
-                      // existing groups() memo — no second data path to drift.
-                      const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
-                      const visible = () => {
-                        if (sessionsExpanded() || total() <= 3) return groups()
-                        let budget = 3
-                        const out: typeof groups extends () => infer G ? G : never = [] as never
-                        for (const g of groups()) {
-                          if (budget <= 0) break
-                          const take = g.sessions.slice(0, budget)
-                          budget -= take.length
-                          ;(out as { title: string; sessions: typeof g.sessions }[]).push({ ...g, sessions: take })
-                        }
-                        return out as ReturnType<typeof groups>
-                      }
-                      return (
-                        <>
-                          <For each={visible()}>
-                            {(group, index) => (
-                              <div class="flex min-w-0 flex-col gap-4">
-                                <HomeSessionGroupHeader
-                                  title={group.title}
-                                  onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
-                                />
-                                <div class="flex min-w-0 flex-col gap-px">
-                                  <For each={group.sessions}>
-                                    {(record) => (
-                                      <HomeSessionRow
-                                        record={record}
-                                        server={state.selection.server}
-                                        activeServer={state.selection.server === server.key}
-                                        openSession={openSession}
+                  <HomeSessionSearch
+                    value={state.search}
+                    placeholder={language.t("home.sessions.search.placeholder")}
+                    open={searchOpen()}
+                    loading={sessionLoad.isLoading}
+                    results={searchResults()}
+                    server={state.selection.server}
+                    activeServer={state.selection.server === server.key}
+                    noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
+                    bindFocus={(focus) => {
+                      focusSessionSearch = focus
+                    }}
+                    onInput={(value) => setState("search", value)}
+                    onFocus={() => setState("searchFocused", true)}
+                    onClose={closeSearch}
+                    onSelect={selectSearchSession}
+                  />
+                  <ScrollView class="mt-3 min-h-0 flex-1">
+                    <div class="pt-3 flex flex-col gap-6">
+                      <Show
+                        when={!sessionLoad.isLoading}
+                        fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
+                      >
+                        <Show
+                          when={groups().length > 0}
+                          fallback={
+                            <div class="flex min-w-0 flex-col gap-4">
+                              <HomeSessionGroupHeader
+                                title={language.t("home.sessions.empty")}
+                                onNewSession={newSessionProject() ? openNewSession : undefined}
+                              />
+                            </div>
+                          }
+                        >
+                          {(() => {
+                            // amicode: collapsed = the 3 most recent sessions across all
+                            // groups; "Show all (N)" expands. Pure derivation off the
+                            // existing groups() memo — no second data path to drift.
+                            const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
+                            const visible = () => {
+                              if (sessionsExpanded() || total() <= 3) return groups()
+                              let budget = 3
+                              const out: typeof groups extends () => infer G ? G : never = [] as never
+                              for (const g of groups()) {
+                                if (budget <= 0) break
+                                const take = g.sessions.slice(0, budget)
+                                budget -= take.length
+                                ;(out as { title: string; sessions: typeof g.sessions }[]).push({
+                                  ...g,
+                                  sessions: take,
+                                })
+                              }
+                              return out as ReturnType<typeof groups>
+                            }
+                            return (
+                              <>
+                                <For each={visible()}>
+                                  {(group, index) => (
+                                    <div class="flex min-w-0 flex-col gap-4">
+                                      <HomeSessionGroupHeader
+                                        title={group.title}
+                                        onNewSession={index() === 0 && newSessionProject() ? openNewSession : undefined}
                                       />
-                                    )}
-                                  </For>
-                                </div>
-                              </div>
-                            )}
-                          </For>
-                          <Show when={total() > 3}>
-                            <button
-                              type="button"
-                              data-action="home-sessions-toggle"
-                              class="self-start px-4 text-[12px]"
-                              style={{
-                                color: "var(--v2-text-text-muted)",
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                              }}
-                              onClick={() => setSessionsExpanded(!sessionsExpanded())}
-                            >
-                              {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
-                            </button>
-                          </Show>
-                        </>
-                      )
-                    })()}
-                  </Show>
-                </Show>
-              </div>
-            </ScrollView>
+                                      <div class="flex min-w-0 flex-col gap-px">
+                                        <For each={group.sessions}>
+                                          {(record) => (
+                                            <HomeSessionRow
+                                              record={record}
+                                              server={state.selection.server}
+                                              activeServer={state.selection.server === server.key}
+                                              openSession={openSession}
+                                            />
+                                          )}
+                                        </For>
+                                      </div>
+                                    </div>
+                                  )}
+                                </For>
+                                <Show when={total() > 3}>
+                                  <button
+                                    type="button"
+                                    data-action="home-sessions-toggle"
+                                    class="self-start px-4 text-[12px]"
+                                    style={{
+                                      color: "var(--v2-text-text-muted)",
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                    }}
+                                    onClick={() => setSessionsExpanded(!sessionsExpanded())}
+                                  >
+                                    {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
+                                  </button>
+                                </Show>
+                              </>
+                            )
+                          })()}
+                        </Show>
+                      </Show>
+                    </div>
+                  </ScrollView>
                 </section>
               </div>
             </Show>
           </div>
-          <Show when={widgetInfos().length > 0 && dashboard()}>
-            <button
-              type="button"
-              data-slot="amicode-grid-customize"
-              onClick={() => setGridEditing(!gridEditing())}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: gridEditing() ? "var(--v2-text-text-accent)" : "var(--v2-text-text-faint)",
-                "font-size": "11px",
-                cursor: "pointer",
-                padding: "0",
-              }}
-            >
-              {gridEditing() ? "done" : "customize"}
-            </button>
-          </Show>
+          <IconButtonV2
+            data-action="home-open-settings"
+            variant="ghost-muted"
+            size="small"
+            icon={<IconV2 name="settings-gear" />}
+            onClick={openSettings}
+            aria-label={language.t("sidebar.settings")}
+          />
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
         <div class="relative z-[1] flex-none pt-1">
@@ -1018,8 +1018,6 @@ function HomeDesign() {
                 frameSrcs={widgetFrameSrcs()}
                 tokens={themeState().tokens}
                 density={themeState().density}
-                editing={gridEditing()}
-                onEditingChange={setGridEditing}
                 context={widgetContext()}
                 callbacks={widgetCallbacks}
                 onSave={saveDashboard}

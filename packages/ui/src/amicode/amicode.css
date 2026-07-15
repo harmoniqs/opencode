@@ -892,3 +892,105 @@
   background: transparent;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="error"] { color: var(--v2-state-fg-danger); }
+
+/* ---- Home chrome strip (nav redesign 2026-07-15) ------------------------
+ * One row at every width; the wordmark is the only element that yields. */
+@media (max-width: 399.98px) {
+  [data-slot="amicode-chrome-word"] {
+    display: none;
+  }
+}
+
+/* ---- per-card ⋯ menu (customize rethink 2026-07-15) ----------------------
+ * The dashboard has NO standing edit button: hover/focus a card and its ⋯
+ * appears (host-side, above the sandboxed frame like .amc-wg-pill); the menu
+ * carries direct actions plus the add/arrange entries that open edit mode. */
+.amc-wg-menuroot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+}
+.amc-wg-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1px solid var(--v2-border-border-base);
+  background: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--v2-background-bg-base) 70%, transparent);
+}
+[data-component="amicode-widget-cell"]:hover .amc-wg-more,
+.amc-wg-menuroot:focus-within .amc-wg-more,
+.amc-wg-more[aria-expanded="true"] {
+  opacity: 1;
+}
+.amc-wg-more:hover {
+  color: var(--v2-text-text-base);
+  background: var(--v2-background-bg-layer-02);
+}
+.amc-wg-more:focus-visible {
+  outline: 1px solid var(--v2-border-border-strong);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .amc-wg-more {
+    transition: opacity 0.14s ease-out;
+  }
+}
+.amc-wg-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 3;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  background: var(--v2-background-bg-base);
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: 9px;
+  box-shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.55);
+}
+.amc-wg-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 12px;
+  color: var(--v2-text-text-base);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.amc-wg-menu button:hover:not(:disabled) {
+  background: var(--v2-background-bg-layer-02);
+}
+.amc-wg-menu button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.amc-wg-menu button:focus-visible {
+  outline: 1px solid var(--v2-border-border-strong);
+  outline-offset: -1px;
+}
+.amc-wg-menu button.amc-wg-danger:hover:not(:disabled) {
+  color: var(--v2-state-fg-danger);
+}
+.amc-wg-menu .amc-wg-menusep {
+  height: 1px;
+  background: var(--v2-border-border-base);
+  margin: 4px 2px;
+}
