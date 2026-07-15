@@ -258,6 +258,7 @@ export function WidgetGrid(props: {
         use:sortable
         class="amc-wg-sortable"
         classList={{ "amc-wg-active": sortable.isActiveDraggable }}
+        data-span={bucketOf(p.entry.id)}
         aria-roledescription="sortable widget"
         tabIndex={0}
         onKeyDown={(e: KeyboardEvent) => {
@@ -293,6 +294,7 @@ export function WidgetGrid(props: {
       <div
         data-component="amicode-widget-cell"
         data-widget={p.entry.id}
+        data-span={bucketOf(p.entry.id)}
         data-editing={moving() ? "true" : "false"}
         style={{ display: collapsed() ? "none" : undefined }}
       >
@@ -345,6 +347,7 @@ export function WidgetGrid(props: {
                     tokens={props.tokens}
                     density={props.density}
                     callbacks={props.callbacks}
+                    fill
                     onEmpty={(e) => setEmpties((prev) => ({ ...prev, [p.entry.key]: e }))}
                   />
                   <Show when={moving()}>
@@ -367,6 +370,52 @@ export function WidgetGrid(props: {
             </>
           )}
         </Show>
+      </div>
+    )
+  }
+
+  // A tray candidate previewed as it will appear on the board — the real
+  // sandboxed frame with the board's tokens, plus context.preview = true so
+  // data-driven widgets render sample content instead of their empty state.
+  // The overlay button is the whole card's click target; nothing inside the
+  // preview is interactive. A widget that still reports empty gets a labeled
+  // placeholder so the card is never a blank void.
+  const TrayCard = (p: {
+    w: WidgetInfo | undefined
+    name: string
+    config: Record<string, unknown>
+    onAdd: () => void
+  }) => {
+    const [empty, setEmpty] = createSignal(false)
+    return (
+      <div class="amc-wg-traycard" data-span={p.w?.size === "hero" ? "hero" : "tile"}>
+        <div class="amc-wg-framewrap">
+          <Show when={p.w} fallback={<div class="amc-wg-placeholder">{p.name}</div>}>
+            {(w) => (
+              <>
+                <Show when={empty()}>
+                  <div class="amc-wg-placeholder">
+                    {p.name} <span class="amc-wg-empty">· no preview — shows once it has data</span>
+                  </div>
+                </Show>
+                <WidgetFrame
+                  widget={w()}
+                  frameSrc={props.frameSrcs[w().id]}
+                  config={p.config}
+                  context={{ ...props.context, preview: true }}
+                  tokens={props.tokens}
+                  density={props.density}
+                  callbacks={props.callbacks}
+                  fill
+                  onEmpty={setEmpty}
+                />
+              </>
+            )}
+          </Show>
+          <button type="button" class="amc-wg-trayadd" title={`Add ${p.name} to the board`} onClick={() => p.onAdd()}>
+            <span>+ {p.name}</span>
+          </button>
+        </div>
       </div>
     )
   }
@@ -408,43 +457,53 @@ export function WidgetGrid(props: {
           <DragDropSensors />
         </Show>
 
-        <Show when={heroes().length > 0}>
-          {/* panel-first (spec T3.4): 2-up when the canvas allows, stacked below */}
-          <div
-            style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}
-          >
-            <Show when={moving()} fallback={<For each={heroes()}>{(entry) => <Cell entry={entry} />}</For>}>
+        {/* ONE geometric grid (Kate 2026-07-15): everything occupies fixed
+            unit blocks — tiles 1×1, heroes 2×2 — so columns and rows align
+            across the whole board. auto-fill (not auto-fit) keeps the unit
+            width stable however few widgets exist; heroes render first so
+            row-major auto-placement packs without holes. The ghost tile at
+            the end is the standing entry point to the tray — it also covers
+            the every-widget-hidden case (no cards → no ⋯ menus). The ghost
+            yields while EITHER mode is up: move keeps the drag surface clean,
+            add gives the tray's library the room (exit via Done). */}
+        <Show when={visible().length > 0 || !busyMode()}>
+          <div class="amc-wg-grid">
+            <Show
+              when={moving()}
+              fallback={<For each={[...heroes(), ...tiles()]}>{(entry) => <Cell entry={entry} />}</For>}
+            >
               <SortableProvider ids={heroes().map((e) => e.key)}>
                 <For each={heroes()}>{(entry) => <SortableCell entry={entry} />}</For>
               </SortableProvider>
-            </Show>
-          </div>
-        </Show>
-
-        <Show when={tiles().length > 0}>
-          <div style={{ display: "grid", "grid-template-columns": "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
-            <Show when={moving()} fallback={<For each={tiles()}>{(entry) => <Cell entry={entry} />}</For>}>
               <SortableProvider ids={tiles().map((e) => e.key)}>
                 <For each={tiles()}>{(entry) => <SortableCell entry={entry} />}</For>
               </SortableProvider>
+            </Show>
+            <Show when={!busyMode()}>
+              <button
+                type="button"
+                class="amc-wg-ghost"
+                title="Opens the widget tray — pick from the library or create a new one"
+                onClick={() => setMode("add")}
+              >
+                <span class="amc-wg-ghostplus" aria-hidden="true">
+                  +
+                </span>
+                <span class="amc-wg-ghostlabel">add widget</span>
+              </button>
             </Show>
           </div>
         </Show>
       </DragDropProvider>
 
-      {/* every widget hidden → no cards → no ⋯ menus: keep an entry point */}
-      <Show when={!busyMode() && visible().length === 0}>
-        <div class="amc-wg-empty-actions">
-          <span>No widgets on the board.</span>
-          <button type="button" onClick={() => setMode("add")}>
-            Add widget…
-          </button>
-        </div>
-      </Show>
-
       {/* the widget tray — the ONE place every available widget collects
           (⋯ → Add widget lands here): hidden entries restore, never-pinned
-          registry widgets pin, and create hands off to the chat. */}
+          registry widgets pin, and create hands off to the chat. Candidates
+          render as live PREVIEWS (Kate 2026-07-15: the widget as it will look
+          once added, not just a name) — same frame/tokens as the board, with a
+          transparent overlay button as the single click target (the scrim
+          trick again: iframes eat clicks). Create-new is a ghost-styled card
+          in the same grid. */}
       <Show when={mode() === "add"}>
         <div
           data-component="amicode-widget-tray"
@@ -455,30 +514,32 @@ export function WidgetGrid(props: {
           }}
         >
           <span class="amc-wg-traylabel">add a widget</span>
-          <For each={trayHidden()}>
-            {(entry) => (
-              <button type="button" class="amc-wg-add" onClick={() => setHidden(entry.key, false)}>
-                + {infoFor(entry.id)?.name ?? entry.id}
+          <div class="amc-wg-traygrid">
+            <For each={trayHidden()}>
+              {(entry) => (
+                <TrayCard
+                  w={infoFor(entry.id)}
+                  name={infoFor(entry.id)?.name ?? entry.id}
+                  config={entry.config}
+                  onAdd={() => setHidden(entry.key, false)}
+                />
+              )}
+            </For>
+            <For each={unpinned()}>{(w) => <TrayCard w={w} name={w.name} config={{}} onAdd={() => pinWidget(w.id)} />}</For>
+            <Show when={props.onNewWidget}>
+              <button
+                type="button"
+                class="amc-wg-ghost amc-wg-traycreate"
+                title="Opens the chat with a prefilled prompt — describe the widget and amico builds it"
+                onClick={() => props.onNewWidget?.()}
+              >
+                <span class="amc-wg-ghostplus" aria-hidden="true">
+                  +
+                </span>
+                <span class="amc-wg-ghostlabel">create new widget…</span>
               </button>
-            )}
-          </For>
-          <For each={unpinned()}>
-            {(w) => (
-              <button type="button" class="amc-wg-add" onClick={() => pinWidget(w.id)}>
-                + {w.name}
-              </button>
-            )}
-          </For>
-          <Show when={props.onNewWidget}>
-            <button
-              type="button"
-              class="amc-wg-add"
-              title="Opens the chat with a prefilled prompt — describe the widget and amico builds it"
-              onClick={() => props.onNewWidget?.()}
-            >
-              + create new widget…
-            </button>
-          </Show>
+            </Show>
+          </div>
         </div>
       </Show>
     </div>

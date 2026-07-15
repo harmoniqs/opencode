@@ -34,6 +34,9 @@ export function WidgetFrame(props: {
   onHeight?: (h: number) => void
   /** explicit empty-state (never inferred from height — hidden frames have no layout) */
   onEmpty?: (empty: boolean) => void
+  /** geometric mode: the frame fills its host-sized block; the widget's
+   *  reported content height is ignored (the empty signal still flows) */
+  fill?: boolean
 }) {
   const [error, setError] = createSignal<string | undefined>(undefined)
   const [height, setHeight] = createSignal<number>(props.widget.height)
@@ -143,7 +146,7 @@ export function WidgetFrame(props: {
         style={{
           display: "block",
           width: "100%",
-          height: `${height()}px`,
+          height: props.fill ? "100%" : `${height()}px`,
           border: "none",
           background: "transparent",
           "color-scheme": "normal",
