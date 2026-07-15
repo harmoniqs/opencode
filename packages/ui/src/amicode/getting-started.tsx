@@ -142,10 +142,11 @@ export function AmicodeGettingStarted(props: {
       <div
         data-slot="amicode-gs-starters"
         style={{
-          display: "flex",
-          "flex-wrap": "wrap",
-          "justify-content": "center",
-          gap: "6px",
+          display: "grid",
+          "grid-template-columns": "repeat(2, minmax(0, 1fr))",
+          gap: "6px 8px",
+          width: "100%",
+          "max-width": "540px",
         }}
       >
         <For each={AMICODE_STARTERS}>
@@ -158,7 +159,8 @@ export function AmicodeGettingStarted(props: {
                 display: "inline-flex",
                 "align-items": "center",
                 gap: "7px",
-                border: "1px solid var(--v2-icon-icon-accent)",
+                "min-width": "0",
+                border: "1px solid var(--v2-border-border-strong)",
                 "border-radius": "6px",
                 background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
@@ -169,7 +171,9 @@ export function AmicodeGettingStarted(props: {
               }}
             >
               <StarterGlyph d={starter.icon} />
-              {starter.label}
+              <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                {starter.label}
+              </span>
             </button>
           )}
         </For>
@@ -182,7 +186,8 @@ export function AmicodeGettingStarted(props: {
               display: "inline-flex",
               "align-items": "center",
               gap: "7px",
-              border: "1px solid var(--v2-icon-icon-accent)",
+              "min-width": "0",
+              border: "1px solid var(--v2-border-border-strong)",
               "border-radius": "6px",
               background: "var(--v2-background-bg-layer-02)",
               color: "var(--v2-text-text-base)",
@@ -193,7 +198,9 @@ export function AmicodeGettingStarted(props: {
             }}
           >
             <StarterGlyph d={RESUME_ICON} />
-            Resume “{props.resumeName}”
+            <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+              Resume “{props.resumeName}”
+            </span>
           </button>
         )}
       </div>
