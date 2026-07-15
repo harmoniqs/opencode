@@ -66,7 +66,7 @@ const PANEL = "#111624"
 const LINE = "#2A3245"
 const TEXT = "#E9ECF4"
 const MUTED = "#8B94A9"
-const GOLD = "#F2C94C"
+const GOLD = "#FFF676" // the brand lemon — card bg is fixed-dark, where the true accent sings
 const CURVE = "#7FD1FF"
 
 const W = 1200

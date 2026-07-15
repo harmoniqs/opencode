@@ -36,7 +36,7 @@ describe("renderRunCardSvg", () => {
     expect(svg).toContain("harmoniqs.ai")
     expect(svg).toContain("AMICODE")
     // 2 drives → 2 pulse paths (second at companion opacity)
-    expect(svg.match(/stroke="#F2C94C" stroke-width="2\.5"/g)?.length).toBe(2)
+    expect(svg.match(/stroke="#FFF676" stroke-width="2\.5"/g)?.length).toBe(2)
     expect(svg).toContain('opacity="0.55"')
   })
   test("pulse panel reads first (left column), convergence second", () => {

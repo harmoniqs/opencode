@@ -61,7 +61,7 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 // files because a native tab icon has no live CSS context for currentColor.
 // Geometry mirrors amicode:packages/extension/media/amico.svg (viewBox
 // 0 0 3600 3600); keep in sync by hand if that mark changes.
-export const MarkDetailed = (props: { class?: string }) => {
+export const MarkDetailed = (props: { class?: string; brand?: boolean }) => {
   return (
     <svg
       data-component="logo-mark-detailed"
@@ -71,7 +71,17 @@ export const MarkDetailed = (props: { class?: string }) => {
       style={{ color: "var(--icon-strong-base)" }}
       fill="currentColor"
     >
-      <path d="M2279.19,374.09v622.56h-958.38V374.09H202.07v2851.83h1118.74v-520.15h958.38v520.15h1118.74V374.09h-1118.74ZM3165.55,2523.71H478.91v-1338.38h2686.65v1338.38Z" />
+      {/* brand: the H tile is a lemon FILL with a 1px edge (yellow is a fill,
+          never an ink). The edge rides icon-accent — a dark hairline on light
+          themes, invisible lemon-on-lemon on dark. The face stays currentColor:
+          it sits on the page background through the tile's window. */}
+      <path
+        fill={props.brand ? "var(--v2-background-bg-accent, #FFF676)" : undefined}
+        stroke={props.brand ? "var(--v2-icon-icon-accent, currentColor)" : undefined}
+        stroke-width={props.brand ? 1 : undefined}
+        vector-effect={props.brand ? "non-scaling-stroke" : undefined}
+        d="M2279.19,374.09v622.56h-958.38V374.09H202.07v2851.83h1118.74v-520.15h958.38v520.15h1118.74V374.09h-1118.74ZM3165.55,2523.71H478.91v-1338.38h2686.65v1338.38Z"
+      />
       <rect x="1778.31" y="1312.43" width="107.11" height="692.38" />
       <polygon points="2769.41 1463.57 2903.01 1463.57 2903.01 1601.01 2769.39 1601.01 2769.39 1463.6 2635.79 1463.6 2635.79 1326.16 2769.41 1326.16 2769.41 1463.57" />
       <polygon points="3036.63 1738.45 2903.03 1738.45 2903.03 1875.89 2769.41 1875.89 2769.41 1738.45 2903.01 1738.45 2903.01 1601.01 3036.63 1601.01 3036.63 1738.45" />

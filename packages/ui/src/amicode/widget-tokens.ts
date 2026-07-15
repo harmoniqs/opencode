@@ -38,7 +38,7 @@ const SOURCES: [amc: string, v2: string, fallback: string][] = [
   ["--amc-text", "--v2-text-text-base", "#E9ECF4"],
   ["--amc-text-muted", "--v2-text-text-muted", "#8B94A9"],
   ["--amc-text-faint", "--v2-text-text-faint", "#6A7286"],
-  ["--amc-accent", "--v2-icon-icon-accent", "#F2C94C"],
+  ["--amc-accent", "--v2-icon-icon-accent", "#FFF676"],
   // The brand FILL — true lemon on every theme (yellow is a fill, never an
   // ink). Widgets pair it with black text and a 1px var(--amc-accent) edge:
   // a dark hairline on light themes, invisible lemon-on-lemon on dark.

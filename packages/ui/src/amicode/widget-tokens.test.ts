@@ -30,7 +30,7 @@ describe("resolveTokens", () => {
     const tokens = resolveTokens((name) => (name === "--v2-text-text-base" ? " #fff " : ""), "normal")
     expect(tokens["--amc-text"]).toBe("#fff")
     expect(tokens["--amc-bg"]).toBe("#0B0E15") // fallback
-    expect(tokens["--amc-accent"]).toBe("#F2C94C")
+    expect(tokens["--amc-accent"]).toBe("#FFF676")
     expect(tokens["--amc-accent-fill"]).toBe("#FFF676") // brand fill fallback
     expect(tokens["--amc-font-mono"]).toContain("monospace")
     expect(Object.keys(tokens)).toHaveLength(16) // 12 colors + 2 fonts + 2 pads
