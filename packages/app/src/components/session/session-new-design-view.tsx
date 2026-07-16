@@ -20,9 +20,9 @@ export function NewSessionDesignView(props: { children: JSX.Element; gettingStar
           <div
             class="w-full rounded-[16px]"
             style={{
-              background: "color-mix(in srgb, var(--v2-background-bg-base) 58%, transparent)",
-              "backdrop-filter": "blur(16px) saturate(1.05)",
-              "-webkit-backdrop-filter": "blur(16px) saturate(1.05)",
+              background: "color-mix(in srgb, var(--v2-background-bg-base) 45%, transparent)",
+              "backdrop-filter": "blur(20px) saturate(1.1)",
+              "-webkit-backdrop-filter": "blur(20px) saturate(1.1)",
               border: "1px solid var(--v2-border-border-muted)",
               padding: "12px",
             }}

@@ -33,9 +33,9 @@ export function BrainBackdrop(props: { sessionID?: string }) {
         style={{
           background:
             "linear-gradient(to bottom," +
-            " color-mix(in srgb, var(--v2-background-bg-base) 30%, transparent)," +
-            " color-mix(in srgb, var(--v2-background-bg-base) 62%, transparent) 46%," +
-            " color-mix(in srgb, var(--v2-background-bg-base) 84%, transparent))",
+            " color-mix(in srgb, var(--v2-background-bg-base) 16%, transparent)," +
+            " color-mix(in srgb, var(--v2-background-bg-base) 38%, transparent) 46%," +
+            " color-mix(in srgb, var(--v2-background-bg-base) 58%, transparent))",
         }}
       />
     </div>

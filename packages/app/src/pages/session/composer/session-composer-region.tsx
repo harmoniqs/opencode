@@ -163,9 +163,9 @@ export function SessionComposerRegion(props: {
         style={
           props.placement !== "inline"
             ? {
-                background: "color-mix(in srgb, var(--v2-background-bg-base) 58%, transparent)",
-                "backdrop-filter": "blur(16px) saturate(1.05)",
-                "-webkit-backdrop-filter": "blur(16px) saturate(1.05)",
+                background: "color-mix(in srgb, var(--v2-background-bg-base) 45%, transparent)",
+                "backdrop-filter": "blur(20px) saturate(1.1)",
+                "-webkit-backdrop-filter": "blur(20px) saturate(1.1)",
               }
             : undefined
         }
