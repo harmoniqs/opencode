@@ -14,20 +14,22 @@ export function NewSessionDesignView(props: { children: JSX.Element; gettingStar
         <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
           <MarkDetailed class="w-36 h-auto mb-4" />
           <Logo class="w-72 max-w-full h-auto mb-6" />
-          <Show when={props.gettingStarted}>
-            <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>
-          </Show>
-          {/* the composer floats frosted over the ambient brain (OCEAN band) */}
+          {/* THE glass block (Kate): one frosted panel housing every interactive
+              piece — starter chips + composer — sized by its contents; the
+              ambient brain stays crisp everywhere around it */}
           <div
-            class="w-full rounded-[14px]"
+            class="w-full rounded-[16px]"
             style={{
-              background: "color-mix(in srgb, var(--v2-background-bg-base) 62%, transparent)",
+              background: "color-mix(in srgb, var(--v2-background-bg-base) 58%, transparent)",
               "backdrop-filter": "blur(16px) saturate(1.05)",
               "-webkit-backdrop-filter": "blur(16px) saturate(1.05)",
               border: "1px solid var(--v2-border-border-muted)",
-              padding: "8px",
+              padding: "12px",
             }}
           >
+            <Show when={props.gettingStarted}>
+              <div class="w-full flex justify-center mb-4">{props.gettingStarted}</div>
+            </Show>
             {props.children}
           </div>
         </div>

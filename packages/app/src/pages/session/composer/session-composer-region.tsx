@@ -146,27 +146,29 @@ export function SessionComposerRegion(props: {
       data-component="session-prompt-dock"
       classList={{
         "w-full flex flex-col justify-center items-center pointer-events-none": true,
-        "shrink-0 pb-3": props.placement !== "inline",
+        "shrink-0 px-3 pb-3": props.placement !== "inline",
       }}
-      style={
-        props.placement !== "inline"
-          ? {
-              // amicode: the dock floats frosted over the brain backdrop —
-              // translucent wash + blur instead of the old opaque bg (Kate)
-              background: "color-mix(in srgb, var(--v2-background-bg-base) 55%, transparent)",
-              "backdrop-filter": "blur(14px) saturate(1.05)",
-              "-webkit-backdrop-filter": "blur(14px) saturate(1.05)",
-            }
-          : undefined
-      }
     >
       <div
         classList={{
           "w-full pointer-events-auto": true,
-          "px-3": props.placement !== "inline",
+          // amicode: THE glass block (Kate) — one bounded frosted panel housing
+          // every interactive piece (input + question/follow-up/permission/todo
+          // docks). Normal flow, so it expands and collapses with its contents;
+          // the brain stays crisp everywhere around it.
+          "rounded-[16px] border border-border-weak-base p-2": props.placement !== "inline",
           [NEW_SESSION_CONTENT_WIDTH]: props.placement === "inline",
           "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
         }}
+        style={
+          props.placement !== "inline"
+            ? {
+                background: "color-mix(in srgb, var(--v2-background-bg-base) 58%, transparent)",
+                "backdrop-filter": "blur(16px) saturate(1.05)",
+                "-webkit-backdrop-filter": "blur(16px) saturate(1.05)",
+              }
+            : undefined
+        }
       >
         <Show when={props.state.questionRequest()} keyed>
           {(request) => (

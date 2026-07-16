@@ -26,19 +26,6 @@ export function BrainBackdrop(props: { sessionID?: string }) {
       <Show when={props.sessionID} keyed fallback={<AmbientFrame />}>
         {(sid) => <LiveFrame sessionID={sid} />}
       </Show>
-      {/* in-session: ONE frosted column under the message flow (the OCEAN band,
-          vertical) — chat components read on glass, the brain stays crisp in
-          the margins; a single backdrop-filter element keeps it cheap */}
-      <Show when={props.sessionID}>
-        <div
-          class="absolute inset-y-0 inset-x-4 md:inset-x-0 md:max-w-200 2xl:max-w-[1000px] md:mx-auto"
-          style={{
-            background: "color-mix(in srgb, var(--v2-background-bg-base) 32%, transparent)",
-            "backdrop-filter": "blur(12px) saturate(1.05)",
-            "-webkit-backdrop-filter": "blur(12px) saturate(1.05)",
-          }}
-        />
-      </Show>
       {/* scrim: a vertical wash so the timeline column and composer stay
           legible — the brain reads clearest at the top, calmest at the foot */}
       <div
