@@ -146,8 +146,19 @@ export function SessionComposerRegion(props: {
       data-component="session-prompt-dock"
       classList={{
         "w-full flex flex-col justify-center items-center pointer-events-none": true,
-        "shrink-0 pb-3 bg-background-stronger": props.placement !== "inline",
+        "shrink-0 pb-3": props.placement !== "inline",
       }}
+      style={
+        props.placement !== "inline"
+          ? {
+              // amicode: the dock floats frosted over the brain backdrop —
+              // translucent wash + blur instead of the old opaque bg (Kate)
+              background: "color-mix(in srgb, var(--v2-background-bg-base) 55%, transparent)",
+              "backdrop-filter": "blur(14px) saturate(1.05)",
+              "-webkit-backdrop-filter": "blur(14px) saturate(1.05)",
+            }
+          : undefined
+      }
     >
       <div
         classList={{
