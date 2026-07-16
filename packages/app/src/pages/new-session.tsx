@@ -2,6 +2,7 @@ import { createEffect, createMemo, createResource, onMount, untrack } from "soli
 import { createStore } from "solid-js/store"
 import { useSearchParams } from "@solidjs/router"
 import { NewSessionDesignView } from "@/components/session"
+import { BrainBackdrop } from "@/pages/session/brain-backdrop"
 import { useComments } from "@/context/comments"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
@@ -80,7 +81,9 @@ export default function NewSessionPage() {
     <div class="relative size-full overflow-hidden flex flex-col">
       <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
         <div class="@container relative flex flex-col min-h-0 h-full bg-background-stronger flex-1">
-          <div class="flex-1 min-h-0 overflow-hidden rounded-[10px]">
+          {/* amicode: ambient amico brain behind the landing (Kate) */}
+          <BrainBackdrop />
+          <div class="relative z-[1] flex-1 min-h-0 overflow-hidden rounded-[10px]">
             <NewSessionDesignView
               gettingStarted={
                 <AmicodeGettingStarted

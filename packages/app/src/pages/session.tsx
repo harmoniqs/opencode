@@ -55,6 +55,7 @@ import {
   shouldShowFileTree,
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
+import { BrainBackdrop } from "@/pages/session/brain-backdrop"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { useServer } from "@/context/server"
@@ -1774,12 +1775,15 @@ export default function Page() {
         >
           <div
             classList={{
-              "flex-1 min-h-0 flex flex-col bg-background-stronger": true,
+              "relative flex-1 min-h-0 flex flex-col bg-background-stronger": true,
               "rounded-[10px] overflow-hidden": settings.general.newLayoutDesigns(),
               "shadow-[var(--v2-elevation-raised)]": settings.general.newLayoutDesigns() && !!params.id,
             }}
           >
-            <div class="flex-1 min-h-0 overflow-hidden">
+            {/* amicode: the amico brain runs full-bleed behind the whole chat —
+                live thought with a session, ambient traces without (Kate) */}
+            <BrainBackdrop sessionID={params.id || undefined} />
+            <div class="relative z-[1] flex-1 min-h-0 overflow-hidden">
               <Switch>
                 <Match when={params.id && mobileChanges()}>
                   <div class="relative h-full overflow-hidden">
@@ -1835,7 +1839,9 @@ export default function Page() {
               </Switch>
             </div>
 
-            <Show when={params.id || !newSessionDesign()}>{composerRegion("dock")}</Show>
+            <Show when={params.id || !newSessionDesign()}>
+              <div class="relative z-[1]">{composerRegion("dock")}</div>
+            </Show>
           </div>
 
           <Show when={desktopReviewOpen()}>
