@@ -146,29 +146,16 @@ export function SessionComposerRegion(props: {
       data-component="session-prompt-dock"
       classList={{
         "w-full flex flex-col justify-center items-center pointer-events-none": true,
-        "shrink-0 px-3 pb-3": props.placement !== "inline",
+        "shrink-0 pb-3 bg-background-stronger": props.placement !== "inline",
       }}
     >
       <div
         classList={{
           "w-full pointer-events-auto": true,
-          // amicode: THE glass block (Kate) — one bounded frosted panel housing
-          // every interactive piece (input + question/follow-up/permission/todo
-          // docks). Normal flow, so it expands and collapses with its contents;
-          // the brain stays crisp everywhere around it.
-          "rounded-[16px] border border-border-weak-base p-2": props.placement !== "inline",
+          "px-3": props.placement !== "inline",
           [NEW_SESSION_CONTENT_WIDTH]: props.placement === "inline",
           "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
         }}
-        style={
-          props.placement !== "inline"
-            ? {
-                background: "color-mix(in srgb, var(--v2-background-bg-base) 45%, transparent)",
-                "backdrop-filter": "blur(20px) saturate(1.1)",
-                "-webkit-backdrop-filter": "blur(20px) saturate(1.1)",
-              }
-            : undefined
-        }
       >
         <Show when={props.state.questionRequest()} keyed>
           {(request) => (
