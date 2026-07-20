@@ -168,6 +168,14 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   return out
 }
 
+/** 170 AC5: expires_at at or behind now. Absent/unparseable expiry never
+ *  expires anything — the honest minimum. */
+function isPastExpiry(expires_at: string | undefined, now: number): boolean {
+  if (!expires_at) return false
+  const at = Date.parse(expires_at)
+  return Number.isFinite(at) && at <= now
+}
+
 function computeStale(state: ConnectionState, validated_at: string | null, now: number, mtime?: number): boolean {
   if (state !== "connected") return false
   if (!validated_at) return true
@@ -210,6 +218,11 @@ function renderStatus(
   else if (persisted.state === "connected") state = input.credential ? "connected" : "needs-key"
   else if (persisted.state) state = persisted.state
   else state = input.credential ? "connected" : "needs-key"
+
+  // 170 AC5: a past expiry outranks a connected claim AT READ TIME — the
+  // reconnect prompt renders without waiting for a revalidation to notice,
+  // identically for company-compute and pasqal.
+  if (state === "connected" && isPastExpiry(persisted.expires_at, input.now)) state = "expired"
 
   const validated_at = state === "needs-key" ? null : (persisted.validated_at ?? null)
   const out: ConnectionStatus = {

@@ -1431,3 +1431,77 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
     expect(readFileSync(connectionsFile(), "utf8")).not.toContain("POISON")
   })
 })
+
+describe("past expiry renders the reconnect prompt (170 AC5)", () => {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+  test("company-compute: a connected claim whose expires_at has passed renders 'expired' at read time; credential KEPT", () => {
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date().toISOString(),
+          expires_at: yesterday,
+          identity: "team-alpha",
+        },
+      }),
+    )
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.state).toBe("expired") // the reconnect prompt state — same rendering pasqal ships
+    expect(entry.stale).toBe(false) // expiry is its own state, never a staleness cue
+    expect(entry.expires_at).toBe(yesterday)
+    expect(entry.identity).toBe("team-alpha") // the record survives for the reconnect
+    // reconnect ≠ disconnect: the expired credential stays on disk
+    expect(readCredential("company-compute")).toEqual(cloudCredential)
+  })
+
+  test("company-compute: an unexpired expires_at keeps connected; unparseable expiry is ignored (honest minimum)", () => {
+    writeCredential("company-compute", cloudCredential)
+    for (const expires_at of [tomorrow, "not-a-date"]) {
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "company-compute": { state: "connected", validated_at: new Date().toISOString(), expires_at },
+        }),
+      )
+      expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected")
+    }
+  })
+
+  test("pasqal: a token that ages past its expiry renders 'expired' at read time — no revalidate needed (parity)", async () => {
+    const pastExpiry = validatorLine({ expires_at: yesterday })
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, pastExpiry).spawn })
+    const entry = pasqalEntry(statusResponse())
+    expect(entry.state).toBe("expired")
+    // the token artifact survives — reconnecting mints a fresh one over it
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted")
+  })
+
+  test("expired never kicks a background revalidate and never renders offline residue", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(), // stale AND expired
+          expires_at: yesterday,
+          offline: true, // leftover marker from an offline stretch
+        },
+      }),
+    )
+    const entry = JSON.parse(statusResponse({ fetchImpl: counting })).connections[0]
+    expect(entry.state).toBe("expired")
+    expect(entry.offline).toBeUndefined() // offline is connected-only
+    await backgroundRevalidationsSettled()
+    expect(probes).toBe(0) // an expired claim re-enters via the form, not a probe
+  })
+})
