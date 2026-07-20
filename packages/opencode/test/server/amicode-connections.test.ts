@@ -867,6 +867,81 @@ describe("pasqal submit — null token → session-only connected (169 AC4)", ()
   })
 })
 
+describe("pasqal revalidate — TOKEN-mode freshness check, never a re-auth (169)", () => {
+  test("revalidate NEVER spawns the validator: the stored credential has no password to re-auth with", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    const { calls, spawn } = scripted(0, validatorLine())
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: spawn }))
+    expect(calls).toHaveLength(0)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("connected")
+  })
+
+  test("unexpired token → connected with a REFRESHED validated_at; devices/identity metadata kept", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    // age the persisted claim so freshness is observable
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))
+    const old = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+    cache["pasqal-cloud"].validated_at = old
+    writeFileSync(connectionsFile(), JSON.stringify(cache))
+    expect(pasqalEntry(statusResponse()).stale).toBe(true)
+
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.stale).toBe(false)
+    expect(Date.parse(parsed.connection.validated_at)).toBeGreaterThan(Date.parse(old))
+    expect(parsed.connection.identity).toBe(PASQAL.project_id)
+    expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }]) // metadata survives
+  })
+
+  test("expires_at in the past → expired (distinct state), credential KEPT for #160's token-mode probe", async () => {
+    const pastExpiry = validatorLine({ expires_at: "2026-07-18T00:00:00+00:00" }) // yesterday
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, pastExpiry).spawn })
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("expired")
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted") // user data survives
+    expect(pasqalEntry(statusResponse()).state).toBe("expired") // persisted for follow-up GETs
+  })
+
+  test("no expiry metadata → connected stands (honest minimum; a live token probe is #160 territory)", async () => {
+    writeCredential("pasqal-cloud", { project_id: PASQAL.project_id, token: "tok-cli-written" })
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe(PASQAL.project_id)
+    expect(parsed.connection.validated_at).not.toBeNull()
+  })
+
+  test("no stored credential → needs-key; a session-only claim is left standing (nothing to re-check)", async () => {
+    const empty = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(empty.ok).toBe(true)
+    expect(empty.connection.state).toBe("needs-key")
+    // session-only connection: revalidate cannot re-auth (no password) and must not destroy the claim
+    await submitCredentialResponse(pasqalSubmit, {
+      pasqalSpawn: scripted(0, validatorLine({ token: null, expires_at: null })).spawn,
+    })
+    const session = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(session.connection.state).toBe("connected")
+    expect(session.connection.session_only).toBe(true)
+  })
+})
+
+describe("pasqal disconnect (169)", () => {
+  test("disconnect clears the token credential through the #162 seam; status becomes needs-key; idempotent", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    expect(readCredential("pasqal-cloud")).toBeDefined()
+    const parsed = JSON.parse(disconnectResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection).toEqual({ id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false })
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    expect(existsSync(path.join(dir, "pasqal.json"))).toBe(false)
+    // the company card is untouched by a pasqal disconnect
+    expect(JSON.parse(statusResponse()).connections[0].id).toBe("company-compute")
+    // idempotent: a second disconnect is a no-op success
+    expect(JSON.parse(disconnectResponse(JSON.stringify({ id: "pasqal-cloud" }))).ok).toBe(true)
+  })
+})
+
 describe("pasqal — password never at rest, whatever the outcome (169 AC3)", () => {
   /** every byte of every file under the test's credential/ops tree */
   const scanAllFiles = (root: string): string => {

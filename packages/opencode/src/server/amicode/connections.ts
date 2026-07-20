@@ -776,9 +776,28 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
 /** Pasqal revalidation is a TOKEN-mode freshness check: the stored credential
  *  holds only project_id + token — no password — so re-running the validator
  *  is impossible and pretending otherwise would lie. With a credential,
- *  expires_at vs now marks connected or expired; a live token-mode probe
- *  against the service is #160's device-path territory. */
+ *  expires_at vs now marks connected or expired (validated_at refreshed,
+ *  devices/identity metadata kept); no or unparseable expiry means the claim
+ *  stands. A live token-mode probe against the service is #160's device-path
+ *  territory. Session-only claims are left standing: there is nothing to
+ *  re-check without a password, and revalidate must not destroy them. */
 function revalidatePasqal(): string {
   const id: ConnectionType = "pasqal-cloud"
+  const credential = readCredential(id)
+  if (!credential) {
+    if (sessionOnlyOverlay.has(id)) return renderCurrent(id)
+    clearStatus(id) // a status claim without a credential behind it is noise
+    return renderCurrent(id)
+  }
+  const expiresAt = credential.expires_at === undefined ? Number.NaN : Date.parse(credential.expires_at)
+  const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now()
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  persistStatus(id, {
+    ...existing, // devices + any other metadata survive the freshness check
+    state: expired ? "expired" : "connected",
+    identity: credential.project_id,
+    ...(credential.expires_at ? { expires_at: credential.expires_at } : {}),
+    validated_at: new Date().toISOString(),
+  })
   return renderCurrent(id)
 }
