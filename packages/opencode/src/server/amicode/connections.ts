@@ -47,6 +47,9 @@ export interface ConnectionStatus {
   devices?: ConnectionDevice[]
   validated_at: string | null
   stale: boolean
+  /** 169 AC4: connected purely in-memory (Pasqal minted no persistable
+   *  token) — the claim dies with the server process. */
+  session_only?: boolean
 }
 
 /** The connection cards this module serves; company-compute renders first. */
@@ -71,6 +74,14 @@ export function connectionsFile(): string {
  *  the in-memory seam the poison test seeds — whatever lands in an entry, only
  *  the whitelist below can reach a response. */
 export const inflightOverlay = new Map<string, Record<string, unknown>>()
+
+/** In-memory session-only claims (169 AC4): a Pasqal validation that minted
+ *  NO persistable token parks its connected status — identity, devices,
+ *  validated_at — here and ONLY here. Nothing reaches disk, so a fresh status
+ *  build after a restart renders needs-key and the card re-prompts. Same
+ *  redaction discipline as the in-flight overlay: entries pass the whitelist
+ *  before any response. */
+export const sessionOnlyOverlay = new Map<string, Record<string, unknown>>()
 
 // --- the redacting whitelist parser: the ONLY way status inputs become a
 // response. It builds a FRESH object from declared fields with type checks —
@@ -144,13 +155,31 @@ function computeStale(state: ConnectionState, validated_at: string | null, now: 
 }
 
 /** Derive the rendered status for one connection from its whitelisted cache
- *  entry, the in-flight overlay, and credential presence (the truth for
- *  "connected"). Output carries ONLY whitelisted fields. */
+ *  entry, the in-flight overlay, the session-only store, and credential
+ *  presence (the truth for durable "connected"). Output carries ONLY
+ *  whitelisted fields. */
 function renderStatus(
   id: ConnectionType,
   persisted: Partial<ConnectionStatus>,
-  input: { inflight: boolean; credential: boolean; now: number },
+  input: { inflight: boolean; credential: boolean; now: number; session?: Partial<ConnectionStatus> },
 ): ConnectionStatus {
+  if (!input.inflight && input.session?.state === "connected") {
+    // session-only claim (169 AC4): connected without a credential at rest —
+    // rendered from memory alone, marked so the card can say so
+    const validated_at = input.session.validated_at ?? null
+    const out: ConnectionStatus = {
+      id,
+      state: "connected",
+      validated_at,
+      stale: computeStale("connected", validated_at, input.now),
+      session_only: true,
+    }
+    if (input.session.identity) out.identity = input.session.identity
+    if (input.session.entitlements) out.entitlements = input.session.entitlements
+    if (input.session.expires_at) out.expires_at = input.session.expires_at
+    if (input.session.devices) out.devices = input.session.devices
+    return out
+  }
   let state: ConnectionState
   if (input.inflight) state = "validating"
   else if (persisted.state === "connected") state = input.credential ? "connected" : "needs-key"
@@ -187,6 +216,9 @@ export interface StatusInput {
   file: string
   overlay: ReadonlyMap<string, Record<string, unknown>>
   hasCredential: (id: ConnectionType) => boolean
+  /** in-memory session-only claims; ABSENT by default so a fresh build from
+   *  disk (= a restarted server) cannot see them (169 AC4) */
+  session?: ReadonlyMap<string, Record<string, unknown>>
   now?: number
 }
 
@@ -195,13 +227,15 @@ export interface StatusInput {
 export function statusBody(input: StatusInput): string {
   const cache = readCacheFile(input.file)
   const now = input.now ?? Date.now()
-  const connections = CONNECTION_IDS.map((id) =>
-    renderStatus(id, whitelistPersisted(cache[id]), {
+  const connections = CONNECTION_IDS.map((id) => {
+    const session = input.session?.get(id)
+    return renderStatus(id, whitelistPersisted(cache[id]), {
       inflight: input.overlay.has(id),
       credential: input.hasCredential(id),
       now,
-    }),
-  )
+      ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
+    })
+  })
   return JSON.stringify({ ok: true, connections, error: null })
 }
 
@@ -213,6 +247,7 @@ export function statusResponse(): string {
       file: connectionsFile(),
       overlay: inflightOverlay,
       hasCredential: (id) => readCredential(id) !== undefined,
+      session: sessionOnlyOverlay,
     })
   } catch (err) {
     return synthesizeConnections("bad_output", String(err))
@@ -513,10 +548,12 @@ export interface MutationDeps {
  *  a non-null error field carrying a FIXED "code: detail" string (#167). */
 function renderCurrent(id: ConnectionType, warning?: string): string {
   const cache = readCacheFile(connectionsFile())
+  const session = sessionOnlyOverlay.get(id)
   const connection = renderStatus(id, whitelistPersisted(cache[id]), {
     inflight: inflightOverlay.has(id),
     credential: readCredential(id) !== undefined,
     now: Date.now(),
+    ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
   })
   return JSON.stringify({ ok: true, connection, error: warning ?? null })
 }
@@ -636,6 +673,7 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
   }
 
   const validated_at = new Date().toISOString()
+  sessionOnlyOverlay.delete(id) // every terminal outcome supersedes a session-only claim
   let warning: string | undefined
   if (outcome.kind === "valid" && outcome.token !== null) {
     try {
@@ -657,7 +695,16 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
       ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
     })
   } else if (outcome.kind === "valid") {
-    clearStatus(id) // null token: nothing persists (session-only handling lands with AC4)
+    // null token (mint unsupported) → SESSION-ONLY connected (AC4): nothing
+    // reaches disk; the claim lives in memory and dies with the process, so
+    // a restarted server re-prompts (needs-key).
+    clearStatus(id)
+    sessionOnlyOverlay.set(id, {
+      state: "connected",
+      validated_at,
+      identity: outcome.project_id,
+      devices: outcome.devices,
+    })
   } else if (outcome.kind === "config") {
     // validator trouble is not a service verdict: render unreachable-class
     // with the DISTINCT fixed warning on the #167 partial-trouble channel
@@ -692,6 +739,7 @@ export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): st
   try {
     clearCredential(id)
     clearStatus(id)
+    sessionOnlyOverlay.delete(id) // a session-only claim ends with disconnect too
   } catch {
     return synthesizeConnection("write_failed", "credential could not be cleared")
   }

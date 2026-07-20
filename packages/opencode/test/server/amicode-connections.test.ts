@@ -27,6 +27,7 @@ import {
   revalidateResponse,
   isLoopbackHostname,
   setBindHostname,
+  sessionOnlyOverlay,
   PASQAL_CONFIG_WARNING,
   type FetchImpl,
   type PasqalSpawn,
@@ -59,6 +60,7 @@ beforeEach(() => {
   process.env.AMICO_PYTHON = "/opt/venvs/amico/bin/python3" // never resolved: every pasqal spawn is injected
   process.env.AMICO_PASQAL_VALIDATOR = "/opt/amico/scripts/pasqal_validate.py"
   inflightOverlay.clear()
+  sessionOnlyOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(() => {
@@ -67,6 +69,7 @@ afterEach(() => {
     else process.env[k] = savedEnv[k]
   }
   inflightOverlay.clear()
+  sessionOnlyOverlay.clear()
   setBindHostname(undefined)
 })
 
@@ -226,14 +229,34 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     )
     // input 2: the in-memory overlay state
     inflightOverlay.set("company-compute", { state: "validating", token: "POISON-overlay", secret: "POISON-mem" })
+    // input 3: the in-memory session-only store (pasqal, #169 AC4)
+    sessionOnlyOverlay.set("pasqal-cloud", {
+      state: "connected",
+      validated_at: new Date().toISOString(),
+      identity: "proj-1",
+      token: "POISON-session",
+      password: "POISON-session-password",
+      devices: [{ name: "qpu-2", token: "POISON-session-device" }],
+    })
     const body = statusResponse()
     expect(body).not.toContain("POISON")
     expect(body).not.toContain("tok-stored-secret") // the stored credential itself must never surface
-    const entry = JSON.parse(body).connections[0]
-    const allowed = ["id", "state", "identity", "entitlements", "expires_at", "devices", "validated_at", "stale"]
-    for (const key of Object.keys(entry)) expect(allowed).toContain(key)
-    for (const device of entry.devices ?? []) {
-      for (const key of Object.keys(device)) expect(["id", "name", "state"]).toContain(key)
+    const allowed = [
+      "id",
+      "state",
+      "identity",
+      "entitlements",
+      "expires_at",
+      "devices",
+      "validated_at",
+      "stale",
+      "session_only",
+    ]
+    for (const entry of JSON.parse(body).connections) {
+      for (const key of Object.keys(entry)) expect(allowed).toContain(key)
+      for (const device of entry.devices ?? []) {
+        for (const key of Object.keys(device)) expect(["id", "name", "state"]).toContain(key)
+      }
     }
   })
 
@@ -781,5 +804,65 @@ describe("pasqal submit — exit-code classes map to distinct states (169 AC5)",
       await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: spawn })
       expect(readCredential("pasqal-cloud")).toEqual(stored!)
     }
+  })
+})
+
+describe("pasqal submit — null token → session-only connected (169 AC4)", () => {
+  const sessionOnlyLine = validatorLine({ token: null, expires_at: null })
+
+  test("null token → connected + session_only marker; NOTHING lands on disk", async () => {
+    const raw = await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, sessionOnlyLine).spawn })
+    const parsed = JSON.parse(raw)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.session_only).toBe(true)
+    expect(parsed.connection.identity).toBe(PASQAL.project_id)
+    expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+    // nothing persisted: no credential file, no pasqal claim in the status cache
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    expect(existsSync(path.join(dir, "pasqal.json"))).toBe(false)
+    const cache = existsSync(connectionsFile()) ? JSON.parse(readFileSync(connectionsFile(), "utf8")) : {}
+    expect(cache["pasqal-cloud"]).toBeUndefined()
+    // live GETs agree from the in-memory claim
+    const entry = pasqalEntry(statusResponse())
+    expect(entry.state).toBe("connected")
+    expect(entry.session_only).toBe(true)
+    expect(entry.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+  })
+
+  test("restart semantics: a FRESH status build from disk renders needs-key — the claim died with the process", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, sessionOnlyLine).spawn })
+    expect(pasqalEntry(statusResponse()).state).toBe("connected") // live process still connected
+    // simulated restart: SAME disk inputs, fresh in-memory state (no session store bound)
+    const fresh = statusBody({
+      file: connectionsFile(),
+      overlay: new Map(),
+      hasCredential: (id) => readCredential(id) !== undefined,
+    })
+    expect(pasqalEntry(fresh).state).toBe("needs-key")
+    expect(pasqalEntry(fresh).session_only).toBeUndefined()
+  })
+
+  test("a later submit that mints a real token replaces the session-only claim with a durable one", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, sessionOnlyLine).spawn })
+    const parsed = JSON.parse(
+      await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn }),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.session_only).toBeUndefined()
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted")
+    // and a failed follow-up drops the session claim rather than keep a stale "connected"
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, sessionOnlyLine).spawn })
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(2).spawn })
+    expect(pasqalEntry(statusResponse()).state).toBe("invalid")
+  })
+
+  test("disconnect ends a session-only connection immediately", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, sessionOnlyLine).spawn })
+    const parsed = JSON.parse(disconnectResponse(JSON.stringify({ id: "pasqal-cloud" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("needs-key")
+    expect(pasqalEntry(statusResponse()).state).toBe("needs-key")
   })
 })
