@@ -2,7 +2,7 @@
 // Relays `amico-vault status --json` (harmoniqs/amico) verbatim; every
 // failure mode is synthesized into the SAME plural shape so the web app
 // parses exactly one schema. Contract: status() never rejects.
-import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { run } from "@/util/process"
@@ -13,6 +13,39 @@ const CLONE_TIMEOUT_MS = 120_000
 
 export function synthesize(code: string, detail: string): string {
   return JSON.stringify({ ok: false, mounts: [], error: `${code}: ${detail}` })
+}
+
+const KIND_RANK: Record<string, number> = { personal: 0, engagement: 1, project: 2, restricted: 3, team: 4, public: 5 }
+const kindRank = (k: string) => KIND_RANK[k] ?? 6
+const writableByKind = (k: string) => k === "personal" || k === "project" || k === "engagement"
+
+/** CLI-less mount listing: scan each vault dir under the vaults root for its
+ *  `.amico-vault.toml` marker and emit the same `{ok,mounts}` wire shape the
+ *  Vaults tab parses. Parity with the extension's resolveMountStack (kind rank +
+ *  writable-by-kind); ordering is kind-rank then name. `last_sync` is unknown
+ *  without the CLI. Never throws. */
+export function scanMounts(root: string = vaultsRoot()): string {
+  let entries: string[]
+  try {
+    entries = readdirSync(root).sort()
+  } catch {
+    return JSON.stringify({ ok: true, mounts: [], error: null })
+  }
+  const mounts: { id: string; kind: string; writable: boolean; last_sync: string }[] = []
+  for (const base of entries) {
+    let text: string
+    try {
+      text = readFileSync(path.join(root, base, ".amico-vault.toml"), "utf8")
+    } catch {
+      continue
+    }
+    const kind = text.match(/^\s*kind\s*=\s*"([^"]*)"/m)?.[1] ?? ""
+    if (!kind) continue
+    const name = text.match(/^\s*name\s*=\s*"([^"]*)"/m)?.[1] || base
+    mounts.push({ id: name, kind, writable: writableByKind(kind), last_sync: "unknown" })
+  }
+  mounts.sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return JSON.stringify({ ok: true, mounts, error: null })
 }
 
 export function candidates(env: Record<string, string | undefined>, home: string): string[] {
@@ -41,7 +74,10 @@ export async function status(): Promise<string> {
 
 async function statusUncached(): Promise<string> {
   const cli = resolveCli()
-  if (!cli) return synthesize("cli_not_found", "amico-vault not found — is amico installed?")
+  // No amico-vault CLI (a fresh / marketplace user without the amico-ops
+  // install) — don't show a scary error; list mounts straight off disk so the
+  // Vaults tab still reflects the personal vault + anything attached here.
+  if (!cli) return scanMounts()
   const started = Date.now()
   // abort is the actual deadline; `timeout` is only the SIGTERM→SIGKILL grace
   // period inside the wrapper's abort handler (it does NOT arm a deadline by

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync, lstatSync } from "node:fs"
 import { tmpdir, homedir } from "node:os"
 import path from "node:path"
-import { candidates, synthesize, normalizeRef, sanitizeVaultName, attachVault } from "@/server/amicode/vaults"
+import { candidates, synthesize, normalizeRef, sanitizeVaultName, attachVault, scanMounts } from "@/server/amicode/vaults"
 
 describe("synthesize", () => {
   test("emits the plural failure shape the UI parser expects", () => {
@@ -94,5 +94,27 @@ describe("attachVault", () => {
     mkdirSync(path.join(root, "taken"))
     const out = JSON.parse(await attachVault(JSON.stringify({ ref: "/whatever/taken" }), root))
     expect(out.error).toMatch(/^exists:/)
+  })
+})
+
+describe("scanMounts (CLI-less fallback)", () => {
+  test("missing vaults root → ok with empty mounts (no error)", () => {
+    expect(JSON.parse(scanMounts("/nope/does/not/exist"))).toEqual({ ok: true, mounts: [], error: null })
+  })
+  test("lists markers, kind-rank ordered, writable-by-kind", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vaults-root-"))
+    for (const [dir, kind, name] of [
+      ["team-vault", "team", "armonissima"],
+      ["mine", "personal", "jack"],
+    ] as const) {
+      mkdirSync(path.join(root, dir))
+      writeFileSync(path.join(root, dir, ".amico-vault.toml"), `kind = "${kind}"\nname = "${name}"\n`)
+    }
+    mkdirSync(path.join(root, "not-a-vault")) // no marker → skipped
+    const out = JSON.parse(scanMounts(root))
+    expect(out.ok).toBe(true)
+    expect(out.mounts.map((m: { id: string }) => m.id)).toEqual(["jack", "armonissima"]) // personal(0) before team(4)
+    expect(out.mounts[0]).toMatchObject({ id: "jack", kind: "personal", writable: true })
+    expect(out.mounts[1]).toMatchObject({ id: "armonissima", kind: "team", writable: false })
   })
 })
