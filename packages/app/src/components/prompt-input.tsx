@@ -1547,6 +1547,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 <div class="relative max-h-[180px] overflow-y-auto no-scrollbar" ref={(el) => (scrollRef = el)}>
                   <div
                     data-component="prompt-input"
+                    // Owns its own bridged ⌘V (handleKeyDown + the image pipeline) —
+                    // opt out of the app-wide clipboard fallback so paste never
+                    // double-fires (see utils/global-clipboard.ts).
+                    data-amc-clipboard="self"
                     ref={(el) => {
                       editorRef = el
                       props.ref?.(el)
@@ -1726,6 +1730,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               >
                 <div
                   data-component="prompt-input"
+                  // Owns its own bridged ⌘V (handleKeyDown + the image pipeline) —
+                  // opt out of the app-wide clipboard fallback so paste never
+                  // double-fires (see utils/global-clipboard.ts).
+                  data-amc-clipboard="self"
                   ref={(el) => {
                     editorRef = el
                     props.ref?.(el)

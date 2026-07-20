@@ -6,6 +6,7 @@ import { AppBaseProviders, AppInterface } from "@/app"
 import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
+import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
 import { handleNotificationClick } from "@/utils/notification-click"
 import { authFromToken } from "@/utils/server"
 import pkg from "../package.json"
@@ -119,39 +120,6 @@ const readClipboardText: Platform["readClipboardText"] = () => {
   })
 }
 
-// Amicode webview (generalized): the same sandboxed-iframe paste failure
-// hits every OTHER editable in the app too — provider API-key fields,
-// settings inputs, etc. — not just the chat composer (which has its own
-// handler, above, and calls stopPropagation() on every paste it handles —
-// so this document-level listener never double-fires there). It only
-// activates when the native paste event gave nothing, so it's a no-op
-// everywhere clipboardData already works (plain browser tabs, desktop).
-const isFormField = (el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement =>
-  el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
-
-const installGlobalPasteFallback = () => {
-  document.addEventListener("paste", (event) => {
-    const target = event.target
-    const isEditable = isFormField(target) || (target instanceof HTMLElement && target.isContentEditable)
-    if (!isEditable) return
-    if (event.clipboardData?.getData("text/plain")) return
-
-    event.preventDefault()
-    void readClipboardText().then((text) => {
-      if (!text) return
-      if (isFormField(target)) {
-        const start = target.selectionStart ?? target.value.length
-        const end = target.selectionEnd ?? target.value.length
-        target.value = target.value.slice(0, start) + text + target.value.slice(end)
-        target.selectionStart = target.selectionEnd = start + text.length
-        target.dispatchEvent(new Event("input", { bubbles: true }))
-      } else {
-        document.execCommand("insertText", false, text)
-      }
-    })
-  })
-}
-
 // Amicode webview: the write side of readClipboardText. The sandboxed iframe's
 // native copy (and navigator.clipboard.writeText) never lands in the OS
 // clipboard, so ⌘V — which reads the OS clipboard over the bridge — would paste
@@ -162,33 +130,6 @@ const writeClipboardText: Platform["writeClipboardText"] = (text) => {
   if (window.parent === window) return Promise.resolve(false)
   window.parent.postMessage({ source: "amicode", kind: "clipboard-write", text }, "*")
   return Promise.resolve(true)
-}
-
-// The copy-side companion to installGlobalPasteFallback: mirror every ⌘C/⌘X
-// selection to the OS clipboard via the bridge so a following ⌘V pastes what
-// was actually copied in-chat. Mirror-only (no preventDefault) — the native
-// selection copy / cut-removal still runs; we just also update the OS clipboard
-// the paste bridge reads. Reads the document selection, falling back to a
-// form field's own selection (which window.getSelection() does not expose).
-const installGlobalCopyBridge = () => {
-  if (window.parent === window) return
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
-      const key = event.key.toLowerCase()
-      if (key !== "c" && key !== "x") return
-      let text = window.getSelection()?.toString() ?? ""
-      const target = event.target
-      if (!text && isFormField(target)) {
-        const start = target.selectionStart ?? 0
-        const end = target.selectionEnd ?? 0
-        text = target.value.slice(start, end)
-      }
-      if (text) void writeClipboardText(text)
-    },
-    true,
-  )
 }
 
 const root = document.getElementById("root")
@@ -253,8 +194,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 if (root instanceof HTMLElement) {
-  installGlobalPasteFallback()
-  installGlobalCopyBridge()
+  // Amicode webview: route ⌘V/⌘C/⌘X for every editable through the
+  // extension-host bridge (framed contexts only — self-gates unframed).
+  installGlobalClipboardFallback(window)
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {

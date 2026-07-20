@@ -65,6 +65,7 @@ import * as AmicodeDashboard from "@/server/amicode/dashboard"
 import * as AmicodeWidgetFrame from "@/server/amicode/widget-frame-html"
 import * as AmicodeLibrary from "@/server/amicode/library"
 import * as AmicodeProfile from "@/server/amicode/profile"
+import * as AmicodeConnections from "@/server/amicode/connections"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -269,9 +270,7 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
 const amicodeWidgetsRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     yield* router.add("GET", "/amicode/widgets", () =>
-      Effect.sync(() =>
-        HttpServerResponse.text(AmicodeWidgets.widgetsResponse(), { contentType: "application/json" }),
-      ),
+      Effect.sync(() => HttpServerResponse.text(AmicodeWidgets.widgetsResponse(), { contentType: "application/json" })),
     )
     // The frame document is served (not srcdoc) so it carries its OWN CSP
     // header — srcdoc would inherit the app's CSP, which forbids the inline
@@ -319,6 +318,43 @@ const amicodeWidgetsRoute = HttpRouter.use((router) =>
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 
+// amicode: Connections panel routes (spec #159/S3) — Company Compute connect
+// path. Same raw-route idiom + auth as the problems routes; body-builders
+// live in amicode/connections.ts and never reject. SECURITY: the credential
+// rides the POST BODY (the library idiom) — never query params, never URLs;
+// mutation routes refuse non-loopback binds inside the body-builders.
+const amicodeConnectionsRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/amicode/connections", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeConnections.statusResponse(), { contentType: "application/json" }),
+      ),
+    )
+    yield* router.add("POST", "/amicode/connections/credential", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = yield* Effect.promise(() => AmicodeConnections.submitCredentialResponse(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("POST", "/amicode/connections/disconnect", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        return HttpServerResponse.text(AmicodeConnections.disconnectResponse(body), {
+          contentType: "application/json",
+        })
+      }),
+    )
+    yield* router.add("POST", "/amicode/connections/revalidate", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = yield* Effect.promise(() => AmicodeConnections.revalidateResponse(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -350,6 +386,7 @@ export function createRoutes(
     amicodeVaultsRoute,
     amicodeProblemsRoute,
     amicodeWidgetsRoute,
+    amicodeConnectionsRoute,
     uiRoute,
   ).pipe(
     Layer.provide([

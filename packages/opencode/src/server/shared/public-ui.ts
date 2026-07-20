@@ -5,8 +5,23 @@ export const PUBLIC_UI_PATHS = new Set<string>([
   "/site.webmanifest",
   "/web-app-manifest-192x192.png",
   "/web-app-manifest-512x512.png",
+  // Widget frames are iframe DOCUMENT requests — they cannot carry a
+  // credential (same constraint as the /assets/ sub-resources below). The
+  // served document embeds only registry widget code + the frame runtime
+  // (its CSP is default-src 'none'; data arrives via the mediated postMessage
+  // bridge after boot), so it is public-shell class within the same-user
+  // trust model. The widget registry route (/amicode/widgets) stays authed.
+  "/amicode/widget-frame",
 ])
 
+// The app shell's fingerprinted bundles live under /assets/. They are plain
+// <script src>/<link href> sub-resource fetches — the browser cannot attach
+// ?auth_token= or a Basic header to them, so gating them behind server auth
+// blanks the whole UI whenever a password is set (the document authenticates,
+// its own bundle 401s). The compiled, content-hashed shell carries no secrets;
+// the API surface stays fully authed. GET-only, exact prefix.
+const PUBLIC_UI_PREFIX = "/assets/"
+
 export function isPublicUIPath(method: string, pathname: string) {
-  return method === "GET" && PUBLIC_UI_PATHS.has(pathname)
+  return method === "GET" && (PUBLIC_UI_PATHS.has(pathname) || pathname.startsWith(PUBLIC_UI_PREFIX))
 }

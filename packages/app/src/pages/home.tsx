@@ -62,7 +62,9 @@ import { type ServerHealth } from "@/utils/server-health"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
+import { AMICODE_MANAGE_VAULTS_PROMPT } from "@opencode-ai/ui/amicode-vaults-tab"
 import { AmicodeDefaultsCapsule } from "@/components/amicode-defaults-capsule"
+import { GlobalConnectionsPopover } from "@/components/status-popover"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
 import {
@@ -600,7 +602,13 @@ function HomeDesign() {
   createEffect(() => {
     if (!menuOpen()) return
     const onDown = (e: MouseEvent) => {
-      if (chromeRoot && !chromeRoot.contains(e.target as Node)) setMenuOpen(false)
+      const target = e.target as Node
+      // Portaled popover content (the Connections entry, #174) counts as
+      // inside: closing the dropdown would display:none the popover's anchor
+      // mid-interaction. The in-flow panels (capsule, sessions) are already
+      // covered by the contains() check.
+      if (target instanceof Element && target.closest('[data-component="popover-content"]')) return
+      if (chromeRoot && !chromeRoot.contains(target)) setMenuOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMenuOpen(false)
@@ -1001,6 +1009,13 @@ function HomeDesign() {
                   </div>
                 </Show>
               </div>
+              {/* amicode (#174 AC1): global Connections entry — Connections are
+                  global credentials, so they must be reachable from a fresh
+                  boot with no session open. Opens the same Vaults+Connections
+                  surface the session-header status popover hosts (one wiring,
+                  two mounts), with Connections pre-selected. Manage-vaults
+                  hands off to a fresh draft session (home has no composer). */}
+              <GlobalConnectionsPopover onManageVaults={() => startWithPrompt(AMICODE_MANAGE_VAULTS_PROMPT)} />
               <IconButtonV2
                 data-action="home-open-settings"
                 variant="ghost-muted"

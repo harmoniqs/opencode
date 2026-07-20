@@ -486,6 +486,9 @@ function AboutYouCard(props: {
         resolve("")
       }, 1500)
     })
+  // Fields carrying this handler also mark data-amc-clipboard="self" so the
+  // app-wide framed-clipboard fallback (utils/global-clipboard.ts) leaves
+  // their paste to this handler instead of double-inserting.
   const pasteFallback = (apply: (value: string) => void) => async (e: KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
     // Plain-browser contexts: native paste works — never preventDefault it
@@ -670,6 +673,7 @@ function AboutYouCard(props: {
                     fallback={
                       <input
                         data-slot="amicode-you-name"
+                        data-amc-clipboard="self"
                         style={FIELD}
                         value={draft().name}
                         placeholder="Name"
@@ -735,6 +739,7 @@ function AboutYouCard(props: {
                             </Show>
                             <input
                               data-slot="amicode-you-affiliation"
+                              data-amc-clipboard="self"
                               style={{ ...FIELD, flex: "1" }}
                               value={draft().affiliation}
                               placeholder="University or company — search like LinkedIn"
@@ -816,6 +821,7 @@ function AboutYouCard(props: {
                         </div>
                         <input
                           data-slot="amicode-you-focus"
+                          data-amc-clipboard="self"
                           style={FIELD}
                           value={draft().focus}
                           placeholder="What you work on"
@@ -824,6 +830,7 @@ function AboutYouCard(props: {
                         />
                         <input
                           data-slot="amicode-you-scholar-input"
+                          data-amc-clipboard="self"
                           style={FIELD}
                           value={draft().scholar}
                           placeholder="Google Scholar URL (optional)"
