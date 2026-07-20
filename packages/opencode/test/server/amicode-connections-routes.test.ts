@@ -14,8 +14,9 @@ import { ConfigProvider, Layer } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiApp } from "@/server/routes/instance/httpapi/server"
 import { ServerAuth } from "@/server/auth"
-import { readCredential } from "@/server/amicode/credentials"
+import { readCredential, writeCredential } from "@/server/amicode/credentials"
 import {
+  backgroundRevalidationsSettled,
   connectionsFile,
   entitlementsFile,
   inflightOverlay,
@@ -56,14 +57,21 @@ function basic(username: string, password: string) {
   return ServerAuth.header({ username, password }) ?? ""
 }
 
-// --- local stub solve service: answers the probe with a scripted status and
-// records what it saw, so tests can assert the token rode the header only ---
+// --- local stub solve service: answers the probe with a scripted status
+// (and, when scripted, a JSON body — the aws-infra#185 identity-echo shape)
+// and records what it saw, so tests can assert the token rode the header only
 type StubSeen = { method: string; url: string; authorization: string | undefined }
-async function stubSolveService(status: () => number) {
+async function stubSolveService(status: () => number, body?: () => string | undefined) {
   const seen: StubSeen[] = []
   const server = createServer((req, res) => {
     seen.push({ method: req.method ?? "", url: req.url ?? "", authorization: req.headers.authorization })
     res.statusCode = status()
+    const payload = body?.()
+    if (payload !== undefined) {
+      res.setHeader("content-type", "application/json")
+      res.end(payload)
+      return
+    }
     res.end()
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
@@ -99,7 +107,8 @@ beforeEach(() => {
   sessionOnlyOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
-afterEach(() => {
+afterEach(async () => {
+  await backgroundRevalidationsSettled() // drain background refreshes BEFORE the env flips to the next test's dir
   for (const k of ENV_KEYS) {
     if (savedEnv[k] === undefined) delete process.env[k]
     else process.env[k] = savedEnv[k]
@@ -427,6 +436,91 @@ describe("pasqal over the route tree — REAL spawn against a staged stub valida
     } finally {
       stub.cleanup()
     }
+  })
+})
+
+// --- Resilience over the SAME route tree (amicode#170): staleness/offline
+// (AC1/AC3), the identity echo + drift diff against the stubbed identity
+// endpoint (AC4, live endpoint aws-infra#185), and read-time expiry (AC5).
+
+describe("connections routes — resilience (170 AC1/AC3/AC4/AC5)", () => {
+  test("offline boot over the route: the stale GET answers at once; the failed background refresh marks offline, never invalid", async () => {
+    const server = app()
+    // a loopback port with nothing listening = the unreachable service
+    const dead = await stubSolveService(() => 404)
+    await dead.close()
+    writeCredential("company-compute", { base_url: dead.url, token: "tok-offline" })
+    const lastVerified = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": { state: "connected", validated_at: lastVerified, identity: "team-alpha" },
+      }),
+    )
+
+    const first = await (await server.request("/amicode/connections")).json()
+    expect(first.connections[0].state).toBe("connected") // rendered immediately from cache
+    expect(first.connections[0].stale).toBe(true)
+    await backgroundRevalidationsSettled()
+
+    const offline = (await (await server.request("/amicode/connections")).json()).connections[0]
+    expect(offline.state).toBe("connected") // never 'invalid', never 'unreachable'
+    expect(offline.offline).toBe(true)
+    expect(offline.stale).toBe(true)
+    expect(offline.validated_at).toBe(lastVerified) // the last-verified marker stands
+    expect(offline.identity).toBe("team-alpha")
+    expect(readCredential("company-compute")).toEqual({ base_url: dead.url, token: "tok-offline" })
+  })
+
+  test("identity echo + drift over the route: the stubbed identity endpoint changes its submitter (the incident shape)", async () => {
+    const server = app()
+    let submitter = "team-alpha"
+    const stub = await stubSolveService(
+      () => 200,
+      () => JSON.stringify({ submitter }),
+    )
+    try {
+      const submitted = await (
+        await server.request(
+          "/amicode/connections/credential",
+          post({ id: "company-compute", base_url: stub.url, token: "tok-echo" }),
+        )
+      ).json()
+      expect(submitted.connection.state).toBe("connected")
+      expect(submitted.connection.identity).toBe("team-alpha") // "Connected as <submitter>"
+
+      submitter = "team-beta" // the server-side submitter drifts out from under the key
+      const drifted = await (
+        await server.request("/amicode/connections/revalidate", post({ id: "company-compute" }))
+      ).json()
+      expect(drifted.connection.state).toBe("connected")
+      expect(drifted.connection.identity).toBe("team-alpha") // the stored record — preserved
+      expect(drifted.connection.identity_drift).toBe("team-beta") // the explicit diff
+
+      const status = await (await server.request("/amicode/connections")).json()
+      expect(status.connections[0].identity).toBe("team-alpha")
+      expect(status.connections[0].identity_drift).toBe("team-beta")
+    } finally {
+      await stub.close()
+    }
+  })
+
+  test("expiry over the route: a past-expiry claim answers 'expired' and the credential file survives", async () => {
+    const server = app()
+    writeCredential("company-compute", { base_url: "https://solves.example.co", token: "tok-expired" })
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() - 60_000).toISOString(),
+        },
+      }),
+    )
+    const parsed = await (await server.request("/amicode/connections")).json()
+    expect(parsed.connections[0].state).toBe("expired")
+    expect(readCredential("company-compute")).toBeDefined() // reconnect ≠ disconnect
   })
 })
 

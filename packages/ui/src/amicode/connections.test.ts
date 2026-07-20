@@ -118,7 +118,13 @@ describe("parseConnectionsResponse", () => {
     const drifted = parseConnectionsResponse({
       ok: true,
       connections: [
-        { id: "company-compute", state: "connected", identity: "team-alpha", identity_drift: "team-beta", stale: false },
+        {
+          id: "company-compute",
+          state: "connected",
+          identity: "team-alpha",
+          identity_drift: "team-beta",
+          stale: false,
+        },
       ],
       error: null,
     })
