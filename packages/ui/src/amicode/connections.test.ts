@@ -4,6 +4,8 @@ import {
   cardModel,
   connectionFormKind,
   connectionTitle,
+  fillLabelTemplate,
+  offlineCopy,
   parseConnectionActionResponse,
   parseConnectionsResponse,
   pasqalSubmitPayload,
@@ -108,6 +110,23 @@ describe("parseConnectionsResponse", () => {
         error: null,
       })
       expect(view.connections[0].devices).toBeUndefined()
+    }
+  })
+
+  test("offline:true parses to the offline marker; anything else leaves it undefined (170 AC3)", () => {
+    const marked = parseConnectionsResponse({
+      ok: true,
+      connections: [{ id: "company-compute", state: "connected", stale: true, offline: true }],
+      error: null,
+    })
+    expect(marked.connections[0].offline).toBe(true)
+    for (const offline of [undefined, false, "yes", 1, null]) {
+      const view = parseConnectionsResponse({
+        ok: true,
+        connections: [{ id: "company-compute", state: "connected", stale: true, offline }],
+        error: null,
+      })
+      expect(view.connections[0].offline).toBeUndefined()
     }
   })
 
@@ -342,6 +361,14 @@ describe("cardModel", () => {
     expect(cardModel(viewFor("invalid", { sessionOnly: true })).showSessionOnly).toBe(false)
   })
 
+  test("offline connected surfaces the last-verified line — and ONLY on connected (170 AC3)", () => {
+    expect(cardModel(viewFor("connected", { offline: true, stale: true })).showOffline).toBe(true)
+    expect(cardModel(viewFor("connected")).showOffline).toBe(false)
+    for (const state of ["needs-key", "invalid", "expired", "unreachable", "unknown"] as const) {
+      expect(cardModel(viewFor(state, { offline: true })).showOffline).toBe(false)
+    }
+  })
+
   test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
     const model = cardModel(viewFor("validating"))
     expect(model.showForm).toBe(true)
@@ -363,6 +390,41 @@ describe("cardModel", () => {
     for (const state of CARD_STATES.filter((s) => s !== "unknown")) {
       expect(cardModel(viewFor(state)).showRawState).toBe(false)
     }
+  })
+})
+
+// --- 170 AC3/AC4: label templates whose values (identities, timestamps) only
+// exist at render time. The app hands the raw {{slot}} template through; the
+// card fills it with display values — never secrets, never wire-raw objects.
+
+describe("fillLabelTemplate", () => {
+  test("fills named slots; unknown slots stay verbatim (forward-compatible copy)", () => {
+    expect(fillLabelTemplate("last verified {{at}} as {{identity}}", { at: "7/19/2026", identity: "team-alpha" })).toBe(
+      "last verified 7/19/2026 as team-alpha",
+    )
+    expect(fillLabelTemplate("no slots here", {})).toBe("no slots here")
+    expect(fillLabelTemplate("keep {{future}} intact", { at: "x" })).toBe("keep {{future}} intact")
+  })
+})
+
+describe("offlineCopy (170 AC3)", () => {
+  test("renders the last-verified line from the view's display values", () => {
+    const view = viewFor("connected", {
+      offline: true,
+      stale: true,
+      validatedAt: "7/19/2026, 10:00",
+      identity: "team-alpha",
+    })
+    expect(offlineCopy(view, "Offline — last verified {{at}} as {{identity}}")).toBe(
+      "Offline — last verified 7/19/2026, 10:00 as team-alpha",
+    )
+  })
+
+  test("a view without an identity renders an em dash, never a hole", () => {
+    const view = viewFor("connected", { offline: true, stale: true, validatedAt: "7/19/2026, 10:00" })
+    expect(offlineCopy(view, "Offline — last verified {{at}} as {{identity}}")).toBe(
+      "Offline — last verified 7/19/2026, 10:00 as —",
+    )
   })
 })
 

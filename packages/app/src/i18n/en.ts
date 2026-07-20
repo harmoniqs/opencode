@@ -708,6 +708,7 @@ export const dict = {
   "dialog.connections.revalidate": "Revalidate",
   "dialog.connections.stale": "Last check is stale — revalidate to refresh",
   "dialog.connections.sessionOnly": "Session-only — you'll be asked to reconnect after a restart",
+  "dialog.connections.offline": "Offline — last verified {{at}} as {{identity}}",
   "amicode.retry": "Retry",
   "amicode.unavailable": "status unavailable",
   "amicode.fetchFailed": "Could not reach the server for problem status",

@@ -227,6 +227,7 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
           password: "POISON-password",
           authorization: "Bearer POISON-header",
           nested: { secret: "POISON-nested" },
+          offline: "yes-POISON", // whitelisted field, but only the literal true survives
           devices: [{ name: "qpu-1", state: "online", token: "POISON-device" }],
           entitlements: ["solve", { token: "POISON-entitlement" }],
         },
@@ -256,6 +257,7 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
       "validated_at",
       "stale",
       "session_only",
+      "offline",
     ]
     for (const entry of JSON.parse(body).connections) {
       for (const key of Object.keys(entry)) expect(allowed).toContain(key)
@@ -1246,5 +1248,75 @@ describe("unparseable credential file → needs-key, honestly (170 AC2)", () => 
     const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" })))
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("needs-key") // unreadable = absent through the #162 seam; no probe fired
+  })
+})
+
+describe("offline boot — last-verified rendering, never invalid (170 AC3)", () => {
+  const boom: FetchImpl = async () => {
+    throw new Error("connect ECONNREFUSED 10.0.0.1:443")
+  }
+  const lastVerified = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+
+  const seedConnected = () => {
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": { state: "connected", validated_at: lastVerified, identity: "team-alpha" },
+      }),
+    )
+  }
+
+  test("stored credential + connected cache + unreachable service → connected, stale, offline; validated_at is the last-verified marker", async () => {
+    seedConnected()
+    // boot GET: the cached claim renders at once (no offline verdict yet)
+    const first = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(first.state).toBe("connected")
+    expect(first.stale).toBe(true)
+    expect(first.offline).toBeUndefined()
+    await backgroundRevalidationsSettled()
+
+    // the failed background revalidation marks offline — it NEVER downgrades
+    // the state and NEVER refreshes the last-verified timestamp
+    const offline = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(offline.state).toBe("connected") // never 'invalid', never 'unreachable'
+    expect(offline.stale).toBe(true)
+    expect(offline.offline).toBe(true)
+    expect(offline.validated_at).toBe(lastVerified) // "last verified <validated_at>"
+    expect(offline.identity).toBe("team-alpha") // "…as <identity>"
+    // the stored credential is never cleared by an offline revalidation
+    expect(readCredential("company-compute")).toEqual(cloudCredential)
+    await backgroundRevalidationsSettled()
+  })
+
+  test("the service coming back clears offline: the next GET's background refresh reconnects and refreshes the timestamp", async () => {
+    seedConnected()
+    statusResponse({ fetchImpl: boom })
+    await backgroundRevalidationsSettled()
+    expect(JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0].offline).toBe(true) // still the cache
+    await backgroundRevalidationsSettled()
+    const recovered = JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0]
+    expect(recovered.state).toBe("connected")
+    expect(recovered.offline).toBeUndefined()
+    expect(recovered.stale).toBe(false)
+    expect(Date.parse(recovered.validated_at)).toBeGreaterThan(Date.parse(lastVerified))
+    expect(recovered.identity).toBe("team-alpha")
+  })
+
+  test("offline is a connected-only presentation flag: it never rides needs-key or failure states", async () => {
+    seedConnected()
+    statusResponse({ fetchImpl: boom })
+    await backgroundRevalidationsSettled()
+    // key actually revoked later: a manual revalidate answering 401 is truthful…
+    const invalid = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(401) }),
+    )
+    expect(invalid.connection.state).toBe("invalid")
+    expect(invalid.connection.offline).toBeUndefined()
+    // …and once the credential file goes away, needs-key carries no offline residue
+    disconnectResponse(JSON.stringify({ id: "company-compute" }))
+    const gone = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(gone.state).toBe("needs-key")
+    expect(gone.offline).toBeUndefined()
   })
 })

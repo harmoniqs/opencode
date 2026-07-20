@@ -52,6 +52,10 @@ export interface ConnectionStatus {
   /** 169 AC4: connected purely in-memory (Pasqal minted no persistable
    *  token) — the claim dies with the server process. */
   session_only?: boolean
+  /** 170 AC3: the last background revalidation could not REACH the service —
+   *  a presentation flag on a connected claim ("last verified <validated_at>
+   *  as <identity>"), never a verdict on the credential. Connected-only. */
+  offline?: boolean
 }
 
 /** The connection cards this module serves; company-compute renders first. */
@@ -152,6 +156,7 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   if (devices) out.devices = devices
   const validated = str(d.validated_at)
   if (validated) out.validated_at = validated
+  if (d.offline === true) out.offline = true // only the literal true — anything else is noise
   return out
 }
 
@@ -211,6 +216,9 @@ function renderStatus(
     if (persisted.expires_at) out.expires_at = persisted.expires_at
     if (persisted.devices) out.devices = persisted.devices
   }
+  // 170 AC3: offline is a connected-only presentation flag — "showing the
+  // last verified status" makes no sense on any other state
+  if (state === "connected" && persisted.offline) out.offline = true
   return out
 }
 
@@ -347,7 +355,13 @@ async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl 
   if (!credential) return
   const outcome = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
   const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
-  if (outcome === "unreachable") return
+  if (outcome === "unreachable") {
+    // offline (170 AC3): the connected claim and its last-verified timestamp
+    // STAND — only the presentation marker lands, and a later successful
+    // refresh (whose write carries no offline key) clears it
+    persistStatus(id, { ...existing, offline: true })
+    return
+  }
   persistStatus(id, {
     ...keptMetadata(existing),
     state: outcome === "valid" ? "connected" : "invalid",

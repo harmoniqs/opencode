@@ -36,6 +36,9 @@ export type ConnectionView = {
   /** connected in memory only (Pasqal minted no token, 169 AC4) — the card
    *  notes that a restart will re-prompt */
   sessionOnly?: boolean
+  /** the last revalidation could not reach the service (170 AC3) — the card
+   *  is showing the last verified status, never a verdict on the key */
+  offline?: boolean
   /** display string: locale-formatted timestamp or an em dash */
   validatedAt: string
   stale: boolean
@@ -93,6 +96,7 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     baseUrl: str(entry.base_url),
     devices: parseDevices(entry.devices),
     sessionOnly: entry.session_only === true ? true : undefined,
+    offline: entry.offline === true ? true : undefined,
     validatedAt: validatedAtDisplay(entry.validated_at),
     stale: entry.stale === true,
   }
@@ -138,6 +142,8 @@ export type ConnectionCardModel = {
   showDevices: boolean
   /** session-only note on a connected card (Pasqal, 169 AC4) */
   showSessionOnly: boolean
+  /** offline last-verified line on a connected card (170 AC3) */
+  showOffline: boolean
   /** unknown states show the wire's raw word beside the fallback copy */
   showRawState: boolean
 }
@@ -151,6 +157,7 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showStale: false,
     showDevices: false,
     showSessionOnly: false,
+    showOffline: false,
     showRawState: false,
   }
   switch (view.state) {
@@ -165,6 +172,7 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showStale: view.stale,
         showDevices: (view.devices?.length ?? 0) > 0,
         showSessionOnly: view.sessionOnly === true,
+        showOffline: view.offline === true,
       }
     case "needs-key":
       return { ...base, tone: "neutral", showForm: true, showActions: false }
@@ -193,6 +201,23 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showIdentity: view.identity !== undefined,
       }
   }
+}
+
+// --- label templates (170 AC3/AC4): copy whose values (identities,
+// timestamps) only exist at render time. The app passes the raw {{slot}}
+// template from its i18n dict; the card fills it with DISPLAY values already
+// scrubbed by the parser above — never wire-raw objects, never secrets.
+
+/** Fill {{name}} slots in a label template; unknown slots stay verbatim so
+ *  future copy keeps rendering something honest. */
+export function fillLabelTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (slot, key: string) => values[key] ?? slot)
+}
+
+/** 170 AC3: the offline last-verified line — "last verified <at> as
+ *  <identity>" semantics; a missing identity renders an em dash. */
+export function offlineCopy(view: ConnectionView, template: string): string {
+  return fillLabelTemplate(template, { at: view.validatedAt, identity: view.identity ?? "—" })
 }
 
 export function parseConnectionActionResponse(raw: unknown): ConnectionActionView {

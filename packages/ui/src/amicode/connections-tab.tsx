@@ -10,6 +10,7 @@ import {
   cardModel,
   connectionFormKind,
   connectionTitle,
+  offlineCopy,
   pasqalSubmitPayload,
   stateCopy,
   submitPayload,
@@ -34,6 +35,8 @@ export type ConnectionsTabLabels = {
   revalidate: string
   staleHint: string
   sessionOnlyHint: string
+  /** {{at}}/{{identity}} template — the offline last-verified line (170 AC3) */
+  offlineHint: string
 }
 
 export function AmicodeConnectionsTab(props: {
@@ -174,6 +177,12 @@ function ConnectionCard(props: {
       <Show when={model().showSessionOnly}>
         <div class="pl-3.5 text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
           {props.labels.sessionOnlyHint}
+        </div>
+      </Show>
+
+      <Show when={model().showOffline}>
+        <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-offline">
+          {offlineCopy(props.conn, props.labels.offlineHint)}
         </div>
       </Show>
 
