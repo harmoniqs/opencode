@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { cloudFile, readCredential, writeCredential, clearCredential } from "@/server/amicode/credentials"
+import { cloudFile, pasqalFile, readCredential, writeCredential, clearCredential } from "@/server/amicode/credentials"
 
 const mode = (file: string) => statSync(file).mode & 0o777
 
@@ -134,5 +134,70 @@ describe("write atomicity under injected failure (AC3)", () => {
     ).toThrow("injected")
     expect(readdirSync(dir)).toEqual([]) // nothing partial, nothing corrupt
     expect(readCredential("company-compute")).toBeUndefined()
+  })
+})
+
+/** every byte currently under the credential dir — the poison scan surface */
+const dirBytes = () =>
+  readdirSync(dir)
+    .map((f) => readFileSync(path.join(dir, f), "utf8"))
+    .join("\n")
+
+describe("pasqal-cloud backend — token-only at rest (AC4)", () => {
+  test("write emits the frozen golden bytes (project_id + token + expiry, nothing else)", () => {
+    writeCredential("pasqal-cloud", {
+      project_id: "proj-fixture-pasqal",
+      token: "tok-fixture-pasqal",
+      expires_at: "2026-08-01T00:00:00Z",
+    })
+    expect(readFileSync(pasqalFile(), "utf8")).toBe(golden("pasqal.json"))
+    expect(readCredential("pasqal-cloud")).toEqual({
+      project_id: "proj-fixture-pasqal",
+      token: "tok-fixture-pasqal",
+      expires_at: "2026-08-01T00:00:00Z",
+    })
+  })
+
+  test("expiry metadata is optional; the key set is exact either way", () => {
+    writeCredential("pasqal-cloud", { project_id: "proj-1", token: "tok-1" })
+    const raw = JSON.parse(readFileSync(pasqalFile(), "utf8")) as Record<string, unknown>
+    expect(Object.keys(raw).sort()).toEqual(["project_id", "token"])
+  })
+
+  test("a null token can never persist — this store only writes real tokens", () => {
+    expect(() => writeCredential("pasqal-cloud", { project_id: "proj-1", token: null } as any)).toThrow()
+    expect(readdirSync(dir)).toEqual([])
+  })
+
+  test("poison: a password/username-bearing object can never land those keys on disk", () => {
+    // seed a valid credential first — the poison write must not even dirty it
+    writeCredential("pasqal-cloud", { project_id: "proj-1", token: "tok-1" })
+    const before = readFileSync(pasqalFile(), "utf8")
+    for (const poison of [
+      { project_id: "proj-1", token: "tok-2", password: "hunter2-super-secret" },
+      { project_id: "proj-1", token: "tok-2", username: "kate@harmoniqs.co" },
+      { project_id: "proj-1", token: "tok-2", user_password: "hunter2-super-secret" },
+      { base_url: "https://x.co", token: "tok-2", password: "hunter2-super-secret" }, // company side too
+    ]) {
+      let threw: Error | undefined
+      try {
+        writeCredential(("base_url" in poison ? "company-compute" : "pasqal-cloud") as any, poison as any)
+      } catch (err) {
+        threw = err as Error
+      }
+      expect(threw).toBeDefined()
+      expect(threw!.message).not.toContain("hunter2") // errors never echo the value
+      expect(threw!.message).not.toContain("kate@")
+    }
+    expect(readFileSync(pasqalFile(), "utf8")).toBe(before) // seeded credential untouched
+    expect(dirBytes()).not.toContain("hunter2") // the secret exists in NO file
+    expect(dirBytes()).not.toContain("kate@harmoniqs.co")
+  })
+
+  test("unknown non-poison keys are allowlist-dropped, never serialized", () => {
+    writeCredential("pasqal-cloud", { project_id: "proj-1", token: "tok-1", note: "scribble" } as any)
+    const raw = JSON.parse(readFileSync(pasqalFile(), "utf8")) as Record<string, unknown>
+    expect(Object.keys(raw).sort()).toEqual(["project_id", "token"])
+    expect(dirBytes()).not.toContain("scribble")
   })
 })
