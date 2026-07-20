@@ -435,16 +435,22 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
       connected: language.t("dialog.connections.state.connected"),
       "needs-key": language.t("dialog.connections.state.needsKey"),
       invalid: language.t("dialog.connections.state.invalid"),
+      expired: language.t("dialog.connections.state.expired"),
       unreachable: language.t("dialog.connections.state.unreachable"),
+      unentitled: language.t("dialog.connections.state.unentitled"),
       validating: language.t("dialog.connections.state.validating"),
       unknown: language.t("dialog.connections.state.unknown"),
     },
     baseUrlPlaceholder: language.t("dialog.connections.baseUrlPlaceholder"),
     tokenPlaceholder: language.t("dialog.connections.tokenPlaceholder"),
+    usernamePlaceholder: language.t("dialog.connections.usernamePlaceholder"),
+    passwordPlaceholder: language.t("dialog.connections.passwordPlaceholder"),
+    projectIdPlaceholder: language.t("dialog.connections.projectIdPlaceholder"),
     submit: language.t("dialog.connections.submit"),
     disconnect: language.t("dialog.connections.disconnect"),
     revalidate: language.t("dialog.connections.revalidate"),
     staleHint: language.t("dialog.connections.stale"),
+    sessionOnlyHint: language.t("dialog.connections.sessionOnly"),
   }))
 
   return (

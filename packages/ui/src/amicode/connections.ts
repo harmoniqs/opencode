@@ -9,10 +9,18 @@
 // poisoned or future-shaped response can neither crash the card nor carry a
 // secret into the DOM.
 
-export const CONNECTION_WIRE_STATES = ["connected", "needs-key", "invalid", "unreachable", "validating"] as const
+export const CONNECTION_WIRE_STATES = [
+  "connected",
+  "needs-key",
+  "invalid",
+  "expired",
+  "unreachable",
+  "unentitled",
+  "validating",
+] as const
 export type ConnectionWireState = (typeof CONNECTION_WIRE_STATES)[number]
-/** Everything the wire might say beyond the five contract states renders via
- *  the "unknown" fallback (expired / unentitled land in later slices). */
+/** Everything the wire might say beyond the contract states renders via the
+ *  "unknown" fallback. */
 export type ConnectionCardState = ConnectionWireState | "unknown"
 
 export type ConnectionView = {
@@ -23,6 +31,11 @@ export type ConnectionView = {
   identity?: string
   /** server-offered prefill for the key form (forward-compatible) */
   baseUrl?: string
+  /** device display names (Pasqal, 169 AC2) — non-secret status metadata */
+  devices?: string[]
+  /** connected in memory only (Pasqal minted no token, 169 AC4) — the card
+   *  notes that a restart will re-prompt */
+  sessionOnly?: boolean
   /** display string: locale-formatted timestamp or an em dash */
   validatedAt: string
   stale: boolean
@@ -32,10 +45,12 @@ export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; erro
 export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; error?: string }
 
 export const COMPANY_COMPUTE_ID = "company-compute"
+export const PASQAL_ID = "pasqal-cloud"
 
 /** Product names are not translated; ids without one render verbatim. */
 export function connectionTitle(id: string): string {
   if (id === COMPANY_COMPUTE_ID) return "Company Compute"
+  if (id === PASQAL_ID) return "Pasqal Cloud"
   return id
 }
 
@@ -53,6 +68,20 @@ export function validatedAtDisplay(value: unknown): string {
   return new Date(at).toLocaleString()
 }
 
+/** Wire devices ({id?,name?,state?} objects) → display names; anything
+ *  off-shape is dropped, an empty result is absent. */
+function parseDevices(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const names: string[] = []
+  for (const device of raw) {
+    if (typeof device !== "object" || device === null || Array.isArray(device)) continue
+    const d = device as Record<string, unknown>
+    const name = str(d.name) ?? str(d.id)
+    if (name) names.push(name)
+  }
+  return names.length > 0 ? names : undefined
+}
+
 function parseConnectionEntry(raw: unknown): ConnectionView {
   const entry = (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>
   const rawState = str(entry.state) ?? "unknown"
@@ -62,6 +91,8 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     rawState,
     identity: str(entry.identity),
     baseUrl: str(entry.base_url),
+    devices: parseDevices(entry.devices),
+    sessionOnly: entry.session_only === true ? true : undefined,
     validatedAt: validatedAtDisplay(entry.validated_at),
     stale: entry.stale === true,
   }
@@ -94,7 +125,7 @@ export function stateCopy(view: ConnectionView, labels: ConnectionStateLabels): 
 export type ConnectionCardModel = {
   state: ConnectionCardState
   tone: "success" | "critical" | "warning" | "pending" | "neutral"
-  /** key-entry form (base_url + masked token) */
+  /** credential-entry form (fields per connectionFormKind) */
   showForm: boolean
   /** true only while validating — the in-flight render keeps the form frozen */
   formDisabled: boolean
@@ -103,6 +134,10 @@ export type ConnectionCardModel = {
   showValidatedAt: boolean
   showIdentity: boolean
   showStale: boolean
+  /** device names listed on a connected card (Pasqal, 169 AC2) */
+  showDevices: boolean
+  /** session-only note on a connected card (Pasqal, 169 AC4) */
+  showSessionOnly: boolean
   /** unknown states show the wire's raw word beside the fallback copy */
   showRawState: boolean
 }
@@ -114,6 +149,8 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showValidatedAt: false,
     showIdentity: false,
     showStale: false,
+    showDevices: false,
+    showSessionOnly: false,
     showRawState: false,
   }
   switch (view.state) {
@@ -126,13 +163,21 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showValidatedAt: true,
         showIdentity: view.identity !== undefined,
         showStale: view.stale,
+        showDevices: (view.devices?.length ?? 0) > 0,
+        showSessionOnly: view.sessionOnly === true,
       }
     case "needs-key":
       return { ...base, tone: "neutral", showForm: true, showActions: false }
     case "invalid":
       return { ...base, tone: "critical", showForm: true, showActions: false }
+    case "expired":
+      // the stored token aged out — re-entering credentials mints a fresh one
+      return { ...base, tone: "warning", showForm: true, showActions: false }
     case "unreachable":
       return { ...base, tone: "warning", showForm: true, showActions: false }
+    case "unentitled":
+      // project-authorization refusal: the fix is a corrected project id
+      return { ...base, tone: "critical", showForm: true, showActions: false }
     case "validating":
       return { ...base, tone: "pending", showForm: true, formDisabled: true, showActions: false }
     default:
@@ -166,13 +211,38 @@ export function parseConnectionActionResponse(raw: unknown): ConnectionActionVie
 // --- submit gate (AC3): an empty submission yields NO payload — the card
 // fires no request and changes no state when this returns undefined.
 
-export type CredentialSubmitPayload = { id: string; base_url: string; token: string }
+export type BaseUrlTokenPayload = { id: string; base_url: string; token: string }
+export type PasqalCredentialsPayload = { id: string; username: string; password: string; project_id: string }
+export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload
 
-export function submitPayload(id: string, baseUrl: string, token: string): CredentialSubmitPayload | undefined {
+/** Which credential fields a card's form collects (169): pasqal-cloud takes
+ *  username/password/project_id; every other id keeps base_url + token. */
+export type ConnectionFormKind = "base-url-token" | "pasqal-credentials"
+
+export function connectionFormKind(id: string): ConnectionFormKind {
+  return id === PASQAL_ID ? "pasqal-credentials" : "base-url-token"
+}
+
+export function submitPayload(id: string, baseUrl: string, token: string): BaseUrlTokenPayload | undefined {
   const base = baseUrl.trim()
   const key = token.trim()
   if (base === "" || key === "") return undefined
   return { id, base_url: base, token: key }
+}
+
+/** Pasqal submit gate (169): all three fields required; username/project are
+ *  trimmed, the password rides VERBATIM (spaces can be legitimate) — it lives
+ *  only in this payload and the POST body, never in any view state. */
+export function pasqalSubmitPayload(
+  id: string,
+  username: string,
+  password: string,
+  projectId: string,
+): PasqalCredentialsPayload | undefined {
+  const user = username.trim()
+  const project = projectId.trim()
+  if (user === "" || password.trim() === "" || project === "") return undefined
+  return { id, username: user, password, project_id: project }
 }
 
 // --- action overlay (AC2): the app layer wraps ONE round trip with this —
