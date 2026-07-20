@@ -5,6 +5,13 @@ export const PUBLIC_UI_PATHS = new Set<string>([
   "/site.webmanifest",
   "/web-app-manifest-192x192.png",
   "/web-app-manifest-512x512.png",
+  // Widget frames are iframe DOCUMENT requests — they cannot carry a
+  // credential (same constraint as the /assets/ sub-resources below). The
+  // served document embeds only registry widget code + the frame runtime
+  // (its CSP is default-src 'none'; data arrives via the mediated postMessage
+  // bridge after boot), so it is public-shell class within the same-user
+  // trust model. The widget registry route (/amicode/widgets) stays authed.
+  "/amicode/widget-frame",
 ])
 
 // The app shell's fingerprinted bundles live under /assets/. They are plain

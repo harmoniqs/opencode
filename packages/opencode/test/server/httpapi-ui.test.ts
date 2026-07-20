@@ -469,6 +469,39 @@ describe("HttpApi UI fallback", () => {
     }),
   )
 
+  // Regression (amicode #159 test drive, part 2): widget frames are iframe
+  // DOCUMENT requests (/amicode/widget-frame?id=) — like the asset fetches,
+  // they cannot carry a credential, so with a password set every widget
+  // 401'd and hit its 5s boot timeout. The served document embeds only
+  // registry widget code + the runtime (data arrives via the mediated
+  // postMessage bridge after boot), so it is public-shell class. The widget
+  // REGISTRY route (/amicode/widgets) stays authed.
+  it.live("serves the widget frame document without auth even when a server password is set", () =>
+    Effect.gen(function* () {
+      const response = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+        client: httpClient(new Response("ok")),
+      }).request("/amicode/widget-frame?id=pulse-bank&h=abc123")
+      expect(response.status).not.toBe(401)
+
+      const registry = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/amicode/widgets")
+      expect(registry.status).toBe(401)
+
+      const post = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/amicode/widget-frame?id=pulse-bank", { method: "POST" })
+      expect(post.status).toBe(401)
+    }),
+  )
+
   it.live("allows web UI preflight without auth", () =>
     Effect.gen(function* () {
       const response = yield* app({ password: "secret", username: "opencode" }).request("/", {
