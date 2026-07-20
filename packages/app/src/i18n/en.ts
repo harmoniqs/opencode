@@ -592,6 +592,7 @@ export const dict = {
   "home.sessions.group.today": "Today",
   "home.sessions.group.yesterday": "Yesterday",
   "home.sessions.group.older": "Older",
+  "home.connections.trigger": "Connections",
 
   "session.tab.session": "Session",
   "session.tab.review": "Review",
@@ -873,7 +874,11 @@ export const dict = {
   "settings.general.row.showTerminal.title": "Terminal",
   "settings.general.row.showTerminal.description": "Show the terminal button in the desktop title bar",
   "settings.general.row.showStatus.title": "Server status",
-  "settings.general.row.showStatus.description": "Show the server status button in the desktop title bar",
+  // amicode (#174): the button itself always shows while a session is open —
+  // it is the entry to global Connections/Vaults — so the setting scopes to
+  // the health indicator only.
+  "settings.general.row.showStatus.description":
+    "Show the server-health indicator on the status button in the desktop title bar",
   "settings.general.row.showCustomAgents.title": "Custom agents",
   "settings.general.row.showCustomAgents.description": "Show the agent picker in the v2 desktop composer",
   "settings.general.row.reasoningSummaries.title": "Show reasoning summaries",

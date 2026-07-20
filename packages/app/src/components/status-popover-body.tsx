@@ -45,6 +45,7 @@ import {
 import { usePrompt } from "@/context/prompt"
 import { startPrompt } from "@/utils/start-prompt"
 import { authTokenFromCredentials } from "@/utils/server"
+import { GLOBAL_STATUS_DEFAULT_TAB } from "./status-popover-model"
 
 const pluginEmptyMessage = (value: string, file: string): JSXElement => {
   const parts = value.split(file)
@@ -319,142 +320,17 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
   const pluginCount = createMemo(() => plugins().length)
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
 
-  // amicode: Vaults tab — fetched per-active-server when the popover opens
-  // (source flips truthy on open / server switch → refetch; closed keeps the
-  // last value, stale-while-revalidate).
+  // amicode: Vaults + Connections wiring — shared with the home-chrome global
+  // popover (#174), see createAmicodeStatusTabs below. This session mount
+  // routes "Manage vaults" through the composer of the OPEN session.
   const prompt = usePrompt()
-  const [vaultsRaw, { refetch: refetchVaults }] = createResource(
-    () => (props.shown() && server.current ? ServerConnection.key(server.current) : undefined),
-    async () => {
-      const conn = server.current
-      if (!conn) return undefined
-      const headers: Record<string, string> = {}
-      if (conn.http.password)
-        headers.Authorization = `Basic ${authTokenFromCredentials({
-          username: conn.http.username,
-          password: conn.http.password,
-        })}`
-      const res = await fetch(new URL("/amicode/vaults", conn.http.url), { headers })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return (await res.json()) as unknown
+  const amicodeTabs = createAmicodeStatusTabs({
+    shown: props.shown,
+    onManageVaults: () => {
+      props.onClose?.()
+      startPrompt(prompt, AMICODE_MANAGE_VAULTS_PROMPT)
     },
-  )
-  const vaultsView = createMemo<VaultsView | undefined>(() => {
-    if (vaultsRaw.error) return { ok: false, mounts: [], error: language.t("dialog.vaults.fetchFailed") }
-    const raw = vaultsRaw()
-    if (raw === undefined) return undefined
-    return parseVaultsResponse(raw)
   })
-  const vaultsCount = () => {
-    const view = vaultsView()
-    return view?.ok ? view.mounts.length : 0
-  }
-  const onManageVaults = () => {
-    props.onClose?.()
-    startPrompt(prompt, AMICODE_MANAGE_VAULTS_PROMPT)
-  }
-
-  // amicode: Connections tab (#166) — same per-active-server fetch idiom as
-  // vaults above. Mutations are ONE round trip (#165 contract): the overlay
-  // renders "validating" while the POST runs, then the terminal connection
-  // from the SAME response replaces it. No polling loop.
-  const amicodeHeaders = (conn: ServerConnection.Any) => {
-    const headers: Record<string, string> = {}
-    if (conn.http.password)
-      headers.Authorization = `Basic ${authTokenFromCredentials({
-        username: conn.http.username,
-        password: conn.http.password,
-      })}`
-    return headers
-  }
-  const [connectionsRaw, { refetch: refetchConnections }] = createResource(
-    () => (props.shown() && server.current ? ServerConnection.key(server.current) : undefined),
-    async () => {
-      const conn = server.current
-      if (!conn) return undefined
-      const res = await fetch(new URL("/amicode/connections", conn.http.url), { headers: amicodeHeaders(conn) })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return (await res.json()) as unknown
-    },
-  )
-  const [connectionsOverlay, setConnectionsOverlay] = createSignal<ConnectionOverlay>({})
-  const [connectionsActionError, setConnectionsActionError] = createSignal<string | undefined>()
-  createEffect(() => {
-    connectionsRaw.state // a fresh GET supersedes any leftover action overlay
-    setConnectionsOverlay({})
-    setConnectionsActionError(undefined)
-  })
-  const connectionsView = createMemo<ConnectionsView | undefined>(() => {
-    const base = (() => {
-      if (connectionsRaw.error)
-        return { ok: false, connections: [], error: language.t("dialog.connections.fetchFailed") } as ConnectionsView
-      const raw = connectionsRaw()
-      if (raw === undefined) return undefined
-      return parseConnectionsResponse(raw)
-    })()
-    return applyConnectionOverlay(base, connectionsOverlay())
-  })
-  const connectionsCount = () => {
-    const view = connectionsView()
-    return view?.ok ? view.connections.filter((conn) => conn.state === "connected").length : 0
-  }
-  const runConnectionAction = async (id: string, path: string, body: unknown): Promise<ConnectionActionView> => {
-    setConnectionsActionError(undefined)
-    setConnectionsOverlay({ validating: id })
-    const result = await (async (): Promise<ConnectionActionView> => {
-      const conn = server.current
-      if (!conn) return { ok: false, error: language.t("dialog.connections.fetchFailed") }
-      try {
-        const res = await fetch(new URL(path, conn.http.url), {
-          method: "POST",
-          headers: { ...amicodeHeaders(conn), "content-type": "application/json" },
-          body: JSON.stringify(body),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return parseConnectionActionResponse((await res.json()) as unknown)
-      } catch {
-        return { ok: false, error: language.t("dialog.connections.fetchFailed") }
-      }
-    })()
-    if (result.ok && result.connection) {
-      setConnectionsOverlay({ terminal: result.connection })
-    } else {
-      setConnectionsOverlay({})
-      setConnectionsActionError(result.error ?? language.t("dialog.connections.fetchFailed"))
-    }
-    return result
-  }
-  const onSubmitCredential = (payload: CredentialSubmitPayload) =>
-    runConnectionAction(payload.id, "/amicode/connections/credential", payload)
-  const onDisconnectConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
-  const onRevalidateConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/revalidate", { id })
-  const connectionsLabels = createMemo(() => ({
-    empty: language.t("dialog.connections.empty"),
-    retry: language.t("dialog.connections.retry"),
-    states: {
-      connected: language.t("dialog.connections.state.connected"),
-      "needs-key": language.t("dialog.connections.state.needsKey"),
-      invalid: language.t("dialog.connections.state.invalid"),
-      expired: language.t("dialog.connections.state.expired"),
-      unreachable: language.t("dialog.connections.state.unreachable"),
-      unentitled: language.t("dialog.connections.state.unentitled"),
-      validating: language.t("dialog.connections.state.validating"),
-      unknown: language.t("dialog.connections.state.unknown"),
-    },
-    baseUrlPlaceholder: language.t("dialog.connections.baseUrlPlaceholder"),
-    tokenPlaceholder: language.t("dialog.connections.tokenPlaceholder"),
-    usernamePlaceholder: language.t("dialog.connections.usernamePlaceholder"),
-    passwordPlaceholder: language.t("dialog.connections.passwordPlaceholder"),
-    projectIdPlaceholder: language.t("dialog.connections.projectIdPlaceholder"),
-    submit: language.t("dialog.connections.submit"),
-    disconnect: language.t("dialog.connections.disconnect"),
-    revalidate: language.t("dialog.connections.revalidate"),
-    staleHint: language.t("dialog.connections.stale"),
-    sessionOnlyHint: language.t("dialog.connections.sessionOnly"),
-    // raw {{slot}} templates — the ui card fills them with render-time values
-    offlineHint: language.t("dialog.connections.offline"),
-    driftHint: language.t("dialog.connections.drift"),
-  }))
 
   return (
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
@@ -485,14 +361,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
             {pluginCount() > 0 ? `${pluginCount()} ` : ""}
             {language.t("status.popover.tab.plugins")}
           </Tabs.Trigger>
-          <Tabs.Trigger value="vaults" data-slot="tab" class="text-12-regular">
-            {vaultsCount() > 0 ? `${vaultsCount()} ` : ""}
-            {language.t("status.popover.tab.vaults")}
-          </Tabs.Trigger>
-          <Tabs.Trigger value="connections" data-slot="tab" class="text-12-regular">
-            {connectionsCount() > 0 ? `${connectionsCount()} ` : ""}
-            {language.t("status.popover.tab.connections")}
-          </Tabs.Trigger>
+          <AmicodeStatusTabTriggers state={amicodeTabs} />
         </Tabs.List>
 
         {!settings.general.newLayoutDesigns() && (
@@ -672,37 +541,257 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
           </div>
         </Tabs.Content>
 
-        <Tabs.Content value="vaults">
-          <div class="flex flex-col px-2 pb-2">
-            <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
-              <AmicodeVaultsTab
-                view={vaultsView()}
-                emptyLabel={language.t("dialog.vaults.empty")}
-                retryLabel={language.t("dialog.vaults.retry")}
-                onRetry={refetchVaults}
-              />
-              <Button variant="secondary" class="mt-3 self-start h-8 px-3 py-1.5" onClick={onManageVaults}>
-                {language.t("status.popover.action.manageVaults")}
-              </Button>
-            </div>
-          </div>
-        </Tabs.Content>
+        <AmicodeStatusTabContents state={amicodeTabs} />
+      </Tabs>
+    </div>
+  )
+}
 
-        <Tabs.Content value="connections">
-          <div class="flex flex-col px-2 pb-2">
-            <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
-              <AmicodeConnectionsTab
-                view={connectionsView()}
-                labels={connectionsLabels()}
-                actionError={connectionsActionError()}
-                onSubmit={onSubmitCredential}
-                onDisconnect={onDisconnectConnection}
-                onRevalidate={onRevalidateConnection}
-                onRetry={refetchConnections}
-              />
-            </div>
+// amicode (#174): Vaults + Connections wiring, extracted so the session-header
+// popover and the home-chrome global popover are ONE wiring with two mounts.
+// Deliberately depends only on app-root contexts (useServer/useLanguage) — the
+// home route mounts neither the directory-scoped sync context nor the
+// composer's PromptProvider, so the manage-vaults action is injected.
+type AmicodeStatusTabsState = ReturnType<typeof createAmicodeStatusTabs>
+
+function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVaults: () => void }) {
+  const server = useServer()
+  const language = useLanguage()
+
+  // amicode: Vaults tab — fetched per-active-server when the popover opens
+  // (source flips truthy on open / server switch → refetch; closed keeps the
+  // last value, stale-while-revalidate).
+  const [vaultsRaw, { refetch: refetchVaults }] = createResource(
+    () => (opts.shown() && server.current ? ServerConnection.key(server.current) : undefined),
+    async () => {
+      const conn = server.current
+      if (!conn) return undefined
+      const res = await fetch(new URL("/amicode/vaults", conn.http.url), { headers: amicodeHeaders(conn) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return (await res.json()) as unknown
+    },
+  )
+  const vaultsView = createMemo<VaultsView | undefined>(() => {
+    if (vaultsRaw.error) return { ok: false, mounts: [], error: language.t("dialog.vaults.fetchFailed") }
+    const raw = vaultsRaw()
+    if (raw === undefined) return undefined
+    return parseVaultsResponse(raw)
+  })
+  const vaultsCount = () => {
+    const view = vaultsView()
+    return view?.ok ? view.mounts.length : 0
+  }
+
+  // amicode: Connections tab (#166) — same per-active-server fetch idiom as
+  // vaults above. Mutations are ONE round trip (#165 contract): the overlay
+  // renders "validating" while the POST runs, then the terminal connection
+  // from the SAME response replaces it. No polling loop.
+  const [connectionsRaw, { refetch: refetchConnections }] = createResource(
+    () => (opts.shown() && server.current ? ServerConnection.key(server.current) : undefined),
+    async () => {
+      const conn = server.current
+      if (!conn) return undefined
+      const res = await fetch(new URL("/amicode/connections", conn.http.url), { headers: amicodeHeaders(conn) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return (await res.json()) as unknown
+    },
+  )
+  const [connectionsOverlay, setConnectionsOverlay] = createSignal<ConnectionOverlay>({})
+  const [connectionsActionError, setConnectionsActionError] = createSignal<string | undefined>()
+  createEffect(() => {
+    connectionsRaw.state // a fresh GET supersedes any leftover action overlay
+    setConnectionsOverlay({})
+    setConnectionsActionError(undefined)
+  })
+  const connectionsView = createMemo<ConnectionsView | undefined>(() => {
+    const base = (() => {
+      if (connectionsRaw.error)
+        return { ok: false, connections: [], error: language.t("dialog.connections.fetchFailed") } as ConnectionsView
+      const raw = connectionsRaw()
+      if (raw === undefined) return undefined
+      return parseConnectionsResponse(raw)
+    })()
+    return applyConnectionOverlay(base, connectionsOverlay())
+  })
+  const connectionsCount = () => {
+    const view = connectionsView()
+    return view?.ok ? view.connections.filter((conn) => conn.state === "connected").length : 0
+  }
+  const runConnectionAction = async (id: string, path: string, body: unknown): Promise<ConnectionActionView> => {
+    setConnectionsActionError(undefined)
+    setConnectionsOverlay({ validating: id })
+    const result = await (async (): Promise<ConnectionActionView> => {
+      const conn = server.current
+      if (!conn) return { ok: false, error: language.t("dialog.connections.fetchFailed") }
+      try {
+        const res = await fetch(new URL(path, conn.http.url), {
+          method: "POST",
+          headers: { ...amicodeHeaders(conn), "content-type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return parseConnectionActionResponse((await res.json()) as unknown)
+      } catch {
+        return { ok: false, error: language.t("dialog.connections.fetchFailed") }
+      }
+    })()
+    if (result.ok && result.connection) {
+      setConnectionsOverlay({ terminal: result.connection })
+    } else {
+      setConnectionsOverlay({})
+      setConnectionsActionError(result.error ?? language.t("dialog.connections.fetchFailed"))
+    }
+    return result
+  }
+  const onSubmitCredential = (payload: CredentialSubmitPayload) =>
+    runConnectionAction(payload.id, "/amicode/connections/credential", payload)
+  const onDisconnectConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
+  const onRevalidateConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/revalidate", { id })
+  const connectionsLabels = createMemo(() => ({
+    empty: language.t("dialog.connections.empty"),
+    retry: language.t("dialog.connections.retry"),
+    states: {
+      connected: language.t("dialog.connections.state.connected"),
+      "needs-key": language.t("dialog.connections.state.needsKey"),
+      invalid: language.t("dialog.connections.state.invalid"),
+      expired: language.t("dialog.connections.state.expired"),
+      unreachable: language.t("dialog.connections.state.unreachable"),
+      unentitled: language.t("dialog.connections.state.unentitled"),
+      validating: language.t("dialog.connections.state.validating"),
+      unknown: language.t("dialog.connections.state.unknown"),
+    },
+    baseUrlPlaceholder: language.t("dialog.connections.baseUrlPlaceholder"),
+    tokenPlaceholder: language.t("dialog.connections.tokenPlaceholder"),
+    usernamePlaceholder: language.t("dialog.connections.usernamePlaceholder"),
+    passwordPlaceholder: language.t("dialog.connections.passwordPlaceholder"),
+    projectIdPlaceholder: language.t("dialog.connections.projectIdPlaceholder"),
+    submit: language.t("dialog.connections.submit"),
+    disconnect: language.t("dialog.connections.disconnect"),
+    revalidate: language.t("dialog.connections.revalidate"),
+    staleHint: language.t("dialog.connections.stale"),
+    sessionOnlyHint: language.t("dialog.connections.sessionOnly"),
+    // raw {{slot}} templates — the ui card fills them with render-time values
+    offlineHint: language.t("dialog.connections.offline"),
+    driftHint: language.t("dialog.connections.drift"),
+  }))
+
+  return {
+    vaultsView,
+    vaultsCount,
+    refetchVaults,
+    onManageVaults: opts.onManageVaults,
+    connectionsView,
+    connectionsCount,
+    connectionsLabels,
+    connectionsActionError,
+    refetchConnections,
+    onSubmitCredential,
+    onDisconnectConnection,
+    onRevalidateConnection,
+  }
+}
+
+const amicodeHeaders = (conn: ServerConnection.Any) => {
+  const headers: Record<string, string> = {}
+  if (conn.http.password)
+    headers.Authorization = `Basic ${authTokenFromCredentials({
+      username: conn.http.username,
+      password: conn.http.password,
+    })}`
+  return headers
+}
+
+// The two shared tab triggers/contents — rendered inside each mount's own
+// <Tabs> so Kobalte's tabs context resolves normally.
+function AmicodeStatusTabTriggers(props: { state: AmicodeStatusTabsState }) {
+  const language = useLanguage()
+  return (
+    <>
+      <Tabs.Trigger value="vaults" data-slot="tab" class="text-12-regular">
+        {props.state.vaultsCount() > 0 ? `${props.state.vaultsCount()} ` : ""}
+        {language.t("status.popover.tab.vaults")}
+      </Tabs.Trigger>
+      <Tabs.Trigger value="connections" data-slot="tab" class="text-12-regular">
+        {props.state.connectionsCount() > 0 ? `${props.state.connectionsCount()} ` : ""}
+        {language.t("status.popover.tab.connections")}
+      </Tabs.Trigger>
+    </>
+  )
+}
+
+function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState }) {
+  const language = useLanguage()
+  return (
+    <>
+      <Tabs.Content value="vaults">
+        <div class="flex flex-col px-2 pb-2">
+          <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+            <AmicodeVaultsTab
+              view={props.state.vaultsView()}
+              emptyLabel={language.t("dialog.vaults.empty")}
+              retryLabel={language.t("dialog.vaults.retry")}
+              onRetry={props.state.refetchVaults}
+            />
+            <Button variant="secondary" class="mt-3 self-start h-8 px-3 py-1.5" onClick={props.state.onManageVaults}>
+              {language.t("status.popover.action.manageVaults")}
+            </Button>
           </div>
-        </Tabs.Content>
+        </div>
+      </Tabs.Content>
+
+      <Tabs.Content value="connections">
+        <div class="flex flex-col px-2 pb-2">
+          <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+            <AmicodeConnectionsTab
+              view={props.state.connectionsView()}
+              labels={props.state.connectionsLabels()}
+              actionError={props.state.connectionsActionError()}
+              onSubmit={props.state.onSubmitCredential}
+              onDisconnect={props.state.onDisconnectConnection}
+              onRevalidate={props.state.onRevalidateConnection}
+              onRetry={props.state.refetchConnections}
+            />
+          </div>
+        </div>
+      </Tabs.Content>
+    </>
+  )
+}
+
+// amicode (#174): the GLOBAL status surface — mounted from the home chrome's
+// Connections entry, where no session (and no directory-scoped sync context)
+// exists. Hosts only the global tabs (vaults + connections; mcp/lsp/plugins
+// are per-directory) and pre-selects Connections, since that is the entry's
+// label. Manage-vaults is injected: home starts a fresh draft session with
+// the manage prompt instead of writing into an open composer.
+export function StatusPopoverGlobalBody(props: {
+  shown: Accessor<boolean>
+  onClose?: () => void
+  onManageVaults: () => void
+}) {
+  const language = useLanguage()
+  const amicodeTabs = createAmicodeStatusTabs({
+    shown: props.shown,
+    onManageVaults: () => {
+      props.onClose?.()
+      props.onManageVaults()
+    },
+  })
+
+  return (
+    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+      <Tabs
+        aria-label={language.t("status.popover.ariaLabel")}
+        class="tabs bg-background-strong rounded-xl overflow-hidden"
+        data-component="tabs"
+        data-active={GLOBAL_STATUS_DEFAULT_TAB}
+        defaultValue={GLOBAL_STATUS_DEFAULT_TAB}
+        variant="alt"
+      >
+        <Tabs.List data-slot="tablist" class="bg-transparent border-b-0 px-4 pt-2 pb-0 gap-4 h-10">
+          <AmicodeStatusTabTriggers state={amicodeTabs} />
+        </Tabs.List>
+        <AmicodeStatusTabContents state={amicodeTabs} />
       </Tabs>
     </div>
   )
