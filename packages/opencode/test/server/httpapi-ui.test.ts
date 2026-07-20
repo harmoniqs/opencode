@@ -502,6 +502,41 @@ describe("HttpApi UI fallback", () => {
     }),
   )
 
+  // Regression (amicode #159 test drive, part 3): the amico brain is an
+  // iframe DOCUMENT request (/brain.html, from the session timeline's
+  // brain-strip) with one external script (/brain.js) — the same
+  // cannot-carry-a-credential class as the widget frame and /assets/*
+  // fetches. With a password armed both 401'd, leaving the "amico is
+  // thinking" strip a blank frame. Both are static shipped app content;
+  // live session data rides the postMessage bridge after load.
+  it.live("serves the brain document and script without auth even when a server password is set", () =>
+    Effect.gen(function* () {
+      for (const path of ["/brain.html?mode=live&colorScheme=dark", "/brain.js"]) {
+        const response = yield* uiApp({
+          password: "secret",
+          username: "opencode",
+          disableEmbeddedWebUi: true,
+          client: httpClient(new Response("ok")),
+        }).request(path)
+        expect(response.status).not.toBe(401)
+      }
+
+      // GET-only and path-exact: mutations and lookalike paths stay authed.
+      const post = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/brain.html", { method: "POST" })
+      expect(post.status).toBe(401)
+      const lookalike = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/brain.html.bak")
+      expect(lookalike.status).toBe(401)
+    }),
+  )
+
   it.live("allows web UI preflight without auth", () =>
     Effect.gen(function* () {
       const response = yield* app({ password: "secret", username: "opencode" }).request("/", {
