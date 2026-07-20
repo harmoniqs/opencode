@@ -6,7 +6,7 @@
 // AMICODE_CONNECTIONS_FILE), so the test seam and the deploy seam are one
 // mechanism (the #162 idiom).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { readCredential, writeCredential } from "@/server/amicode/credentials"
@@ -348,6 +348,69 @@ describe("HP flip on connect — artifacts in the ops dir (167 AC1, AC3)", () =>
     expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
     expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
     expect(JSON.parse(modeBytes)).toEqual({ mode: "hp", status: "switching" })
+  })
+})
+
+describe("HP flip on connect — only the valid outcome flips; repeats stay idempotent (167 AC4)", () => {
+  test("invalid / unreachable / malformed / non-loopback → NO flip artifacts of any kind", async () => {
+    const boom: FetchImpl = async () => {
+      throw new Error("ECONNREFUSED")
+    }
+    const attempts: [string, FetchImpl][] = [
+      [validSubmit, respond(401)], // invalid
+      [validSubmit, respond(500)], // unreachable (server trouble)
+      [validSubmit, boom], // unreachable (network)
+      ["not json {{{", respond(200)], // malformed body — no probe, no save
+    ]
+    for (const [body, fetchImpl] of attempts) await submitCredentialResponse(body, { fetchImpl })
+    setBindHostname("0.0.0.0") // refused mutations must not flip either
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    setBindHostname(undefined)
+    expect(existsSync(entitlementsFile())).toBe(false)
+    expect(existsSync(solverModeFile())).toBe(false)
+  })
+
+  test("a failed revalidation never revokes: pre-granted entitlements survive an invalid outcome untouched", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }) // granted + switching
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(401) }) // key went bad
+    await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(401) })
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
+  })
+
+  test("disconnect leaves both artifacts alone — the flip is one-way; the user's toggle owns reverting", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    disconnectResponse(JSON.stringify({ id: "company-compute" }))
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+  })
+
+  test("repeat valid save while already hp+granted: no duplicate codes, no fresh switching write", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8")).status).toBe("switching")
+    // the extension watcher settles the request: ready at hp (writeSolverModeReady shape)
+    writeFileSync(
+      solverModeFile(),
+      JSON.stringify({ mode: "hp", status: "ready", switched_at: new Date().toISOString() }),
+    )
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const again = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }))
+    expect(again.ok).toBe(true)
+    expect(again.connection.state).toBe("connected")
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes) // ONE issimo, byte-identical
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8")).status).toBe("ready") // watcher NOT poked again
+  })
+
+  test("hp already active but the grant is missing → the switch IS re-requested (re-prep must apply the entitlement)", async () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(solverModeFile(), JSON.stringify({ mode: "hp", status: "ready" }))
+    writeFileSync(entitlementsFile(), 'codes = ["pasqal-hackathon-2026"]\n') // issimo absent
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["pasqal-hackathon-2026", "issimo"]\n')
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
   })
 })
 

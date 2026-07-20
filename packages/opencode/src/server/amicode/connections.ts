@@ -330,11 +330,30 @@ function grantIssimo(file: string): { alreadyGranted: boolean } {
   return { alreadyGranted: false }
 }
 
+/** Tolerant {mode,status} read — the extension's readSolverModeState
+ *  semantics: anything absent/off-shape collapses to piccolo/ready. */
+function readSolverMode(file: string): { mode: "piccolo" | "hp"; status: "ready" | "switching" } {
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { mode?: unknown; status?: unknown }
+    return {
+      mode: parsed.mode === "hp" ? "hp" : "piccolo",
+      status: parsed.status === "switching" ? "switching" : "ready",
+    }
+  } catch {
+    return { mode: "piccolo", status: "ready" }
+  }
+}
+
 /** After a VALID save: grant the entitlement, then request the hp switch the
- *  watcher re-preps from. */
+ *  watcher re-preps from — but ONLY when a re-prep would change anything (the
+ *  mode isn't hp yet, or the last prep ran without the grant). A repeat save
+ *  on an already-flipped setup writes nothing, so the watcher — whose one
+ *  re-prep includes restarting THIS server — is never poked for a no-op. */
 function requestHpFlip(): void {
-  grantIssimo(entitlementsFile())
-  atomicWriteFileSync(solverModeFile(), JSON.stringify({ mode: "hp", status: "switching" }))
+  const { alreadyGranted } = grantIssimo(entitlementsFile())
+  const modeFile = solverModeFile()
+  if (alreadyGranted && readSolverMode(modeFile).mode === "hp") return
+  atomicWriteFileSync(modeFile, JSON.stringify({ mode: "hp", status: "switching" }))
 }
 
 // --- mutation bodies (POST routes). One shape per route family, sibling
