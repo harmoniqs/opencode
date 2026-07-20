@@ -29,6 +29,9 @@ export type ConnectionView = {
   /** what the wire actually said — shown verbatim when state is "unknown" */
   rawState: string
   identity?: string
+  /** the submitter this key NOW answers as when it differs from the stored
+   *  identity record (170 AC4) — presence IS the drift signal */
+  identityDrift?: string
   /** server-offered prefill for the key form (forward-compatible) */
   baseUrl?: string
   /** device display names (Pasqal, 169 AC2) — non-secret status metadata */
@@ -93,6 +96,7 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     state: WIRE_STATES.has(rawState) ? (rawState as ConnectionWireState) : "unknown",
     rawState,
     identity: str(entry.identity),
+    identityDrift: str(entry.identity_drift),
     baseUrl: str(entry.base_url),
     devices: parseDevices(entry.devices),
     sessionOnly: entry.session_only === true ? true : undefined,
@@ -144,6 +148,8 @@ export type ConnectionCardModel = {
   showSessionOnly: boolean
   /** offline last-verified line on a connected card (170 AC3) */
   showOffline: boolean
+  /** submitter-drift diff on a connected card (170 AC4) */
+  showDrift: boolean
   /** unknown states show the wire's raw word beside the fallback copy */
   showRawState: boolean
 }
@@ -158,6 +164,7 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showDevices: false,
     showSessionOnly: false,
     showOffline: false,
+    showDrift: false,
     showRawState: false,
   }
   switch (view.state) {
@@ -173,6 +180,7 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showDevices: (view.devices?.length ?? 0) > 0,
         showSessionOnly: view.sessionOnly === true,
         showOffline: view.offline === true,
+        showDrift: view.identityDrift !== undefined,
       }
     case "needs-key":
       return { ...base, tone: "neutral", showForm: true, showActions: false }
@@ -218,6 +226,12 @@ export function fillLabelTemplate(template: string, values: Record<string, strin
  *  <identity>" semantics; a missing identity renders an em dash. */
 export function offlineCopy(view: ConnectionView, template: string): string {
   return fillLabelTemplate(template, { at: view.validatedAt, identity: view.identity ?? "—" })
+}
+
+/** 170 AC4: the drift diff — "answered as <identityDrift>, was <identity>";
+ *  the stored record renders unaltered beside what the key answers as now. */
+export function driftCopy(view: ConnectionView, template: string): string {
+  return fillLabelTemplate(template, { answered: view.identityDrift ?? "—", stored: view.identity ?? "—" })
 }
 
 export function parseConnectionActionResponse(raw: unknown): ConnectionActionView {

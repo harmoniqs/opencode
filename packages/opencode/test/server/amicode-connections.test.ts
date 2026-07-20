@@ -111,25 +111,27 @@ const cloudCredential = { base_url: "https://solves.example.co", token: "tok-sto
 
 describe("probe classification (AC2)", () => {
   test("authorizer-rejection class: 401 → invalid", async () => {
-    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(401))).toBe("invalid")
+    expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(401))).outcome).toBe("invalid")
   })
 
   test("auth-passed classes → valid: 403, 404, and 2xx all mean the key got past the authorizer", async () => {
     // Parent contract: the authorizer rejects bad keys BEFORE the handler; a
     // good key reaches the handler's not-found/forbidden for the fake task.
     for (const status of [200, 204, 403, 404]) {
-      expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).toBe("valid")
+      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe("valid")
     }
   })
 
   test("server-error / network classes → unreachable: 5xx, odd 4xx, thrown fetch", async () => {
     for (const status of [400, 429, 500, 502, 503]) {
-      expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).toBe("unreachable")
+      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe(
+        "unreachable",
+      )
     }
     const network: FetchImpl = async () => {
       throw new Error("ECONNREFUSED")
     }
-    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", network)).toBe("unreachable")
+    expect((await probeCompanyCompute("https://solves.example.co", "tok-1", network)).outcome).toBe("unreachable")
   })
 
   test("probe hits the fake-task status route; the token rides ONLY the Authorization header, never the URL", async () => {
@@ -223,6 +225,7 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
           state: "connected",
           validated_at: new Date().toISOString(),
           identity: "kate",
+          identity_drift: { nested: "POISON-drift" }, // whitelisted field, but only a plain string survives
           token: "POISON-entry",
           password: "POISON-password",
           authorization: "Bearer POISON-header",
@@ -251,6 +254,7 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
       "id",
       "state",
       "identity",
+      "identity_drift",
       "entitlements",
       "expires_at",
       "devices",
@@ -1318,5 +1322,112 @@ describe("offline boot — last-verified rendering, never invalid (170 AC3)", ()
     const gone = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
     expect(gone.state).toBe("needs-key")
     expect(gone.offline).toBeUndefined()
+  })
+})
+
+describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra#185)", () => {
+  // The stubbed identity endpoint: the SAME probe response, now carrying a
+  // JSON body with a submitter — exactly what aws-infra#185 will serve live.
+  const answering =
+    (submitter: unknown, status = 200): FetchImpl =>
+    async () => ({ status, json: async () => ({ submitter }) })
+  const revalidate = (fetchImpl: FetchImpl) =>
+    revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl })
+
+  test("probe surfaces the submitter echo when the response carries one; tolerant to everything else", async () => {
+    const url = "https://solves.example.co"
+    expect(await probeCompanyCompute(url, "tok", answering("team-alpha"))).toEqual({
+      outcome: "valid",
+      submitter: "team-alpha",
+    })
+    // no json seam (services predating #185), a broken body, an off-shape
+    // body, a non-string or empty submitter — all still a plain valid
+    expect(await probeCompanyCompute(url, "tok", respond(404))).toEqual({ outcome: "valid" })
+    const broken: FetchImpl = async () => ({
+      status: 200,
+      json: async () => {
+        throw new Error("no body")
+      },
+    })
+    expect(await probeCompanyCompute(url, "tok", broken)).toEqual({ outcome: "valid" })
+    const offShape: FetchImpl = async () => ({ status: 200, json: async () => ["not-an-object"] })
+    expect(await probeCompanyCompute(url, "tok", offShape)).toEqual({ outcome: "valid" })
+    expect(await probeCompanyCompute(url, "tok", answering(42))).toEqual({ outcome: "valid" })
+    expect(await probeCompanyCompute(url, "tok", answering(""))).toEqual({ outcome: "valid" })
+    // a rejected key reads NO identity — the body of a 401 is untrusted
+    expect(await probeCompanyCompute(url, "tok", answering("mallory", 401))).toEqual({ outcome: "invalid" })
+  })
+
+  test("submit with an identity echo → 'Connected as <submitter>': identity in the response AND the cache", async () => {
+    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("team-alpha")
+    expect(parsed.connection.identity_drift).toBeUndefined()
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.identity).toBe("team-alpha")
+    expect(entry.identity_drift).toBeUndefined()
+  })
+
+  test("a revalidation answering a DIFFERENT submitter → explicit diff; the STORED identity is the record (AC4)", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const drifted = JSON.parse(await revalidate(answering("team-beta")))
+    expect(drifted.connection.state).toBe("connected")
+    expect(drifted.connection.identity).toBe("team-alpha") // the record — never silently overwritten
+    expect(drifted.connection.identity_drift).toBe("team-beta") // what the key answers as NOW
+    // the record survives on disk exactly as stored; the drift rides beside it
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))["company-compute"]
+    expect(cache.identity).toBe("team-alpha")
+    expect(cache.identity_drift).toBe("team-beta")
+    // and the credential itself was never touched
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://solves.example.co", token: "tok-good" })
+  })
+
+  test("drift lands via the BACKGROUND revalidation too — the incident's silent path now surfaces", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))
+    cache["company-compute"].validated_at = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+    writeFileSync(connectionsFile(), JSON.stringify(cache))
+    statusResponse({ fetchImpl: answering("team-beta") }) // stale GET kicks the refresh
+    await backgroundRevalidationsSettled()
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.state).toBe("connected")
+    expect(entry.stale).toBe(false)
+    expect(entry.identity).toBe("team-alpha")
+    expect(entry.identity_drift).toBe("team-beta")
+  })
+
+  test("agreement clears the drift; an echo-less revalidation leaves record AND drift standing", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await revalidate(answering("team-beta")) // drift recorded
+    const silent = JSON.parse(await revalidate(respond(200))) // no echo: nothing to reconcile with
+    expect(silent.connection.identity).toBe("team-alpha")
+    expect(silent.connection.identity_drift).toBe("team-beta")
+    const agreed = JSON.parse(await revalidate(answering("team-alpha"))) // answers as the record again
+    expect(agreed.connection.identity).toBe("team-alpha")
+    expect(agreed.connection.identity_drift).toBeUndefined()
+  })
+
+  test("re-submitting credentials is the human reconciliation: the record RESETS and the drift clears", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await revalidate(answering("team-beta"))
+    const resubmitted = JSON.parse(
+      await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta", 404) }),
+    )
+    expect(resubmitted.connection.state).toBe("connected")
+    expect(resubmitted.connection.identity).toBe("team-beta")
+    expect(resubmitted.connection.identity_drift).toBeUndefined()
+  })
+
+  test("POISON: a poisoned identity echo smuggles nothing — only the submitter string is read", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const poisoned: FetchImpl = async () => ({
+      status: 200,
+      json: async () => ({ submitter: "team-beta", token: "POISON-echo", password: "POISON-echo-password" }),
+    })
+    const raw = await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: poisoned })
+    expect(raw).not.toContain("POISON")
+    expect(JSON.parse(raw).connection.identity_drift).toBe("team-beta")
+    expect(readFileSync(connectionsFile(), "utf8")).not.toContain("POISON")
   })
 })

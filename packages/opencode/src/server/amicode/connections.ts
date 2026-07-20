@@ -44,6 +44,12 @@ export interface ConnectionStatus {
   id: ConnectionType
   state: ConnectionState
   identity?: string
+  /** 170 AC4 (the 2026-07-19 incident canary): the submitter this credential
+   *  NOW answers as, when a revalidation echo disagrees with the stored
+   *  `identity`. The stored identity is the immutable record; this field is
+   *  the diff — presence IS the drift signal. Reconciliation is a human act
+   *  (re-submitting the credential resets the record). */
+  identity_drift?: string
   entitlements?: string[]
   expires_at?: string
   devices?: ConnectionDevice[]
@@ -146,6 +152,8 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   if (state && isKnownState(state)) out.state = state
   const identity = str(d.identity)
   if (identity) out.identity = identity
+  const drift = str(d.identity_drift)
+  if (drift) out.identity_drift = drift
   if (Array.isArray(d.entitlements)) {
     const entitlements = d.entitlements.filter((e): e is string => typeof e === "string" && e !== "")
     if (entitlements.length > 0) out.entitlements = entitlements
@@ -212,6 +220,7 @@ function renderStatus(
   }
   if (state !== "needs-key") {
     if (persisted.identity) out.identity = persisted.identity
+    if (persisted.identity_drift) out.identity_drift = persisted.identity_drift
     if (persisted.entitlements) out.entitlements = persisted.entitlements
     if (persisted.expires_at) out.expires_at = persisted.expires_at
     if (persisted.devices) out.devices = persisted.devices
@@ -344,18 +353,36 @@ function keptMetadata(existing: Partial<ConnectionStatus>): Partial<ConnectionSt
   }
 }
 
+/** Reconcile a revalidation's identity echo against the stored record (170
+ *  AC4, the 2026-07-19 incident canary). The stored identity is IMMUTABLE
+ *  here: a disagreeing echo lands as identity_drift beside it — never over
+ *  it. No echo → record and any prior drift stand; a matching echo clears
+ *  the drift; a first-ever echo establishes the record. */
+function identityRecord(existing: Partial<ConnectionStatus>, submitter: string | undefined): Partial<ConnectionStatus> {
+  if (!submitter) {
+    return {
+      ...(existing.identity ? { identity: existing.identity } : {}),
+      ...(existing.identity_drift ? { identity_drift: existing.identity_drift } : {}),
+    }
+  }
+  if (!existing.identity) return { identity: submitter }
+  if (existing.identity === submitter) return { identity: existing.identity }
+  return { identity: existing.identity, identity_drift: submitter }
+}
+
 /** Company-compute background refresh: probe from the STORED credential.
- *  valid → connected with a fresh validated_at; invalid → the authorizer
- *  truly rejected the key, render it; unreachable → the connected claim and
- *  its validated_at STAND (170 AC3) — offline trouble is never a verdict on
- *  the credential, and the credential is never touched. */
+ *  valid → connected with a fresh validated_at (identity echo reconciled per
+ *  identityRecord); invalid → the authorizer truly rejected the key, render
+ *  it; unreachable → the connected claim and its validated_at STAND (170
+ *  AC3) — offline trouble is never a verdict on the credential, and the
+ *  credential is never touched. */
 async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl }): Promise<void> {
   const id: ConnectionType = "company-compute"
   const credential = readCredential(id)
   if (!credential) return
-  const outcome = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
+  const probe = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
   const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
-  if (outcome === "unreachable") {
+  if (probe.outcome === "unreachable") {
     // offline (170 AC3): the connected claim and its last-verified timestamp
     // STAND — only the presentation marker lands, and a later successful
     // refresh (whose write carries no offline key) clears it
@@ -364,7 +391,12 @@ async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl 
   }
   persistStatus(id, {
     ...keptMetadata(existing),
-    state: outcome === "valid" ? "connected" : "invalid",
+    ...(probe.outcome === "valid"
+      ? identityRecord(existing, probe.submitter)
+      : existing.identity_drift // a rejection is no reconciliation: a recorded drift stands
+        ? { identity_drift: existing.identity_drift }
+        : {}),
+    state: probe.outcome === "valid" ? "connected" : "invalid",
     validated_at: new Date().toISOString(),
   })
 }
@@ -381,14 +413,37 @@ function backgroundRevalidatePasqal(): void {
 
 export type ProbeOutcome = "valid" | "invalid" | "unreachable"
 
+export interface ProbeResult {
+  outcome: ProbeOutcome
+  /** identity echo (170 AC4, live endpoint aws-infra#185): present when a
+   *  VALID probe's response body carries a string `submitter` — absent for
+   *  services predating the echo, non-JSON bodies, or rejected keys. */
+  submitter?: string
+}
+
 /** Injectable fetch seam — tests stub this; production uses global fetch.
- *  Only the status code matters to classification. */
+ *  The status code drives classification; `json` (optional, tolerated
+ *  missing) is the identity-echo seam. */
 export type FetchImpl = (
   url: string,
   init: { method: "GET"; headers: Record<string, string> },
-) => Promise<{ status: number }>
+) => Promise<{ status: number; json?: () => Promise<unknown> }>
 
 const PROBE_PATH = "/solves/__validate__/status"
+
+/** The identity echo: a VALID probe response MAY carry {submitter: string}
+ *  (aws-infra#185). Anything else — no json seam, unparseable body, off-shape
+ *  value — is simply no echo; never a throw, and nothing but the one string
+ *  field is ever read. */
+async function readSubmitterEcho(response: { json?: () => Promise<unknown> }): Promise<string | undefined> {
+  try {
+    const raw = await response.json?.()
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+    return str((raw as Record<string, unknown>).submitter)
+  } catch {
+    return undefined
+  }
+}
 
 /** Classify a Company Compute credential against the fake-task status route
  *  (parent #159 probe contract: the authorizer rejects bad keys before the
@@ -401,17 +456,20 @@ export async function probeCompanyCompute(
   baseUrl: string,
   token: string,
   fetchImpl: FetchImpl = fetch,
-): Promise<ProbeOutcome> {
+): Promise<ProbeResult> {
   const url = baseUrl.replace(/\/+$/, "") + PROBE_PATH
-  let status: number
+  let response: { status: number; json?: () => Promise<unknown> }
   try {
-    status = (await fetchImpl(url, { method: "GET", headers: { authorization: `Bearer ${token}` } })).status
+    response = await fetchImpl(url, { method: "GET", headers: { authorization: `Bearer ${token}` } })
   } catch {
-    return "unreachable"
+    return { outcome: "unreachable" }
   }
-  if (status === 401) return "invalid"
-  if ((status >= 200 && status < 300) || status === 403 || status === 404) return "valid"
-  return "unreachable"
+  if (response.status === 401) return { outcome: "invalid" }
+  if ((response.status >= 200 && response.status < 300) || response.status === 403 || response.status === 404) {
+    const submitter = await readSubmitterEcho(response)
+    return { outcome: "valid", ...(submitter ? { submitter } : {}) }
+  }
+  return { outcome: "unreachable" }
 }
 
 // --- Pasqal validator spawn (amicode#169 / parent #159; #164 contract) ---
@@ -733,26 +791,29 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
 
   const id: ConnectionType = "company-compute"
   inflightOverlay.set(id, { state: "validating" })
-  let outcome: ProbeOutcome
+  let probe: ProbeResult
   try {
-    outcome = await probeCompanyCompute(base, token, deps.fetchImpl)
+    probe = await probeCompanyCompute(base, token, deps.fetchImpl)
   } finally {
     inflightOverlay.delete(id)
   }
   const validated_at = new Date().toISOString()
   let warning: string | undefined
-  if (outcome === "valid") {
+  if (probe.outcome === "valid") {
     try {
       writeCredential(id, { base_url: base, token })
     } catch {
       // value-free by contract: never echo what the encoder rejected
       return synthesizeConnection("write_failed", "credential could not be saved")
     }
-    persistStatus(id, { state: "connected", validated_at })
+    // submitting a credential is the human act that OWNS the identity record
+    // (170 AC4): the echo (if any) becomes the fresh record, any prior drift
+    // is reconciled away with the old entry
+    persistStatus(id, { state: "connected", validated_at, ...(probe.submitter ? { identity: probe.submitter } : {}) })
     warning = requestHpFlip() // #167: AFTER the save and ONLY on the valid outcome
   } else {
     // nothing written — an existing credential (if any) stays untouched
-    persistStatus(id, { state: outcome, validated_at })
+    persistStatus(id, { state: probe.outcome, validated_at })
   }
   return renderCurrent(id, warning)
 }
@@ -886,15 +947,27 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
     return renderCurrent(id)
   }
   inflightOverlay.set(id, { state: "validating" })
-  let outcome: ProbeOutcome
+  let probe: ProbeResult
   try {
-    outcome = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
+    probe = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
   } finally {
     inflightOverlay.delete(id)
   }
   // credential is kept on EVERY outcome — invalid signals re-entry, it does
-  // not destroy user data; only disconnect removes the file.
-  persistStatus(id, { state: outcome === "valid" ? "connected" : outcome, validated_at: new Date().toISOString() })
+  // not destroy user data; only disconnect removes the file. Metadata and the
+  // identity record survive the refresh; a disagreeing echo lands as an
+  // explicit drift beside the record, never over it (170 AC4).
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  persistStatus(id, {
+    ...keptMetadata(existing),
+    ...(probe.outcome === "valid"
+      ? identityRecord(existing, probe.submitter)
+      : existing.identity_drift // a failed probe reconciles nothing: a recorded drift stands
+        ? { identity_drift: existing.identity_drift }
+        : {}),
+    state: probe.outcome === "valid" ? "connected" : probe.outcome,
+    validated_at: new Date().toISOString(),
+  })
   return renderCurrent(id)
 }
 

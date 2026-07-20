@@ -4,6 +4,7 @@ import {
   cardModel,
   connectionFormKind,
   connectionTitle,
+  driftCopy,
   fillLabelTemplate,
   offlineCopy,
   parseConnectionActionResponse,
@@ -110,6 +111,26 @@ describe("parseConnectionsResponse", () => {
         error: null,
       })
       expect(view.connections[0].devices).toBeUndefined()
+    }
+  })
+
+  test("identity_drift parses to identityDrift; junk shapes leave it undefined (170 AC4)", () => {
+    const drifted = parseConnectionsResponse({
+      ok: true,
+      connections: [
+        { id: "company-compute", state: "connected", identity: "team-alpha", identity_drift: "team-beta", stale: false },
+      ],
+      error: null,
+    })
+    expect(drifted.connections[0].identity).toBe("team-alpha")
+    expect(drifted.connections[0].identityDrift).toBe("team-beta")
+    for (const identity_drift of [undefined, "", 42, { nested: "x" }, ["y"]]) {
+      const view = parseConnectionsResponse({
+        ok: true,
+        connections: [{ id: "company-compute", state: "connected", identity_drift, stale: false }],
+        error: null,
+      })
+      expect(view.connections[0].identityDrift).toBeUndefined()
     }
   })
 
@@ -369,6 +390,16 @@ describe("cardModel", () => {
     }
   })
 
+  test("a drifted identity surfaces the diff on a connected card — never without a drift (170 AC4)", () => {
+    const drifted = cardModel(viewFor("connected", { identity: "team-alpha", identityDrift: "team-beta" }))
+    expect(drifted.showDrift).toBe(true)
+    expect(drifted.showIdentity).toBe(true) // the record still renders beside the diff
+    expect(cardModel(viewFor("connected", { identity: "team-alpha" })).showDrift).toBe(false)
+    for (const state of ["needs-key", "invalid", "expired", "validating"] as const) {
+      expect(cardModel(viewFor(state, { identityDrift: "team-beta" })).showDrift).toBe(false)
+    }
+  })
+
   test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
     const model = cardModel(viewFor("validating"))
     expect(model.showForm).toBe(true)
@@ -425,6 +456,20 @@ describe("offlineCopy (170 AC3)", () => {
     expect(offlineCopy(view, "Offline — last verified {{at}} as {{identity}}")).toBe(
       "Offline — last verified 7/19/2026, 10:00 as —",
     )
+  })
+})
+
+describe("driftCopy (170 AC4)", () => {
+  test("renders the explicit diff — answered as X, was Y", () => {
+    const view = viewFor("connected", { identity: "team-alpha", identityDrift: "team-beta" })
+    expect(
+      driftCopy(view, "This key answered as {{answered}}, was {{stored}} — historical runs may stop authorizing"),
+    ).toBe("This key answered as team-beta, was team-alpha — historical runs may stop authorizing")
+  })
+
+  test("holes render em dashes rather than template residue", () => {
+    const view = viewFor("connected", { identityDrift: "team-beta" })
+    expect(driftCopy(view, "answered as {{answered}}, was {{stored}}")).toBe("answered as team-beta, was —")
   })
 })
 
