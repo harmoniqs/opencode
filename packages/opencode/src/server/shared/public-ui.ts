@@ -12,6 +12,13 @@ export const PUBLIC_UI_PATHS = new Set<string>([
   // bridge after boot), so it is public-shell class within the same-user
   // trust model. The widget registry route (/amicode/widgets) stays authed.
   "/amicode/widget-frame",
+  // The amico brain graph is the same class: brain-strip.tsx loads /brain.html
+  // in an iframe (with /brain.js) that cannot carry ?auth_token=, so with a
+  // password set the frame 401s and paints opaque white. Both are static
+  // public-shell assets (no secrets; session touches arrive via the same
+  // postMessage bridge as widgets). Sibling to the widget-frame exemption.
+  "/brain.html",
+  "/brain.js",
 ])
 
 // The app shell's fingerprinted bundles live under /assets/. They are plain

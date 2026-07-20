@@ -502,6 +502,31 @@ describe("HttpApi UI fallback", () => {
     }),
   )
 
+  // Regression (amicode): the amico brain graph loads /brain.html (+ /brain.js)
+  // in an iframe that cannot carry ?auth_token= — same class as widget-frame —
+  // so with a password set both 401'd and the frame painted opaque white. They
+  // are static public-shell assets; session touches arrive via the postMessage
+  // bridge. GET-only; other root paths stay authed.
+  it.live("serves the brain graph frame + script without auth even when a server password is set", () =>
+    Effect.gen(function* () {
+      for (const path of ["/brain.html?mode=live&colorScheme=dark", "/brain.js"]) {
+        const response = yield* uiApp({
+          password: "secret",
+          username: "opencode",
+          disableEmbeddedWebUi: true,
+          client: httpClient(new Response("ok")),
+        }).request(path)
+        expect(response.status).not.toBe(401)
+      }
+      const post = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/brain.html", { method: "POST" })
+      expect(post.status).toBe(401)
+    }),
+  )
+
   it.live("allows web UI preflight without auth", () =>
     Effect.gen(function* () {
       const response = yield* app({ password: "secret", username: "opencode" }).request("/", {
