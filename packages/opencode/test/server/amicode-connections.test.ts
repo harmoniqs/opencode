@@ -6,7 +6,7 @@
 // AMICODE_CONNECTIONS_FILE), so the test seam and the deploy seam are one
 // mechanism (the #162 idiom).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { readCredential, writeCredential } from "@/server/amicode/credentials"
@@ -864,5 +864,59 @@ describe("pasqal submit — null token → session-only connected (169 AC4)", ()
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("needs-key")
     expect(pasqalEntry(statusResponse()).state).toBe("needs-key")
+  })
+})
+
+describe("pasqal — password never at rest, whatever the outcome (169 AC3)", () => {
+  /** every byte of every file under the test's credential/ops tree */
+  const scanAllFiles = (root: string): string => {
+    if (!existsSync(root)) return ""
+    const chunks: string[] = []
+    for (const entry of readdirSync(root, { recursive: true }) as string[]) {
+      const full = path.join(root, String(entry))
+      if (!statSync(full).isFile()) continue
+      chunks.push(readFileSync(full, "latin1")) // raw bytes — encoding cannot hide the needle
+    }
+    return chunks.join("\n")
+  }
+
+  test("after the FULL flow including every failure class, an adversarial scan finds no password/username", async () => {
+    const flows: PasqalSpawn[] = [
+      scripted(0, validatorLine({ token: null, expires_at: null })).spawn, // session-only
+      scripted(2).spawn, // invalid credentials
+      scripted(3).spawn, // unreachable
+      scripted(4).spawn, // project-unauthorized
+      scripted(1).spawn, // config class
+      scripted(0, "garbage not json").spawn, // off-contract stdout
+      async () => {
+        throw new Error(`spawn ENOENT (${PASQAL.password})`) // a leaky error must not propagate
+      },
+      scripted(0, validatorLine()).spawn, // valid + token LAST: real artifacts stay on disk for the scan
+    ]
+    for (const pasqalSpawn of flows) {
+      const raw = await submitCredentialResponse(pasqalSubmit, { pasqalSpawn })
+      expect(raw).not.toContain(PASQAL.password) // no response ever echoes it either
+    }
+    await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }))
+    // the disk truth: token artifacts exist, the password is NOWHERE
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted")
+    const bytes = scanAllFiles(dir)
+    expect(bytes).toContain("tok-pasqal-minted") // the scan sees the real artifacts…
+    expect(bytes).not.toContain(PASQAL.password) // …but never the password
+    expect(bytes).not.toContain(PASQAL.username) // and never the username
+    // the in-memory stores a future response could render from are clean too
+    const stores = JSON.stringify([[...inflightOverlay.entries()], [...sessionOnlyOverlay.entries()]])
+    expect(stores).not.toContain(PASQAL.password)
+    expect(stores).not.toContain(PASQAL.username)
+  })
+
+  test("disconnect after the flow leaves a scrubbed tree — and still no secret anywhere", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    disconnectResponse(JSON.stringify({ id: "pasqal-cloud" }))
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    const bytes = scanAllFiles(dir)
+    expect(bytes).not.toContain(PASQAL.password)
+    expect(bytes).not.toContain(PASQAL.username)
+    expect(bytes).not.toContain("tok-pasqal-minted") // disconnect removed the token artifact too
   })
 })
