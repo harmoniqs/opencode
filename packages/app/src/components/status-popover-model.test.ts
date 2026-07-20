@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  GLOBAL_STATUS_DEFAULT_TAB,
-  GLOBAL_STATUS_TABS,
-  statusTriggerVisibility,
-} from "./status-popover-model"
+import { GLOBAL_STATUS_DEFAULT_TAB, GLOBAL_STATUS_TABS, statusTriggerVisibility } from "./status-popover-model"
 
 describe("statusTriggerVisibility", () => {
   // amicode#174 AC2: the status trigger is the only per-session entry to the

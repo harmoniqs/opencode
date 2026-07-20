@@ -25,6 +25,7 @@ import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
+import { statusTriggerVisibility } from "../status-popover-model"
 
 // AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
 // noise here ("No MCPs configured"). Hidden, not deleted — the trigger slot is
@@ -167,7 +168,14 @@ export function SessionHeader() {
   const search = createMemo(() => (isDesktopV2() ? settings.general.showSearch() : true))
   const tree = createMemo(() => (isDesktopV2() ? settings.general.showFileTree() : true))
   const term = createMemo(() => (isDesktopV2() ? settings.general.showTerminal() : true))
-  const status = createMemo(() => (isDesktopV2() ? settings.general.showStatus() : true))
+  // AMICODE (#174 AC2): unlike its siblings above, showStatus no longer gates
+  // the whole trigger — the popover now hosts the global Connections + Vaults
+  // tabs, and the setting defaults OFF, which orphaned them in every session.
+  // The settings row sells "server status", so that is all it scopes now: the
+  // health dot. Policy + rationale live in status-popover-model.ts (tested).
+  const statusVis = createMemo(() =>
+    statusTriggerVisibility({ desktopV2: isDesktopV2(), showStatus: settings.general.showStatus() }),
+  )
 
   const [exists, setExists] = createStore<Partial<Record<OpenApp, boolean>>>({
     finder: true,
@@ -242,7 +250,7 @@ export function SessionHeader() {
     messageAgentColor(params.id ? sync.data.message[params.id] : undefined, sync.data.agent),
   )
   const v2ActionsState = createMemo<SessionHeaderV2ActionsState>(() => ({
-    statusVisible: status(),
+    statusDotVisible: statusVis().healthDot,
     statusLabel: language.t("status.popover.trigger"),
     reviewLabel: language.t("command.review.toggle"),
     reviewKeybind: command.keybind("review.toggle"),
@@ -447,9 +455,9 @@ export function SessionHeader() {
                     </div>
                   </Show>
                   <div class="flex items-center gap-1">
-                    <Show when={!AMICODE_HIDE_STATUS_POPOVER && status()}>
+                    <Show when={!AMICODE_HIDE_STATUS_POPOVER && statusVis().trigger}>
                       <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
-                        <StatusPopover />
+                        <StatusPopover healthDot={statusVis().healthDot} />
                       </Tooltip>
                     </Show>
                     <Show when={term()}>
@@ -528,7 +536,9 @@ export function SessionHeader() {
 }
 
 type SessionHeaderV2ActionsState = {
-  statusVisible: boolean
+  /** AMICODE (#174 AC2): the trigger itself always renders in a session; the
+   *  show-status setting only drives this health-dot flag. */
+  statusDotVisible: boolean
   statusLabel: string
   reviewLabel: string
   reviewKeybind: string
@@ -539,9 +549,9 @@ type SessionHeaderV2ActionsState = {
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
   return (
     <div class="flex items-center gap-2">
-      <Show when={!AMICODE_HIDE_STATUS_POPOVER && props.state.statusVisible}>
+      <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
-          <StatusPopoverV2 />
+          <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
         </Tooltip>
       </Show>
       <TooltipKeybind title={props.state.reviewLabel} keybind={props.state.reviewKeybind}>

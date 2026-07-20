@@ -972,12 +972,14 @@
   }
   [data-slot="amicode-chrome-actions"]:not([data-open="true"]) { display: none; }
   [data-slot="amicode-chrome-hamburger"] { display: inline-flex; }
-  /* The two pill controls fill the column so it reads as a menu; each keeps its
-     own popover, which still anchors to its trigger. */
+  /* The pill controls fill the column so it reads as a menu; each keeps its
+     own popover, which still anchors to its trigger. The Connections pill
+     (#174) is the popover trigger itself — a direct child, no wrapper. */
   [data-slot="amicode-chrome-actions"] > [data-component="amicode-defaults-capsule"],
   [data-slot="amicode-chrome-actions"] > [data-slot="amicode-chrome-sessions"],
   [data-slot="amicode-chrome-actions"] [data-slot="amicode-defaults-face"],
-  [data-slot="amicode-chrome-actions"] [data-action="home-sessions-toggle-flyout"] { width: 100%; }
+  [data-slot="amicode-chrome-actions"] [data-action="home-sessions-toggle-flyout"],
+  [data-slot="amicode-chrome-actions"] > [data-action="home-connections-toggle"] { width: 100%; }
   /* The settings gear keeps its natural size, parked at the row start. */
   [data-slot="amicode-chrome-actions"] > [data-action="home-open-settings"] { align-self: flex-start; }
 }
