@@ -33,6 +33,12 @@ export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; e
 
 export const COMPANY_COMPUTE_ID = "company-compute"
 
+/** Product names are not translated; ids without one render verbatim. */
+export function connectionTitle(id: string): string {
+  if (id === COMPANY_COMPUTE_ID) return "Company Compute"
+  return id
+}
+
 const WIRE_STATES: ReadonlySet<string> = new Set(CONNECTION_WIRE_STATES)
 
 function str(value: unknown): string | undefined {

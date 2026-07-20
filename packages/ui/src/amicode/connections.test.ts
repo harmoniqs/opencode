@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   applyConnectionOverlay,
   cardModel,
+  connectionTitle,
   parseConnectionActionResponse,
   parseConnectionsResponse,
   stateCopy,
@@ -287,6 +288,14 @@ describe("cardModel", () => {
     for (const state of CARD_STATES.filter((s) => s !== "unknown")) {
       expect(cardModel(viewFor(state)).showRawState).toBe(false)
     }
+  })
+})
+
+describe("connectionTitle", () => {
+  test("company-compute reads as Company Compute; unknown ids render verbatim", () => {
+    expect(connectionTitle("company-compute")).toBe("Company Compute")
+    expect(connectionTitle("pasqal-cloud")).toBe("pasqal-cloud")
+    expect(connectionTitle("(unknown)")).toBe("(unknown)")
   })
 })
 
