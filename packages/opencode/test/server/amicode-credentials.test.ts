@@ -5,7 +5,7 @@
 // overrides the CLI honors (AMICO_CLOUD_FILE / AMICO_PASQAL_FILE) — the test
 // seam and the compatibility seam are one mechanism.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { chmodSync, mkdtempSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { cloudFile, readCredential, writeCredential, clearCredential } from "@/server/amicode/credentials"
@@ -106,5 +106,33 @@ describe("atomic 0600-at-birth writer (AC2)", () => {
     writeCredential("company-compute", { base_url: "https://new.co", token: "new-tok" })
     expect(mode(cloudFile())).toBe(0o600)
     expect(readCredential("company-compute")).toEqual({ base_url: "https://new.co", token: "new-tok" })
+  })
+})
+
+describe("write atomicity under injected failure (AC3)", () => {
+  test("failure at the rename step leaves the OLD file byte-for-byte intact, no tmp debris", () => {
+    writeCredential("company-compute", { base_url: "https://old.co", token: "old-tok" })
+    const before = readFileSync(cloudFile(), "utf8")
+    expect(() =>
+      writeCredential("company-compute", { base_url: "https://new.co", token: "new-tok" }, {
+        rename() {
+          throw new Error("injected: disk full at rename")
+        },
+      }),
+    ).toThrow("injected")
+    expect(readFileSync(cloudFile(), "utf8")).toBe(before) // old credential untouched
+    expect(readdirSync(dir)).toEqual(["cloud.json"]) // no partial tmp left behind
+  })
+
+  test("failure on a first-ever write leaves NO credential file at all", () => {
+    expect(() =>
+      writeCredential("company-compute", { base_url: "https://x.co", token: "tok" }, {
+        rename() {
+          throw new Error("injected: power loss")
+        },
+      }),
+    ).toThrow("injected")
+    expect(readdirSync(dir)).toEqual([]) // nothing partial, nothing corrupt
+    expect(readCredential("company-compute")).toBeUndefined()
   })
 })
