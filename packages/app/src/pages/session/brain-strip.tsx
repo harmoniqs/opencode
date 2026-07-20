@@ -86,17 +86,26 @@ function BrainFrame(props: { sessionID: string }) {
   )
   const expanded = () => !questionOpen() && (manual() ?? (busy() || linger()))
 
-  const scheme = document.documentElement.dataset.colorScheme === "light" ? "light" : "dark"
   let frame: HTMLIFrameElement | undefined
+  const currentScheme = () => (document.documentElement.dataset.colorScheme === "light" ? "light" : "dark")
   // live theme flips must reach the iframe: a color-scheme mismatch between
   // parent and child makes the browser paint the transparent frame opaque
-  // white — so forward every change (and once on ready for the initial state)
-  const currentScheme = () => (document.documentElement.dataset.colorScheme === "light" ? "light" : "dark")
-  const themeObserver = new MutationObserver(() => post({ kind: "theme", colorScheme: currentScheme() }))
+  // white. Inside the VS Code webview the boot theme arrives asynchronously
+  // (chat_panel seeds it via ?colorScheme= → app preload → data-color-scheme),
+  // so a one-time snapshot read at mount can be wrong and bake a white frame.
+  // Track the scheme REACTIVELY so the iframe src re-syncs, AND re-post the
+  // current scheme every time the brain reports ready (the initial handshake)
+  // plus on every subsequent flip.
+  const [scheme, setScheme] = createSignal(currentScheme())
+  const themeObserver = new MutationObserver(() => {
+    const s = currentScheme()
+    setScheme(s)
+    post({ kind: "theme", colorScheme: s })
+  })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
   onCleanup(() => themeObserver.disconnect())
   createEffect(() => {
-    if (ready()) post({ kind: "theme", colorScheme: currentScheme() })
+    if (ready()) post({ kind: "theme", colorScheme: scheme() })
   })
   const [ready, setReady] = createSignal(false)
   const sent = new Set<string>()
@@ -104,7 +113,15 @@ function BrainFrame(props: { sessionID: string }) {
   const onBrainMessage = (e: MessageEvent) => {
     if (e.origin !== location.origin) return
     const d = e.data as { source?: string; kind?: string } | undefined
-    if (d?.source === "amico-brain" && d.kind === "ready") setReady(true)
+    if (d?.source === "amico-brain" && d.kind === "ready") {
+      // A colorScheme flip re-mounts the iframe (reactive src), which re-sends
+      // `ready`. Clear the sent-set and restore initialFlush so the reloaded
+      // brain gets the full event history re-flushed — otherwise it would come
+      // back empty (every id already in `sent`).
+      sent.clear()
+      initialFlush = true
+      setReady(true)
+    }
   }
   window.addEventListener("message", onBrainMessage)
   onCleanup(() => window.removeEventListener("message", onBrainMessage))
@@ -158,7 +175,7 @@ function BrainFrame(props: { sessionID: string }) {
     >
       <iframe
         ref={(el) => (frame = el)}
-        src={`/brain.html?mode=live&colorScheme=${scheme}`}
+        src={`/brain.html?mode=live&colorScheme=${scheme()}`}
         title="amico brain"
         aria-hidden="true"
         class="pointer-events-none block h-full w-full border-0"
