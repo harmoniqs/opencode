@@ -18,6 +18,8 @@ import {
   STALE_MS,
   statusBody,
   submitCredentialResponse,
+  disconnectResponse,
+  revalidateResponse,
   type FetchImpl,
 } from "@/server/amicode/connections"
 
@@ -276,5 +278,73 @@ describe("submit credential — probe → save → terminal status, one round tr
     }
     expect(probes).toBe(0)
     expect(readCredential("company-compute")).toBeUndefined()
+  })
+})
+
+describe("disconnect + revalidate (AC4)", () => {
+  test("disconnect clears the credential; status becomes needs-key; idempotent", async () => {
+    await submitCredentialResponse(
+      JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-good" }),
+      { fetchImpl: respond(200) },
+    )
+    const parsed = JSON.parse(disconnectResponse(JSON.stringify({ id: "company-compute" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection).toEqual({ id: "company-compute", state: "needs-key", validated_at: null, stale: false })
+    expect(readCredential("company-compute")).toBeUndefined()
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("needs-key")
+    // disconnecting an already-absent credential is a no-op, not an error
+    expect(JSON.parse(disconnectResponse(JSON.stringify({ id: "company-compute" }))).ok).toBe(true)
+  })
+
+  test("disconnect: malformed body / unknown id → ok:false", () => {
+    expect(JSON.parse(disconnectResponse("nope")).ok).toBe(false)
+    expect(JSON.parse(disconnectResponse(JSON.stringify({ id: "who-knows" }))).ok).toBe(false)
+  })
+
+  test("revalidate runs from the STORED credential — no secret rides the request (AC4)", async () => {
+    writeCredential("company-compute", cloudCredential)
+    const stale = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+    writeFileSync(connectionsFile(), JSON.stringify({ "company-compute": { state: "connected", validated_at: stale } }))
+    let seenUrl = ""
+    let seenAuth = ""
+    const capture: FetchImpl = async (url, init) => {
+      seenUrl = url
+      seenAuth = init.headers.authorization ?? ""
+      return { status: 404 }
+    }
+    const request = JSON.stringify({ id: "company-compute" }) // the whole body — token never leaves the server
+    const parsed = JSON.parse(await revalidateResponse(request, { fetchImpl: capture }))
+    expect(seenUrl).toBe("https://solves.example.co/solves/__validate__/status")
+    expect(seenAuth).toBe(`Bearer ${cloudCredential.token}`)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.stale).toBe(false)
+    expect(Date.parse(parsed.connection.validated_at)).toBeGreaterThan(Date.parse(stale)) // timestamp refreshed
+  })
+
+  test("revalidate: 401 → invalid but the stored credential is KEPT; unreachable refreshes the timestamp too", async () => {
+    writeCredential("company-compute", cloudCredential)
+    const invalid = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(401) }),
+    )
+    expect(invalid.connection.state).toBe("invalid")
+    expect(readCredential("company-compute")).toEqual(cloudCredential) // user data survives; re-entry is their call
+    const unreachable = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(503) }),
+    )
+    expect(unreachable.connection.state).toBe("unreachable")
+    expect(unreachable.connection.validated_at).not.toBeNull()
+  })
+
+  test("revalidate with no stored credential → needs-key, no probe fired", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("needs-key")
+    expect(probes).toBe(0)
   })
 })

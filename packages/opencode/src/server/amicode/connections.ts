@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
-import { atomicWriteFileSync, readCredential, writeCredential, type ConnectionType } from "./credentials"
+import { atomicWriteFileSync, clearCredential, readCredential, writeCredential, type ConnectionType } from "./credentials"
 
 // --- status contract (parent #159 data contract; secret-free by construction) ---
 
@@ -344,5 +344,54 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
     // nothing written — an existing credential (if any) stays untouched
     persistStatus(id, { state: outcome, validated_at })
   }
+  return renderCurrent(id)
+}
+
+/** id-only mutation bodies (disconnect/revalidate) — the secret NEVER rides
+ *  these requests; revalidation reads the stored credential server-side. */
+function parseIdBody(rawBody: string): ConnectionType | undefined {
+  const body = parseMutationBody(rawBody)
+  if (!body) return undefined
+  const id = body.id
+  if (typeof id !== "string" || !(CONNECTION_IDS as string[]).includes(id)) return undefined
+  return id as ConnectionType
+}
+
+/** POST /amicode/connections/disconnect — body {id}. Clears the credential
+ *  through the #162 seam and drops the cache entry; status becomes needs-key.
+ *  Idempotent: disconnecting an absent credential is a no-op. */
+export function disconnectResponse(rawBody: string): string {
+  const id = parseIdBody(rawBody)
+  if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
+  try {
+    clearCredential(id)
+    clearStatus(id)
+  } catch {
+    return synthesizeConnection("write_failed", "credential could not be cleared")
+  }
+  return renderCurrent(id)
+}
+
+/** POST /amicode/connections/revalidate — body {id}. Re-runs the probe from
+ *  the STORED credential and refreshes validated_at; the secret never rides
+ *  the request. Absent credential → needs-key, no probe fired. */
+export async function revalidateResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const id = parseIdBody(rawBody)
+  if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
+  const credential = readCredential("company-compute")
+  if (!credential) {
+    clearStatus(id) // a status claim without a credential behind it is noise
+    return renderCurrent(id)
+  }
+  inflightOverlay.set(id, { state: "validating" })
+  let outcome: ProbeOutcome
+  try {
+    outcome = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
+  } finally {
+    inflightOverlay.delete(id)
+  }
+  // credential is kept on EVERY outcome — invalid signals re-entry, it does
+  // not destroy user data; only disconnect removes the file.
+  persistStatus(id, { state: outcome === "valid" ? "connected" : outcome, validated_at: new Date().toISOString() })
   return renderCurrent(id)
 }
