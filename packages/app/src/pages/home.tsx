@@ -387,6 +387,27 @@ function HomeDesign() {
     if ((res as { ok?: boolean } | undefined)?.ok !== true) throw new Error("library save rejected")
     await refetchLibrary()
   }
+  // Onboarding-wizard finale: attach an existing vault (clone repo / symlink a
+  // local vault dir into the vaults root). The server returns {ok,name,error};
+  // map failures to a human-readable message for the wizard to surface.
+  async function attachVault(ref: string): Promise<{ name: string }> {
+    const res = (await amicodePost(focusedServer(), "/amicode/vaults", { ref })) as
+      | { ok?: boolean; name?: string; error?: string }
+      | undefined
+    if (res?.ok === true && typeof res.name === "string") return { name: res.name }
+    const code = (res?.error ?? "").split(":")[0]
+    const message =
+      code === "exists"
+        ? "That vault is already attached."
+        : code === "not_a_vault"
+          ? "That folder isn't a vault (no .amico-vault.toml marker)."
+          : code === "clone_failed"
+            ? "Couldn't clone that repo — check the name and that you have access."
+            : code === "bad_request"
+              ? "Enter a repo (owner/repo), a git URL, or a local path."
+              : "Couldn't attach that vault."
+    throw new Error(message)
+  }
 
   // amicode (widget kernel): registry + dashboard state + per-widget module
   // code. Everything degrades to undefined → the page falls back to the
@@ -1103,6 +1124,7 @@ function HomeDesign() {
             })()}
             onComplete={saveProfileFields}
             onUploadPaper={uploadPaper}
+            onAttachVault={attachVault}
             onDismiss={dismissWizard}
             onOpenChat={() => {
               dismissWizard()
