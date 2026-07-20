@@ -187,11 +187,22 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
 // Raw route outside the declared API surface (same idiom + auth as /doc).
 // AmicodeVaults.status() never rejects — failures come back as JSON bodies.
 const amicodeVaultsRoute = HttpRouter.use((router) =>
-  router.add("GET", "/amicode/vaults", () =>
-    Effect.promise(() => AmicodeVaults.status()).pipe(
-      Effect.map((body) => HttpServerResponse.text(body, { contentType: "application/json" })),
-    ),
-  ),
+  Effect.gen(function* () {
+    yield* router.add("GET", "/amicode/vaults", () =>
+      Effect.promise(() => AmicodeVaults.status()).pipe(
+        Effect.map((body) => HttpServerResponse.text(body, { contentType: "application/json" })),
+      ),
+    )
+    // Attach an existing vault (onboarding-wizard finale). JSON body {ref};
+    // clones a repo or symlinks a local vault dir into the vaults root.
+    yield* router.add("POST", "/amicode/vaults", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = yield* Effect.promise(() => AmicodeVaults.attachVault(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+  }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 
 // amicode: Problem-UI data sources (spec B). Raw routes outside the declared

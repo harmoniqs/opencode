@@ -58,6 +58,10 @@ export function AmicodeOnboardingWizard(props: {
   onComplete: (fields: WizardFields) => Promise<void>
   /** Optional: enables the library step (papers that make Amico smarter). */
   onUploadPaper?: (filename: string, dataB64: string) => Promise<void>
+  /** Optional: enables the finale "attach your own vault" affordance. Given a
+   *  reference (owner/repo, git URL, or a local path), resolves to the attached
+   *  mount name; rejects with a human-readable message on failure. */
+  onAttachVault?: (ref: string) => Promise<{ name: string }>
   onDismiss: () => void
   onOpenChat: () => void
 }) {
@@ -95,6 +99,28 @@ export function AmicodeOnboardingWizard(props: {
   const [resolvingLogo, setResolvingLogo] = createSignal(0)
   const [saving, setSaving] = createSignal(false)
   const [saveError, setSaveError] = createSignal<string | undefined>(undefined)
+
+  // finale: attach-your-own-vault (skipped entirely when onAttachVault isn't wired)
+  const [attachOpen, setAttachOpen] = createSignal(false)
+  const [attachRef, setAttachRef] = createSignal("")
+  const [attaching, setAttaching] = createSignal(false)
+  const [attached, setAttached] = createSignal<string[]>([])
+  const [attachError, setAttachError] = createSignal<string | undefined>(undefined)
+  const attach = async () => {
+    const ref = attachRef().trim()
+    if (!ref || !props.onAttachVault) return
+    setAttaching(true)
+    setAttachError(undefined)
+    try {
+      const { name } = await props.onAttachVault(ref)
+      setAttached([...attached(), name])
+      setAttachRef("")
+    } catch (e) {
+      setAttachError(e instanceof Error ? e.message : "Couldn't attach that vault.")
+    } finally {
+      setAttaching(false)
+    }
+  }
 
   // same debounce + out-of-order discipline as the About-You card
   let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -529,8 +555,49 @@ export function AmicodeOnboardingWizard(props: {
               </div>
             </div>
             <div style={{ "font-size": "13px", color: "var(--v2-text-text-muted)", "max-width": "360px" }}>
-              You're set. Amico will remember this — say hi and design your first pulse.
+              You're set — a personal vault is ready. Amico will remember this; say hi and design your first pulse.
             </div>
+            {/* attach-your-own-vault: quiet by default so it never crowds the payoff shot */}
+            <Show when={props.onAttachVault}>
+              <div style={{ width: "min(360px, 100%)" }}>
+                <Show when={!attachOpen()}>
+                  <QuietBtn label="Already have a vault? Attach it →" onClick={() => setAttachOpen(true)} />
+                </Show>
+                <Show when={attachOpen()}>
+                  <div style={{ display: "flex", "flex-direction": "column", gap: "6px", "text-align": "left" }}>
+                    <div style={LABEL}>Attach a vault</div>
+                    <div style={{ display: "flex", gap: "6px", "align-items": "stretch" }}>
+                      <input
+                        style={FIELD}
+                        value={attachRef()}
+                        onInput={(e) => setAttachRef(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void attach()
+                        }}
+                        placeholder="owner/repo, a git URL, or a local path"
+                      />
+                      <PrimaryBtn label={attaching() ? "…" : "Attach"} disabled={attaching()} onClick={() => void attach()} />
+                    </div>
+                    <div style={{ "font-size": "11px", color: "var(--v2-text-text-faint)" }}>
+                      A GitHub repo you can access, or a folder with an <code>.amico-vault.toml</code> marker.
+                    </div>
+                    <For each={attached()}>
+                      {(name) => (
+                        <div style={{ display: "flex", "align-items": "center", gap: "6px", "font-size": "12px" }}>
+                          <span style={{ color: "var(--v2-state-fg-success)" }}>✓</span>
+                          <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                            {name}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                    <Show when={attachError()}>
+                      <div style={{ "font-size": "12px", color: "var(--v2-state-fg-danger)" }}>{attachError()}</div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </Show>
             <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "4px" }}>
               <PrimaryBtn label="Go to my home page" onClick={() => props.onDismiss()} />
               <QuietBtn label="or start a chat with Amico" onClick={() => props.onOpenChat()} />
