@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { ConfigProvider, Layer } from "effect"
@@ -19,8 +19,10 @@ import {
   connectionsFile,
   entitlementsFile,
   inflightOverlay,
+  sessionOnlyOverlay,
   setBindHostname,
   solverModeFile,
+  PASQAL_CONFIG_WARNING,
 } from "@/server/amicode/connections"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances } from "../fixture/fixture"
@@ -75,7 +77,14 @@ async function stubSolveService(status: () => number) {
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) })
 
-const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE", "AMICODE_OPS_DIR"] as const
+const ENV_KEYS = [
+  "AMICO_CLOUD_FILE",
+  "AMICO_PASQAL_FILE",
+  "AMICODE_CONNECTIONS_FILE",
+  "AMICODE_OPS_DIR",
+  "AMICO_PYTHON",
+  "AMICO_PASQAL_VALIDATOR",
+] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
 
@@ -87,6 +96,7 @@ beforeEach(() => {
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
   process.env.AMICODE_OPS_DIR = path.join(dir, "amicode-ops") // flip artifacts (#167) stay hermetic
   inflightOverlay.clear()
+  sessionOnlyOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(() => {
@@ -95,6 +105,7 @@ afterEach(() => {
     else process.env[k] = savedEnv[k]
   }
   inflightOverlay.clear()
+  sessionOnlyOverlay.clear()
   setBindHostname(undefined)
 })
 
@@ -108,6 +119,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
       expect(initial.ok).toBe(true)
       expect(initial.connections).toEqual([
         { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
+        { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
       ])
 
       // submit: secret rides the POST body (library idiom), never a query param
@@ -229,6 +241,191 @@ describe("connections routes — HP flip artifacts over the route tree (167 AC1,
       expect(existsSync(solverModeFile())).toBe(false)
     } finally {
       await rejecting.close()
+    }
+  })
+})
+
+// --- Pasqal over the route tree (amicode#169): the REAL spawn path — the
+// default (non-injected) spawner launches an actual child against a stub
+// validator honoring the #164 contract, staged where $AMICO_PASQAL_VALIDATOR
+// points and interpreted by $AMICO_PYTHON (the test binds it to the bun
+// executable, proving the interpreter is a plain argv[0]).
+
+const PASQAL = {
+  username: "kate@example.com",
+  password: "hunter2-P0ison-pa55word",
+  project_id: "proj-0000-aaaa-bbbb",
+}
+const validatorLine = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    ok: true,
+    project_id: PASQAL.project_id,
+    devices: ["EMU_FREE", "FRESNEL"],
+    token: "tok-pasqal-minted",
+    expires_at: "2026-08-01T00:00:00+00:00",
+    ...over,
+  })
+
+/** Stage a stub validator OUTSIDE the scanned credential tree: it records the
+ *  child's env view (keys + the PASQAL_* values) into the harness dir and
+ *  answers the scenario file — exit code + optional stdout line. */
+function stageStubValidator() {
+  const harness = mkdtempSync(path.join(tmpdir(), "amicode-pasqal-stub-"))
+  const scenarioFile = path.join(harness, "scenario.json")
+  const recordFile = path.join(harness, "record.json")
+  const script = path.join(harness, "pasqal_validate_stub.mjs")
+  writeFileSync(
+    script,
+    [
+      `import { readFileSync, writeFileSync } from "node:fs"`,
+      `writeFileSync(${JSON.stringify(recordFile)}, JSON.stringify({`,
+      `  keys: Object.keys(process.env).sort(),`,
+      `  username: process.env.PASQAL_USERNAME ?? null,`,
+      `  password: process.env.PASQAL_PASSWORD ?? null,`,
+      `  project_id: process.env.PASQAL_PROJECT_ID ?? null,`,
+      `  argv: process.argv.slice(2),`,
+      `}))`,
+      `const scenario = JSON.parse(readFileSync(${JSON.stringify(scenarioFile)}, "utf8"))`,
+      `if (scenario.stdout) console.log(scenario.stdout)`,
+      `process.exit(scenario.exitCode)`,
+    ].join("\n"),
+  )
+  process.env.AMICO_PYTHON = process.execPath // "interpreter" = the bun binary
+  process.env.AMICO_PASQAL_VALIDATOR = script
+  return {
+    scenario(exitCode: number, stdout = "") {
+      writeFileSync(scenarioFile, JSON.stringify({ exitCode, stdout }))
+    },
+    record(): {
+      keys: string[]
+      username: string | null
+      password: string | null
+      project_id: string | null
+      argv: string[]
+    } {
+      return JSON.parse(readFileSync(recordFile, "utf8"))
+    },
+    recordExists: () => existsSync(recordFile),
+    clearRecord: () => rmSync(recordFile, { force: true }),
+    cleanup: () => rmSync(harness, { recursive: true, force: true }),
+  }
+}
+
+/** every byte of every file under the credential/ops tree (raw) */
+const scanTree = (root: string): string => {
+  if (!existsSync(root)) return ""
+  const chunks: string[] = []
+  for (const entry of readdirSync(root, { recursive: true }) as string[]) {
+    const full = path.join(root, String(entry))
+    if (statSync(full).isFile()) chunks.push(readFileSync(full, "latin1"))
+  }
+  return chunks.join("\n")
+}
+
+describe("pasqal over the route tree — REAL spawn against a staged stub validator (169 AC1/AC2/AC3/AC4)", () => {
+  test("full lifecycle: submit(valid) → connected + devices; revalidate never respawns; disconnect scrubs", async () => {
+    const server = app()
+    const stub = stageStubValidator()
+    process.env.AMICODE_ROUTE_CANARY = "canary-route-full-spread" // a process.env spread would leak this
+    try {
+      stub.scenario(0, validatorLine())
+      const submitted = await (
+        await server.request("/amicode/connections/credential", post({ id: "pasqal-cloud", ...PASQAL }))
+      ).json()
+      expect(submitted.ok).toBe(true)
+      expect(submitted.error).toBeNull()
+      expect(submitted.connection.state).toBe("connected")
+      expect(submitted.connection.identity).toBe(PASQAL.project_id)
+      expect(submitted.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+
+      // the child saw EXACTLY the minimal declared env — the real spawn spreads nothing
+      const record = stub.record()
+      expect(record.keys).toEqual(["PASQAL_PASSWORD", "PASQAL_PROJECT_ID", "PASQAL_USERNAME", "PATH"])
+      expect(record.username).toBe(PASQAL.username)
+      expect(record.password).toBe(PASQAL.password)
+      expect(record.project_id).toBe(PASQAL.project_id)
+      expect(record.argv).toEqual([]) // nothing beyond <interpreter> <script> — no secret rides argv
+
+      // token-only at rest; the password exists NOWHERE under the credential/ops tree
+      expect(readCredential("pasqal-cloud")).toEqual({
+        project_id: PASQAL.project_id,
+        token: "tok-pasqal-minted",
+        expires_at: "2026-08-01T00:00:00+00:00",
+      })
+      const bytes = scanTree(dir)
+      expect(bytes).toContain("tok-pasqal-minted")
+      expect(bytes).not.toContain(PASQAL.password)
+      expect(bytes).not.toContain(PASQAL.username)
+
+      // revalidate is a token-mode freshness check — the validator must NOT run again
+      stub.clearRecord()
+      const revalidated = await (
+        await server.request("/amicode/connections/revalidate", post({ id: "pasqal-cloud" }))
+      ).json()
+      expect(revalidated.connection.state).toBe("connected")
+      expect(stub.recordExists()).toBe(false)
+
+      const disconnected = await (
+        await server.request("/amicode/connections/disconnect", post({ id: "pasqal-cloud" }))
+      ).json()
+      expect(disconnected.connection.state).toBe("needs-key")
+      expect(readCredential("pasqal-cloud")).toBeUndefined()
+      expect(scanTree(dir)).not.toContain("tok-pasqal-minted")
+    } finally {
+      delete process.env.AMICODE_ROUTE_CANARY
+      stub.cleanup()
+    }
+  })
+
+  test("failure classes over the route: exit 2/4 → invalid/unentitled; exit 1 → config warning; nothing at rest", async () => {
+    const server = app()
+    const stub = stageStubValidator()
+    try {
+      const cases: [number, string, string | null][] = [
+        [2, "invalid", null],
+        [4, "unentitled", null],
+        [1, "unreachable", PASQAL_CONFIG_WARNING],
+      ]
+      for (const [exitCode, state, error] of cases) {
+        stub.scenario(exitCode)
+        const parsed = await (
+          await server.request("/amicode/connections/credential", post({ id: "pasqal-cloud", ...PASQAL }))
+        ).json()
+        expect(parsed.ok).toBe(true)
+        expect(parsed.connection.state).toBe(state)
+        expect(parsed.error).toBe(error)
+      }
+      expect(readCredential("pasqal-cloud")).toBeUndefined()
+      const bytes = scanTree(dir)
+      expect(bytes).not.toContain(PASQAL.password)
+      expect(bytes).not.toContain(PASQAL.username)
+    } finally {
+      stub.cleanup()
+    }
+  })
+
+  test("null token over the route → session-only connected; nothing at rest (AC4)", async () => {
+    const server = app()
+    const stub = stageStubValidator()
+    try {
+      stub.scenario(0, validatorLine({ token: null, expires_at: null }))
+      const parsed = await (
+        await server.request("/amicode/connections/credential", post({ id: "pasqal-cloud", ...PASQAL }))
+      ).json()
+      expect(parsed.ok).toBe(true)
+      expect(parsed.connection.state).toBe("connected")
+      expect(parsed.connection.session_only).toBe(true)
+      expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+      expect(readCredential("pasqal-cloud")).toBeUndefined()
+      const status = await (await server.request("/amicode/connections")).json()
+      const entry = status.connections.find((conn: { id: string }) => conn.id === "pasqal-cloud")
+      expect(entry.state).toBe("connected")
+      expect(entry.session_only).toBe(true)
+      const bytes = scanTree(dir)
+      expect(bytes).not.toContain(PASQAL.password)
+      expect(bytes).not.toContain(PASQAL.username)
+    } finally {
+      stub.cleanup()
     }
   })
 })

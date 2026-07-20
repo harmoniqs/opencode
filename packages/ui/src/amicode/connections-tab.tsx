@@ -1,14 +1,16 @@
-// AMICODE: Connections tab body for the status popover (amicode#166). A thin
-// projection of connections.ts — cardModel/stateCopy carry the behavioral
-// contract (and its tests; the repo has no tsx component harness), the app
-// layer owns fetching and the one-round-trip overlay, and this file only
-// renders. SECURITY: the token lives in a password-masked input and the
-// submit payload; it is never rendered as text and the input clears when a
-// submit lands connected.
+// AMICODE: Connections tab body for the status popover (amicode#166, Pasqal
+// card #169). A thin projection of connections.ts — cardModel/stateCopy carry
+// the behavioral contract (and its tests; the repo has no tsx component
+// harness), the app layer owns fetching and the one-round-trip overlay, and
+// this file only renders. SECURITY: secrets (token, Pasqal password) live in
+// password-masked inputs and the submit payload; they are never rendered as
+// text and the masked input clears when a submit lands connected.
 import { createEffect, createSignal, For, Show } from "solid-js"
 import {
   cardModel,
+  connectionFormKind,
   connectionTitle,
+  pasqalSubmitPayload,
   stateCopy,
   submitPayload,
   type ConnectionActionView,
@@ -24,10 +26,14 @@ export type ConnectionsTabLabels = {
   states: ConnectionStateLabels
   baseUrlPlaceholder: string
   tokenPlaceholder: string
+  usernamePlaceholder: string
+  passwordPlaceholder: string
+  projectIdPlaceholder: string
   submit: string
   disconnect: string
   revalidate: string
   staleHint: string
+  sessionOnlyHint: string
 }
 
 export function AmicodeConnectionsTab(props: {
@@ -104,8 +110,14 @@ function ConnectionCard(props: {
   onRevalidate: (id: string) => void
 }) {
   const model = () => cardModel(props.conn)
+  const formKind = () => connectionFormKind(props.conn.id)
   const [baseUrl, setBaseUrl] = createSignal("")
   const [token, setToken] = createSignal("")
+  // pasqal credentials (#169): request-scope only — the password signal feeds
+  // the payload and nothing else, and clears the moment a submit connects
+  const [username, setUsername] = createSignal("")
+  const [password, setPassword] = createSignal("")
+  const [projectId, setProjectId] = createSignal("")
 
   // wire-offered prefill fills an untouched field only, never overwrites input
   createEffect(() => {
@@ -115,11 +127,17 @@ function ConnectionCard(props: {
 
   const submit = async (event: Event) => {
     event.preventDefault()
-    const payload = submitPayload(props.conn.id, baseUrl(), token())
+    const payload =
+      formKind() === "pasqal-credentials"
+        ? pasqalSubmitPayload(props.conn.id, username(), password(), projectId())
+        : submitPayload(props.conn.id, baseUrl(), token())
     if (!payload) return // AC3: empty submission — no request, no state change
     const result = await props.onSubmit(payload)
-    // clear the masked input once the key is accepted; it is never echoed back
-    if (result.ok && result.connection?.state === "connected") setToken("")
+    // clear the masked inputs once accepted; secrets are never echoed back
+    if (result.ok && result.connection?.state === "connected") {
+      setToken("")
+      setPassword("")
+    }
   }
 
   return (
@@ -147,6 +165,18 @@ function ConnectionCard(props: {
         </Show>
       </div>
 
+      <Show when={model().showDevices}>
+        <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-devices">
+          {props.conn.devices?.join(" · ")}
+        </div>
+      </Show>
+
+      <Show when={model().showSessionOnly}>
+        <div class="pl-3.5 text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
+          {props.labels.sessionOnlyHint}
+        </div>
+      </Show>
+
       <Show when={model().showStale}>
         <div class="pl-3.5 text-11-regular text-text-weaker truncate">{props.labels.staleHint}</div>
       </Show>
@@ -160,27 +190,67 @@ function ConnectionCard(props: {
 
       <Show when={model().showForm}>
         <form class="flex flex-col gap-1.5 pl-3.5 pt-1.5" data-slot="amicode-connection-form" onSubmit={submit}>
-          <input
-            type="text"
-            name="base_url"
-            autocomplete="off"
-            spellcheck={false}
-            placeholder={props.labels.baseUrlPlaceholder}
-            value={baseUrl()}
-            disabled={model().formDisabled}
-            onInput={(event) => setBaseUrl(event.currentTarget.value)}
-            class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
-          />
-          <input
-            type="password"
-            name="token"
-            autocomplete="off"
-            placeholder={props.labels.tokenPlaceholder}
-            value={token()}
-            disabled={model().formDisabled}
-            onInput={(event) => setToken(event.currentTarget.value)}
-            class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
-          />
+          <Show
+            when={formKind() === "pasqal-credentials"}
+            fallback={
+              <>
+                <input
+                  type="text"
+                  name="base_url"
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder={props.labels.baseUrlPlaceholder}
+                  value={baseUrl()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setBaseUrl(event.currentTarget.value)}
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+                />
+                <input
+                  type="password"
+                  name="token"
+                  autocomplete="off"
+                  placeholder={props.labels.tokenPlaceholder}
+                  value={token()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setToken(event.currentTarget.value)}
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+                />
+              </>
+            }
+          >
+            <input
+              type="text"
+              name="username"
+              autocomplete="off"
+              spellcheck={false}
+              placeholder={props.labels.usernamePlaceholder}
+              value={username()}
+              disabled={model().formDisabled}
+              onInput={(event) => setUsername(event.currentTarget.value)}
+              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+            />
+            <input
+              type="password"
+              name="password"
+              autocomplete="off"
+              placeholder={props.labels.passwordPlaceholder}
+              value={password()}
+              disabled={model().formDisabled}
+              onInput={(event) => setPassword(event.currentTarget.value)}
+              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+            />
+            <input
+              type="text"
+              name="project_id"
+              autocomplete="off"
+              spellcheck={false}
+              placeholder={props.labels.projectIdPlaceholder}
+              value={projectId()}
+              disabled={model().formDisabled}
+              onInput={(event) => setProjectId(event.currentTarget.value)}
+              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+            />
+          </Show>
           <button
             type="submit"
             disabled={model().formDisabled}

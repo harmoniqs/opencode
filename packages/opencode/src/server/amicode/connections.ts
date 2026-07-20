@@ -47,10 +47,13 @@ export interface ConnectionStatus {
   devices?: ConnectionDevice[]
   validated_at: string | null
   stale: boolean
+  /** 169 AC4: connected purely in-memory (Pasqal minted no persistable
+   *  token) — the claim dies with the server process. */
+  session_only?: boolean
 }
 
-/** The connection cards this slice serves. Later slices append "pasqal-cloud". */
-export const CONNECTION_IDS: ConnectionType[] = ["company-compute"]
+/** The connection cards this module serves; company-compute renders first. */
+export const CONNECTION_IDS: ConnectionType[] = ["company-compute", "pasqal-cloud"]
 
 /** A connected claim older than this renders stale:true — the UI's cue to
  *  offer revalidation. Freshness metadata only; never blocks anything. */
@@ -71,6 +74,14 @@ export function connectionsFile(): string {
  *  the in-memory seam the poison test seeds — whatever lands in an entry, only
  *  the whitelist below can reach a response. */
 export const inflightOverlay = new Map<string, Record<string, unknown>>()
+
+/** In-memory session-only claims (169 AC4): a Pasqal validation that minted
+ *  NO persistable token parks its connected status — identity, devices,
+ *  validated_at — here and ONLY here. Nothing reaches disk, so a fresh status
+ *  build after a restart renders needs-key and the card re-prompts. Same
+ *  redaction discipline as the in-flight overlay: entries pass the whitelist
+ *  before any response. */
+export const sessionOnlyOverlay = new Map<string, Record<string, unknown>>()
 
 // --- the redacting whitelist parser: the ONLY way status inputs become a
 // response. It builds a FRESH object from declared fields with type checks —
@@ -144,13 +155,31 @@ function computeStale(state: ConnectionState, validated_at: string | null, now: 
 }
 
 /** Derive the rendered status for one connection from its whitelisted cache
- *  entry, the in-flight overlay, and credential presence (the truth for
- *  "connected"). Output carries ONLY whitelisted fields. */
+ *  entry, the in-flight overlay, the session-only store, and credential
+ *  presence (the truth for durable "connected"). Output carries ONLY
+ *  whitelisted fields. */
 function renderStatus(
   id: ConnectionType,
   persisted: Partial<ConnectionStatus>,
-  input: { inflight: boolean; credential: boolean; now: number },
+  input: { inflight: boolean; credential: boolean; now: number; session?: Partial<ConnectionStatus> },
 ): ConnectionStatus {
+  if (!input.inflight && input.session?.state === "connected") {
+    // session-only claim (169 AC4): connected without a credential at rest —
+    // rendered from memory alone, marked so the card can say so
+    const validated_at = input.session.validated_at ?? null
+    const out: ConnectionStatus = {
+      id,
+      state: "connected",
+      validated_at,
+      stale: computeStale("connected", validated_at, input.now),
+      session_only: true,
+    }
+    if (input.session.identity) out.identity = input.session.identity
+    if (input.session.entitlements) out.entitlements = input.session.entitlements
+    if (input.session.expires_at) out.expires_at = input.session.expires_at
+    if (input.session.devices) out.devices = input.session.devices
+    return out
+  }
   let state: ConnectionState
   if (input.inflight) state = "validating"
   else if (persisted.state === "connected") state = input.credential ? "connected" : "needs-key"
@@ -187,6 +216,9 @@ export interface StatusInput {
   file: string
   overlay: ReadonlyMap<string, Record<string, unknown>>
   hasCredential: (id: ConnectionType) => boolean
+  /** in-memory session-only claims; ABSENT by default so a fresh build from
+   *  disk (= a restarted server) cannot see them (169 AC4) */
+  session?: ReadonlyMap<string, Record<string, unknown>>
   now?: number
 }
 
@@ -195,13 +227,15 @@ export interface StatusInput {
 export function statusBody(input: StatusInput): string {
   const cache = readCacheFile(input.file)
   const now = input.now ?? Date.now()
-  const connections = CONNECTION_IDS.map((id) =>
-    renderStatus(id, whitelistPersisted(cache[id]), {
+  const connections = CONNECTION_IDS.map((id) => {
+    const session = input.session?.get(id)
+    return renderStatus(id, whitelistPersisted(cache[id]), {
       inflight: input.overlay.has(id),
       credential: input.hasCredential(id),
       now,
-    }),
-  )
+      ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
+    })
+  })
   return JSON.stringify({ ok: true, connections, error: null })
 }
 
@@ -213,6 +247,7 @@ export function statusResponse(): string {
       file: connectionsFile(),
       overlay: inflightOverlay,
       hasCredential: (id) => readCredential(id) !== undefined,
+      session: sessionOnlyOverlay,
     })
   } catch (err) {
     return synthesizeConnections("bad_output", String(err))
@@ -254,6 +289,92 @@ export async function probeCompanyCompute(
   if (status === 401) return "invalid"
   if ((status >= 200 && status < 300) || status === 403 || status === 404) return "valid"
   return "unreachable"
+}
+
+// --- Pasqal validator spawn (amicode#169 / parent #159; #164 contract) ---
+// The fork never sees SDK internals: the validator's one-line JSON + exit-code
+// contract is the ENTIRE interface. Inputs ride env variables ONLY — never
+// argv (visible in `ps`), never files.
+
+/** Interpreter: $AMICO_PYTHON override → `python3` resolved on PATH. */
+export function pasqalPython(): string {
+  const env = process.env.AMICO_PYTHON
+  if (env && env.trim() !== "") return env
+  return "python3"
+}
+
+/** Script: $AMICO_PASQAL_VALIDATOR override → the amicode-staged copy under
+ *  the SHARED ops-dir resolution (amicodeOpsDir(): $AMICODE_OPS_DIR →
+ *  ~/.amico/amicode). The amicode packaging side stages
+ *  scripts/pasqal-connector/pasqal_validate.py there. */
+export function pasqalValidatorScript(): string {
+  const env = process.env.AMICO_PASQAL_VALIDATOR
+  if (env && env.trim() !== "") return env
+  return path.join(amicodeOpsDir(), "scripts", "pasqal-connector", "pasqal_validate.py")
+}
+
+export interface PasqalValidatorRun {
+  exitCode: number
+  stdout: string
+}
+
+/** Injectable spawn seam (AC1): tests record argv + the EXACT child env. The
+ *  default implementation passes both through verbatim — the child env is
+ *  always the minimal declared set built in submitPasqalCredential, NEVER a
+ *  process.env spread. */
+export type PasqalSpawn = (argv: string[], env: Record<string, string>) => Promise<PasqalValidatorRun>
+
+const spawnPasqalValidator: PasqalSpawn = async (argv, env) => {
+  const proc = Bun.spawn(argv as [string, ...string[]], {
+    env,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore", // fixed value-free messages by the #164 contract; not consumed here
+  })
+  const stdout = await new Response(proc.stdout).text()
+  const exitCode = await proc.exited
+  return { exitCode, stdout }
+}
+
+type PasqalOutcome =
+  | { kind: "valid"; project_id: string; devices: ConnectionDevice[]; token: string | null; expires_at?: string }
+  | { kind: "invalid" }
+  | { kind: "unreachable" }
+  | { kind: "unentitled" }
+  | { kind: "config" }
+
+/** #164 exit-code contract → outcome: 0 valid (stdout must carry ONE
+ *  parseable ok:true JSON line) · 2 invalid-credentials · 3 unreachable ·
+ *  4 project-unauthorized · 1/anything-else config-class (missing env /
+ *  missing SDK / broken interpreter). */
+function classifyValidatorRun(run: PasqalValidatorRun): PasqalOutcome {
+  if (run.exitCode === 2) return { kind: "invalid" }
+  if (run.exitCode === 3) return { kind: "unreachable" }
+  if (run.exitCode === 4) return { kind: "unentitled" }
+  if (run.exitCode !== 0) return { kind: "config" }
+  let raw: unknown
+  try {
+    raw = JSON.parse(run.stdout.trim())
+  } catch {
+    return { kind: "config" } // exit 0 without the contract line is a config-class lie
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { kind: "config" }
+  const d = raw as Record<string, unknown>
+  const project = str(d.project_id)
+  if (d.ok !== true || !project) return { kind: "config" }
+  const devices: ConnectionDevice[] = []
+  if (Array.isArray(d.devices)) {
+    for (const device of d.devices) {
+      if (typeof device === "string" && device !== "") devices.push({ name: device })
+      else {
+        const picked = whitelistDevices([device]) // tolerate future object-shaped devices
+        if (picked) devices.push(...picked)
+      }
+    }
+  }
+  const token = typeof d.token === "string" && d.token !== "" ? d.token : null
+  const expires = str(d.expires_at)
+  return { kind: "valid", project_id: project, devices, token, ...(expires ? { expires_at: expires } : {}) }
 }
 
 // --- status cache writes: everything lands through the same whitelist, so a
@@ -416,6 +537,8 @@ const MAX_BODY_BYTES = 16 * 1024 // credentials are small; bigger is a mistake
 
 export interface MutationDeps {
   fetchImpl?: FetchImpl
+  /** injectable/recordable validator spawn for pasqal-cloud (169 AC1) */
+  pasqalSpawn?: PasqalSpawn
   /** override the recorded bind hostname (pure-injection alternative to
    *  setBindHostname) */
   bindHostname?: string
@@ -425,20 +548,31 @@ export interface MutationDeps {
  *  a non-null error field carrying a FIXED "code: detail" string (#167). */
 function renderCurrent(id: ConnectionType, warning?: string): string {
   const cache = readCacheFile(connectionsFile())
+  const session = sessionOnlyOverlay.get(id)
   const connection = renderStatus(id, whitelistPersisted(cache[id]), {
     inflight: inflightOverlay.has(id),
     credential: readCredential(id) !== undefined,
     now: Date.now(),
+    ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
   })
   return JSON.stringify({ ok: true, connection, error: warning ?? null })
 }
 
-function parseMutationBody(rawBody: string): { id?: unknown; base_url?: unknown; token?: unknown } | undefined {
+interface MutationBody {
+  id?: unknown
+  base_url?: unknown
+  token?: unknown
+  username?: unknown
+  password?: unknown
+  project_id?: unknown
+}
+
+function parseMutationBody(rawBody: string): MutationBody | undefined {
   if (rawBody.length > MAX_BODY_BYTES) return undefined
   try {
     const parsed: unknown = JSON.parse(rawBody)
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined
-    return parsed as { id?: unknown; base_url?: unknown; token?: unknown }
+    return parsed as MutationBody
   } catch {
     return undefined
   }
@@ -461,10 +595,9 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
   const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
   if (refusal) return refusal
   const body = parseMutationBody(rawBody)
-  if (!body) return synthesizeConnection("bad_request", "body must be JSON {id, base_url, token}")
+  if (!body) return synthesizeConnection("bad_request", "body must be JSON with an id and that id's credential fields")
+  if (body.id === "pasqal-cloud") return submitPasqalCredential(body, deps)
   if (body.id !== "company-compute") {
-    if (body.id === "pasqal-cloud")
-      return synthesizeConnection("unsupported_connection", "pasqal-cloud lands in a later slice")
     return synthesizeConnection("unknown_connection", "id must be a known connection id")
   }
   const base = typeof body.base_url === "string" ? body.base_url.trim().replace(/\/+$/, "") : ""
@@ -499,6 +632,92 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
   return renderCurrent(id, warning)
 }
 
+/** POST body {id:"pasqal-cloud", username, password, project_id} → spawn the
+ *  #164 validator (env-only inputs; MINIMAL child env: PATH for interpreter
+ *  resolution plus the three PASQAL_* inputs — never a process.env spread) and
+ *  classify its one-line JSON / exit-code contract. SECURITY: the username and
+ *  password live ONLY in this request scope and the child env — never the
+ *  status cache, never any file, never a log or error message. Pasqal never
+ *  touches solver mode: the HP flip (#167) is company-compute-only. */
+/** The FIXED config-class warning (169 AC5, sibling "code: detail" shape):
+ *  exit 1 / unknown exits / off-contract stdout / spawn failure all mean the
+ *  validator itself could not run properly — distinct from the service being
+ *  unreachable. Value-free by the module contract. */
+export const PASQAL_CONFIG_WARNING =
+  "pasqal_validator_config: the Pasqal validator could not run — check the Python interpreter and the pasqal-cloud SDK"
+
+async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): Promise<string> {
+  const username = typeof body.username === "string" ? body.username.trim() : ""
+  const password = typeof body.password === "string" ? body.password : ""
+  const projectId = typeof body.project_id === "string" ? body.project_id.trim() : ""
+  if (username === "" || password.trim() === "" || projectId === "")
+    return synthesizeConnection("bad_request", "non-empty username, password and project_id are required")
+
+  const id: ConnectionType = "pasqal-cloud"
+  const spawn = deps.pasqalSpawn ?? spawnPasqalValidator
+  const argv = [pasqalPython(), pasqalValidatorScript()] // no secret ever rides argv
+  const env = {
+    PATH: process.env.PATH ?? "", // interpreter resolution only
+    PASQAL_USERNAME: username,
+    PASQAL_PASSWORD: password,
+    PASQAL_PROJECT_ID: projectId,
+  }
+  inflightOverlay.set(id, { state: "validating" })
+  let outcome: PasqalOutcome
+  try {
+    outcome = classifyValidatorRun(await spawn(argv, env))
+  } catch {
+    outcome = { kind: "config" } // spawn trouble (missing interpreter/script) is config-class
+  } finally {
+    inflightOverlay.delete(id)
+  }
+
+  const validated_at = new Date().toISOString()
+  sessionOnlyOverlay.delete(id) // every terminal outcome supersedes a session-only claim
+  let warning: string | undefined
+  if (outcome.kind === "valid" && outcome.token !== null) {
+    try {
+      // token-only at rest (#162 seam): project_id + token + expiry — the
+      // password has no field to land in, and the store rejects poison keys.
+      writeCredential(id, {
+        project_id: outcome.project_id,
+        token: outcome.token,
+        ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+      })
+    } catch {
+      return synthesizeConnection("write_failed", "credential could not be saved")
+    }
+    persistStatus(id, {
+      state: "connected",
+      validated_at,
+      identity: outcome.project_id,
+      devices: outcome.devices, // non-secret metadata, refreshed on every submit
+      ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+    })
+  } else if (outcome.kind === "valid") {
+    // null token (mint unsupported) → SESSION-ONLY connected (AC4): nothing
+    // reaches disk; the claim lives in memory and dies with the process, so
+    // a restarted server re-prompts (needs-key).
+    clearStatus(id)
+    sessionOnlyOverlay.set(id, {
+      state: "connected",
+      validated_at,
+      identity: outcome.project_id,
+      devices: outcome.devices,
+    })
+  } else if (outcome.kind === "config") {
+    // validator trouble is not a service verdict: render unreachable-class
+    // with the DISTINCT fixed warning on the #167 partial-trouble channel
+    persistStatus(id, { state: "unreachable", validated_at })
+    warning = PASQAL_CONFIG_WARNING
+  } else {
+    // invalid / unreachable / unentitled — nothing written, an existing
+    // credential (if any) stays untouched
+    persistStatus(id, { state: outcome.kind, validated_at })
+  }
+  return renderCurrent(id, warning)
+}
+
 /** id-only mutation bodies (disconnect/revalidate) — the secret NEVER rides
  *  these requests; revalidation reads the stored credential server-side. */
 function parseIdBody(rawBody: string): ConnectionType | undefined {
@@ -520,6 +739,7 @@ export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): st
   try {
     clearCredential(id)
     clearStatus(id)
+    sessionOnlyOverlay.delete(id) // a session-only claim ends with disconnect too
   } catch {
     return synthesizeConnection("write_failed", "credential could not be cleared")
   }
@@ -534,8 +754,7 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
   if (refusal) return refusal
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
-  // parseIdBody only admits CONNECTION_IDS, and this slice serves exactly
-  // company-compute — the Pasqal slice adds its own per-id probe branch here.
+  if (id === "pasqal-cloud") return revalidatePasqal()
   const credential = readCredential("company-compute")
   if (!credential) {
     clearStatus(id) // a status claim without a credential behind it is noise
@@ -551,5 +770,34 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
   // credential is kept on EVERY outcome — invalid signals re-entry, it does
   // not destroy user data; only disconnect removes the file.
   persistStatus(id, { state: outcome === "valid" ? "connected" : outcome, validated_at: new Date().toISOString() })
+  return renderCurrent(id)
+}
+
+/** Pasqal revalidation is a TOKEN-mode freshness check: the stored credential
+ *  holds only project_id + token — no password — so re-running the validator
+ *  is impossible and pretending otherwise would lie. With a credential,
+ *  expires_at vs now marks connected or expired (validated_at refreshed,
+ *  devices/identity metadata kept); no or unparseable expiry means the claim
+ *  stands. A live token-mode probe against the service is #160's device-path
+ *  territory. Session-only claims are left standing: there is nothing to
+ *  re-check without a password, and revalidate must not destroy them. */
+function revalidatePasqal(): string {
+  const id: ConnectionType = "pasqal-cloud"
+  const credential = readCredential(id)
+  if (!credential) {
+    if (sessionOnlyOverlay.has(id)) return renderCurrent(id)
+    clearStatus(id) // a status claim without a credential behind it is noise
+    return renderCurrent(id)
+  }
+  const expiresAt = credential.expires_at === undefined ? Number.NaN : Date.parse(credential.expires_at)
+  const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now()
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  persistStatus(id, {
+    ...existing, // devices + any other metadata survive the freshness check
+    state: expired ? "expired" : "connected",
+    identity: credential.project_id,
+    ...(credential.expires_at ? { expires_at: credential.expires_at } : {}),
+    validated_at: new Date().toISOString(),
+  })
   return renderCurrent(id)
 }

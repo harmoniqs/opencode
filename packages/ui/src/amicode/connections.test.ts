@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test"
 import {
   applyConnectionOverlay,
   cardModel,
+  connectionFormKind,
   connectionTitle,
   parseConnectionActionResponse,
   parseConnectionsResponse,
+  pasqalSubmitPayload,
   stateCopy,
   submitPayload,
   validatedAtDisplay,
@@ -57,8 +59,8 @@ describe("parseConnectionsResponse", () => {
     expect(conn.stale).toBe(false)
   })
 
-  test("each contract state this slice renders survives the parse", () => {
-    for (const state of ["connected", "needs-key", "invalid", "unreachable", "validating"]) {
+  test("each contract state survives the parse — incl. expired + unentitled (169)", () => {
+    for (const state of ["connected", "needs-key", "invalid", "expired", "unreachable", "unentitled", "validating"]) {
       const view = parseConnectionsResponse({
         ok: true,
         connections: [{ id: "company-compute", state, validated_at: null, stale: false }],
@@ -70,7 +72,7 @@ describe("parseConnectionsResponse", () => {
   })
 
   test("unknown states collapse to the safe fallback, raw word preserved (AC4)", () => {
-    for (const state of ["expired", "unentitled", "some-future-state"]) {
+    for (const state of ["some-future-state", "revoked"]) {
       const view = parseConnectionsResponse({
         ok: true,
         connections: [{ id: "company-compute", state, validated_at: null, stale: false }],
@@ -79,6 +81,50 @@ describe("parseConnectionsResponse", () => {
       expect(view.ok).toBe(true)
       expect(view.connections[0].state).toBe("unknown")
       expect(view.connections[0].rawState).toBe(state)
+    }
+  })
+
+  test("devices parse to display names — objects prefer name, fall back to id; junk is dropped (169 AC2)", () => {
+    const view = parseConnectionsResponse({
+      ok: true,
+      connections: [
+        {
+          id: "pasqal-cloud",
+          state: "connected",
+          stale: false,
+          devices: [{ name: "EMU_FREE" }, { id: "d9", state: "online" }, {}, null, 42, { name: "" }],
+        },
+      ],
+      error: null,
+    })
+    expect(view.connections[0].devices).toEqual(["EMU_FREE", "d9"])
+  })
+
+  test("absent or empty devices leave the field undefined", () => {
+    for (const devices of [undefined, [], "three", [null, {}]]) {
+      const view = parseConnectionsResponse({
+        ok: true,
+        connections: [{ id: "pasqal-cloud", state: "connected", stale: false, devices }],
+        error: null,
+      })
+      expect(view.connections[0].devices).toBeUndefined()
+    }
+  })
+
+  test("session_only:true parses to the sessionOnly marker; anything else leaves it undefined (169 AC4)", () => {
+    const marked = parseConnectionsResponse({
+      ok: true,
+      connections: [{ id: "pasqal-cloud", state: "connected", stale: false, session_only: true }],
+      error: null,
+    })
+    expect(marked.connections[0].sessionOnly).toBe(true)
+    for (const session_only of [undefined, false, "yes", 1]) {
+      const view = parseConnectionsResponse({
+        ok: true,
+        connections: [{ id: "pasqal-cloud", state: "connected", stale: false, session_only }],
+        error: null,
+      })
+      expect(view.connections[0].sessionOnly).toBeUndefined()
     }
   })
 
@@ -202,13 +248,24 @@ describe("parseConnectionActionResponse", () => {
 // component harness in this repo (see connections-tab.tsx), this mapping IS
 // the component contract, so it gets exhaustive coverage here.
 
-const CARD_STATES: ConnectionCardState[] = ["connected", "needs-key", "invalid", "unreachable", "validating", "unknown"]
+const CARD_STATES: ConnectionCardState[] = [
+  "connected",
+  "needs-key",
+  "invalid",
+  "expired",
+  "unreachable",
+  "unentitled",
+  "validating",
+  "unknown",
+]
 
 const labels: ConnectionStateLabels = {
   connected: "Connected",
   "needs-key": "Not connected — enter a key",
   invalid: "Key rejected",
+  expired: "Token expired — reconnect to refresh it",
   unreachable: "Service unreachable",
+  unentitled: "Project not authorized — check the project ID",
   validating: "Validating key…",
   unknown: "Status needs attention",
 }
@@ -252,11 +309,13 @@ describe("cardModel", () => {
     expect(stale.showStale).toBe(true)
   })
 
-  test("needs-key / invalid / unreachable: key form enabled, no actions", () => {
+  test("needs-key / invalid / expired / unreachable / unentitled: credential form enabled, no actions", () => {
     for (const [state, tone] of [
       ["needs-key", "neutral"],
       ["invalid", "critical"],
+      ["expired", "warning"],
       ["unreachable", "warning"],
+      ["unentitled", "critical"],
     ] as const) {
       const model = cardModel(viewFor(state))
       expect(model.showForm).toBe(true)
@@ -265,6 +324,22 @@ describe("cardModel", () => {
       expect(model.showValidatedAt).toBe(false)
       expect(model.tone).toBe(tone)
     }
+  })
+
+  test("connected with devices lists them; other states keep the device list out of the way (169 AC2)", () => {
+    const connected = cardModel(viewFor("connected", { devices: ["EMU_FREE", "FRESNEL"] }))
+    expect(connected.showDevices).toBe(true)
+    expect(cardModel(viewFor("connected")).showDevices).toBe(false)
+    expect(cardModel(viewFor("connected", { devices: [] })).showDevices).toBe(false)
+    for (const state of ["invalid", "expired", "unentitled"] as const) {
+      expect(cardModel(viewFor(state, { devices: ["EMU_FREE"] })).showDevices).toBe(false)
+    }
+  })
+
+  test("session-only connected surfaces the note; a durable connect does not (169 AC4)", () => {
+    expect(cardModel(viewFor("connected", { sessionOnly: true })).showSessionOnly).toBe(true)
+    expect(cardModel(viewFor("connected")).showSessionOnly).toBe(false)
+    expect(cardModel(viewFor("invalid", { sessionOnly: true })).showSessionOnly).toBe(false)
   })
 
   test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
@@ -292,10 +367,18 @@ describe("cardModel", () => {
 })
 
 describe("connectionTitle", () => {
-  test("company-compute reads as Company Compute; unknown ids render verbatim", () => {
+  test("known products get names; unknown ids render verbatim", () => {
     expect(connectionTitle("company-compute")).toBe("Company Compute")
-    expect(connectionTitle("pasqal-cloud")).toBe("pasqal-cloud")
+    expect(connectionTitle("pasqal-cloud")).toBe("Pasqal Cloud")
     expect(connectionTitle("(unknown)")).toBe("(unknown)")
+  })
+})
+
+describe("connectionFormKind", () => {
+  test("pasqal-cloud takes the credentials form; everything else keeps base_url + token", () => {
+    expect(connectionFormKind("pasqal-cloud")).toBe("pasqal-credentials")
+    expect(connectionFormKind("company-compute")).toBe("base-url-token")
+    expect(connectionFormKind("some-future-id")).toBe("base-url-token")
   })
 })
 
@@ -316,6 +399,25 @@ describe("submitPayload", () => {
       id: "company-compute",
       base_url: "https://solve.example",
       token: "sk-key",
+    })
+  })
+})
+
+describe("pasqalSubmitPayload", () => {
+  test("any empty or whitespace-only field yields no payload at all — no request fires (169)", () => {
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "", "")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "", "proj-1")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "hunter2", "proj-1")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "hunter2", "   ")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "  \t ", "proj-1")).toBeUndefined()
+  })
+
+  test("all fields present: username/project trimmed, the password passed VERBATIM", () => {
+    expect(pasqalSubmitPayload("pasqal-cloud", "  kate@example.com ", " p4ss word ", " proj-1 ")).toEqual({
+      id: "pasqal-cloud",
+      username: "kate@example.com",
+      password: " p4ss word ", // passwords may legitimately carry spaces — never trimmed
+      project_id: "proj-1",
     })
   })
 })
