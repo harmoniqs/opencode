@@ -451,6 +451,9 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
     revalidate: language.t("dialog.connections.revalidate"),
     staleHint: language.t("dialog.connections.stale"),
     sessionOnlyHint: language.t("dialog.connections.sessionOnly"),
+    // raw {{slot}} templates — the ui card fills them with render-time values
+    offlineHint: language.t("dialog.connections.offline"),
+    driftHint: language.t("dialog.connections.drift"),
   }))
 
   return (

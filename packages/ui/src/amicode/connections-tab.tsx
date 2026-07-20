@@ -10,6 +10,8 @@ import {
   cardModel,
   connectionFormKind,
   connectionTitle,
+  driftCopy,
+  offlineCopy,
   pasqalSubmitPayload,
   stateCopy,
   submitPayload,
@@ -34,6 +36,10 @@ export type ConnectionsTabLabels = {
   revalidate: string
   staleHint: string
   sessionOnlyHint: string
+  /** {{at}}/{{identity}} template — the offline last-verified line (170 AC3) */
+  offlineHint: string
+  /** {{answered}}/{{stored}} template — the submitter-drift diff (170 AC4) */
+  driftHint: string
 }
 
 export function AmicodeConnectionsTab(props: {
@@ -165,6 +171,13 @@ function ConnectionCard(props: {
         </Show>
       </div>
 
+      <Show when={model().showDrift}>
+        <div class="flex items-center gap-2 pl-3.5" data-slot="amicode-connection-drift">
+          <div class="size-1 rounded-full shrink-0 bg-icon-warning-base" />
+          <span class="text-11-regular text-text-weak">{driftCopy(props.conn, props.labels.driftHint)}</span>
+        </div>
+      </Show>
+
       <Show when={model().showDevices}>
         <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-devices">
           {props.conn.devices?.join(" · ")}
@@ -174,6 +187,12 @@ function ConnectionCard(props: {
       <Show when={model().showSessionOnly}>
         <div class="pl-3.5 text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
           {props.labels.sessionOnlyHint}
+        </div>
+      </Show>
+
+      <Show when={model().showOffline}>
+        <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-offline">
+          {offlineCopy(props.conn, props.labels.offlineHint)}
         </div>
       </Show>
 

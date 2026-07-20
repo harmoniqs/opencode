@@ -12,9 +12,11 @@ import path from "node:path"
 import {
   atomicWriteFileSync,
   clearCredential,
+  credentialFileMtime,
   readCredential,
   writeCredential,
   type ConnectionType,
+  type PasqalCredential,
 } from "./credentials"
 import { parseTomlLite } from "./toml-lite"
 
@@ -42,6 +44,12 @@ export interface ConnectionStatus {
   id: ConnectionType
   state: ConnectionState
   identity?: string
+  /** 170 AC4 (the 2026-07-19 incident canary): the submitter this credential
+   *  NOW answers as, when a revalidation echo disagrees with the stored
+   *  `identity`. The stored identity is the immutable record; this field is
+   *  the diff — presence IS the drift signal. Reconciliation is a human act
+   *  (re-submitting the credential resets the record). */
+  identity_drift?: string
   entitlements?: string[]
   expires_at?: string
   devices?: ConnectionDevice[]
@@ -50,6 +58,10 @@ export interface ConnectionStatus {
   /** 169 AC4: connected purely in-memory (Pasqal minted no persistable
    *  token) — the claim dies with the server process. */
   session_only?: boolean
+  /** 170 AC3: the last background revalidation could not REACH the service —
+   *  a presentation flag on a connected claim ("last verified <validated_at>
+   *  as <identity>"), never a verdict on the credential. Connected-only. */
+  offline?: boolean
 }
 
 /** The connection cards this module serves; company-compute renders first. */
@@ -58,6 +70,13 @@ export const CONNECTION_IDS: ConnectionType[] = ["company-compute", "pasqal-clou
 /** A connected claim older than this renders stale:true — the UI's cue to
  *  offer revalidation. Freshness metadata only; never blocks anything. */
 export const STALE_MS = 24 * 60 * 60 * 1000
+
+/** Mtime staleness slack (170 AC1): a credential file counts as hand-edited
+ *  only when its mtime lands more than this AFTER validated_at. The connect
+ *  path writes the file within moments of stamping validated_at (either
+ *  order), so the slack keeps a fresh connect from reading as an edit while
+ *  any real out-of-band edit — minutes or hours later — still trips it. */
+export const MTIME_STALE_SLACK_MS = 5_000
 
 /** Non-secret status cache — the ops-dir env-override idiom the siblings use
  *  (problems.ts / profile.ts / credentials.ts): $AMICODE_CONNECTIONS_FILE
@@ -133,6 +152,8 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   if (state && isKnownState(state)) out.state = state
   const identity = str(d.identity)
   if (identity) out.identity = identity
+  const drift = str(d.identity_drift)
+  if (drift) out.identity_drift = drift
   if (Array.isArray(d.entitlements)) {
     const entitlements = d.entitlements.filter((e): e is string => typeof e === "string" && e !== "")
     if (entitlements.length > 0) out.entitlements = entitlements
@@ -143,15 +164,27 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   if (devices) out.devices = devices
   const validated = str(d.validated_at)
   if (validated) out.validated_at = validated
+  if (d.offline === true) out.offline = true // only the literal true — anything else is noise
   return out
 }
 
-function computeStale(state: ConnectionState, validated_at: string | null, now: number): boolean {
+/** 170 AC5: expires_at at or behind now. Absent/unparseable expiry never
+ *  expires anything — the honest minimum. */
+function isPastExpiry(expires_at: string | undefined, now: number): boolean {
+  if (!expires_at) return false
+  const at = Date.parse(expires_at)
+  return Number.isFinite(at) && at <= now
+}
+
+function computeStale(state: ConnectionState, validated_at: string | null, now: number, mtime?: number): boolean {
   if (state !== "connected") return false
   if (!validated_at) return true
   const at = Date.parse(validated_at)
   if (!Number.isFinite(at)) return true
-  return now - at > STALE_MS
+  if (now - at > STALE_MS) return true
+  // 170 AC1: a credential file hand-edited AFTER its last validation is a
+  // desync the 24h clock cannot see — the file itself marks the claim stale
+  return mtime !== undefined && mtime - at > MTIME_STALE_SLACK_MS
 }
 
 /** Derive the rendered status for one connection from its whitelisted cache
@@ -161,7 +194,7 @@ function computeStale(state: ConnectionState, validated_at: string | null, now: 
 function renderStatus(
   id: ConnectionType,
   persisted: Partial<ConnectionStatus>,
-  input: { inflight: boolean; credential: boolean; now: number; session?: Partial<ConnectionStatus> },
+  input: { inflight: boolean; credential: boolean; now: number; mtime?: number; session?: Partial<ConnectionStatus> },
 ): ConnectionStatus {
   if (!input.inflight && input.session?.state === "connected") {
     // session-only claim (169 AC4): connected without a credential at rest —
@@ -186,14 +219,28 @@ function renderStatus(
   else if (persisted.state) state = persisted.state
   else state = input.credential ? "connected" : "needs-key"
 
+  // 170 AC5: a past expiry outranks a connected claim AT READ TIME — the
+  // reconnect prompt renders without waiting for a revalidation to notice,
+  // identically for company-compute and pasqal.
+  if (state === "connected" && isPastExpiry(persisted.expires_at, input.now)) state = "expired"
+
   const validated_at = state === "needs-key" ? null : (persisted.validated_at ?? null)
-  const out: ConnectionStatus = { id, state, validated_at, stale: computeStale(state, validated_at, input.now) }
+  const out: ConnectionStatus = {
+    id,
+    state,
+    validated_at,
+    stale: computeStale(state, validated_at, input.now, input.mtime),
+  }
   if (state !== "needs-key") {
     if (persisted.identity) out.identity = persisted.identity
+    if (persisted.identity_drift) out.identity_drift = persisted.identity_drift
     if (persisted.entitlements) out.entitlements = persisted.entitlements
     if (persisted.expires_at) out.expires_at = persisted.expires_at
     if (persisted.devices) out.devices = persisted.devices
   }
+  // 170 AC3: offline is a connected-only presentation flag — "showing the
+  // last verified status" makes no sense on any other state
+  if (state === "connected" && persisted.offline) out.offline = true
   return out
 }
 
@@ -216,6 +263,9 @@ export interface StatusInput {
   file: string
   overlay: ReadonlyMap<string, Record<string, unknown>>
   hasCredential: (id: ConnectionType) => boolean
+  /** credential-file mtime per id (ms) — the hand-edit detector (170 AC1).
+   *  Absent seam (pure tests) or absent file → undefined, mtime rule off. */
+  credentialMtime?: (id: ConnectionType) => number | undefined
   /** in-memory session-only claims; ABSENT by default so a fresh build from
    *  disk (= a restarted server) cannot see them (169 AC4) */
   session?: ReadonlyMap<string, Record<string, unknown>>
@@ -229,10 +279,12 @@ export function statusBody(input: StatusInput): string {
   const now = input.now ?? Date.now()
   const connections = CONNECTION_IDS.map((id) => {
     const session = input.session?.get(id)
+    const mtime = input.credentialMtime?.(id)
     return renderStatus(id, whitelistPersisted(cache[id]), {
       inflight: input.overlay.has(id),
       credential: input.hasCredential(id),
       now,
+      ...(mtime !== undefined ? { mtime } : {}),
       ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
     })
   })
@@ -240,32 +292,171 @@ export function statusBody(input: StatusInput): string {
 }
 
 /** GET /amicode/connections — never rejects; failures collapse into the one
- *  success shape like every other amicode route. */
-export function statusResponse(): string {
+ *  success shape like every other amicode route. Stale connected claims render
+ *  IMMEDIATELY from cache and kick a background revalidation (170 AC1) whose
+ *  result lands in the cache for the NEXT read — the GET never waits. */
+export function statusResponse(deps: { fetchImpl?: FetchImpl } = {}): string {
   try {
-    return statusBody({
+    const body = statusBody({
       file: connectionsFile(),
       overlay: inflightOverlay,
       hasCredential: (id) => readCredential(id) !== undefined,
+      credentialMtime: credentialFileMtime,
       session: sessionOnlyOverlay,
     })
+    kickStaleRevalidations(body, deps)
+    return body
   } catch (err) {
     return synthesizeConnections("bad_output", String(err))
   }
+}
+
+// --- background revalidation (170 AC1/AC3): stale claims refresh WITHOUT
+// blocking the GET that noticed them. Deduped per id; never renders
+// "validating" (the card keeps showing the cached claim); every failure is
+// swallowed — the next GET simply retries.
+
+const backgroundInflight = new Map<ConnectionType, Promise<void>>()
+
+/** Test seam: a joinable handle over every background revalidation currently
+ *  in flight — await this instead of sleeping. Production never calls it. */
+export function backgroundRevalidationsSettled(): Promise<void> {
+  return Promise.all([...backgroundInflight.values()]).then(() => undefined)
+}
+
+/** Kick background revalidations for stale connected claims in a just-built
+ *  status body. Skips ids already refreshing, ids with a submit/revalidate in
+ *  flight, session-only claims (nothing at rest to re-check), and ids without
+ *  a stored credential. */
+function kickStaleRevalidations(body: string, deps: { fetchImpl?: FetchImpl }): void {
+  let entries: unknown
+  try {
+    entries = (JSON.parse(body) as { connections?: unknown }).connections
+  } catch {
+    return
+  }
+  if (!Array.isArray(entries)) return
+  for (const raw of entries) {
+    if (typeof raw !== "object" || raw === null) continue
+    const entry = raw as { id?: unknown; state?: unknown; stale?: unknown; session_only?: unknown }
+    if (entry.state !== "connected" || entry.stale !== true || entry.session_only === true) continue
+    const id = CONNECTION_IDS.find((known) => known === entry.id)
+    if (!id || backgroundInflight.has(id) || inflightOverlay.has(id)) continue
+    if (readCredential(id) === undefined) continue
+    const task = (async () => {
+      try {
+        if (id === "company-compute") await backgroundRevalidateCompanyCompute(deps)
+        else backgroundRevalidatePasqal()
+      } catch {
+        // background refresh must never surface trouble; the next GET retries
+      }
+    })().finally(() => backgroundInflight.delete(id))
+    backgroundInflight.set(id, task)
+  }
+}
+
+/** The metadata a background/manual refresh carries forward from the existing
+ *  cache entry — status facts the probe outcome does not speak to. */
+function keptMetadata(existing: Partial<ConnectionStatus>): Partial<ConnectionStatus> {
+  return {
+    ...(existing.identity ? { identity: existing.identity } : {}),
+    ...(existing.entitlements ? { entitlements: existing.entitlements } : {}),
+    ...(existing.expires_at ? { expires_at: existing.expires_at } : {}),
+    ...(existing.devices ? { devices: existing.devices } : {}),
+  }
+}
+
+/** Reconcile a revalidation's identity echo against the stored record (170
+ *  AC4, the 2026-07-19 incident canary). The stored identity is IMMUTABLE
+ *  here: a disagreeing echo lands as identity_drift beside it — never over
+ *  it. No echo → record and any prior drift stand; a matching echo clears
+ *  the drift; a first-ever echo establishes the record. */
+function identityRecord(existing: Partial<ConnectionStatus>, submitter: string | undefined): Partial<ConnectionStatus> {
+  if (!submitter) {
+    return {
+      ...(existing.identity ? { identity: existing.identity } : {}),
+      ...(existing.identity_drift ? { identity_drift: existing.identity_drift } : {}),
+    }
+  }
+  if (!existing.identity) return { identity: submitter }
+  if (existing.identity === submitter) return { identity: existing.identity }
+  return { identity: existing.identity, identity_drift: submitter }
+}
+
+/** Company-compute background refresh: probe from the STORED credential.
+ *  valid → connected with a fresh validated_at (identity echo reconciled per
+ *  identityRecord); invalid → the authorizer truly rejected the key, render
+ *  it; unreachable → the connected claim and its validated_at STAND (170
+ *  AC3) — offline trouble is never a verdict on the credential, and the
+ *  credential is never touched. */
+async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl }): Promise<void> {
+  const id: ConnectionType = "company-compute"
+  const credential = readCredential(id)
+  if (!credential) return
+  const probe = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  if (probe.outcome === "unreachable") {
+    // offline (170 AC3): the connected claim and its last-verified timestamp
+    // STAND — only the presentation marker lands, and a later successful
+    // refresh (whose write carries no offline key) clears it
+    persistStatus(id, { ...existing, offline: true })
+    return
+  }
+  persistStatus(id, {
+    ...keptMetadata(existing),
+    ...(probe.outcome === "valid"
+      ? identityRecord(existing, probe.submitter)
+      : existing.identity_drift // a rejection is no reconciliation: a recorded drift stands
+        ? { identity_drift: existing.identity_drift }
+        : {}),
+    state: probe.outcome === "valid" ? "connected" : "invalid",
+    validated_at: new Date().toISOString(),
+  })
+}
+
+/** Pasqal background refresh: the SAME token-mode freshness check the manual
+ *  revalidate runs (169) — local expiry math only, never a validator spawn. */
+function backgroundRevalidatePasqal(): void {
+  const credential = readCredential("pasqal-cloud")
+  if (!credential) return
+  refreshPasqalFreshness(credential)
 }
 
 // --- probe validation ---
 
 export type ProbeOutcome = "valid" | "invalid" | "unreachable"
 
+export interface ProbeResult {
+  outcome: ProbeOutcome
+  /** identity echo (170 AC4, live endpoint aws-infra#185): present when a
+   *  VALID probe's response body carries a string `submitter` — absent for
+   *  services predating the echo, non-JSON bodies, or rejected keys. */
+  submitter?: string
+}
+
 /** Injectable fetch seam — tests stub this; production uses global fetch.
- *  Only the status code matters to classification. */
+ *  The status code drives classification; `json` (optional, tolerated
+ *  missing) is the identity-echo seam. */
 export type FetchImpl = (
   url: string,
   init: { method: "GET"; headers: Record<string, string> },
-) => Promise<{ status: number }>
+) => Promise<{ status: number; json?: () => Promise<unknown> }>
 
 const PROBE_PATH = "/solves/__validate__/status"
+
+/** The identity echo: a VALID probe response MAY carry {submitter: string}
+ *  (aws-infra#185). Anything else — no json seam, unparseable body, off-shape
+ *  value — is simply no echo; never a throw, and nothing but the one string
+ *  field is ever read. */
+async function readSubmitterEcho(response: { json?: () => Promise<unknown> }): Promise<string | undefined> {
+  try {
+    const raw = await response.json?.()
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+    return str((raw as Record<string, unknown>).submitter)
+  } catch {
+    return undefined
+  }
+}
 
 /** Classify a Company Compute credential against the fake-task status route
  *  (parent #159 probe contract: the authorizer rejects bad keys before the
@@ -278,17 +469,20 @@ export async function probeCompanyCompute(
   baseUrl: string,
   token: string,
   fetchImpl: FetchImpl = fetch,
-): Promise<ProbeOutcome> {
+): Promise<ProbeResult> {
   const url = baseUrl.replace(/\/+$/, "") + PROBE_PATH
-  let status: number
+  let response: { status: number; json?: () => Promise<unknown> }
   try {
-    status = (await fetchImpl(url, { method: "GET", headers: { authorization: `Bearer ${token}` } })).status
+    response = await fetchImpl(url, { method: "GET", headers: { authorization: `Bearer ${token}` } })
   } catch {
-    return "unreachable"
+    return { outcome: "unreachable" }
   }
-  if (status === 401) return "invalid"
-  if ((status >= 200 && status < 300) || status === 403 || status === 404) return "valid"
-  return "unreachable"
+  if (response.status === 401) return { outcome: "invalid" }
+  if ((response.status >= 200 && response.status < 300) || response.status === 403 || response.status === 404) {
+    const submitter = await readSubmitterEcho(response)
+    return { outcome: "valid", ...(submitter ? { submitter } : {}) }
+  }
+  return { outcome: "unreachable" }
 }
 
 // --- Pasqal validator spawn (amicode#169 / parent #159; #164 contract) ---
@@ -549,10 +743,12 @@ export interface MutationDeps {
 function renderCurrent(id: ConnectionType, warning?: string): string {
   const cache = readCacheFile(connectionsFile())
   const session = sessionOnlyOverlay.get(id)
+  const mtime = credentialFileMtime(id)
   const connection = renderStatus(id, whitelistPersisted(cache[id]), {
     inflight: inflightOverlay.has(id),
     credential: readCredential(id) !== undefined,
     now: Date.now(),
+    ...(mtime !== undefined ? { mtime } : {}),
     ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
   })
   return JSON.stringify({ ok: true, connection, error: warning ?? null })
@@ -608,26 +804,29 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
 
   const id: ConnectionType = "company-compute"
   inflightOverlay.set(id, { state: "validating" })
-  let outcome: ProbeOutcome
+  let probe: ProbeResult
   try {
-    outcome = await probeCompanyCompute(base, token, deps.fetchImpl)
+    probe = await probeCompanyCompute(base, token, deps.fetchImpl)
   } finally {
     inflightOverlay.delete(id)
   }
   const validated_at = new Date().toISOString()
   let warning: string | undefined
-  if (outcome === "valid") {
+  if (probe.outcome === "valid") {
     try {
       writeCredential(id, { base_url: base, token })
     } catch {
       // value-free by contract: never echo what the encoder rejected
       return synthesizeConnection("write_failed", "credential could not be saved")
     }
-    persistStatus(id, { state: "connected", validated_at })
+    // submitting a credential is the human act that OWNS the identity record
+    // (170 AC4): the echo (if any) becomes the fresh record, any prior drift
+    // is reconciled away with the old entry
+    persistStatus(id, { state: "connected", validated_at, ...(probe.submitter ? { identity: probe.submitter } : {}) })
     warning = requestHpFlip() // #167: AFTER the save and ONLY on the valid outcome
   } else {
     // nothing written — an existing credential (if any) stays untouched
-    persistStatus(id, { state: outcome, validated_at })
+    persistStatus(id, { state: probe.outcome, validated_at })
   }
   return renderCurrent(id, warning)
 }
@@ -761,15 +960,27 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
     return renderCurrent(id)
   }
   inflightOverlay.set(id, { state: "validating" })
-  let outcome: ProbeOutcome
+  let probe: ProbeResult
   try {
-    outcome = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
+    probe = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
   } finally {
     inflightOverlay.delete(id)
   }
   // credential is kept on EVERY outcome — invalid signals re-entry, it does
-  // not destroy user data; only disconnect removes the file.
-  persistStatus(id, { state: outcome === "valid" ? "connected" : outcome, validated_at: new Date().toISOString() })
+  // not destroy user data; only disconnect removes the file. Metadata and the
+  // identity record survive the refresh; a disagreeing echo lands as an
+  // explicit drift beside the record, never over it (170 AC4).
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  persistStatus(id, {
+    ...keptMetadata(existing),
+    ...(probe.outcome === "valid"
+      ? identityRecord(existing, probe.submitter)
+      : existing.identity_drift // a failed probe reconciles nothing: a recorded drift stands
+        ? { identity_drift: existing.identity_drift }
+        : {}),
+    state: probe.outcome === "valid" ? "connected" : probe.outcome,
+    validated_at: new Date().toISOString(),
+  })
   return renderCurrent(id)
 }
 
@@ -789,15 +1000,24 @@ function revalidatePasqal(): string {
     clearStatus(id) // a status claim without a credential behind it is noise
     return renderCurrent(id)
   }
+  refreshPasqalFreshness(credential)
+  return renderCurrent(id)
+}
+
+/** The persist half of the Pasqal freshness check — shared by the manual
+ *  revalidate above and the background revalidation (170 AC1): expires_at vs
+ *  now marks connected or expired, validated_at refreshes, devices and other
+ *  metadata survive. */
+function refreshPasqalFreshness(credential: PasqalCredential): void {
+  const id: ConnectionType = "pasqal-cloud"
   const expiresAt = credential.expires_at === undefined ? Number.NaN : Date.parse(credential.expires_at)
   const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now()
   const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
   persistStatus(id, {
-    ...existing, // devices + any other metadata survive the freshness check
+    ...keptMetadata(existing), // devices + any other metadata survive the freshness check
     state: expired ? "expired" : "connected",
     identity: credential.project_id,
     ...(credential.expires_at ? { expires_at: credential.expires_at } : {}),
     validated_at: new Date().toISOString(),
   })
-  return renderCurrent(id)
 }

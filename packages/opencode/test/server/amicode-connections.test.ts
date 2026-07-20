@@ -6,12 +6,22 @@
 // AMICODE_CONNECTIONS_FILE), so the test seam and the deploy seam are one
 // mechanism (the #162 idiom).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { readCredential, writeCredential } from "@/server/amicode/credentials"
 import {
   amicodeOpsDir,
+  backgroundRevalidationsSettled,
   connectionsFile,
   entitlementsFile,
   inflightOverlay,
@@ -63,7 +73,8 @@ beforeEach(() => {
   sessionOnlyOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
-afterEach(() => {
+afterEach(async () => {
+  await backgroundRevalidationsSettled() // drain background refreshes BEFORE the env flips to the next test's dir
   for (const k of ENV_KEYS) {
     if (savedEnv[k] === undefined) delete process.env[k]
     else process.env[k] = savedEnv[k]
@@ -109,25 +120,27 @@ const cloudCredential = { base_url: "https://solves.example.co", token: "tok-sto
 
 describe("probe classification (AC2)", () => {
   test("authorizer-rejection class: 401 → invalid", async () => {
-    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(401))).toBe("invalid")
+    expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(401))).outcome).toBe("invalid")
   })
 
   test("auth-passed classes → valid: 403, 404, and 2xx all mean the key got past the authorizer", async () => {
     // Parent contract: the authorizer rejects bad keys BEFORE the handler; a
     // good key reaches the handler's not-found/forbidden for the fake task.
     for (const status of [200, 204, 403, 404]) {
-      expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).toBe("valid")
+      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe("valid")
     }
   })
 
   test("server-error / network classes → unreachable: 5xx, odd 4xx, thrown fetch", async () => {
     for (const status of [400, 429, 500, 502, 503]) {
-      expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).toBe("unreachable")
+      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe(
+        "unreachable",
+      )
     }
     const network: FetchImpl = async () => {
       throw new Error("ECONNREFUSED")
     }
-    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", network)).toBe("unreachable")
+    expect((await probeCompanyCompute("https://solves.example.co", "tok-1", network)).outcome).toBe("unreachable")
   })
 
   test("probe hits the fake-task status route; the token rides ONLY the Authorization header, never the URL", async () => {
@@ -172,15 +185,18 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     expect(parsed.connections[0].stale).toBe(false)
   })
 
-  test("connected cache older than STALE_MS → stale:true; unvalidated credential → connected + stale", () => {
+  test("connected cache older than STALE_MS → stale:true; unvalidated credential → connected + stale", async () => {
     writeCredential("company-compute", cloudCredential)
     const old = new Date(Date.now() - STALE_MS - 60_000).toISOString()
     writeFileSync(connectionsFile(), JSON.stringify({ "company-compute": { state: "connected", validated_at: old } }))
-    expect(JSON.parse(statusResponse()).connections[0].stale).toBe(true)
+    // stale GETs kick a background revalidate (170 AC1) — injected here so no
+    // live network rides the test; the returned body is the pre-kick cache
+    expect(JSON.parse(statusResponse({ fetchImpl: respond(503) })).connections[0].stale).toBe(true)
+    await backgroundRevalidationsSettled()
     // a credential that exists but was never validated (e.g. CLI-written
     // cloud.json) renders connected-but-stale, prompting a revalidate
     writeFileSync(connectionsFile(), "{}")
-    const unvalidated = JSON.parse(statusResponse()).connections[0]
+    const unvalidated = JSON.parse(statusResponse({ fetchImpl: respond(503) })).connections[0]
     expect(unvalidated.state).toBe("connected")
     expect(unvalidated.validated_at).toBeNull()
     expect(unvalidated.stale).toBe(true)
@@ -218,10 +234,12 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
           state: "connected",
           validated_at: new Date().toISOString(),
           identity: "kate",
+          identity_drift: { nested: "POISON-drift" }, // whitelisted field, but only a plain string survives
           token: "POISON-entry",
           password: "POISON-password",
           authorization: "Bearer POISON-header",
           nested: { secret: "POISON-nested" },
+          offline: "yes-POISON", // whitelisted field, but only the literal true survives
           devices: [{ name: "qpu-1", state: "online", token: "POISON-device" }],
           entitlements: ["solve", { token: "POISON-entitlement" }],
         },
@@ -245,12 +263,14 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
       "id",
       "state",
       "identity",
+      "identity_drift",
       "entitlements",
       "expires_at",
       "devices",
       "validated_at",
       "stale",
       "session_only",
+      "offline",
     ]
     for (const entry of JSON.parse(body).connections) {
       for (const key of Object.keys(entry)) expect(allowed).toContain(key)
@@ -993,5 +1013,504 @@ describe("pasqal — password never at rest, whatever the outcome (169 AC3)", ()
     expect(bytes).not.toContain(PASQAL.password)
     expect(bytes).not.toContain(PASQAL.username)
     expect(bytes).not.toContain("tok-pasqal-minted") // disconnect removed the token artifact too
+  })
+})
+
+// --- Resilience (amicode#170 / parent #159): mtime staleness, background
+// revalidation, offline boots, drift, expiry. GETs always render the cache
+// IMMEDIATELY; refresh work rides a background task the tests JOIN via
+// backgroundRevalidationsSettled() — never a sleep, never a live probe.
+
+describe("mtime staleness — a hand-edited credential file marks the claim stale (170 AC1)", () => {
+  const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000)
+
+  test("credential file mtime newer than validated_at → stale even inside the 24h window (pure rule)", () => {
+    writeCredential("company-compute", cloudCredential)
+    const at = minutesAgo(60) // validated 1h ago — fresh by the 24h rule alone
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({ "company-compute": { state: "connected", validated_at: at.toISOString() } }),
+    )
+    const staleFor = (mtime: number | undefined) =>
+      JSON.parse(
+        statusBody({
+          file: connectionsFile(),
+          overlay: new Map(),
+          hasCredential: () => true,
+          credentialMtime: () => mtime,
+        }),
+      ).connections[0].stale
+    expect(staleFor(undefined)).toBe(false) // no file mtime bound (pure builder) → the 24h rule alone
+    expect(staleFor(minutesAgo(90).getTime())).toBe(false) // written BEFORE validation — the normal connect order
+    expect(staleFor(minutesAgo(30).getTime())).toBe(true) // hand-edited AFTER validation → stale
+    // the submit's own write order (credential file saved moments around the
+    // validation stamp) stays inside the slack — never a false stale
+    expect(staleFor(at.getTime() + 1_000)).toBe(false)
+  })
+
+  test("mtime never marks non-connected states stale", () => {
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": { state: "invalid", validated_at: minutesAgo(60).toISOString() },
+        "pasqal-cloud": { state: "expired", validated_at: minutesAgo(60).toISOString() },
+      }),
+    )
+    const parsed = JSON.parse(
+      statusBody({
+        file: connectionsFile(),
+        overlay: new Map(),
+        hasCredential: () => true,
+        credentialMtime: () => Date.now(),
+      }),
+    )
+    for (const entry of parsed.connections) expect(entry.stale).toBe(false)
+  })
+
+  test("statusResponse binds the REAL file mtime, renders the cache immediately, and fires ONE non-blocking background revalidate", async () => {
+    writeCredential("company-compute", cloudCredential)
+    const at = minutesAgo(60)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": { state: "connected", validated_at: at.toISOString(), identity: "team-alpha" },
+      }),
+    )
+    const edited = minutesAgo(30) // hand-edit landed after the validation
+    utimesSync(path.join(dir, "cloud.json"), edited, edited)
+
+    let release!: (v: { status: number }) => void
+    let probes = 0
+    const gated: FetchImpl = () => {
+      probes++
+      return new Promise((resolve) => (release = resolve))
+    }
+
+    // the GET renders the cached claim AT ONCE — stale-marked, never blocked
+    // on the probe, never flipped to "validating"
+    const first = JSON.parse(statusResponse({ fetchImpl: gated })).connections[0]
+    expect(first.state).toBe("connected")
+    expect(first.stale).toBe(true)
+    expect(first.validated_at).toBe(at.toISOString())
+    expect(probes).toBe(1) // the background revalidate kicked off the stored credential
+
+    // concurrent GETs render the same cache and never double-kick
+    const second = JSON.parse(statusResponse({ fetchImpl: gated })).connections[0]
+    expect(second.state).toBe("connected")
+    expect(probes).toBe(1)
+
+    release({ status: 404 }) // auth-passed → valid
+    await backgroundRevalidationsSettled()
+
+    const refreshed = JSON.parse(statusResponse({ fetchImpl: gated })).connections[0]
+    expect(refreshed.state).toBe("connected")
+    expect(refreshed.stale).toBe(false) // validated_at now outranks the edit mtime
+    expect(Date.parse(refreshed.validated_at)).toBeGreaterThan(at.getTime())
+    expect(refreshed.identity).toBe("team-alpha") // metadata survives the background refresh
+    expect(probes).toBe(1) // fresh again — no further kick
+  })
+
+  test("the background revalidate probes the CURRENT file's credential — the hand-edit is what gets validated", async () => {
+    writeCredential("company-compute", cloudCredential)
+    writeCredential("company-compute", { base_url: "https://edited.example.co", token: "tok-hand-edited" })
+    const at = minutesAgo(60)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({ "company-compute": { state: "connected", validated_at: at.toISOString() } }),
+    )
+    let seenAuth = ""
+    let seenUrl = ""
+    const capture: FetchImpl = async (url, init) => {
+      seenUrl = url
+      seenAuth = init.headers.authorization ?? ""
+      return { status: 404 }
+    }
+    statusResponse({ fetchImpl: capture })
+    await backgroundRevalidationsSettled()
+    expect(seenUrl).toBe("https://edited.example.co/solves/__validate__/status")
+    expect(seenAuth).toBe("Bearer tok-hand-edited")
+  })
+
+  test("hand-edited pasqal.json → stale; the background freshness check refreshes it locally (no validator, no network)", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))
+    const at = minutesAgo(60)
+    cache["pasqal-cloud"].validated_at = at.toISOString()
+    writeFileSync(connectionsFile(), JSON.stringify(cache))
+    const edited = minutesAgo(30)
+    utimesSync(path.join(dir, "pasqal.json"), edited, edited)
+
+    const first = pasqalEntry(statusResponse())
+    expect(first.state).toBe("connected")
+    expect(first.stale).toBe(true)
+    await backgroundRevalidationsSettled()
+
+    const refreshed = pasqalEntry(statusResponse())
+    expect(refreshed.state).toBe("connected")
+    expect(refreshed.stale).toBe(false)
+    expect(Date.parse(refreshed.validated_at)).toBeGreaterThan(at.getTime())
+    expect(refreshed.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }]) // metadata kept
+  })
+
+  test("no background kick for an unparseable credential file — there is nothing to revalidate", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    writeFileSync(path.join(dir, "cloud.json"), "corrupt {{{ not json")
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+        },
+      }),
+    )
+    expect(JSON.parse(statusResponse({ fetchImpl: counting })).connections[0].state).toBe("needs-key")
+    await backgroundRevalidationsSettled()
+    expect(probes).toBe(0)
+  })
+
+  test("no background kick without a credential, while validating, or for a session-only claim", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    // stale connected cache, but the credential file is GONE → needs-key, no kick
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+        },
+      }),
+    )
+    expect(JSON.parse(statusResponse({ fetchImpl: counting })).connections[0].state).toBe("needs-key")
+    // in-flight overlay wins → validating, no second probe behind it
+    writeCredential("company-compute", cloudCredential)
+    inflightOverlay.set("company-compute", { state: "validating" })
+    expect(JSON.parse(statusResponse({ fetchImpl: counting })).connections[0].state).toBe("validating")
+    inflightOverlay.clear()
+    disconnectResponse(JSON.stringify({ id: "company-compute" })) // back to needs-key so only pasqal is in play below
+    // session-only pasqal claim (nothing at rest to re-check) → no kick
+    sessionOnlyOverlay.set("pasqal-cloud", {
+      state: "connected",
+      validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+      identity: "proj-1",
+    })
+    const session = pasqalEntry(statusResponse({ fetchImpl: counting }))
+    expect(session.state).toBe("connected")
+    expect(session.session_only).toBe(true)
+    await backgroundRevalidationsSettled()
+    expect(probes).toBe(0)
+  })
+})
+
+describe("unparseable credential file → needs-key, honestly (170 AC2)", () => {
+  const corruptions = ["not json {{{", "", "42", '"just-a-string"', '{"base_url": 7, "token": null}', "[]"]
+
+  test("company-compute: an existing-but-corrupt cloud.json renders needs-key — never a crash, a stale badge, or 'connected'", () => {
+    for (const bytes of corruptions) {
+      writeFileSync(path.join(dir, "cloud.json"), bytes)
+      // even with a cache still claiming connected (validated long ago, file
+      // mtime newer — every staleness trigger armed at once)
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "company-compute": {
+            state: "connected",
+            validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+            identity: "team-alpha",
+          },
+        }),
+      )
+      const parsed = JSON.parse(statusResponse())
+      expect(parsed.ok).toBe(true)
+      const entry = parsed.connections[0]
+      expect(entry.state).toBe("needs-key")
+      expect(entry.stale).toBe(false)
+      expect(entry.validated_at).toBeNull()
+      expect(entry.identity).toBeUndefined() // a claim without a usable credential carries no identity
+    }
+  })
+
+  test("pasqal-cloud: a corrupt pasqal.json renders needs-key too — and a bare corrupt file without any cache as well", () => {
+    for (const bytes of corruptions) {
+      writeFileSync(path.join(dir, "pasqal.json"), bytes)
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "pasqal-cloud": { state: "connected", validated_at: new Date().toISOString(), identity: "proj-1" },
+        }),
+      )
+      expect(pasqalEntry(statusResponse()).state).toBe("needs-key")
+      // no cache entry at all: still needs-key, still no throw
+      writeFileSync(connectionsFile(), "{}")
+      const bare = pasqalEntry(statusResponse())
+      expect(bare.state).toBe("needs-key")
+      expect(bare.stale).toBe(false)
+    }
+  })
+
+  test("a corrupt credential file never flips a mutation response into a lie either", async () => {
+    writeFileSync(path.join(dir, "cloud.json"), "corrupt {{{")
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("needs-key") // unreadable = absent through the #162 seam; no probe fired
+  })
+})
+
+describe("offline boot — last-verified rendering, never invalid (170 AC3)", () => {
+  const boom: FetchImpl = async () => {
+    throw new Error("connect ECONNREFUSED 10.0.0.1:443")
+  }
+  const lastVerified = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+
+  const seedConnected = () => {
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": { state: "connected", validated_at: lastVerified, identity: "team-alpha" },
+      }),
+    )
+  }
+
+  test("stored credential + connected cache + unreachable service → connected, stale, offline; validated_at is the last-verified marker", async () => {
+    seedConnected()
+    // boot GET: the cached claim renders at once (no offline verdict yet)
+    const first = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(first.state).toBe("connected")
+    expect(first.stale).toBe(true)
+    expect(first.offline).toBeUndefined()
+    await backgroundRevalidationsSettled()
+
+    // the failed background revalidation marks offline — it NEVER downgrades
+    // the state and NEVER refreshes the last-verified timestamp
+    const offline = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(offline.state).toBe("connected") // never 'invalid', never 'unreachable'
+    expect(offline.stale).toBe(true)
+    expect(offline.offline).toBe(true)
+    expect(offline.validated_at).toBe(lastVerified) // "last verified <validated_at>"
+    expect(offline.identity).toBe("team-alpha") // "…as <identity>"
+    // the stored credential is never cleared by an offline revalidation
+    expect(readCredential("company-compute")).toEqual(cloudCredential)
+    await backgroundRevalidationsSettled()
+  })
+
+  test("the service coming back clears offline: the next GET's background refresh reconnects and refreshes the timestamp", async () => {
+    seedConnected()
+    statusResponse({ fetchImpl: boom })
+    await backgroundRevalidationsSettled()
+    expect(JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0].offline).toBe(true) // still the cache
+    await backgroundRevalidationsSettled()
+    const recovered = JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0]
+    expect(recovered.state).toBe("connected")
+    expect(recovered.offline).toBeUndefined()
+    expect(recovered.stale).toBe(false)
+    expect(Date.parse(recovered.validated_at)).toBeGreaterThan(Date.parse(lastVerified))
+    expect(recovered.identity).toBe("team-alpha")
+  })
+
+  test("offline is a connected-only presentation flag: it never rides needs-key or failure states", async () => {
+    seedConnected()
+    statusResponse({ fetchImpl: boom })
+    await backgroundRevalidationsSettled()
+    // key actually revoked later: a manual revalidate answering 401 is truthful…
+    const invalid = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(401) }),
+    )
+    expect(invalid.connection.state).toBe("invalid")
+    expect(invalid.connection.offline).toBeUndefined()
+    // …and once the credential file goes away, needs-key carries no offline residue
+    disconnectResponse(JSON.stringify({ id: "company-compute" }))
+    const gone = JSON.parse(statusResponse({ fetchImpl: boom })).connections[0]
+    expect(gone.state).toBe("needs-key")
+    expect(gone.offline).toBeUndefined()
+  })
+})
+
+describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra#185)", () => {
+  // The stubbed identity endpoint: the SAME probe response, now carrying a
+  // JSON body with a submitter — exactly what aws-infra#185 will serve live.
+  const answering =
+    (submitter: unknown, status = 200): FetchImpl =>
+    async () => ({ status, json: async () => ({ submitter }) })
+  const revalidate = (fetchImpl: FetchImpl) =>
+    revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl })
+
+  test("probe surfaces the submitter echo when the response carries one; tolerant to everything else", async () => {
+    const url = "https://solves.example.co"
+    expect(await probeCompanyCompute(url, "tok", answering("team-alpha"))).toEqual({
+      outcome: "valid",
+      submitter: "team-alpha",
+    })
+    // no json seam (services predating #185), a broken body, an off-shape
+    // body, a non-string or empty submitter — all still a plain valid
+    expect(await probeCompanyCompute(url, "tok", respond(404))).toEqual({ outcome: "valid" })
+    const broken: FetchImpl = async () => ({
+      status: 200,
+      json: async () => {
+        throw new Error("no body")
+      },
+    })
+    expect(await probeCompanyCompute(url, "tok", broken)).toEqual({ outcome: "valid" })
+    const offShape: FetchImpl = async () => ({ status: 200, json: async () => ["not-an-object"] })
+    expect(await probeCompanyCompute(url, "tok", offShape)).toEqual({ outcome: "valid" })
+    expect(await probeCompanyCompute(url, "tok", answering(42))).toEqual({ outcome: "valid" })
+    expect(await probeCompanyCompute(url, "tok", answering(""))).toEqual({ outcome: "valid" })
+    // a rejected key reads NO identity — the body of a 401 is untrusted
+    expect(await probeCompanyCompute(url, "tok", answering("mallory", 401))).toEqual({ outcome: "invalid" })
+  })
+
+  test("submit with an identity echo → 'Connected as <submitter>': identity in the response AND the cache", async () => {
+    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("team-alpha")
+    expect(parsed.connection.identity_drift).toBeUndefined()
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.identity).toBe("team-alpha")
+    expect(entry.identity_drift).toBeUndefined()
+  })
+
+  test("a revalidation answering a DIFFERENT submitter → explicit diff; the STORED identity is the record (AC4)", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const drifted = JSON.parse(await revalidate(answering("team-beta")))
+    expect(drifted.connection.state).toBe("connected")
+    expect(drifted.connection.identity).toBe("team-alpha") // the record — never silently overwritten
+    expect(drifted.connection.identity_drift).toBe("team-beta") // what the key answers as NOW
+    // the record survives on disk exactly as stored; the drift rides beside it
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))["company-compute"]
+    expect(cache.identity).toBe("team-alpha")
+    expect(cache.identity_drift).toBe("team-beta")
+    // and the credential itself was never touched
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://solves.example.co", token: "tok-good" })
+  })
+
+  test("drift lands via the BACKGROUND revalidation too — the incident's silent path now surfaces", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))
+    cache["company-compute"].validated_at = new Date(Date.now() - STALE_MS - 60_000).toISOString()
+    writeFileSync(connectionsFile(), JSON.stringify(cache))
+    statusResponse({ fetchImpl: answering("team-beta") }) // stale GET kicks the refresh
+    await backgroundRevalidationsSettled()
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.state).toBe("connected")
+    expect(entry.stale).toBe(false)
+    expect(entry.identity).toBe("team-alpha")
+    expect(entry.identity_drift).toBe("team-beta")
+  })
+
+  test("agreement clears the drift; an echo-less revalidation leaves record AND drift standing", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await revalidate(answering("team-beta")) // drift recorded
+    const silent = JSON.parse(await revalidate(respond(200))) // no echo: nothing to reconcile with
+    expect(silent.connection.identity).toBe("team-alpha")
+    expect(silent.connection.identity_drift).toBe("team-beta")
+    const agreed = JSON.parse(await revalidate(answering("team-alpha"))) // answers as the record again
+    expect(agreed.connection.identity).toBe("team-alpha")
+    expect(agreed.connection.identity_drift).toBeUndefined()
+  })
+
+  test("re-submitting credentials is the human reconciliation: the record RESETS and the drift clears", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await revalidate(answering("team-beta"))
+    const resubmitted = JSON.parse(
+      await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta", 404) }),
+    )
+    expect(resubmitted.connection.state).toBe("connected")
+    expect(resubmitted.connection.identity).toBe("team-beta")
+    expect(resubmitted.connection.identity_drift).toBeUndefined()
+  })
+
+  test("POISON: a poisoned identity echo smuggles nothing — only the submitter string is read", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    const poisoned: FetchImpl = async () => ({
+      status: 200,
+      json: async () => ({ submitter: "team-beta", token: "POISON-echo", password: "POISON-echo-password" }),
+    })
+    const raw = await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: poisoned })
+    expect(raw).not.toContain("POISON")
+    expect(JSON.parse(raw).connection.identity_drift).toBe("team-beta")
+    expect(readFileSync(connectionsFile(), "utf8")).not.toContain("POISON")
+  })
+})
+
+describe("past expiry renders the reconnect prompt (170 AC5)", () => {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+  test("company-compute: a connected claim whose expires_at has passed renders 'expired' at read time; credential KEPT", () => {
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date().toISOString(),
+          expires_at: yesterday,
+          identity: "team-alpha",
+        },
+      }),
+    )
+    const entry = JSON.parse(statusResponse()).connections[0]
+    expect(entry.state).toBe("expired") // the reconnect prompt state — same rendering pasqal ships
+    expect(entry.stale).toBe(false) // expiry is its own state, never a staleness cue
+    expect(entry.expires_at).toBe(yesterday)
+    expect(entry.identity).toBe("team-alpha") // the record survives for the reconnect
+    // reconnect ≠ disconnect: the expired credential stays on disk
+    expect(readCredential("company-compute")).toEqual(cloudCredential)
+  })
+
+  test("company-compute: an unexpired expires_at keeps connected; unparseable expiry is ignored (honest minimum)", () => {
+    writeCredential("company-compute", cloudCredential)
+    for (const expires_at of [tomorrow, "not-a-date"]) {
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "company-compute": { state: "connected", validated_at: new Date().toISOString(), expires_at },
+        }),
+      )
+      expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected")
+    }
+  })
+
+  test("pasqal: a token that ages past its expiry renders 'expired' at read time — no revalidate needed (parity)", async () => {
+    const pastExpiry = validatorLine({ expires_at: yesterday })
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, pastExpiry).spawn })
+    const entry = pasqalEntry(statusResponse())
+    expect(entry.state).toBe("expired")
+    // the token artifact survives — reconnecting mints a fresh one over it
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted")
+  })
+
+  test("expired never kicks a background revalidate and never renders offline residue", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    writeCredential("company-compute", cloudCredential)
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(), // stale AND expired
+          expires_at: yesterday,
+          offline: true, // leftover marker from an offline stretch
+        },
+      }),
+    )
+    const entry = JSON.parse(statusResponse({ fetchImpl: counting })).connections[0]
+    expect(entry.state).toBe("expired")
+    expect(entry.offline).toBeUndefined() // offline is connected-only
+    await backgroundRevalidationsSettled()
+    expect(probes).toBe(0) // an expired claim re-enters via the form, not a probe
   })
 })

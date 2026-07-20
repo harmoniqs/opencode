@@ -8,7 +8,7 @@
 // amicode CLI's remote-config reader (amico-run/src/remote_config.ts)
 // unchanged. SECURITY: no credential value ever appears in an error message
 // or log line — errors carry structure, never bytes.
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
@@ -163,4 +163,15 @@ export function writeCredential(type: ConnectionType, value: Credential, hooks?:
 /** Remove the credential file; absent is a no-op. */
 export function clearCredential(type: ConnectionType): void {
   rmSync(BACKENDS[type].file(), { force: true })
+}
+
+/** The credential FILE's mtime in ms — the hand-edit detector (amicode#170
+ *  AC1): a file newer than its last validation marks the status stale.
+ *  Absent/unreadable → undefined, never a throw. */
+export function credentialFileMtime(type: ConnectionType): number | undefined {
+  try {
+    return statSync(BACKENDS[type].file()).mtimeMs
+  } catch {
+    return undefined
+  }
 }
