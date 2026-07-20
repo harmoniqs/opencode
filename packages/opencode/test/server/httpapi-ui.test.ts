@@ -436,6 +436,39 @@ describe("HttpApi UI fallback", () => {
     }),
   )
 
+  // Regression (amicode #159 test drive): the app shell's fingerprinted
+  // bundles are plain <script src>/<link href> sub-resource fetches — they
+  // structurally cannot carry ?auth_token= or a Basic header, so gating them
+  // behind server auth blanks the entire UI whenever a password is set. The
+  // hashed /assets/* files are exactly the "browser fetches without
+  // app-managed credentials" class PUBLIC_UI_PATHS exists for.
+  it.live("serves the fingerprinted app assets without auth even when a server password is set", () =>
+    Effect.gen(function* () {
+      for (const path of ["/assets/index-Bf35O2Ar.js", "/assets/index-DVrWAzIf.css", "/assets/logo-dark.svg"]) {
+        const response = yield* uiApp({
+          password: "secret",
+          username: "opencode",
+          disableEmbeddedWebUi: true,
+          client: httpClient(new Response("ok")),
+        }).request(path)
+        expect(response.status).not.toBe(401)
+      }
+      // The bypass is GET-only and prefix-exact: mutations and non-asset paths stay authed.
+      const post = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/assets/index-Bf35O2Ar.js", { method: "POST" })
+      expect(post.status).toBe(401)
+      const traversal = yield* uiApp({
+        password: "secret",
+        username: "opencode",
+        disableEmbeddedWebUi: true,
+      }).request("/assetsish/secret.js")
+      expect(traversal.status).toBe(401)
+    }),
+  )
+
   it.live("allows web UI preflight without auth", () =>
     Effect.gen(function* () {
       const response = yield* app({ password: "secret", username: "opencode" }).request("/", {

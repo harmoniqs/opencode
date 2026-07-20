@@ -7,6 +7,14 @@ export const PUBLIC_UI_PATHS = new Set<string>([
   "/web-app-manifest-512x512.png",
 ])
 
+// The app shell's fingerprinted bundles live under /assets/. They are plain
+// <script src>/<link href> sub-resource fetches — the browser cannot attach
+// ?auth_token= or a Basic header to them, so gating them behind server auth
+// blanks the whole UI whenever a password is set (the document authenticates,
+// its own bundle 401s). The compiled, content-hashed shell carries no secrets;
+// the API surface stays fully authed. GET-only, exact prefix.
+const PUBLIC_UI_PREFIX = "/assets/"
+
 export function isPublicUIPath(method: string, pathname: string) {
-  return method === "GET" && PUBLIC_UI_PATHS.has(pathname)
+  return method === "GET" && (PUBLIC_UI_PATHS.has(pathname) || pathname.startsWith(PUBLIC_UI_PREFIX))
 }
