@@ -6,6 +6,7 @@
 // password-masked inputs and the submit payload; they are never rendered as
 // text and the masked input clears when a submit lands connected.
 import { createEffect, createSignal, For, Show } from "solid-js"
+import { Button } from "../components/button"
 import {
   cardModel,
   connectionFormKind,
@@ -64,14 +65,16 @@ export function AmicodeConnectionsTab(props: {
               <div class="flex items-center gap-2 w-full px-2 py-1">
                 <div class="size-1.5 rounded-full shrink-0 bg-icon-critical-base" />
                 <span class="text-14-regular text-text-weak flex-1 truncate">{view().error}</span>
-                <button
+                <Button
                   type="button"
-                  class="text-12-regular text-text-base underline shrink-0"
+                  variant="ghost"
+                  size="small"
+                  class="shrink-0"
                   data-slot="amicode-connections-retry"
                   onClick={props.onRetry}
                 >
                   {props.labels.retry}
-                </button>
+                </Button>
               </div>
             }
           >
@@ -270,35 +273,39 @@ function ConnectionCard(props: {
               class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
             />
           </Show>
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="small"
             disabled={model().formDisabled}
             data-slot="amicode-connection-submit"
-            class="text-12-regular text-text-base underline self-start disabled:opacity-50"
+            class="self-start"
           >
             {props.labels.submit}
-          </button>
+          </Button>
         </form>
       </Show>
 
       <Show when={model().showActions}>
         <div class="flex gap-3 pl-3.5 pt-1">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="small"
             data-slot="amicode-connection-revalidate"
-            class="text-12-regular text-text-base underline"
             onClick={() => props.onRevalidate(props.conn.id)}
           >
             {props.labels.revalidate}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="small"
             data-slot="amicode-connection-disconnect"
-            class="text-12-regular text-text-weak underline"
             onClick={() => props.onDisconnect(props.conn.id)}
           >
             {props.labels.disconnect}
-          </button>
+          </Button>
         </div>
       </Show>
     </div>
