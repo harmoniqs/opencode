@@ -1136,6 +1136,10 @@ export const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         let structured: unknown
         let step = 0
+        // Amico interview guard: assistant message IDs already nudged to re-ask
+        // via the `question` tool, so a stubborn turn is nudged at most once
+        // (the Assistant info schema has no metadata field to persist this on).
+        const amicoNudged = new Set<string>()
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
@@ -1167,6 +1171,73 @@ export const layer = Layer.effect(
             !hasToolCalls &&
             lastUser.id < lastAssistant.id
           ) {
+            // Amico interview guard: the pulse-designer interview must ask every
+            // question via the `question` tool (it renders the clickable card).
+            // Models intermittently drift and ask in PROSE instead, which leaves
+            // the user with no card and stalls the interview. If this turn ended
+            // by asking a question in prose — no question tool call, final text
+            // ends in "?" — while the interview is active (the session has used
+            // amicode_* recording tools), don't exit: inject a synthetic nudge
+            // and continue so the model re-asks via the tool. Guarded to fire at
+            // most once per assistant message (metadata flag) so a genuinely
+            // stubborn turn can't loop forever.
+            const askedInProse = (() => {
+              if (!lastAssistantMsg || !lastAssistant) return false
+              // already nudged this exact assistant message? let it exit.
+              if (amicoNudged.has(lastAssistant.id)) return false
+              const askedQuestionTool = lastAssistantMsg.parts.some(
+                (p) => p.type === "tool" && p.tool === "question",
+              )
+              if (askedQuestionTool) return false
+              const text = lastAssistantMsg.parts
+                .filter((p): p is SessionV1.TextPart => p.type === "text")
+                .map((p) => p.text)
+                .join("\n")
+                .trimEnd()
+              // Heuristic: final non-empty line ends with "?" (a question to the user).
+              const endsWithQuestion = /\?["')\]]*\s*$/.test(text)
+              if (!endsWithQuestion) return false
+              // Only within an active Amico interview: the session has recorded
+              // at least one entity via an amicode_* tool this session.
+              const interviewActive = msgs.some((m) =>
+                m.parts.some((p) => p.type === "tool" && typeof p.tool === "string" && p.tool.startsWith("amicode_")),
+              )
+              return interviewActive
+            })()
+
+            if (askedInProse && lastAssistant) {
+              yield* Effect.logWarning("amico interview: question asked in prose, nudging to the question tool", {
+                "session.id": sessionID,
+                messageID: lastAssistant.id,
+              })
+              // nudge this assistant message at most once (in-memory, this loop)
+              amicoNudged.add(lastAssistant.id)
+              const nudgeMsg: SessionV1.User = {
+                id: MessageID.ascending(),
+                sessionID,
+                role: "user",
+                time: { created: Date.now() },
+                agent: lastUser.agent,
+                model: lastUser.model,
+              }
+              yield* sessions.updateMessage(nudgeMsg)
+              yield* sessions.updatePart({
+                id: PartID.ascending(),
+                messageID: nudgeMsg.id,
+                sessionID,
+                type: "text",
+                text:
+                  "[system] You just asked the user a question in plain text. The interview " +
+                  "requires the `question` tool for every question so the user gets a clickable " +
+                  "card — plain prose renders nothing to answer. Re-ask that exact question by " +
+                  "calling the `question` tool now (one question, default option first with " +
+                  "\"(Recommended)\"), and do not repeat the question in prose.",
+                synthetic: true,
+              } satisfies SessionV1.TextPart)
+              step++
+              continue
+            }
+
             const orphan = lastAssistantMsg?.parts.find(
               (part): part is SessionV1.ToolPart => part.type === "tool" && isOrphanedInterruptedTool(part),
             )
