@@ -74,6 +74,76 @@ export function parseConnectionsResponse(raw: unknown): ConnectionsView {
   return { ok: true, connections: data.connections.map(parseConnectionEntry) }
 }
 
+// --- card model (AC1): the pure state→props mapping the tab renders from.
+// The tsx component is a thin projection of this — with no component harness
+// in the repo, this mapping carries the behavioral contract and its tests.
+
+export type ConnectionStateLabels = Record<ConnectionCardState, string>
+
+/** Distinct copy per state; anything unrecognized reads the "unknown" line. */
+export function stateCopy(view: ConnectionView, labels: ConnectionStateLabels): string {
+  return labels[view.state]
+}
+
+export type ConnectionCardModel = {
+  state: ConnectionCardState
+  tone: "success" | "critical" | "warning" | "pending" | "neutral"
+  /** key-entry form (base_url + masked token) */
+  showForm: boolean
+  /** true only while validating — the in-flight render keeps the form frozen */
+  formDisabled: boolean
+  /** disconnect + revalidate */
+  showActions: boolean
+  showValidatedAt: boolean
+  showIdentity: boolean
+  showStale: boolean
+  /** unknown states show the wire's raw word beside the fallback copy */
+  showRawState: boolean
+}
+
+export function cardModel(view: ConnectionView): ConnectionCardModel {
+  const base = {
+    state: view.state,
+    formDisabled: false,
+    showValidatedAt: false,
+    showIdentity: false,
+    showStale: false,
+    showRawState: false,
+  }
+  switch (view.state) {
+    case "connected":
+      return {
+        ...base,
+        tone: "success",
+        showForm: false,
+        showActions: true,
+        showValidatedAt: true,
+        showIdentity: view.identity !== undefined,
+        showStale: view.stale,
+      }
+    case "needs-key":
+      return { ...base, tone: "neutral", showForm: true, showActions: false }
+    case "invalid":
+      return { ...base, tone: "critical", showForm: true, showActions: false }
+    case "unreachable":
+      return { ...base, tone: "warning", showForm: true, showActions: false }
+    case "validating":
+      return { ...base, tone: "pending", showForm: true, formDisabled: true, showActions: false }
+    default:
+      // safe fallback (AC4): keep every exit open — re-key, disconnect, or
+      // revalidate — and surface whatever the wire said as a raw badge.
+      return {
+        ...base,
+        tone: "neutral",
+        showForm: true,
+        showActions: true,
+        showRawState: true,
+        showValidatedAt: view.validatedAt !== "—",
+        showIdentity: view.identity !== undefined,
+      }
+  }
+}
+
 export function parseConnectionActionResponse(raw: unknown): ConnectionActionView {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     return { ok: false, error: "bad_shape: response is not an object" }

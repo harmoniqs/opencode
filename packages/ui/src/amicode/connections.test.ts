@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { parseConnectionActionResponse, parseConnectionsResponse, validatedAtDisplay } from "./connections"
+import {
+  cardModel,
+  parseConnectionActionResponse,
+  parseConnectionsResponse,
+  stateCopy,
+  validatedAtDisplay,
+  type ConnectionCardState,
+  type ConnectionStateLabels,
+  type ConnectionView,
+} from "./connections"
 
 // Wire fixtures mirror the #165 status contract (packages/opencode
 // src/server/amicode/connections.ts): GET → {ok, connections:[…]},
@@ -182,5 +191,98 @@ describe("parseConnectionActionResponse", () => {
       error: null,
     })
     expect(JSON.stringify(view)).not.toContain("sk-echoed")
+  })
+})
+
+// --- AC1: the state→props mapping the card renders from. With no tsx
+// component harness in this repo (see connections-tab.tsx), this mapping IS
+// the component contract, so it gets exhaustive coverage here.
+
+const CARD_STATES: ConnectionCardState[] = ["connected", "needs-key", "invalid", "unreachable", "validating", "unknown"]
+
+const labels: ConnectionStateLabels = {
+  connected: "Connected",
+  "needs-key": "Not connected — enter a key",
+  invalid: "Key rejected",
+  unreachable: "Service unreachable",
+  validating: "Validating key…",
+  unknown: "Status needs attention",
+}
+
+function viewFor(state: ConnectionCardState, extra: Partial<ConnectionView> = {}): ConnectionView {
+  return {
+    id: "company-compute",
+    state,
+    rawState: state === "unknown" ? "expired" : state,
+    validatedAt: "—",
+    stale: false,
+    ...extra,
+  }
+}
+
+describe("stateCopy", () => {
+  test("every card state picks its own distinct copy (AC1)", () => {
+    const seen = new Set(CARD_STATES.map((state) => stateCopy(viewFor(state), labels)))
+    expect(seen.size).toBe(CARD_STATES.length)
+    for (const state of CARD_STATES) {
+      expect(stateCopy(viewFor(state), labels)).toBe(labels[state])
+    }
+  })
+})
+
+describe("cardModel", () => {
+  test("connected: actions + validated_at, no key form", () => {
+    const model = cardModel(viewFor("connected", { validatedAt: "7/19/2026", identity: "kate@harmoniqs.co" }))
+    expect(model.showForm).toBe(false)
+    expect(model.showActions).toBe(true)
+    expect(model.showValidatedAt).toBe(true)
+    expect(model.showIdentity).toBe(true)
+    expect(model.tone).toBe("success")
+  })
+
+  test("connected without identity hides the identity line; stale surfaces the hint", () => {
+    const bare = cardModel(viewFor("connected"))
+    expect(bare.showIdentity).toBe(false)
+    expect(bare.showStale).toBe(false)
+    const stale = cardModel(viewFor("connected", { stale: true }))
+    expect(stale.showStale).toBe(true)
+  })
+
+  test("needs-key / invalid / unreachable: key form enabled, no actions", () => {
+    for (const [state, tone] of [
+      ["needs-key", "neutral"],
+      ["invalid", "critical"],
+      ["unreachable", "warning"],
+    ] as const) {
+      const model = cardModel(viewFor(state))
+      expect(model.showForm).toBe(true)
+      expect(model.formDisabled).toBe(false)
+      expect(model.showActions).toBe(false)
+      expect(model.showValidatedAt).toBe(false)
+      expect(model.tone).toBe(tone)
+    }
+  })
+
+  test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
+    const model = cardModel(viewFor("validating"))
+    expect(model.showForm).toBe(true)
+    expect(model.formDisabled).toBe(true)
+    expect(model.showActions).toBe(false)
+    expect(model.tone).toBe("pending")
+  })
+
+  test("unknown: safe fallback keeps every exit open and shows the raw wire word (AC4)", () => {
+    const model = cardModel(viewFor("unknown"))
+    expect(model.showForm).toBe(true)
+    expect(model.formDisabled).toBe(false)
+    expect(model.showActions).toBe(true)
+    expect(model.showRawState).toBe(true)
+    expect(model.tone).toBe("neutral")
+  })
+
+  test("only unknown renders the raw state word", () => {
+    for (const state of CARD_STATES.filter((s) => s !== "unknown")) {
+      expect(cardModel(viewFor(state)).showRawState).toBe(false)
+    }
   })
 })
