@@ -123,16 +123,29 @@ describe("probe classification (AC2)", () => {
     expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(401))).outcome).toBe("invalid")
   })
 
-  test("auth-passed classes → valid: 403, 404, and 2xx all mean the key got past the authorizer", async () => {
-    // Parent contract: the authorizer rejects bad keys BEFORE the handler; a
-    // good key reaches the handler's not-found/forbidden for the fake task.
-    for (const status of [200, 204, 403, 404]) {
-      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe("valid")
+  test("LIVE-VERIFIED semantics (amicode#178): 2xx+submitter = valid with identity; 401 AND 403 = invalid (HTTP API authorizer denials emit 403, not 401)", async () => {
+    // Live finding 2026-07-20 with a real credential: the old fake-task probe
+    // inverted — valid keys 400'd on aws-infra#186's task-id guard while
+    // garbage keys got authorizer-denial 403s that classified as valid.
+    // Validation now targets GET /solves/whoami (aws-infra#185/#188).
+    const whoami: FetchImpl = async () => ({ status: 200, json: async () => ({ submitter: "raghav-internal" }) })
+    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", whoami)).toEqual({
+      outcome: "valid",
+      submitter: "raghav-internal",
+    })
+    for (const status of [401, 403]) {
+      expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe("invalid")
     }
   })
 
-  test("server-error / network classes → unreachable: 5xx, odd 4xx, thrown fetch", async () => {
-    for (const status of [400, 429, 500, 502, 503]) {
+  test("2xx without a submitter echo is tolerated as valid, identity-less (no-echo tolerance)", async () => {
+    expect(await probeCompanyCompute("https://solves.example.co", "tok-1", respond(204))).toEqual({ outcome: "valid" })
+  })
+
+  test("server-error / network / missing-endpoint classes → unreachable: 400, 404, 5xx, thrown fetch", async () => {
+    // 404 = a service deploy that predates the whoami endpoint — refuse to
+    // save rather than guess (the shipped service has it; aws-infra#188).
+    for (const status of [400, 404, 429, 500, 502, 503]) {
       expect((await probeCompanyCompute("https://solves.example.co", "tok-1", respond(status))).outcome).toBe(
         "unreachable",
       )
@@ -143,16 +156,16 @@ describe("probe classification (AC2)", () => {
     expect((await probeCompanyCompute("https://solves.example.co", "tok-1", network)).outcome).toBe("unreachable")
   })
 
-  test("probe hits the fake-task status route; the token rides ONLY the Authorization header, never the URL", async () => {
+  test("probe hits /solves/whoami; the token rides ONLY the Authorization header, never the URL", async () => {
     let seenUrl = ""
     let seenAuth = ""
     const capture: FetchImpl = async (url, init) => {
       seenUrl = url
       seenAuth = init.headers.authorization ?? ""
-      return { status: 404 }
+      return { status: 200, json: async () => ({ submitter: "s" }) }
     }
     await probeCompanyCompute("https://solves.example.co///", "tok-secret-xyz", capture)
-    expect(seenUrl).toBe("https://solves.example.co/solves/__validate__/status")
+    expect(seenUrl).toBe("https://solves.example.co/solves/whoami")
     expect(seenUrl).not.toContain("tok-secret-xyz")
     expect(seenAuth).toBe("Bearer tok-secret-xyz")
   })
@@ -297,7 +310,7 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
 describe("submit credential — probe → save → terminal status, one round trip (AC1, AC2)", () => {
   test("submit: valid key → credential written through the #162 seam + connected in the SAME response (AC1)", async () => {
     const body = JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co/", token: "tok-good" })
-    const parsed = JSON.parse(await submitCredentialResponse(body, { fetchImpl: respond(404) }))
+    const parsed = JSON.parse(await submitCredentialResponse(body, { fetchImpl: respond(200) }))
     expect(parsed.ok).toBe(true)
     expect(parsed.error).toBeNull()
     expect(parsed.connection.id).toBe("company-compute")
@@ -404,7 +417,7 @@ describe("HP flip on connect — artifacts in the ops dir (167 AC1, AC3)", () =>
   })
 
   test("valid save → BOTH artifacts: issimo granted in entitlements.toml AND the hp switching request (AC1)", async () => {
-    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: respond(404) }))
+    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }))
     expect(parsed.ok).toBe(true)
     expect(parsed.error).toBeNull()
     expect(parsed.connection.state).toBe("connected")
@@ -552,11 +565,11 @@ describe("disconnect + revalidate (AC4)", () => {
     const capture: FetchImpl = async (url, init) => {
       seenUrl = url
       seenAuth = init.headers.authorization ?? ""
-      return { status: 404 }
+      return { status: 200 }
     }
     const request = JSON.stringify({ id: "company-compute" }) // the whole body — token never leaves the server
     const parsed = JSON.parse(await revalidateResponse(request, { fetchImpl: capture }))
-    expect(seenUrl).toBe("https://solves.example.co/solves/__validate__/status")
+    expect(seenUrl).toBe("https://solves.example.co/solves/whoami")
     expect(seenAuth).toBe(`Bearer ${cloudCredential.token}`)
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("connected")
@@ -1099,7 +1112,7 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     expect(second.state).toBe("connected")
     expect(probes).toBe(1)
 
-    release({ status: 404 }) // auth-passed → valid
+    release({ status: 200 }) // whoami 200 → valid (amicode#178 semantics)
     await backgroundRevalidationsSettled()
 
     const refreshed = JSON.parse(statusResponse({ fetchImpl: gated })).connections[0]
@@ -1123,11 +1136,11 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     const capture: FetchImpl = async (url, init) => {
       seenUrl = url
       seenAuth = init.headers.authorization ?? ""
-      return { status: 404 }
+      return { status: 200 }
     }
     statusResponse({ fetchImpl: capture })
     await backgroundRevalidationsSettled()
-    expect(seenUrl).toBe("https://edited.example.co/solves/__validate__/status")
+    expect(seenUrl).toBe("https://edited.example.co/solves/whoami")
     expect(seenAuth).toBe("Bearer tok-hand-edited")
   })
 
@@ -1306,9 +1319,9 @@ describe("offline boot — last-verified rendering, never invalid (170 AC3)", ()
     seedConnected()
     statusResponse({ fetchImpl: boom })
     await backgroundRevalidationsSettled()
-    expect(JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0].offline).toBe(true) // still the cache
+    expect(JSON.parse(statusResponse({ fetchImpl: respond(200) })).connections[0].offline).toBe(true) // still the cache
     await backgroundRevalidationsSettled()
-    const recovered = JSON.parse(statusResponse({ fetchImpl: respond(404) })).connections[0]
+    const recovered = JSON.parse(statusResponse({ fetchImpl: respond(200) })).connections[0]
     expect(recovered.state).toBe("connected")
     expect(recovered.offline).toBeUndefined()
     expect(recovered.stale).toBe(false)
@@ -1351,7 +1364,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
     })
     // no json seam (services predating #185), a broken body, an off-shape
     // body, a non-string or empty submitter — all still a plain valid
-    expect(await probeCompanyCompute(url, "tok", respond(404))).toEqual({ outcome: "valid" })
+    expect(await probeCompanyCompute(url, "tok", respond(204))).toEqual({ outcome: "valid" })
     const broken: FetchImpl = async () => ({
       status: 200,
       json: async () => {
@@ -1368,7 +1381,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   })
 
   test("submit with an identity echo → 'Connected as <submitter>': identity in the response AND the cache", async () => {
-    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) }))
+    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") }))
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("connected")
     expect(parsed.connection.identity).toBe("team-alpha")
@@ -1379,7 +1392,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   })
 
   test("a revalidation answering a DIFFERENT submitter → explicit diff; the STORED identity is the record (AC4)", async () => {
-    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     const drifted = JSON.parse(await revalidate(answering("team-beta")))
     expect(drifted.connection.state).toBe("connected")
     expect(drifted.connection.identity).toBe("team-alpha") // the record — never silently overwritten
@@ -1393,7 +1406,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   })
 
   test("drift lands via the BACKGROUND revalidation too — the incident's silent path now surfaces", async () => {
-    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     const cache = JSON.parse(readFileSync(connectionsFile(), "utf8"))
     cache["company-compute"].validated_at = new Date(Date.now() - STALE_MS - 60_000).toISOString()
     writeFileSync(connectionsFile(), JSON.stringify(cache))
@@ -1407,7 +1420,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   })
 
   test("agreement clears the drift; an echo-less revalidation leaves record AND drift standing", async () => {
-    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     await revalidate(answering("team-beta")) // drift recorded
     const silent = JSON.parse(await revalidate(respond(200))) // no echo: nothing to reconcile with
     expect(silent.connection.identity).toBe("team-alpha")
@@ -1418,18 +1431,16 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   })
 
   test("re-submitting credentials is the human reconciliation: the record RESETS and the drift clears", async () => {
-    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     await revalidate(answering("team-beta"))
-    const resubmitted = JSON.parse(
-      await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta", 404) }),
-    )
+    const resubmitted = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta") }))
     expect(resubmitted.connection.state).toBe("connected")
     expect(resubmitted.connection.identity).toBe("team-beta")
     expect(resubmitted.connection.identity_drift).toBeUndefined()
   })
 
   test("POISON: a poisoned identity echo smuggles nothing — only the submitter string is read", async () => {
-    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha", 404) })
+    await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     const poisoned: FetchImpl = async () => ({
       status: 200,
       json: async () => ({ submitter: "team-beta", token: "POISON-echo", password: "POISON-echo-password" }),

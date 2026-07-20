@@ -121,7 +121,7 @@ afterEach(async () => {
 describe("connections routes — full lifecycle, no extension host (AC6)", () => {
   test("needs-key → submit → connected → revalidate → disconnect → needs-key, one round trip each", async () => {
     const server = app()
-    let probeStatus = 404 // authorizer passed; fake task not found → valid
+    let probeStatus = 200 // whoami 200 → valid (amicode#178 semantics)
     const stub = await stubSolveService(() => probeStatus)
     try {
       const initial = await (await server.request("/amicode/connections")).json()
@@ -142,7 +142,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
       expect(submitted.connection.state).toBe("connected") // terminal status in the SAME response (AC1)
       expect(readCredential("company-compute")).toEqual({ base_url: stub.url, token: "tok-lifecycle" })
       expect(stub.seen).toHaveLength(1)
-      expect(stub.seen[0].url).toBe("/solves/__validate__/status")
+      expect(stub.seen[0].url).toBe("/solves/whoami")
       expect(stub.seen[0].url).not.toContain("tok-lifecycle")
       expect(stub.seen[0].authorization).toBe("Bearer tok-lifecycle")
 
@@ -210,7 +210,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
 describe("connections routes — HP flip artifacts over the route tree (167 AC1, AC3, AC4)", () => {
   test("valid submit over the route → both flip artifacts; disconnect leaves them (one-way); 401 never flips", async () => {
     const server = app()
-    let probeStatus = 404
+    let probeStatus = 200
     const stub = await stubSolveService(() => probeStatus)
     try {
       // valid save over the REAL route tree → both ops-dir artifacts (AC1),
@@ -575,7 +575,7 @@ describe("connections routes — standalone serve records the bind", () => {
 
   test("a real 0.0.0.0 listener refuses mutations over live HTTP; a 127.0.0.1 listener serves them", async () => {
     const { Server } = await import("@/server/server")
-    const stub = await stubSolveService(() => 404)
+    const stub = await stubSolveService(() => 200)
     const body = post({ id: "company-compute", base_url: stub.url, token: "tok-real-bind" })
 
     const wide = await Server.listen({ hostname: "0.0.0.0", port: 0 })

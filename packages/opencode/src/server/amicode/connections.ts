@@ -442,7 +442,7 @@ export type FetchImpl = (
   init: { method: "GET"; headers: Record<string, string> },
 ) => Promise<{ status: number; json?: () => Promise<unknown> }>
 
-const PROBE_PATH = "/solves/__validate__/status"
+const PROBE_PATH = "/solves/whoami"
 
 /** The identity echo: a VALID probe response MAY carry {submitter: string}
  *  (aws-infra#185). Anything else — no json seam, unparseable body, off-shape
@@ -458,12 +458,16 @@ async function readSubmitterEcho(response: { json?: () => Promise<unknown> }): P
   }
 }
 
-/** Classify a Company Compute credential against the fake-task status route
- *  (parent #159 probe contract: the authorizer rejects bad keys before the
- *  handler; good keys reach the handler's not-found/forbidden).
- *    401                → invalid      (authorizer rejected the key)
- *    2xx / 403 / 404    → valid        (key got past the authorizer)
- *    anything else      → unreachable  (service or network trouble)
+/** Classify a Company Compute credential against GET /solves/whoami
+ *  (aws-infra#185/#188 — the credential-scoped identity endpoint).
+ *    2xx                → valid        (identity captured when echoed)
+ *    401 / 403          → invalid      (HTTP API authorizer denials emit 403,
+ *                                       not the once-assumed 401 — live-verified)
+ *    anything else      → unreachable  (incl. 400/404: a deploy without the
+ *                                       endpoint — refuse to save, never guess)
+ *  Replaces the fake-task probe, which inverted against the live service
+ *  (amicode#178: aws-infra#186's task-id guard 400'd valid keys while
+ *  authorizer-denial 403s classified garbage as valid).
  *  The token rides the Authorization header ONLY — never the URL. */
 export async function probeCompanyCompute(
   baseUrl: string,
@@ -477,8 +481,8 @@ export async function probeCompanyCompute(
   } catch {
     return { outcome: "unreachable" }
   }
-  if (response.status === 401) return { outcome: "invalid" }
-  if ((response.status >= 200 && response.status < 300) || response.status === 403 || response.status === 404) {
+  if (response.status === 401 || response.status === 403) return { outcome: "invalid" }
+  if (response.status >= 200 && response.status < 300) {
     const submitter = await readSubmitterEcho(response)
     return { outcome: "valid", ...(submitter ? { submitter } : {}) }
   }
