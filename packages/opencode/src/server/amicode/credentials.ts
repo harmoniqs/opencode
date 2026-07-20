@@ -8,7 +8,8 @@
 // amicode CLI's remote-config reader (amico-run/src/remote_config.ts)
 // unchanged. SECURITY: no credential value ever appears in an error message
 // or log line — errors carry structure, never bytes.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
 
@@ -105,6 +106,33 @@ const BACKENDS: Record<ConnectionType, Backend> = {
   },
 }
 
+// --- atomic 0600-at-birth writer ---
+
+export interface WriteHooks {
+  /** Test seam: observe or replace the rename step, e.g. to assert the tmp
+   *  file's mode BEFORE it becomes the target (mode-at-birth, never a
+   *  post-rename chmod). Production callers pass nothing. */
+  rename?: (tmp: string, target: string) => void
+}
+
+/** Atomic replace: write a sibling tmp file with mode 0600 set AT CREATION
+ *  (the mode option on the open — the Bun/Node default is 0666 & ~umask,
+ *  i.e. world-readable), then rename over the target. rename() swaps the
+ *  inode, so a pre-existing wrong-permission target comes out 0600 too. On
+ *  ANY failure the tmp is removed: the target is never partial — it holds
+ *  either the old bytes or the new bytes, nothing in between. */
+export function atomicWriteFileSync(target: string, data: string, hooks?: WriteHooks): void {
+  mkdirSync(path.dirname(target), { recursive: true })
+  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${randomBytes(6).toString("hex")}.tmp`)
+  try {
+    writeFileSync(tmp, data, { mode: 0o600 })
+    ;(hooks?.rename ?? renameSync)(tmp, target)
+  } catch (err) {
+    rmSync(tmp, { force: true })
+    throw err
+  }
+}
+
 // --- the seam surface: read / write / clear per connection type ---
 
 export function readCredential(type: "company-compute"): CompanyComputeCredential | undefined
@@ -123,14 +151,12 @@ export function readCredential(type: ConnectionType): Credential | undefined {
   return backend.decode(raw)
 }
 
-export function writeCredential(type: "company-compute", value: CompanyComputeCredential): void
-export function writeCredential(type: "pasqal-cloud", value: PasqalCredential): void
-export function writeCredential(type: ConnectionType, value: Credential): void {
+export function writeCredential(type: "company-compute", value: CompanyComputeCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "pasqal-cloud", value: PasqalCredential, hooks?: WriteHooks): void
+export function writeCredential(type: ConnectionType, value: Credential, hooks?: WriteHooks): void {
   const backend = BACKENDS[type]
-  const bytes = backend.encode(value as unknown as Record<string, unknown>)
-  const target = backend.file()
-  mkdirSync(path.dirname(target), { recursive: true })
-  writeFileSync(target, bytes)
+  const bytes = backend.encode(value as unknown as Record<string, unknown>) // encode BEFORE touching disk
+  atomicWriteFileSync(backend.file(), bytes, hooks)
 }
 
 /** Remove the credential file; absent is a no-op. */

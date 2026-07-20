@@ -5,10 +5,12 @@
 // overrides the CLI honors (AMICO_CLOUD_FILE / AMICO_PASQAL_FILE) — the test
 // seam and the compatibility seam are one mechanism.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync } from "node:fs"
+import { chmodSync, mkdtempSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { cloudFile, readCredential, writeCredential, clearCredential } from "@/server/amicode/credentials"
+
+const mode = (file: string) => statSync(file).mode & 0o777
 
 const FIXTURES = path.join(import.meta.dir, "fixtures", "credentials")
 const golden = (name: string) => readFileSync(path.join(FIXTURES, name), "utf8")
@@ -72,5 +74,37 @@ describe("company-compute backend (AC1)", () => {
     clearCredential("company-compute")
     expect(readCredential("company-compute")).toBeUndefined()
     clearCredential("company-compute") // idempotent — clearing an absent file is a no-op
+  })
+})
+
+describe("atomic 0600-at-birth writer (AC2)", () => {
+  test("tmp file is 0600 AT CREATION — asserted at the tmp stage, before rename", () => {
+    let tmpSeen: string | undefined
+    let tmpMode: number | undefined
+    writeCredential("company-compute", { base_url: "https://x.co", token: "tok" }, {
+      rename(tmp, target) {
+        tmpSeen = tmp
+        tmpMode = mode(tmp) // stat BEFORE the rename — birth mode, not post-hoc chmod
+        expect(path.dirname(tmp)).toBe(path.dirname(target)) // same dir → same fs, rename is atomic
+        renameSync(tmp, target)
+      },
+    })
+    expect(tmpSeen).toBeDefined()
+    expect(tmpMode).toBe(0o600)
+    expect(mode(cloudFile())).toBe(0o600)
+  })
+
+  test("final file is 0600 with the default rename", () => {
+    writeCredential("company-compute", { base_url: "https://x.co", token: "tok" })
+    expect(mode(cloudFile())).toBe(0o600)
+  })
+
+  test("a pre-existing wrong-permission file is corrected to 0600 on write", () => {
+    writeFileSync(cloudFile(), '{"base_url":"https://old.co","token":"old"}\n')
+    chmodSync(cloudFile(), 0o644)
+    expect(mode(cloudFile())).toBe(0o644)
+    writeCredential("company-compute", { base_url: "https://new.co", token: "new-tok" })
+    expect(mode(cloudFile())).toBe(0o600)
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://new.co", token: "new-tok" })
   })
 })
