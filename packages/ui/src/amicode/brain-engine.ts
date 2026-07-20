@@ -231,8 +231,17 @@ const TEMPI = [
 export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOptions = {}): BrainEngine {
   let scheme: BrainScheme = opts.scheme === "light" ? "light" : "dark"
   let css: Palette = PALETTES[scheme]
-  const reduceMotion =
+  // live: honors mid-session OS toggles (the iframe only re-read it on reload)
+  let reduceMotion =
     opts.reduceMotion ?? (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches)
+  let motionQuery: MediaQueryList | null = null
+  const onMotionChange = (e: MediaQueryListEvent) => {
+    reduceMotion = e.matches
+  }
+  if (opts.reduceMotion === undefined && typeof matchMedia !== "undefined") {
+    motionQuery = matchMedia("(prefers-reduced-motion: reduce)")
+    motionQuery.addEventListener("change", onMotionChange)
+  }
   const animate = opts.animate ?? true
   const ctx = canvas.getContext("2d")
 
@@ -492,7 +501,9 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     DPR = Math.min((typeof devicePixelRatio !== "undefined" ? devicePixelRatio : 1) || 1, 2)
     W = width ?? canvas.clientWidth ?? 0
     H = height ?? canvas.clientHeight ?? 0
-    if (!W || !H) {
+    // junk-proof: a NaN/negative box would poison every projection this frame
+    // and a zero worldScale divides the camera fit by 0 — fall back instead
+    if (!Number.isFinite(W) || !Number.isFinite(H) || W < 1 || H < 1) {
       W = opts.size?.width ?? 800
       H = opts.size?.height ?? 224
     }
@@ -695,6 +706,10 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     const key = label + (msg.consider ? "?" : "!")
     if ((live.recent.get(key) ?? -9) > clock.beat - 2) return // debounce repeats
     live.recent.set(key, clock.beat)
+    // marathon sessions: entries past the debounce window are dead weight
+    if (live.recent.size > 512) {
+      for (const [k, t] of live.recent) if (t <= clock.beat - 2) live.recent.delete(k)
+    }
     const n = liveNode(label, msg.type)
     if (msg.consider) {
       n.consider = 1 // the flash itself is a fade — fine under reduced motion
@@ -792,6 +807,20 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   let unfurl = reduceMotion ? 1 : 0
   function tick(nowMs: number) {
     if (halted || !ctx) return
+    if (!Number.isFinite(nowMs)) return // a NaN timestamp would poison clock.beat permanently
+    try {
+      drawFrame(nowMs)
+    } catch (err) {
+      // a corrupt frame must not spin the rAF chain half-rendered forever —
+      // halt visibly (resume() re-arms after e.g. a session switch)
+      halted = true
+      console.error("[amico-brain] halted on render error:", err)
+      return
+    }
+    if (animate && typeof requestAnimationFrame !== "undefined") requestAnimationFrame(tick)
+  }
+  function drawFrame(nowMs: number) {
+    if (!ctx) return
     const dt = Math.min(nowMs - (clock.lastMs || nowMs), 50)
     clock.lastMs = nowMs
     clock.beat += (dt / 60000) * bpmNow()
@@ -1030,8 +1059,6 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       ctx.stroke()
       curNode.labelA = 1 // the name of where we are stays readable
     }
-
-    if (animate && typeof requestAnimationFrame !== "undefined") requestAnimationFrame(tick)
   }
 
   // waking — the thought begins here
@@ -1083,6 +1110,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       destroyed = true
       halted = true
       ro?.disconnect()
+      motionQuery?.removeEventListener("change", onMotionChange)
     },
     stats: () => ({
       scheme,

@@ -197,3 +197,65 @@ describe("lifecycle", () => {
     }).not.toThrow()
   })
 })
+
+describe("hostile input", () => {
+  test("a NaN timestamp is a no-op and does not poison the clock", () => {
+    const { engine, ctx } = makeEngine()
+    engine.tick(Number.NaN)
+    engine.tick(Number.POSITIVE_INFINITY)
+    expect(ctx.calls.length).toBe(0) // rejected before any drawing
+    engine.tick(16)
+    engine.touch({ label: "solve", replay: true })
+    engine.tick(32) // a poisoned beat would NaN every projection from here on
+    expect(ctx.calls.filter((c) => c.method === "clearRect").length).toBe(2)
+    expect(engine.stats().claimed).toBe(1)
+  })
+
+  test("junk resize falls back instead of zeroing the world scale", () => {
+    const { engine, ctx } = makeEngine()
+    engine.resize(Number.NaN, -5)
+    engine.resize(0, 0)
+    engine.tick(16)
+    const clears = ctx.calls.filter((c) => c.method === "clearRect")
+    expect(clears[0].args).toEqual([0, 0, 800, 224]) // opts.size fallback held
+  })
+
+  test("charting fewer than two commits never plates a constellation", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "solve", replay: true })
+    engine.chart("one lonely commit", true)
+    expect(engine.stats().atlas).toBe(0)
+  })
+
+  test("rapid theme flips stay stable and lossless", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "solve", replay: true })
+    for (let i = 0; i < 50; i++) engine.setTheme(i % 2 ? "dark" : "light")
+    engine.tick(16)
+    expect(engine.stats().scheme).toBe("dark") // 50 flips from i=0 end on i=49 → dark
+    expect(engine.stats().claimed).toBe(1)
+  })
+
+  test("a render error halts the loop instead of spinning half-rendered", () => {
+    const ctx = recordingCtx()
+    let arcs = 0
+    ctx.arc = (..._args: unknown[]) => {
+      if (++arcs > 4) throw new Error("boom")
+    }
+    const canvas = stubCanvas(ctx)
+    const engine = createBrainEngine(canvas, {
+      scheme: "dark",
+      reduceMotion: true,
+      animate: false,
+      size: { width: 800, height: 224 },
+    })
+    engine.tick(16) // throws internally → halts, no propagation
+    const n = ctx.calls.length
+    engine.tick(32) // halted: no further drawing
+    expect(ctx.calls.length).toBe(n)
+    engine.resume() // re-arms after e.g. a session switch
+    arcs = -1e9
+    engine.tick(48)
+    expect(ctx.calls.length).toBeGreaterThan(n)
+  })
+})
