@@ -68,7 +68,8 @@ export interface BrainEngine {
   highlight(label: string): void
   /** lossless: swaps the palette and repaints — the atlas persists */
   setTheme(scheme: BrainScheme): void
-  resize(width: number, height: number): void
+  /** omit both to re-measure from the canvas box (e.g. after mount/layout) */
+  resize(width?: number, height?: number): void
   /** advance one frame; the rAF loop calls this when animate is on */
   tick(nowMs: number): void
   /** folded away — stop burning frames */
@@ -662,11 +663,45 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     const id = "live-" + norm.replace(/[^a-z0-9]+/g, "-").slice(0, 48)
     return byId.get(norm) || byId.get(id) || nodes.find((x) => x.label.toLowerCase() === norm)
   }
+  // marathon sessions: every unique file AND every unique search pattern
+  // grafts a node + edge, and the render loop is O(nodes+edges) per frame.
+  // The iframe used to reset this on every theme-flip reload; the native
+  // engine persists, so cap the graft population — evict the oldest graft
+  // that is not charted, not pending a plate, and not where amico stands.
+  const GRAFT_CAP = 300
+  function evictGraft() {
+    let count = 0
+    let oldest: BNode | null = null
+    for (const n of nodes) {
+      if (!n.id.startsWith("live-")) continue
+      count++
+      if (n.atlasKeep || n.id === live.cur || live.sinceChart.includes(n) || live.queue.includes(n)) continue
+      if (!oldest || n.touchedAt < oldest.touchedAt) oldest = n
+    }
+    if (count < GRAFT_CAP || !oldest) return
+    const dead = oldest
+    byId.delete(dead.id)
+    nodes.splice(nodes.indexOf(dead), 1)
+    for (let i = edges.length - 1; i >= 0; i--) {
+      const e = edges[i]
+      if (e.s !== dead && e.t !== dead) continue
+      edges.splice(i, 1)
+      edgeSeen.delete(e.s.id < e.t.id ? e.s.id + "|" + e.t.id : e.t.id + "|" + e.s.id)
+    }
+    adj.delete(dead.id)
+    for (const [k, list] of adj) {
+      const filtered = list.filter((r) => r.to !== dead.id)
+      if (filtered.length !== list.length) adj.set(k, filtered)
+    }
+    // an in-flight pulse may still reference the orphan; its arrival mutates
+    // a detached object and every lookup path tolerates the missing id
+  }
   function liveNode(label: string, type?: string): BNode {
     const norm = label.toLowerCase().replace(/\.(md|jl|json|toml)$/, "")
     const id = "live-" + norm.replace(/[^a-z0-9]+/g, "-").slice(0, 48)
     const found = findLiveNode(label)
     if (found) return found
+    evictGraft()
     const src = byId.get(live.cur) || byId.get("amico")!
     const n = addNode({ id, label: label.slice(0, 28), type: type || "resource" })
     n.half = 4
@@ -804,6 +839,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   /* ---------- render ---------- */
   let halted = false
   let destroyed = false
+  let rafId = 0
   let unfurl = reduceMotion ? 1 : 0
   function tick(nowMs: number) {
     if (halted || !ctx) return
@@ -817,7 +853,10 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       console.error("[amico-brain] halted on render error:", err)
       return
     }
-    if (animate && typeof requestAnimationFrame !== "undefined") requestAnimationFrame(tick)
+    // re-check halted: a dueQueue callback may have paused us mid-frame — and
+    // track the id so pause() can cancel an already-scheduled frame (otherwise
+    // pause→resume inside one frame breeds parallel rAF chains)
+    if (!halted && animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
   }
   function drawFrame(nowMs: number) {
     if (!ctx) return
@@ -1065,7 +1104,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   const core = byId.get("amico")!
   core.flash = 1
   core.ringT = clock.beat
-  if (animate && typeof requestAnimationFrame !== "undefined") requestAnimationFrame(tick)
+  if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
 
   return {
     touch: (ev) => {
@@ -1099,16 +1138,18 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     tick,
     pause: () => {
       halted = true // folded away — stop burning frames
+      if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
     },
     resume: () => {
       if (destroyed || !halted) return
       halted = false
       clock.lastMs = 0 // dt is capped, so the gap doesn't lurch the clock
-      if (animate && typeof requestAnimationFrame !== "undefined") requestAnimationFrame(tick)
+      if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
     },
     destroy: () => {
       destroyed = true
       halted = true
+      if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
       ro?.disconnect()
       motionQuery?.removeEventListener("change", onMotionChange)
     },

@@ -22,7 +22,7 @@
 // from frame zero, events are direct calls, and a theme flip repaints
 // without losing the atlas.
 
-import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { amicoBrainRef, type AmicoBrainRef } from "@opencode-ai/ui/brain-ref"
 import { createBrainEngine, type BrainEngine } from "@opencode-ai/ui/brain-engine"
@@ -102,6 +102,10 @@ function BrainFrame(props: { sessionID: string }) {
   // theme flips are direct, lossless repaints — no reload, no re-flush
   const [engine, setEngine] = createSignal<BrainEngine>()
   const currentScheme = () => (document.documentElement.dataset.colorScheme === "light" ? "light" : "dark")
+  // refs run before layout (clientWidth/Height are 0 at creation), so seed the
+  // engine with the strip's real height — the camera's close-up vs whole-network
+  // branch keys on it — and re-measure once mounted
+  onMount(() => engine()?.resize())
   const themeObserver = new MutationObserver(() => engine()?.setTheme(currentScheme()))
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
   onCleanup(() => themeObserver.disconnect())
@@ -157,7 +161,14 @@ function BrainFrame(props: { sessionID: string }) {
       }}
     >
       <canvas
-        ref={(el) => setEngine(createBrainEngine(el, { scheme: currentScheme() }))}
+        ref={(el) =>
+          setEngine(
+            createBrainEngine(el, {
+              scheme: currentScheme(),
+              size: { width: 800, height: expanded() ? 224 : 72 },
+            }),
+          )
+        }
         aria-hidden="true"
         class="pointer-events-none block h-full w-full"
       />

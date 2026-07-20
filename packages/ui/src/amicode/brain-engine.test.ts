@@ -236,6 +236,16 @@ describe("hostile input", () => {
     expect(engine.stats().claimed).toBe(1)
   })
 
+  test("the graft population is capped — marathon sessions cannot grow the graph unboundedly", () => {
+    const { engine } = makeEngine()
+    const boot = engine.stats().nodes
+    for (let i = 0; i < 340; i++) engine.touch({ label: `scratch/probe-${i}.md`, consider: true })
+    // 340 unique search patterns grafted, but eviction holds the line at the cap
+    expect(engine.stats().nodes).toBeLessThanOrEqual(boot + 300)
+    expect(engine.stats().edges).toBeLessThanOrEqual(boot + 300 + 200) // skeleton edges + capped thought edges
+    engine.tick(16) // and the survivors still draw
+  })
+
   test("a render error halts the loop instead of spinning half-rendered", () => {
     const ctx = recordingCtx()
     let arcs = 0
@@ -257,5 +267,49 @@ describe("hostile input", () => {
     arcs = -1e9
     engine.tick(48)
     expect(ctx.calls.length).toBeGreaterThan(n)
+  })
+})
+
+describe("animated pipeline (manual clock)", () => {
+  // full motion: reduceMotion off, clock driven by hand — a commit is a pulse
+  // that must physically travel the skeleton before its node claims
+  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
+    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+    return toMs
+  }
+
+  test("a live commit claims only after its pulse arrives", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    engine.tick(0)
+    engine.touch({ label: "setup" }) // amico → experimenter → setup, one beat per hop
+    expect(engine.stats().claimed).toBe(0) // departure is not arrival
+    drive(engine, 16, 4000) // allegro q=126: plenty of beats for both hops
+    const s = engine.stats()
+    expect(s.claimed).toBeGreaterThanOrEqual(1)
+    expect(s.cur).toBe("setup")
+  })
+
+  test("a chart waits for the pump to drain, then plates every commit", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    engine.tick(0)
+    engine.touch({ label: "setup" })
+    engine.touch({ label: "solve" })
+    engine.chart("the whole thought", false) // arrives while commits are in flight
+    expect(engine.stats().atlas).toBe(0) // a plate never misses its own commits
+    drive(engine, 16, 8000)
+    const s = engine.stats()
+    expect(s.atlas).toBe(1)
+    expect(s.claimed).toBeGreaterThanOrEqual(2)
+    expect(s.queued).toBe(0)
+  })
+
+  test("destroy with pulses in flight is safe", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    engine.tick(0)
+    engine.touch({ label: "setup" })
+    drive(engine, 16, 200) // pulse mid-edge
+    expect(() => engine.destroy()).not.toThrow()
+    engine.tick(300) // halted — no draw, no arrival callbacks
+    expect(engine.stats().cur).toBe("amico")
   })
 })
