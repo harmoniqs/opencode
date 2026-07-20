@@ -29,7 +29,10 @@ import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 // AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
 // noise here ("No MCPs configured"). Hidden, not deleted — the trigger slot is
 // where a solver-health panel (server/Julia env/runs dir) belongs later.
-const AMICODE_HIDE_STATUS_POPOVER = true
+// Un-hidden 2026-07-20 (amicode#159 test drive): the 7/7 hide targeted the
+// popover's then-only content (upstream MCP/LSP operator noise). It now hosts
+// the amicode-first Vaults + Connections tabs — hiding it orphaned both.
+const AMICODE_HIDE_STATUS_POPOVER = false
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 
