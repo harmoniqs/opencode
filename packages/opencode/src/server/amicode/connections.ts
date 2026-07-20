@@ -602,6 +602,13 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
  *  password live ONLY in this request scope and the child env — never the
  *  status cache, never any file, never a log or error message. Pasqal never
  *  touches solver mode: the HP flip (#167) is company-compute-only. */
+/** The FIXED config-class warning (169 AC5, sibling "code: detail" shape):
+ *  exit 1 / unknown exits / off-contract stdout / spawn failure all mean the
+ *  validator itself could not run properly — distinct from the service being
+ *  unreachable. Value-free by the module contract. */
+export const PASQAL_CONFIG_WARNING =
+  "pasqal_validator_config: the Pasqal validator could not run — check the Python interpreter and the pasqal-cloud SDK"
+
 async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): Promise<string> {
   const username = typeof body.username === "string" ? body.username.trim() : ""
   const password = typeof body.password === "string" ? body.password : ""
@@ -629,6 +636,7 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
   }
 
   const validated_at = new Date().toISOString()
+  let warning: string | undefined
   if (outcome.kind === "valid" && outcome.token !== null) {
     try {
       // token-only at rest (#162 seam): project_id + token + expiry — the
@@ -651,13 +659,16 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
   } else if (outcome.kind === "valid") {
     clearStatus(id) // null token: nothing persists (session-only handling lands with AC4)
   } else if (outcome.kind === "config") {
+    // validator trouble is not a service verdict: render unreachable-class
+    // with the DISTINCT fixed warning on the #167 partial-trouble channel
     persistStatus(id, { state: "unreachable", validated_at })
+    warning = PASQAL_CONFIG_WARNING
   } else {
     // invalid / unreachable / unentitled — nothing written, an existing
     // credential (if any) stays untouched
     persistStatus(id, { state: outcome.kind, validated_at })
   }
-  return renderCurrent(id)
+  return renderCurrent(id, warning)
 }
 
 /** id-only mutation bodies (disconnect/revalidate) — the secret NEVER rides

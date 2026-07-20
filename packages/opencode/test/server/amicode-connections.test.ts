@@ -27,6 +27,7 @@ import {
   revalidateResponse,
   isLoopbackHostname,
   setBindHostname,
+  PASQAL_CONFIG_WARNING,
   type FetchImpl,
   type PasqalSpawn,
 } from "@/server/amicode/connections"
@@ -727,5 +728,58 @@ describe("pasqal submit — token-only persistence + device metadata (169 AC2)",
     expect(parsed.connection.state).toBe("connected")
     expect(existsSync(entitlementsFile())).toBe(false)
     expect(existsSync(solverModeFile())).toBe(false)
+  })
+})
+
+describe("pasqal submit — exit-code classes map to distinct states (169 AC5)", () => {
+  test("exit 2 → invalid; exit 3 → unreachable; exit 4 → unentitled (project-unauthorized); nothing written", async () => {
+    for (const [exitCode, state] of [
+      [2, "invalid"],
+      [3, "unreachable"],
+      [4, "unentitled"],
+    ] as const) {
+      const raw = await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(exitCode).spawn })
+      const parsed = JSON.parse(raw)
+      expect(parsed.ok).toBe(true)
+      expect(parsed.error).toBeNull() // contract classes carry no extra warning — the state IS the message
+      expect(parsed.connection.state).toBe(state)
+      expect(raw).not.toContain(PASQAL.password)
+      expect(readCredential("pasqal-cloud")).toBeUndefined()
+      expect(pasqalEntry(statusResponse()).state).toBe(state) // persisted for follow-up GETs
+    }
+  })
+
+  test("config class — exit 1, unknown exits, garbage stdout, spawn throw → unreachable + DISTINCT value-free warning", async () => {
+    const boom: PasqalSpawn = async () => {
+      throw new Error(`ENOENT: no such file /opt/venvs/amico/bin/python3 (user ${PASQAL.username})`)
+    }
+    const runs: PasqalSpawn[] = [
+      scripted(1).spawn, // missing env / missing SDK
+      scripted(127).spawn, // interpreter not found via a shell-ish exit
+      scripted(0, "not json {{{").spawn, // exit 0 without the contract line
+      scripted(0, JSON.stringify({ ok: false })).spawn, // ok:false on exit 0 is off-contract
+      boom, // spawn itself failed
+    ]
+    for (const pasqalSpawn of runs) {
+      const raw = await submitCredentialResponse(pasqalSubmit, { pasqalSpawn })
+      const parsed = JSON.parse(raw)
+      expect(parsed.ok).toBe(true) // the mutation ran; trouble rides the warning channel (#167 idiom)
+      expect(parsed.connection.state).toBe("unreachable")
+      expect(parsed.error).toStartWith("pasqal_validator_config:") // distinct from a plain exit-3 unreachable
+      expect(parsed.error).toBe(PASQAL_CONFIG_WARNING) // FIXED string — value-free by construction
+      expect(raw).not.toContain(PASQAL.password)
+      expect(raw).not.toContain(PASQAL.username)
+      expect(readCredential("pasqal-cloud")).toBeUndefined()
+    }
+  })
+
+  test("a failed submit never clobbers a previously stored pasqal credential", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    const stored = readCredential("pasqal-cloud")
+    expect(stored).toBeDefined()
+    for (const spawn of [scripted(2).spawn, scripted(3).spawn, scripted(4).spawn, scripted(1).spawn]) {
+      await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: spawn })
+      expect(readCredential("pasqal-cloud")).toEqual(stored!)
+    }
   })
 })
