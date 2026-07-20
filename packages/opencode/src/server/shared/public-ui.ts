@@ -12,15 +12,11 @@ export const PUBLIC_UI_PATHS = new Set<string>([
   // bridge after boot), so it is public-shell class within the same-user
   // trust model. The widget registry route (/amicode/widgets) stays authed.
   "/amicode/widget-frame",
-  // The amico brain ("amico is thinking") is the same constraint class: an
-  // iframe DOCUMENT request from the session timeline (brain-strip.tsx) plus
-  // its one external script — neither can carry ?auth_token= or a Basic
-  // header, so with a password armed the brain rendered a blank 401 frame.
-  // Both are static shipped app content (the script bakes only the prototype
-  // sample atlas; live session data arrives via postMessage after load), so
-  // they are public-shell class. The API surface stays fully authed.
-  "/brain.html",
-  "/brain.js",
+  // /brain.html + /brain.js used to sit here (the "amico is thinking" iframe
+  // could not carry a credential). The brain now renders on an in-document
+  // canvas (packages/ui amicode/brain-engine), so those assets are gone and
+  // their exemptions with them — do not re-add paths for the brain; it needs
+  // no HTTP surface at all.
 ])
 
 // The app shell's fingerprinted bundles live under /assets/. They are plain
