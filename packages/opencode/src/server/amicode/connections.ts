@@ -437,6 +437,8 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
   if (refusal) return refusal
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
+  // parseIdBody only admits CONNECTION_IDS, and this slice serves exactly
+  // company-compute — the Pasqal slice adds its own per-id probe branch here.
   const credential = readCredential("company-compute")
   if (!credential) {
     clearStatus(id) // a status claim without a credential behind it is noise
