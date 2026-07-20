@@ -81,14 +81,18 @@ describe("atomic 0600-at-birth writer (AC2)", () => {
   test("tmp file is 0600 AT CREATION — asserted at the tmp stage, before rename", () => {
     let tmpSeen: string | undefined
     let tmpMode: number | undefined
-    writeCredential("company-compute", { base_url: "https://x.co", token: "tok" }, {
-      rename(tmp, target) {
-        tmpSeen = tmp
-        tmpMode = mode(tmp) // stat BEFORE the rename — birth mode, not post-hoc chmod
-        expect(path.dirname(tmp)).toBe(path.dirname(target)) // same dir → same fs, rename is atomic
-        renameSync(tmp, target)
+    writeCredential(
+      "company-compute",
+      { base_url: "https://x.co", token: "tok" },
+      {
+        rename(tmp, target) {
+          tmpSeen = tmp
+          tmpMode = mode(tmp) // stat BEFORE the rename — birth mode, not post-hoc chmod
+          expect(path.dirname(tmp)).toBe(path.dirname(target)) // same dir → same fs, rename is atomic
+          renameSync(tmp, target)
+        },
       },
-    })
+    )
     expect(tmpSeen).toBeDefined()
     expect(tmpMode).toBe(0o600)
     expect(mode(cloudFile())).toBe(0o600)
@@ -114,11 +118,15 @@ describe("write atomicity under injected failure (AC3)", () => {
     writeCredential("company-compute", { base_url: "https://old.co", token: "old-tok" })
     const before = readFileSync(cloudFile(), "utf8")
     expect(() =>
-      writeCredential("company-compute", { base_url: "https://new.co", token: "new-tok" }, {
-        rename() {
-          throw new Error("injected: disk full at rename")
+      writeCredential(
+        "company-compute",
+        { base_url: "https://new.co", token: "new-tok" },
+        {
+          rename() {
+            throw new Error("injected: disk full at rename")
+          },
         },
-      }),
+      ),
     ).toThrow("injected")
     expect(readFileSync(cloudFile(), "utf8")).toBe(before) // old credential untouched
     expect(readdirSync(dir)).toEqual(["cloud.json"]) // no partial tmp left behind
@@ -126,11 +134,15 @@ describe("write atomicity under injected failure (AC3)", () => {
 
   test("failure on a first-ever write leaves NO credential file at all", () => {
     expect(() =>
-      writeCredential("company-compute", { base_url: "https://x.co", token: "tok" }, {
-        rename() {
-          throw new Error("injected: power loss")
+      writeCredential(
+        "company-compute",
+        { base_url: "https://x.co", token: "tok" },
+        {
+          rename() {
+            throw new Error("injected: power loss")
+          },
         },
-      }),
+      ),
     ).toThrow("injected")
     expect(readdirSync(dir)).toEqual([]) // nothing partial, nothing corrupt
     expect(readCredential("company-compute")).toBeUndefined()

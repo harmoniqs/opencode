@@ -91,7 +91,8 @@ const BACKENDS: Record<ConnectionType, Backend> = {
       if (project === "" || token === "")
         throw new Error('pasqal-cloud credential needs non-empty "project_id" and "token"')
       const out: PasqalCredential = { project_id: project, token }
-      if (typeof value.expires_at === "string" && value.expires_at.trim() !== "") out.expires_at = value.expires_at.trim()
+      if (typeof value.expires_at === "string" && value.expires_at.trim() !== "")
+        out.expires_at = value.expires_at.trim()
       return JSON.stringify(out, null, 2) + "\n"
     },
     decode(raw) {
