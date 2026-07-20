@@ -1,0 +1,88 @@
+// AMICODE: pure, tolerant parsing + card logic for the Connections panel tab
+// (amicode#166 / parent #159). The wire shape is the #165 status contract
+// served by GET /amicode/connections ({ok, connections:[…]}) and the three
+// POST mutations ({ok, connection, error}) — packages/opencode
+// src/server/amicode/connections.ts is the producer. This module is the
+// SINGLE consumer of the wire shape (vaults.ts idiom: one schema, one place
+// to update). It must never throw on malformed input; unknown fields are
+// dropped and unknown states collapse to a safe "unknown" fallback, so a
+// poisoned or future-shaped response can neither crash the card nor carry a
+// secret into the DOM.
+
+export const CONNECTION_WIRE_STATES = ["connected", "needs-key", "invalid", "unreachable", "validating"] as const
+export type ConnectionWireState = (typeof CONNECTION_WIRE_STATES)[number]
+/** Everything the wire might say beyond the five contract states renders via
+ *  the "unknown" fallback (expired / unentitled land in later slices). */
+export type ConnectionCardState = ConnectionWireState | "unknown"
+
+export type ConnectionView = {
+  id: string
+  state: ConnectionCardState
+  /** what the wire actually said — shown verbatim when state is "unknown" */
+  rawState: string
+  identity?: string
+  /** server-offered prefill for the key form (forward-compatible) */
+  baseUrl?: string
+  /** display string: locale-formatted timestamp or an em dash */
+  validatedAt: string
+  stale: boolean
+}
+
+export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; error?: string }
+export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; error?: string }
+
+export const COMPANY_COMPUTE_ID = "company-compute"
+
+const WIRE_STATES: ReadonlySet<string> = new Set(CONNECTION_WIRE_STATES)
+
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined
+}
+
+export function validatedAtDisplay(value: unknown): string {
+  const raw = str(value)
+  if (!raw) return "—"
+  const at = Date.parse(raw)
+  if (!Number.isFinite(at)) return "—"
+  return new Date(at).toLocaleString()
+}
+
+function parseConnectionEntry(raw: unknown): ConnectionView {
+  const entry = (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>
+  const rawState = str(entry.state) ?? "unknown"
+  return {
+    id: str(entry.id) ?? "(unknown)",
+    state: WIRE_STATES.has(rawState) ? (rawState as ConnectionWireState) : "unknown",
+    rawState,
+    identity: str(entry.identity),
+    baseUrl: str(entry.base_url),
+    validatedAt: validatedAtDisplay(entry.validated_at),
+    stale: entry.stale === true,
+  }
+}
+
+export function parseConnectionsResponse(raw: unknown): ConnectionsView {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return { ok: false, connections: [], error: "bad_shape: response is not an object" }
+  const data = raw as Record<string, unknown>
+  if (data.ok !== true) {
+    const error = str(data.error) ?? "connection status reported a failure"
+    return { ok: false, connections: [], error }
+  }
+  if (!Array.isArray(data.connections))
+    return { ok: false, connections: [], error: "bad_shape: connections missing or not a list" }
+  return { ok: true, connections: data.connections.map(parseConnectionEntry) }
+}
+
+export function parseConnectionActionResponse(raw: unknown): ConnectionActionView {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return { ok: false, error: "bad_shape: response is not an object" }
+  const data = raw as Record<string, unknown>
+  if (data.ok !== true) {
+    const error = str(data.error) ?? "connection update failed"
+    return { ok: false, error }
+  }
+  if (typeof data.connection !== "object" || data.connection === null || Array.isArray(data.connection))
+    return { ok: false, error: "bad_shape: connection missing" }
+  return { ok: true, connection: parseConnectionEntry(data.connection) }
+}
