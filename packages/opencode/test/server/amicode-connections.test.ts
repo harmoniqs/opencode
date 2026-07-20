@@ -1137,6 +1137,27 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     expect(refreshed.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }]) // metadata kept
   })
 
+  test("no background kick for an unparseable credential file — there is nothing to revalidate", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    writeFileSync(path.join(dir, "cloud.json"), "corrupt {{{ not json")
+    writeFileSync(
+      connectionsFile(),
+      JSON.stringify({
+        "company-compute": {
+          state: "connected",
+          validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+        },
+      }),
+    )
+    expect(JSON.parse(statusResponse({ fetchImpl: counting })).connections[0].state).toBe("needs-key")
+    await backgroundRevalidationsSettled()
+    expect(probes).toBe(0)
+  })
+
   test("no background kick without a credential, while validating, or for a session-only claim", async () => {
     let probes = 0
     const counting: FetchImpl = async () => {
@@ -1171,5 +1192,59 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     expect(session.session_only).toBe(true)
     await backgroundRevalidationsSettled()
     expect(probes).toBe(0)
+  })
+})
+
+describe("unparseable credential file → needs-key, honestly (170 AC2)", () => {
+  const corruptions = ["not json {{{", "", "42", '"just-a-string"', '{"base_url": 7, "token": null}', "[]"]
+
+  test("company-compute: an existing-but-corrupt cloud.json renders needs-key — never a crash, a stale badge, or 'connected'", () => {
+    for (const bytes of corruptions) {
+      writeFileSync(path.join(dir, "cloud.json"), bytes)
+      // even with a cache still claiming connected (validated long ago, file
+      // mtime newer — every staleness trigger armed at once)
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "company-compute": {
+            state: "connected",
+            validated_at: new Date(Date.now() - STALE_MS - 60_000).toISOString(),
+            identity: "team-alpha",
+          },
+        }),
+      )
+      const parsed = JSON.parse(statusResponse())
+      expect(parsed.ok).toBe(true)
+      const entry = parsed.connections[0]
+      expect(entry.state).toBe("needs-key")
+      expect(entry.stale).toBe(false)
+      expect(entry.validated_at).toBeNull()
+      expect(entry.identity).toBeUndefined() // a claim without a usable credential carries no identity
+    }
+  })
+
+  test("pasqal-cloud: a corrupt pasqal.json renders needs-key too — and a bare corrupt file without any cache as well", () => {
+    for (const bytes of corruptions) {
+      writeFileSync(path.join(dir, "pasqal.json"), bytes)
+      writeFileSync(
+        connectionsFile(),
+        JSON.stringify({
+          "pasqal-cloud": { state: "connected", validated_at: new Date().toISOString(), identity: "proj-1" },
+        }),
+      )
+      expect(pasqalEntry(statusResponse()).state).toBe("needs-key")
+      // no cache entry at all: still needs-key, still no throw
+      writeFileSync(connectionsFile(), "{}")
+      const bare = pasqalEntry(statusResponse())
+      expect(bare.state).toBe("needs-key")
+      expect(bare.stale).toBe(false)
+    }
+  })
+
+  test("a corrupt credential file never flips a mutation response into a lie either", async () => {
+    writeFileSync(path.join(dir, "cloud.json"), "corrupt {{{")
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("needs-key") // unreadable = absent through the #162 seam; no probe fired
   })
 })
