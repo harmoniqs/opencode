@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { ConfigProvider, Layer } from "effect"
@@ -15,7 +15,13 @@ import { HttpRouter } from "effect/unstable/http"
 import { HttpApiApp } from "@/server/routes/instance/httpapi/server"
 import { ServerAuth } from "@/server/auth"
 import { readCredential } from "@/server/amicode/credentials"
-import { connectionsFile, inflightOverlay, setBindHostname } from "@/server/amicode/connections"
+import {
+  connectionsFile,
+  entitlementsFile,
+  inflightOverlay,
+  setBindHostname,
+  solverModeFile,
+} from "@/server/amicode/connections"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances } from "../fixture/fixture"
 
@@ -69,7 +75,7 @@ async function stubSolveService(status: () => number) {
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) })
 
-const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE"] as const
+const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE", "AMICODE_OPS_DIR"] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
 
@@ -79,6 +85,7 @@ beforeEach(() => {
   process.env.AMICO_CLOUD_FILE = path.join(dir, "cloud.json")
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
+  process.env.AMICODE_OPS_DIR = path.join(dir, "amicode-ops") // flip artifacts (#167) stay hermetic
   inflightOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
@@ -176,6 +183,53 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
     )
     const response = await app().request("/amicode/connections")
     expect(await response.text()).not.toContain("POISON")
+  })
+})
+
+describe("connections routes — HP flip artifacts over the route tree (167 AC1, AC3, AC4)", () => {
+  test("valid submit over the route → both flip artifacts; disconnect leaves them (one-way); 401 never flips", async () => {
+    const server = app()
+    let probeStatus = 404
+    const stub = await stubSolveService(() => probeStatus)
+    try {
+      // valid save over the REAL route tree → both ops-dir artifacts (AC1),
+      // durable with no extension host anywhere in this process (AC3)
+      const submitted = await (
+        await server.request(
+          "/amicode/connections/credential",
+          post({ id: "company-compute", base_url: stub.url, token: "tok-flip" }),
+        )
+      ).json()
+      expect(submitted.ok).toBe(true)
+      expect(submitted.connection.state).toBe("connected")
+      expect(submitted.error).toBeNull() // flip succeeded — no partial-failure warning
+      expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["issimo"]\n')
+      expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+
+      // disconnect reverts NOTHING solver-side — the flip is one-way on connect
+      await server.request("/amicode/connections/disconnect", post({ id: "company-compute" }))
+      expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["issimo"]\n')
+      expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+    } finally {
+      await stub.close()
+    }
+
+    // a rejected key over the route produces no flip artifacts at all (AC4)
+    process.env.AMICODE_OPS_DIR = path.join(dir, "amicode-ops-rejected")
+    const rejecting = await stubSolveService(() => 401)
+    try {
+      const rejected = await (
+        await server.request(
+          "/amicode/connections/credential",
+          post({ id: "company-compute", base_url: rejecting.url, token: "tok-bad" }),
+        )
+      ).json()
+      expect(rejected.connection.state).toBe("invalid")
+      expect(existsSync(entitlementsFile())).toBe(false)
+      expect(existsSync(solverModeFile())).toBe(false)
+    } finally {
+      await rejecting.close()
+    }
   })
 })
 

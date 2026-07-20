@@ -6,14 +6,17 @@
 // AMICODE_CONNECTIONS_FILE), so the test seam and the deploy seam are one
 // mechanism (the #162 idiom).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { readCredential, writeCredential } from "@/server/amicode/credentials"
 import {
+  amicodeOpsDir,
   connectionsFile,
+  entitlementsFile,
   inflightOverlay,
   probeCompanyCompute,
+  solverModeFile,
   statusResponse,
   STALE_MS,
   statusBody,
@@ -31,7 +34,7 @@ const respond =
 
 // Same env-override discipline as the credentials suite: point every file the
 // module touches into a per-test tmp dir, restore after.
-const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE"] as const
+const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE", "AMICODE_OPS_DIR"] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
 
@@ -41,6 +44,7 @@ beforeEach(() => {
   process.env.AMICO_CLOUD_FILE = path.join(dir, "cloud.json")
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
+  process.env.AMICODE_OPS_DIR = path.join(dir, "amicode-ops") // flip artifacts (#167) stay hermetic
   inflightOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
@@ -285,6 +289,148 @@ describe("submit credential — probe → save → terminal status, one round tr
     }
     expect(probes).toBe(0)
     expect(readCredential("company-compute")).toBeUndefined()
+  })
+})
+
+// --- HP flip on Company Compute connect (amicode#167 / parent #159): a VALID
+// save grants `issimo` and writes the durable {mode:"hp",status:"switching"}
+// request; the amicode extension's EXISTING watcher (solver_mode.ts) does the
+// actual re-prep. These tests assert the fork-side artifacts on file bytes —
+// the shared ops-dir contract, hermetic via $AMICODE_OPS_DIR.
+
+const validSubmit = JSON.stringify({
+  id: "company-compute",
+  base_url: "https://solves.example.co",
+  token: "tok-good",
+})
+
+describe("HP flip on connect — artifacts in the ops dir (167 AC1, AC3)", () => {
+  test("flip artifacts resolve through $AMICODE_OPS_DIR, defaulting to ~/.amico/amicode (the extension's amicodeOpsDir)", () => {
+    expect(amicodeOpsDir()).toBe(path.join(dir, "amicode-ops"))
+    expect(entitlementsFile()).toBe(path.join(dir, "amicode-ops", "entitlements.toml"))
+    expect(solverModeFile()).toBe(path.join(dir, "amicode-ops", "solver-mode.json"))
+    delete process.env.AMICODE_OPS_DIR
+    expect(entitlementsFile()).toContain(path.join(".amico", "amicode", "entitlements.toml"))
+    expect(solverModeFile()).toContain(path.join(".amico", "amicode", "solver-mode.json"))
+  })
+
+  test("valid save → BOTH artifacts: issimo granted in entitlements.toml AND the hp switching request (AC1)", async () => {
+    const parsed = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: respond(404) }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    expect(parsed.connection.state).toBe("connected")
+    // artifact 1: the exact byte shape the extension's applyEntitlementForMode writes/reads
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["issimo"]\n')
+    // artifact 2: the exact request shape the extension's watchSolverMode consumes
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+  })
+
+  test("grant PRESERVES existing codes (and the expired list) — read-modify-write, byte-compatible", async () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(entitlementsFile(), 'codes = ["pasqal-hackathon-2026"]\nexpired = ["old-2025"]\n')
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(
+      'codes = ["pasqal-hackathon-2026", "issimo"]\nexpired = ["old-2025"]\n',
+    )
+  })
+
+  test("headless: no extension host consumes anything — both artifacts persist durably, response path clean (AC3)", async () => {
+    // this suite runs with NO extension host: headless is the ambient truth here
+    const raw = await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    const parsed = JSON.parse(raw)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+    // a later GET disturbs nothing; re-reads see the same bytes — the request
+    // is still pending for the next extension attach
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected")
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
+    expect(JSON.parse(modeBytes)).toEqual({ mode: "hp", status: "switching" })
+  })
+})
+
+describe("HP flip on connect — only the valid outcome flips; repeats stay idempotent (167 AC4)", () => {
+  test("invalid / unreachable / malformed / non-loopback → NO flip artifacts of any kind", async () => {
+    const boom: FetchImpl = async () => {
+      throw new Error("ECONNREFUSED")
+    }
+    const attempts: [string, FetchImpl][] = [
+      [validSubmit, respond(401)], // invalid
+      [validSubmit, respond(500)], // unreachable (server trouble)
+      [validSubmit, boom], // unreachable (network)
+      ["not json {{{", respond(200)], // malformed body — no probe, no save
+    ]
+    for (const [body, fetchImpl] of attempts) await submitCredentialResponse(body, { fetchImpl })
+    setBindHostname("0.0.0.0") // refused mutations must not flip either
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    setBindHostname(undefined)
+    expect(existsSync(entitlementsFile())).toBe(false)
+    expect(existsSync(solverModeFile())).toBe(false)
+  })
+
+  test("a failed revalidation never revokes: pre-granted entitlements survive an invalid outcome untouched", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }) // granted + switching
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(401) }) // key went bad
+    await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: respond(401) })
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
+  })
+
+  test("disconnect leaves both artifacts alone — the flip is one-way; the user's toggle owns reverting", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    disconnectResponse(JSON.stringify({ id: "company-compute" }))
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+  })
+
+  test("repeat valid save while already hp+granted: no duplicate codes, no fresh switching write", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8")).status).toBe("switching")
+    // the extension watcher settles the request: ready at hp (writeSolverModeReady shape)
+    writeFileSync(
+      solverModeFile(),
+      JSON.stringify({ mode: "hp", status: "ready", switched_at: new Date().toISOString() }),
+    )
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const again = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }))
+    expect(again.ok).toBe(true)
+    expect(again.connection.state).toBe("connected")
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes) // ONE issimo, byte-identical
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8")).status).toBe("ready") // watcher NOT poked again
+  })
+
+  test("hp already active but the grant is missing → the switch IS re-requested (re-prep must apply the entitlement)", async () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(solverModeFile(), JSON.stringify({ mode: "hp", status: "ready" }))
+    writeFileSync(entitlementsFile(), 'codes = ["pasqal-hackathon-2026"]\n') // issimo absent
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["pasqal-hackathon-2026", "issimo"]\n')
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "hp", status: "switching" })
+  })
+})
+
+describe("HP flip on connect — flip trouble never corrupts the save (167 partial failure)", () => {
+  test("flip write failure → credential SAVED, connected status, fixed value-free warning in the error field", async () => {
+    // an ops dir that cannot exist: a regular file occupies the parent path
+    writeFileSync(path.join(dir, "blocker"), "")
+    process.env.AMICODE_OPS_DIR = path.join(dir, "blocker", "ops")
+    const raw = await submitCredentialResponse(
+      JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-flip-fail" }),
+      { fetchImpl: respond(200) },
+    )
+    const parsed = JSON.parse(raw)
+    expect(parsed.ok).toBe(true) // the save SUCCEEDED — partial failure is a warning, not a failure
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.error).toStartWith("hp_flip_failed:") // sibling "code: detail" shape, fixed string
+    expect(raw).not.toContain("tok-flip-fail") // value-free: no token…
+    expect(raw).not.toContain(dir) // …and no filesystem path/errno detail either
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://solves.example.co", token: "tok-flip-fail" })
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected") // the cache write preceded the flip
   })
 })
 
