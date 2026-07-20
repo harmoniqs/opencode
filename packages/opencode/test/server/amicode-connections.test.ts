@@ -1433,9 +1433,7 @@ describe("submitter identity echo + drift diff (170 AC4, live endpoint aws-infra
   test("re-submitting credentials is the human reconciliation: the record RESETS and the drift clears", async () => {
     await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-alpha") })
     await revalidate(answering("team-beta"))
-    const resubmitted = JSON.parse(
-      await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta") }),
-    )
+    const resubmitted = JSON.parse(await submitCredentialResponse(validSubmit, { fetchImpl: answering("team-beta") }))
     expect(resubmitted.connection.state).toBe("connected")
     expect(resubmitted.connection.identity).toBe("team-beta")
     expect(resubmitted.connection.identity_drift).toBeUndefined()
