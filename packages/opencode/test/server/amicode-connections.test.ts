@@ -20,6 +20,8 @@ import {
   submitCredentialResponse,
   disconnectResponse,
   revalidateResponse,
+  isLoopbackHostname,
+  setBindHostname,
   type FetchImpl,
 } from "@/server/amicode/connections"
 
@@ -47,6 +49,7 @@ afterEach(() => {
     else process.env[k] = savedEnv[k]
   }
   inflightOverlay.clear()
+  setBindHostname(undefined)
 })
 
 const cloudCredential = { base_url: "https://solves.example.co", token: "tok-stored-secret" }
@@ -346,5 +349,53 @@ describe("disconnect + revalidate (AC4)", () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("needs-key")
     expect(probes).toBe(0)
+  })
+})
+
+describe("loopback guard on mutations (AC5)", () => {
+  test("loopback classification: 127/8, localhost, ::1 (and v4-mapped) are loopback; wildcard/LAN binds are not", () => {
+    for (const host of [undefined, "127.0.0.1", "127.1.2.3", "localhost", "LOCALHOST", "::1", "::ffff:127.0.0.1"]) {
+      expect(isLoopbackHostname(host)).toBe(true)
+    }
+    for (const host of ["0.0.0.0", "::", "192.168.1.5", "10.0.0.2", "example.co", ""]) {
+      expect(isLoopbackHostname(host)).toBe(false)
+    }
+  })
+
+  test("bound beyond loopback → every mutation refuses with the DISTINCT error; nothing happens", async () => {
+    setBindHostname("0.0.0.0")
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    const submit = JSON.parse(
+      await submitCredentialResponse(
+        JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-lan" }),
+        { fetchImpl: counting },
+      ),
+    )
+    const disconnect = JSON.parse(disconnectResponse(JSON.stringify({ id: "company-compute" })))
+    const revalidate = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }))
+    for (const parsed of [submit, disconnect, revalidate]) {
+      expect(parsed.ok).toBe(false)
+      expect(parsed.error).toStartWith("non_loopback:")
+    }
+    expect(probes).toBe(0)
+    expect(readCredential("company-compute")).toBeUndefined()
+    // the read-only status route still serves
+    expect(JSON.parse(statusResponse()).ok).toBe(true)
+  })
+
+  test("back on a loopback bind, mutations serve again", async () => {
+    setBindHostname("127.0.0.1")
+    const parsed = JSON.parse(
+      await submitCredentialResponse(
+        JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-good" }),
+        { fetchImpl: respond(200) },
+      ),
+    )
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("connected")
   })
 })

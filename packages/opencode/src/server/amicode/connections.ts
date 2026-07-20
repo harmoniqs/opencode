@@ -269,10 +269,42 @@ export function synthesizeConnection(code: string, detail: string): string {
   return JSON.stringify({ ok: false, connection: null, error: `${code}: ${detail}` })
 }
 
+// --- loopback guard: credential mutations serve LOCAL callers only. The bind
+// hostname is recorded by Server.listen (server.ts) at listen time; the
+// in-process webHandler never binds a socket, so "never recorded" counts as
+// loopback. setBindHostname doubles as the injectable test seam.
+
+let bindHostname: string | undefined
+
+export function setBindHostname(hostname: string | undefined): void {
+  bindHostname = hostname
+}
+
+/** Same loopback family the mdns gate recognizes (server.ts), widened to the
+ *  whole 127/8 block and the v4-mapped form. undefined = in-process handler. */
+export function isLoopbackHostname(hostname: string | undefined): boolean {
+  if (hostname === undefined) return true
+  const host = hostname.toLowerCase()
+  if (host === "localhost" || host === "::1") return true
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true
+  if (host.startsWith("::ffff:127.")) return true
+  return false
+}
+
+/** The distinct refusal every mutation route answers on a non-loopback bind
+ *  (AC5); undefined when the bind is fine. */
+function loopbackRefusal(bind: string | undefined): string | undefined {
+  if (isLoopbackHostname(bind)) return undefined
+  return synthesizeConnection("non_loopback", "credential mutations serve loopback binds only")
+}
+
 const MAX_BODY_BYTES = 16 * 1024 // credentials are small; bigger is a mistake
 
 export interface MutationDeps {
   fetchImpl?: FetchImpl
+  /** override the recorded bind hostname (pure-injection alternative to
+   *  setBindHostname) */
+  bindHostname?: string
 }
 
 function renderCurrent(id: ConnectionType): string {
@@ -310,6 +342,8 @@ function isHttpUrl(value: string): boolean {
  *  the #162 seam. The terminal status rides back in the SAME response; while
  *  the probe runs, the overlay renders "validating" for concurrent GETs. */
 export async function submitCredentialResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
   const body = parseMutationBody(rawBody)
   if (!body) return synthesizeConnection("bad_request", "body must be JSON {id, base_url, token}")
   if (body.id !== "company-compute") {
@@ -360,7 +394,9 @@ function parseIdBody(rawBody: string): ConnectionType | undefined {
 /** POST /amicode/connections/disconnect — body {id}. Clears the credential
  *  through the #162 seam and drops the cache entry; status becomes needs-key.
  *  Idempotent: disconnecting an absent credential is a no-op. */
-export function disconnectResponse(rawBody: string): string {
+export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): string {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
   try {
@@ -376,6 +412,8 @@ export function disconnectResponse(rawBody: string): string {
  *  the STORED credential and refreshes validated_at; the secret never rides
  *  the request. Absent credential → needs-key, no probe fired. */
 export async function revalidateResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
   const credential = readCredential("company-compute")
