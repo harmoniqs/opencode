@@ -201,3 +201,33 @@ describe("pasqal-cloud backend — token-only at rest (AC4)", () => {
     expect(dirBytes()).not.toContain("scribble")
   })
 })
+
+describe("read-path tolerance (AC5)", () => {
+  test("missing file → absent, never a throw", () => {
+    expect(readCredential("company-compute")).toBeUndefined()
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("unparseable file → absent, never a throw", () => {
+    writeFileSync(cloudFile(), "not json {{{")
+    expect(readCredential("company-compute")).toBeUndefined()
+    writeFileSync(pasqalFile(), "\x00\x01 binary junk")
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("off-schema JSON → absent (hand-edited files degrade, never crash)", () => {
+    writeFileSync(cloudFile(), '{"base_url": "", "token": 42}')
+    expect(readCredential("company-compute")).toBeUndefined()
+    writeFileSync(pasqalFile(), '["not", "an", "object"]')
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    writeFileSync(pasqalFile(), '{"project_id": "p"}') // token missing entirely
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("the golden fixture bytes parse through the read path (cross-repo contract, reader side)", () => {
+    writeFileSync(cloudFile(), golden("cloud.json"))
+    expect(readCredential("company-compute")?.token).toBe("tok-fixture-company-compute")
+    writeFileSync(pasqalFile(), golden("pasqal.json"))
+    expect(readCredential("pasqal-cloud")?.project_id).toBe("proj-fixture-pasqal")
+  })
+})
