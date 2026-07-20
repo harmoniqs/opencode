@@ -296,7 +296,13 @@ function stageStubValidator() {
     scenario(exitCode: number, stdout = "") {
       writeFileSync(scenarioFile, JSON.stringify({ exitCode, stdout }))
     },
-    record(): { keys: string[]; username: string | null; password: string | null; project_id: string | null } {
+    record(): {
+      keys: string[]
+      username: string | null
+      password: string | null
+      project_id: string | null
+      argv: string[]
+    } {
       return JSON.parse(readFileSync(recordFile, "utf8"))
     },
     recordExists: () => existsSync(recordFile),
