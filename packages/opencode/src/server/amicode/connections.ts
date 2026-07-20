@@ -344,16 +344,29 @@ function readSolverMode(file: string): { mode: "piccolo" | "hp"; status: "ready"
   }
 }
 
+/** The FIXED partial-failure warning (sibling "code: detail" shape): the
+ *  credential save stands; only the flip write went wrong. Value-free by the
+ *  module contract — never a token, path, or errno. */
+export const HP_FLIP_WARNING = "hp_flip_failed: connected, but the HP solver switch could not be requested"
+
 /** After a VALID save: grant the entitlement, then request the hp switch the
  *  watcher re-preps from — but ONLY when a re-prep would change anything (the
  *  mode isn't hp yet, or the last prep ran without the grant). A repeat save
  *  on an already-flipped setup writes nothing, so the watcher — whose one
- *  re-prep includes restarting THIS server — is never poked for a no-op. */
-function requestHpFlip(): void {
-  const { alreadyGranted } = grantIssimo(entitlementsFile())
-  const modeFile = solverModeFile()
-  if (alreadyGranted && readSolverMode(modeFile).mode === "hp") return
-  atomicWriteFileSync(modeFile, JSON.stringify({ mode: "hp", status: "switching" }))
+ *  re-prep includes restarting THIS server — is never poked for a no-op.
+ *  NEVER throws: flip trouble must not corrupt the credential-save response;
+ *  the caller passes the returned warning (if any) into the response's error
+ *  field beside the connected status. */
+function requestHpFlip(): string | undefined {
+  try {
+    const { alreadyGranted } = grantIssimo(entitlementsFile())
+    const modeFile = solverModeFile()
+    if (alreadyGranted && readSolverMode(modeFile).mode === "hp") return undefined
+    atomicWriteFileSync(modeFile, JSON.stringify({ mode: "hp", status: "switching" }))
+    return undefined
+  } catch {
+    return HP_FLIP_WARNING
+  }
 }
 
 // --- mutation bodies (POST routes). One shape per route family, sibling
@@ -408,14 +421,16 @@ export interface MutationDeps {
   bindHostname?: string
 }
 
-function renderCurrent(id: ConnectionType): string {
+/** `warning` is the partial-failure channel: ok:true (the mutation stood) with
+ *  a non-null error field carrying a FIXED "code: detail" string (#167). */
+function renderCurrent(id: ConnectionType, warning?: string): string {
   const cache = readCacheFile(connectionsFile())
   const connection = renderStatus(id, whitelistPersisted(cache[id]), {
     inflight: inflightOverlay.has(id),
     credential: readCredential(id) !== undefined,
     now: Date.now(),
   })
-  return JSON.stringify({ ok: true, connection, error: null })
+  return JSON.stringify({ ok: true, connection, error: warning ?? null })
 }
 
 function parseMutationBody(rawBody: string): { id?: unknown; base_url?: unknown; token?: unknown } | undefined {
@@ -467,6 +482,7 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
     inflightOverlay.delete(id)
   }
   const validated_at = new Date().toISOString()
+  let warning: string | undefined
   if (outcome === "valid") {
     try {
       writeCredential(id, { base_url: base, token })
@@ -475,12 +491,12 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
       return synthesizeConnection("write_failed", "credential could not be saved")
     }
     persistStatus(id, { state: "connected", validated_at })
-    requestHpFlip() // #167: AFTER the save and ONLY on the valid outcome
+    warning = requestHpFlip() // #167: AFTER the save and ONLY on the valid outcome
   } else {
     // nothing written — an existing credential (if any) stays untouched
     persistStatus(id, { state: outcome, validated_at })
   }
-  return renderCurrent(id)
+  return renderCurrent(id, warning)
 }
 
 /** id-only mutation bodies (disconnect/revalidate) — the secret NEVER rides

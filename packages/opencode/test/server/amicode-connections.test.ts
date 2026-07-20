@@ -414,6 +414,26 @@ describe("HP flip on connect — only the valid outcome flips; repeats stay idem
   })
 })
 
+describe("HP flip on connect — flip trouble never corrupts the save (167 partial failure)", () => {
+  test("flip write failure → credential SAVED, connected status, fixed value-free warning in the error field", async () => {
+    // an ops dir that cannot exist: a regular file occupies the parent path
+    writeFileSync(path.join(dir, "blocker"), "")
+    process.env.AMICODE_OPS_DIR = path.join(dir, "blocker", "ops")
+    const raw = await submitCredentialResponse(
+      JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-flip-fail" }),
+      { fetchImpl: respond(200) },
+    )
+    const parsed = JSON.parse(raw)
+    expect(parsed.ok).toBe(true) // the save SUCCEEDED — partial failure is a warning, not a failure
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.error).toStartWith("hp_flip_failed:") // sibling "code: detail" shape, fixed string
+    expect(raw).not.toContain("tok-flip-fail") // value-free: no token…
+    expect(raw).not.toContain(dir) // …and no filesystem path/errno detail either
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://solves.example.co", token: "tok-flip-fail" })
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected") // the cache write preceded the flip
+  })
+})
+
 describe("disconnect + revalidate (AC4)", () => {
   test("disconnect clears the credential; status becomes needs-key; idempotent", async () => {
     await submitCredentialResponse(
