@@ -108,6 +108,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
       expect(initial.ok).toBe(true)
       expect(initial.connections).toEqual([
         { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
+        { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
       ])
 
       // submit: secret rides the POST body (library idiom), never a query param

@@ -15,6 +15,8 @@ import {
   connectionsFile,
   entitlementsFile,
   inflightOverlay,
+  pasqalPython,
+  pasqalValidatorScript,
   probeCompanyCompute,
   solverModeFile,
   statusResponse,
@@ -26,6 +28,7 @@ import {
   isLoopbackHostname,
   setBindHostname,
   type FetchImpl,
+  type PasqalSpawn,
 } from "@/server/amicode/connections"
 
 const respond =
@@ -34,7 +37,14 @@ const respond =
 
 // Same env-override discipline as the credentials suite: point every file the
 // module touches into a per-test tmp dir, restore after.
-const ENV_KEYS = ["AMICO_CLOUD_FILE", "AMICO_PASQAL_FILE", "AMICODE_CONNECTIONS_FILE", "AMICODE_OPS_DIR"] as const
+const ENV_KEYS = [
+  "AMICO_CLOUD_FILE",
+  "AMICO_PASQAL_FILE",
+  "AMICODE_CONNECTIONS_FILE",
+  "AMICODE_OPS_DIR",
+  "AMICO_PYTHON",
+  "AMICO_PASQAL_VALIDATOR",
+] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
 
@@ -45,6 +55,8 @@ beforeEach(() => {
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
   process.env.AMICODE_OPS_DIR = path.join(dir, "amicode-ops") // flip artifacts (#167) stay hermetic
+  process.env.AMICO_PYTHON = "/opt/venvs/amico/bin/python3" // never resolved: every pasqal spawn is injected
+  process.env.AMICO_PASQAL_VALIDATOR = "/opt/amico/scripts/pasqal_validate.py"
   inflightOverlay.clear()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
@@ -56,6 +68,38 @@ afterEach(() => {
   inflightOverlay.clear()
   setBindHostname(undefined)
 })
+
+// --- Pasqal fixtures: the #164 validator output contract (shared corpus —
+// same values the amicode-side contract tests use, so drift fails both) ---
+const PASQAL = {
+  username: "kate@example.com",
+  password: "hunter2-P0ison-pa55word",
+  project_id: "proj-0000-aaaa-bbbb",
+}
+const pasqalSubmit = JSON.stringify({ id: "pasqal-cloud", ...PASQAL })
+const validatorLine = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    ok: true,
+    project_id: PASQAL.project_id,
+    devices: ["EMU_FREE", "FRESNEL"],
+    token: "tok-pasqal-minted",
+    expires_at: "2026-08-01T00:00:00+00:00",
+    ...over,
+  }) + "\n"
+
+/** Recordable spawn stub (AC1): captures argv + the EXACT env object the
+ *  module hands the child, then answers a scripted run. */
+function scripted(exitCode: number, stdout = "") {
+  const calls: { argv: string[]; env: Record<string, string> }[] = []
+  const spawn: PasqalSpawn = async (argv, env) => {
+    calls.push({ argv: [...argv], env: { ...env } })
+    return { exitCode, stdout }
+  }
+  return { calls, spawn }
+}
+
+const pasqalEntry = (body: string) =>
+  JSON.parse(body).connections.find((conn: { id: string }) => conn.id === "pasqal-cloud")
 
 const cloudCredential = { base_url: "https://solves.example.co", token: "tok-stored-secret" }
 
@@ -104,12 +148,13 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     expect(connectionsFile()).toContain(path.join(".amico", "connections.json"))
   })
 
-  test("no credential, no cache → needs-key", () => {
+  test("no credential, no cache → needs-key for BOTH cards; company-compute stays first", () => {
     const parsed = JSON.parse(statusResponse())
     expect(parsed.ok).toBe(true)
     expect(parsed.error).toBeNull()
     expect(parsed.connections).toEqual([
       { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
+      { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
     ])
   })
 
@@ -277,7 +322,7 @@ describe("submit credential — probe → save → terminal status, one round tr
       JSON.stringify({ id: "company-compute", token: "tok-orphan-xyz" }), // base_url required in body
       JSON.stringify({ id: "company-compute", base_url: "https://x.co", token: "" }),
       JSON.stringify({ id: "company-compute", base_url: "ftp://x.co", token: "tok-orphan-xyz" }),
-      JSON.stringify({ id: "pasqal-cloud", base_url: "https://x.co", token: "tok-orphan-xyz" }), // later slice
+      JSON.stringify({ id: "pasqal-cloud", base_url: "https://x.co", token: "tok-orphan-xyz" }), // wrong field set for pasqal
       JSON.stringify({ id: "who-knows", base_url: "https://x.co", token: "tok-orphan-xyz" }),
     ]
     for (const body of cases) {
@@ -551,5 +596,136 @@ describe("loopback guard on mutations (AC5)", () => {
     )
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("connected")
+  })
+})
+
+// --- Pasqal card (amicode#169 / parent #159): submit spawns the #164
+// validator — env-only inputs, one-line JSON + exit-code contract — and only
+// the minted token persists. The card is served off the SAME routes as
+// company-compute; every spawn below is injected, never a real child.
+
+describe("pasqal submit — validator spawn contract (169 AC1)", () => {
+  test("spawn is <python> <script> with EXACTLY the minimal env — never a process.env spread", async () => {
+    process.env.AMICODE_TEST_CANARY = "canary-full-spread-detector" // a spread would carry this through
+    try {
+      const { calls, spawn } = scripted(0, validatorLine())
+      const parsed = JSON.parse(await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: spawn }))
+      expect(parsed.ok).toBe(true)
+      expect(calls).toHaveLength(1)
+      // argv: interpreter + script, nothing else — no secret ever rides argv
+      expect(calls[0].argv).toEqual(["/opt/venvs/amico/bin/python3", "/opt/amico/scripts/pasqal_validate.py"])
+      expect(JSON.stringify(calls[0].argv)).not.toContain(PASQAL.password)
+      expect(JSON.stringify(calls[0].argv)).not.toContain(PASQAL.username)
+      // env: the exact declared key set — PATH (interpreter resolution) + the three inputs
+      expect(Object.keys(calls[0].env).sort()).toEqual([
+        "PASQAL_PASSWORD",
+        "PASQAL_PROJECT_ID",
+        "PASQAL_USERNAME",
+        "PATH",
+      ])
+      expect(calls[0].env.PASQAL_USERNAME).toBe(PASQAL.username)
+      expect(calls[0].env.PASQAL_PASSWORD).toBe(PASQAL.password)
+      expect(calls[0].env.PASQAL_PROJECT_ID).toBe(PASQAL.project_id)
+      expect(calls[0].env.PATH).toBe(process.env.PATH ?? "")
+      expect(JSON.stringify(calls[0].env)).not.toContain("canary-full-spread-detector")
+    } finally {
+      delete process.env.AMICODE_TEST_CANARY
+    }
+  })
+
+  test("interpreter/script resolution: $AMICO_PYTHON / $AMICO_PASQAL_VALIDATOR override, documented defaults", () => {
+    expect(pasqalPython()).toBe("/opt/venvs/amico/bin/python3")
+    expect(pasqalValidatorScript()).toBe("/opt/amico/scripts/pasqal_validate.py")
+    process.env.AMICO_PYTHON = "   " // blank → default: python3 resolved on PATH
+    delete process.env.AMICO_PASQAL_VALIDATOR
+    expect(pasqalPython()).toBe("python3")
+    // default: the amicode-staged script under the SHARED ops dir resolution
+    expect(pasqalValidatorScript()).toBe(
+      path.join(dir, "amicode-ops", "scripts", "pasqal-connector", "pasqal_validate.py"),
+    )
+    delete process.env.AMICODE_OPS_DIR
+    expect(pasqalValidatorScript()).toContain(
+      path.join(".amico", "amicode", "scripts", "pasqal-connector", "pasqal_validate.py"),
+    )
+  })
+
+  test("missing/blank username, password or project_id → bad_request, NO spawn, value-free error", async () => {
+    const { calls, spawn } = scripted(0, validatorLine())
+    const cases = [
+      JSON.stringify({ id: "pasqal-cloud" }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, project_id: PASQAL.project_id }), // no password
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password, project_id: "  " }),
+      JSON.stringify({ id: "pasqal-cloud", username: "", password: PASQAL.password, project_id: PASQAL.project_id }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: "   ", project_id: PASQAL.project_id }),
+    ]
+    for (const body of cases) {
+      const raw = await submitCredentialResponse(body, { pasqalSpawn: spawn })
+      const parsed = JSON.parse(raw)
+      expect(parsed.ok).toBe(false)
+      expect(parsed.connection).toBeNull()
+      expect(raw).not.toContain(PASQAL.password) // error text never echoes what was rejected
+      expect(raw).not.toContain(PASQAL.username)
+    }
+    expect(calls).toHaveLength(0)
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("while the validator runs, concurrent GETs render 'validating'; the terminal state clears it", async () => {
+    let release!: (run: { exitCode: number; stdout: string }) => void
+    const gate = new Promise<{ exitCode: number; stdout: string }>((resolve) => (release = resolve))
+    const blocking: PasqalSpawn = () => gate
+    const pending = submitCredentialResponse(pasqalSubmit, { pasqalSpawn: blocking })
+    await Bun.sleep(0) // let the submit reach the spawn await
+    expect(pasqalEntry(statusResponse()).state).toBe("validating")
+    release({ exitCode: 0, stdout: validatorLine() })
+    expect(JSON.parse(await pending).connection.state).toBe("connected")
+    expect(inflightOverlay.size).toBe(0)
+    expect(pasqalEntry(statusResponse()).state).toBe("connected")
+  })
+})
+
+describe("pasqal submit — token-only persistence + device metadata (169 AC2)", () => {
+  test("valid run with a token → token-only credential via the #162 seam; connected + identity + devices in the SAME response", async () => {
+    const raw = await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    const parsed = JSON.parse(raw)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe(PASQAL.project_id)
+    expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+    expect(parsed.connection.expires_at).toBe("2026-08-01T00:00:00+00:00")
+    // token-only at rest: project_id + token + expiry — no username, no password
+    expect(readCredential("pasqal-cloud")).toEqual({
+      project_id: PASQAL.project_id,
+      token: "tok-pasqal-minted",
+      expires_at: "2026-08-01T00:00:00+00:00",
+    })
+    // the response body itself is secret-free
+    expect(raw).not.toContain(PASQAL.password)
+    expect(raw).not.toContain(PASQAL.username)
+    expect(raw).not.toContain("tok-pasqal-minted")
+    // a follow-up GET agrees from disk — devices are status metadata, not credential bytes
+    const entry = pasqalEntry(statusResponse())
+    expect(entry.state).toBe("connected")
+    expect(entry.identity).toBe(PASQAL.project_id)
+    expect(entry.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
+  })
+
+  test("device metadata REFRESHES on every submit — the newest list replaces the old one", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    const shrunk = validatorLine({ devices: ["FRESNEL"], token: "tok-pasqal-rotated" })
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, shrunk).spawn })
+    const entry = pasqalEntry(statusResponse())
+    expect(entry.devices).toEqual([{ name: "FRESNEL" }])
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-rotated")
+  })
+
+  test("a valid Pasqal save NEVER touches solver mode — the HP flip is company-compute-only", async () => {
+    const parsed = JSON.parse(
+      await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn }),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(existsSync(entitlementsFile())).toBe(false)
+    expect(existsSync(solverModeFile())).toBe(false)
   })
 })
