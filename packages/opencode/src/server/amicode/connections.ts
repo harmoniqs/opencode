@@ -16,6 +16,7 @@ import {
   writeCredential,
   type ConnectionType,
 } from "./credentials"
+import { parseTomlLite } from "./toml-lite"
 
 // --- status contract (parent #159 data contract; secret-free by construction) ---
 
@@ -276,6 +277,66 @@ function clearStatus(id: ConnectionType): void {
   atomicWriteFileSync(file, JSON.stringify(out, null, 2) + "\n")
 }
 
+// --- HP flip on connect (amicode#167 / parent #159, pushed hp-cloud-key
+// contract): a VALID Company Compute save grants the `issimo` entitlement and
+// writes the durable {mode:"hp",status:"switching"} request. The amicode
+// extension's EXISTING watcher (packages/extension/src/solver_mode.ts,
+// watchSolverMode) consumes the request and performs the full re-prep exactly
+// once — this slice only WRITES the shared file contract, never a second
+// switch mechanism. One-way on connect: disconnect never reverts solver mode
+// (the user's toggle owns reverting).
+
+/** $AMICODE_OPS_DIR override → ~/.amico/amicode — the SAME resolution the
+ *  extension's amicodeOpsDir() uses (substrate/vault_store.ts), so the watcher
+ *  reads exactly where we write and tests stay hermetic. */
+export function amicodeOpsDir(): string {
+  const env = process.env.AMICODE_OPS_DIR
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "amicode")
+}
+
+export function entitlementsFile(): string {
+  return path.join(amicodeOpsDir(), "entitlements.toml")
+}
+
+export function solverModeFile(): string {
+  return path.join(amicodeOpsDir(), "solver-mode.json")
+}
+
+/** Grant `issimo` PRESERVING every other code (read-modify-write). The write
+ *  is byte-compatible with the extension's applyEntitlementForMode writer —
+ *  `codes = [...]` (+ optional `expired = [...]`), double-quoted strings — and
+ *  its smol-toml reader parses it unchanged. Absent/corrupt file starts empty
+ *  (the extension's own fallback); an already-granted file is left untouched
+ *  byte-for-byte. Returns whether the grant was already in place. */
+function grantIssimo(file: string): { alreadyGranted: boolean } {
+  let codes: string[] = []
+  let expired: string[] = []
+  try {
+    const parsed = parseTomlLite(readFileSync(file, "utf8"))
+    if (parsed.ok) {
+      const value = parsed.value as { codes?: unknown; expired?: unknown }
+      if (Array.isArray(value.codes)) codes = value.codes.filter((c): c is string => typeof c === "string")
+      if (Array.isArray(value.expired)) expired = value.expired.filter((c): c is string => typeof c === "string")
+    }
+  } catch {
+    // absent/unreadable → start empty, matching the extension reader
+  }
+  if (codes.includes("issimo")) return { alreadyGranted: true }
+  codes.push("issimo")
+  const lines = [`codes = [${codes.map((c) => JSON.stringify(c)).join(", ")}]`]
+  if (expired.length > 0) lines.push(`expired = [${expired.map((c) => JSON.stringify(c)).join(", ")}]`)
+  atomicWriteFileSync(file, lines.join("\n") + "\n")
+  return { alreadyGranted: false }
+}
+
+/** After a VALID save: grant the entitlement, then request the hp switch the
+ *  watcher re-preps from. */
+function requestHpFlip(): void {
+  grantIssimo(entitlementsFile())
+  atomicWriteFileSync(solverModeFile(), JSON.stringify({ mode: "hp", status: "switching" }))
+}
+
 // --- mutation bodies (POST routes). One shape per route family, sibling
 // discipline: never reject, ok:false + "code: detail" on failure. SECURITY:
 // every failure message is a FIXED string — nothing the caller sent (token,
@@ -395,6 +456,7 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
       return synthesizeConnection("write_failed", "credential could not be saved")
     }
     persistStatus(id, { state: "connected", validated_at })
+    requestHpFlip() // #167: AFTER the save and ONLY on the valid outcome
   } else {
     // nothing written — an existing credential (if any) stays untouched
     persistStatus(id, { state: outcome, validated_at })
