@@ -1,0 +1,199 @@
+import { describe, expect, test } from "bun:test"
+import { createBrainEngine, type BrainEngineOptions } from "./brain-engine"
+import { BRAIN_DATA } from "./brain-data"
+
+/* The engine must run headless: bun test has no DOM, no rAF, no matchMedia.
+   That is the point — the old /brain.html iframe could only be exercised by
+   booting a server and a browser, which is why it broke three times before
+   anyone saw it. A recording 2d-context stub is enough to pin the behavior. */
+
+type Call = { method: string; args: unknown[] }
+function recordingCtx() {
+  const calls: Call[] = []
+  const record =
+    (method: string) =>
+    (...args: unknown[]) => {
+      calls.push({ method, args })
+      if (method === "measureText") return { width: 42 }
+      return undefined
+    }
+  const ctx: Record<string, unknown> = { calls }
+  for (const m of [
+    "setTransform",
+    "clearRect",
+    "fillRect",
+    "beginPath",
+    "moveTo",
+    "lineTo",
+    "stroke",
+    "fill",
+    "arc",
+    "setLineDash",
+    "drawImage",
+    "fillText",
+    "measureText",
+  ])
+    ctx[m] = record(m)
+  return ctx as { calls: Call[] } & Record<string, unknown>
+}
+function stubCanvas(ctx: unknown) {
+  return {
+    clientWidth: 0,
+    clientHeight: 0,
+    width: 0,
+    height: 0,
+    getContext: () => ctx,
+  } as unknown as HTMLCanvasElement
+}
+function makeEngine(opts: Partial<BrainEngineOptions> = {}) {
+  const ctx = recordingCtx()
+  const engine = createBrainEngine(stubCanvas(ctx), {
+    scheme: "dark",
+    reduceMotion: true,
+    animate: false,
+    size: { width: 800, height: 224 },
+    ...opts,
+  })
+  return { engine, ctx }
+}
+
+describe("boot", () => {
+  test("builds the full skeleton graph headless, centered on the amico core", () => {
+    const { engine } = makeEngine()
+    const s = engine.stats()
+    // every vault-sample node plus the core; edges include the dispatch spokes
+    expect(s.nodes).toBe(BRAIN_DATA.nodes.length + 1)
+    expect(s.edges).toBeGreaterThan(BRAIN_DATA.edges.length)
+    expect(s.cur).toBe("amico")
+    expect(s.claimed).toBe(0)
+    expect(s.atlas).toBe(0)
+  })
+
+  test("wears the requested scheme from frame zero — no wrong-theme first frame", () => {
+    // the iframe read its theme AFTER load (async in the VS Code webview), so
+    // the first frames painted the wrong palette or opaque white; the native
+    // engine takes the scheme as a constructor input
+    const { engine } = makeEngine({ scheme: "light" })
+    expect(engine.stats().scheme).toBe("light")
+  })
+
+  test("first frame clears to transparent, never paints an opaque ground", () => {
+    const { engine, ctx } = makeEngine()
+    engine.tick(16)
+    engine.tick(32)
+    const clears = ctx.calls.filter((c) => c.method === "clearRect")
+    expect(clears.length).toBeGreaterThanOrEqual(2)
+    expect(clears[0].args).toEqual([0, 0, 800, 224])
+    // the unwanted first frame was the old page's own body { background }
+    // fill — a full-canvas fillRect has no business here (label halos are
+    // small rects)
+    const fullFills = ctx.calls.filter(
+      (c) => c.method === "fillRect" && (c.args[2] as number) >= 800 && (c.args[3] as number) >= 224,
+    )
+    expect(fullFills).toEqual([])
+  })
+})
+
+describe("live thought", () => {
+  test("a replay commit claims the node instantly and moves the cursor", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "solve", replay: true })
+    const s = engine.stats()
+    expect(s.claimed).toBe(1)
+    expect(s.cur).toBe("solve")
+  })
+
+  test("a consider touch is a scout flash — it never claims", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "debugging", consider: true })
+    const s = engine.stats()
+    expect(s.claimed).toBe(0)
+    expect(s.cur).toBe("amico")
+  })
+
+  test("an unknown label grafts a new node over a thought edge", () => {
+    const { engine } = makeEngine()
+    const before = engine.stats()
+    engine.touch({ label: "scratch/wip-notes.md", replay: true })
+    const after = engine.stats()
+    expect(after.nodes).toBe(before.nodes + 1)
+    expect(after.edges).toBe(before.edges + 1)
+    expect(after.claimed).toBe(1)
+  })
+
+  test("a live commit claims through the reduced-motion pump", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "setup" })
+    // reduced motion: no traveling pulses — the claim lands synchronously
+    const s = engine.stats()
+    expect(s.claimed).toBe(1)
+    expect(s.cur).toBe("setup")
+  })
+
+  test("charting two commits since the last plate yields one constellation", () => {
+    const { engine } = makeEngine()
+    engine.touch({ label: "solve", replay: true })
+    engine.touch({ label: "piccolo-jl", replay: true })
+    engine.chart("optimize a fluxonium X gate", true)
+    expect(engine.stats().atlas).toBe(1)
+  })
+})
+
+describe("theme", () => {
+  test("setTheme is lossless: the atlas, claims, and cursor all survive a flip", () => {
+    // the iframe workaround reloaded the document on every flip and re-flushed
+    // the whole event history; the native engine just swaps ink
+    const { engine } = makeEngine()
+    engine.touch({ label: "solve", replay: true })
+    engine.touch({ label: "piccolo-jl", replay: true })
+    engine.chart("plate the thought", true)
+    const before = engine.stats()
+    engine.setTheme("light")
+    const after = engine.stats()
+    expect(after.scheme).toBe("light")
+    expect(after.claimed).toBe(before.claimed)
+    expect(after.atlas).toBe(before.atlas)
+    expect(after.cur).toBe(before.cur)
+    expect(after.nodes).toBe(before.nodes)
+  })
+
+  test("setTheme ignores junk", () => {
+    const { engine } = makeEngine()
+    engine.setTheme("hotdog" as never)
+    expect(engine.stats().scheme).toBe("dark")
+  })
+})
+
+describe("lifecycle", () => {
+  test("pause stops the frame loop; resume restarts it", () => {
+    const { engine, ctx } = makeEngine()
+    engine.tick(16)
+    const n = ctx.calls.length
+    engine.pause()
+    engine.tick(1000)
+    expect(ctx.calls.length).toBe(n) // folded away — no frames burned
+    engine.resume()
+    engine.tick(1016)
+    expect(ctx.calls.length).toBeGreaterThan(n)
+  })
+
+  test("destroy is terminal: later events and ticks are no-ops", () => {
+    const { engine, ctx } = makeEngine()
+    engine.destroy()
+    const n = ctx.calls.length
+    engine.touch({ label: "solve", replay: true })
+    engine.resume()
+    engine.tick(2000)
+    expect(ctx.calls.length).toBe(n)
+    expect(engine.stats().claimed).toBe(0)
+  })
+
+  test("highlight tolerates unknown labels", () => {
+    const { engine } = makeEngine()
+    expect(() => {
+      engine.highlight("tdd")
+      engine.highlight("definitely-not-a-node")
+      engine.highlight("")
+    }).not.toThrow()
+  })
+})

@@ -10,10 +10,22 @@
 // always visible, never hidden; click (or Enter/Space) overrides until the
 // next turn reclaims auto. An open question dock forces the collapsed
 // slice (amico is waiting on the user, not thinking).
+//
+// The graph renders on an IN-DOCUMENT canvas (brain-engine), not an iframe.
+// The old /brain.html embed broke three separate ways at the frame boundary:
+// document requests can't carry server auth (armed password ⇒ 401 ⇒ blank
+// strip), a parent/child color-scheme mismatch composites the transparent
+// frame opaque white (async webview theming ⇒ white box + full reload on
+// every flip), and the page's own stylesheet ground + prototype chrome
+// painted an unwanted first frame before script hid them. Native, there is
+// no fetch, no second document, no handshake — the canvas is transparent
+// from frame zero, events are direct calls, and a theme flip repaints
+// without losing the atlas.
 
 import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { amicoBrainRef, type AmicoBrainRef } from "@opencode-ai/ui/brain-ref"
+import { createBrainEngine, type BrainEngine } from "@opencode-ai/ui/brain-engine"
 
 type BrainTouch = { id: string } & AmicoBrainRef
 type BrainEvent = ({ kind: "touch"; replay: boolean } & BrainTouch) | { kind: "chart"; id: string; title: string }
@@ -86,65 +98,36 @@ function BrainFrame(props: { sessionID: string }) {
   )
   const expanded = () => !questionOpen() && (manual() ?? (busy() || linger()))
 
-  let frame: HTMLIFrameElement | undefined
+  // the engine is created when the canvas mounts and destroyed with the row;
+  // theme flips are direct, lossless repaints — no reload, no re-flush
+  const [engine, setEngine] = createSignal<BrainEngine>()
   const currentScheme = () => (document.documentElement.dataset.colorScheme === "light" ? "light" : "dark")
-  // live theme flips must reach the iframe: a color-scheme mismatch between
-  // parent and child makes the browser paint the transparent frame opaque
-  // white. Inside the VS Code webview the boot theme arrives asynchronously
-  // (chat_panel seeds it via ?colorScheme= → app preload → data-color-scheme),
-  // so a one-time snapshot read at mount can be wrong and bake a white frame.
-  // Track the scheme REACTIVELY so the iframe src re-syncs, AND re-post the
-  // current scheme every time the brain reports ready (the initial handshake)
-  // plus on every subsequent flip.
-  const [scheme, setScheme] = createSignal(currentScheme())
-  const themeObserver = new MutationObserver(() => {
-    const s = currentScheme()
-    setScheme(s)
-    post({ kind: "theme", colorScheme: s })
-  })
+  const themeObserver = new MutationObserver(() => engine()?.setTheme(currentScheme()))
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
   onCleanup(() => themeObserver.disconnect())
-  createEffect(() => {
-    if (ready()) post({ kind: "theme", colorScheme: scheme() })
-  })
-  const [ready, setReady] = createSignal(false)
-  const sent = new Set<string>()
-  let initialFlush = true
-  const onBrainMessage = (e: MessageEvent) => {
-    if (e.origin !== location.origin) return
-    const d = e.data as { source?: string; kind?: string } | undefined
-    if (d?.source === "amico-brain" && d.kind === "ready") {
-      // A colorScheme flip re-mounts the iframe (reactive src), which re-sends
-      // `ready`. Clear the sent-set and restore initialFlush so the reloaded
-      // brain gets the full event history re-flushed — otherwise it would come
-      // back empty (every id already in `sent`).
-      sent.clear()
-      initialFlush = true
-      setReady(true)
-    }
-  }
-  window.addEventListener("message", onBrainMessage)
-  onCleanup(() => window.removeEventListener("message", onBrainMessage))
+  onCleanup(() => engine()?.destroy())
+
   // amicode: hovering a tool row in the log glances at its node on the map
   // (emitted by packages/ui message-part via the amicode:brain-hover event)
   const onToolHover = (e: Event) => {
     const d = (e as CustomEvent).detail as { label?: string } | undefined
-    if (d?.label && ready()) post({ kind: "highlight", label: d.label })
+    if (d?.label) engine()?.highlight(d.label)
   }
   window.addEventListener("amicode:brain-hover", onToolHover)
   onCleanup(() => window.removeEventListener("amicode:brain-hover", onToolHover))
-  const post = (payload: Record<string, unknown>) =>
-    frame?.contentWindow?.postMessage({ source: "amico-brain", ...payload }, location.origin)
 
+  const sent = new Set<string>()
+  let initialFlush = true
   createEffect(() => {
     const evs = events()
-    if (!ready()) return
+    const brain = engine()
+    if (!brain) return
     const replayCharts = initialFlush // charts already on the atlas restore silently
     for (const ev of evs) {
       if (sent.has(ev.id)) continue
       sent.add(ev.id)
-      if (ev.kind === "touch") post({ kind: "touch", label: ev.label, type: ev.type, consider: ev.consider, replay: ev.replay })
-      else post({ kind: "chart", title: ev.title, replay: replayCharts })
+      if (ev.kind === "touch") brain.touch({ label: ev.label, type: ev.type, consider: ev.consider, replay: ev.replay })
+      else brain.chart(ev.title, replayCharts)
     }
     initialFlush = false
   })
@@ -173,12 +156,10 @@ function BrainFrame(props: { sessionID: string }) {
         }
       }}
     >
-      <iframe
-        ref={(el) => (frame = el)}
-        src={`/brain.html?mode=live&colorScheme=${scheme()}`}
-        title="amico brain"
+      <canvas
+        ref={(el) => setEngine(createBrainEngine(el, { scheme: currentScheme() }))}
         aria-hidden="true"
-        class="pointer-events-none block h-full w-full border-0"
+        class="pointer-events-none block h-full w-full"
       />
     </div>
   )
