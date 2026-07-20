@@ -83,10 +83,16 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
 const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
   function* (opts: ListenOptions) {
     // amicode: record the bind so credential-mutation routes can refuse to
-    // serve beyond loopback (amicode#165 AC5). Last listener wins — the
-    // in-process webHandler never binds, so "never recorded" stays loopback.
-    yield* Effect.sync(() => AmicodeConnections.setBindHostname(opts.hostname))
-    const state = yield* startWithPortFallback(opts)
+    // serve beyond loopback (amicode#165 AC5). Last listener wins while it
+    // lives; the previous value is restored when this listener's scope closes
+    // (or the listen fails), so a dead 0.0.0.0 bind never lingers. The
+    // in-process webHandler never binds — "never recorded" stays loopback.
+    const previousBind = yield* Effect.sync(() => AmicodeConnections.setBindHostname(opts.hostname))
+    const restoreBind = Effect.sync(() => {
+      AmicodeConnections.setBindHostname(previousBind)
+    })
+    const state = yield* startWithPortFallback(opts).pipe(Effect.onError(() => restoreBind))
+    yield* Scope.addFinalizer(state.scope, restoreBind)
     const address = yield* tcpAddress(state)
     const listenerUrl = makeURL(opts.hostname, address.port)
     url = listenerUrl

@@ -42,6 +42,7 @@ beforeEach(() => {
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
   inflightOverlay.clear()
+  setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(() => {
   for (const k of ENV_KEYS) {

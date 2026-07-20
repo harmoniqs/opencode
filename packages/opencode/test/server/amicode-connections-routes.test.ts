@@ -80,6 +80,7 @@ beforeEach(() => {
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
   process.env.AMICODE_CONNECTIONS_FILE = path.join(dir, "connections.json")
   inflightOverlay.clear()
+  setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(() => {
   for (const k of ENV_KEYS) {
@@ -240,6 +241,12 @@ describe("connections routes — standalone serve records the bind", () => {
     } finally {
       await wide.stop(true)
     }
+
+    // the recorded bind dies WITH the listener: once the wide listener stops,
+    // an in-process (loopback-default) handler serves mutations again
+    const released = await (await app().request("/amicode/connections/credential", body)).json()
+    expect(released.ok).toBe(true)
+    expect(released.connection.state).toBe("connected")
 
     const local = await Server.listen({ hostname: "127.0.0.1", port: 0 })
     try {

@@ -292,8 +292,13 @@ export function synthesizeConnection(code: string, detail: string): string {
 
 let bindHostname: string | undefined
 
-export function setBindHostname(hostname: string | undefined): void {
+/** Returns the previous value so a listener can RESTORE it when it stops — a
+ *  dead 0.0.0.0 listener must not keep refusing mutations for a later
+ *  loopback/in-process handler (see server.ts). */
+export function setBindHostname(hostname: string | undefined): string | undefined {
+  const previous = bindHostname
   bindHostname = hostname
+  return previous
 }
 
 /** Same loopback family the mdns gate recognizes (server.ts), widened to the
