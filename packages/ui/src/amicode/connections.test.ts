@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import {
+  applyConnectionOverlay,
   cardModel,
   parseConnectionActionResponse,
   parseConnectionsResponse,
   stateCopy,
+  submitPayload,
   validatedAtDisplay,
   type ConnectionCardState,
   type ConnectionStateLabels,
+  type ConnectionsView,
   type ConnectionView,
 } from "./connections"
 
@@ -284,5 +287,86 @@ describe("cardModel", () => {
     for (const state of CARD_STATES.filter((s) => s !== "unknown")) {
       expect(cardModel(viewFor(state)).showRawState).toBe(false)
     }
+  })
+})
+
+// --- AC3: the submit gate. An empty submission produces NO payload — the
+// component fires no request and touches no state when this returns undefined.
+
+describe("submitPayload", () => {
+  test("empty or whitespace-only fields yield no payload at all (AC3)", () => {
+    expect(submitPayload("company-compute", "", "")).toBeUndefined()
+    expect(submitPayload("company-compute", "https://solve.example", "")).toBeUndefined()
+    expect(submitPayload("company-compute", "", "sk-key")).toBeUndefined()
+    expect(submitPayload("company-compute", "   ", "sk-key")).toBeUndefined()
+    expect(submitPayload("company-compute", "https://solve.example", "  \t ")).toBeUndefined()
+  })
+
+  test("both fields present yields the trimmed wire body", () => {
+    expect(submitPayload("company-compute", "  https://solve.example  ", " sk-key ")).toEqual({
+      id: "company-compute",
+      base_url: "https://solve.example",
+      token: "sk-key",
+    })
+  })
+})
+
+// --- AC2: the overlay the app layer applies around one round trip — the
+// submit renders "validating" while the POST is in flight, then the terminal
+// connection from the SAME response replaces it. No polling loop anywhere.
+
+describe("applyConnectionOverlay", () => {
+  const baseView: ConnectionsView = {
+    ok: true,
+    connections: [viewFor("needs-key")],
+  }
+
+  test("no overlay passes the base view through untouched", () => {
+    expect(applyConnectionOverlay(baseView, {})).toBe(baseView)
+    expect(applyConnectionOverlay(undefined, {})).toBeUndefined()
+  })
+
+  test("validating overlay flips the matching card to the in-flight state (AC2)", () => {
+    const view = applyConnectionOverlay(baseView, { validating: "company-compute" })
+    expect(view?.ok).toBe(true)
+    expect(view?.connections[0].state).toBe("validating")
+    expect(view?.connections[0].id).toBe("company-compute")
+    // the base view is not mutated
+    expect(baseView.connections[0].state).toBe("needs-key")
+  })
+
+  test("terminal overlay replaces the card with the connection from the same response (AC2)", () => {
+    const terminal = viewFor("connected", { validatedAt: "7/19/2026", identity: "kate@harmoniqs.co" })
+    const view = applyConnectionOverlay(baseView, { terminal })
+    expect(view?.connections).toHaveLength(1)
+    expect(view?.connections[0]).toEqual(terminal)
+  })
+
+  test("validating wins over a stale terminal while a new request is in flight", () => {
+    const terminal = viewFor("connected")
+    const view = applyConnectionOverlay(baseView, { terminal, validating: "company-compute" })
+    expect(view?.connections[0].state).toBe("validating")
+  })
+
+  test("overlay still renders when the base GET is absent or failed", () => {
+    const inflight = applyConnectionOverlay(undefined, { validating: "company-compute" })
+    expect(inflight?.ok).toBe(true)
+    expect(inflight?.connections[0].state).toBe("validating")
+    const failed = applyConnectionOverlay(
+      { ok: false, connections: [], error: "boom" },
+      { terminal: viewFor("connected") },
+    )
+    expect(failed?.ok).toBe(true)
+    expect(failed?.connections[0].state).toBe("connected")
+  })
+
+  test("an overlay for one id leaves sibling cards untouched (Pasqal-ready)", () => {
+    const twoCards: ConnectionsView = {
+      ok: true,
+      connections: [viewFor("needs-key"), viewFor("connected", { id: "pasqal-cloud" })],
+    }
+    const view = applyConnectionOverlay(twoCards, { validating: "company-compute" })
+    expect(view?.connections[1]).toEqual(twoCards.connections[1])
+    expect(view?.connections[0].state).toBe("validating")
   })
 })

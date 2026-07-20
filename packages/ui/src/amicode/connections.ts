@@ -156,3 +156,54 @@ export function parseConnectionActionResponse(raw: unknown): ConnectionActionVie
     return { ok: false, error: "bad_shape: connection missing" }
   return { ok: true, connection: parseConnectionEntry(data.connection) }
 }
+
+// --- submit gate (AC3): an empty submission yields NO payload — the card
+// fires no request and changes no state when this returns undefined.
+
+export type CredentialSubmitPayload = { id: string; base_url: string; token: string }
+
+export function submitPayload(id: string, baseUrl: string, token: string): CredentialSubmitPayload | undefined {
+  const base = baseUrl.trim()
+  const key = token.trim()
+  if (base === "" || key === "") return undefined
+  return { id, base_url: base, token: key }
+}
+
+// --- action overlay (AC2): the app layer wraps ONE round trip with this —
+// {validating: id} while the POST is in flight, then {terminal: connection}
+// parsed from the SAME response. Pure and non-mutating; no polling loop.
+
+export type ConnectionOverlay = {
+  /** connection id whose card renders "validating" while a request runs */
+  validating?: string
+  /** terminal connection from the mutation response; replaces the card */
+  terminal?: ConnectionView
+}
+
+function replaceConnection(base: ConnectionsView | undefined, entry: ConnectionView): ConnectionsView {
+  if (!base || !base.ok) return { ok: true, connections: [entry] }
+  const found = base.connections.some((conn) => conn.id === entry.id)
+  return {
+    ok: true,
+    connections: found
+      ? base.connections.map((conn) => (conn.id === entry.id ? entry : conn))
+      : [...base.connections, entry],
+  }
+}
+
+function validatingEntry(base: ConnectionsView | undefined, id: string): ConnectionView {
+  const existing = base?.ok ? base.connections.find((conn) => conn.id === id) : undefined
+  if (existing) return { ...existing, state: "validating", rawState: "validating" }
+  return { id, state: "validating", rawState: "validating", validatedAt: "—", stale: false }
+}
+
+export function applyConnectionOverlay(
+  base: ConnectionsView | undefined,
+  overlay: ConnectionOverlay,
+): ConnectionsView | undefined {
+  let view = base
+  if (overlay.terminal) view = replaceConnection(view, overlay.terminal)
+  // applied last: a request in flight outranks any previously stored terminal
+  if (overlay.validating !== undefined) view = replaceConnection(view, validatingEntry(view, overlay.validating))
+  return view
+}
