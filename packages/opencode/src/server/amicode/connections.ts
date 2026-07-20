@@ -9,7 +9,13 @@
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
-import { atomicWriteFileSync, clearCredential, readCredential, writeCredential, type ConnectionType } from "./credentials"
+import {
+  atomicWriteFileSync,
+  clearCredential,
+  readCredential,
+  writeCredential,
+  type ConnectionType,
+} from "./credentials"
 
 // --- status contract (parent #159 data contract; secret-free by construction) ---
 
@@ -83,6 +89,10 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v !== "" ? v : undefined
 }
 
+function isKnownState(v: string): v is ConnectionState {
+  return KNOWN_STATES.has(v)
+}
+
 function whitelistDevices(v: unknown): ConnectionDevice[] | undefined {
   if (!Array.isArray(v)) return undefined
   const out: ConnectionDevice[] = []
@@ -90,9 +100,12 @@ function whitelistDevices(v: unknown): ConnectionDevice[] | undefined {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue
     const d = raw as Record<string, unknown>
     const device: ConnectionDevice = {}
-    if (str(d.id)) device.id = d.id as string
-    if (str(d.name)) device.name = d.name as string
-    if (str(d.state)) device.state = d.state as string
+    const id = str(d.id)
+    const name = str(d.name)
+    const state = str(d.state)
+    if (id) device.id = id
+    if (name) device.name = name
+    if (state) device.state = state
     if (Object.keys(device).length > 0) out.push(device)
   }
   return out.length > 0 ? out : undefined
@@ -105,16 +118,19 @@ function whitelistPersisted(raw: unknown): Partial<ConnectionStatus> {
   const d = raw as Record<string, unknown>
   const out: Partial<ConnectionStatus> = {}
   const state = str(d.state)
-  if (state && KNOWN_STATES.has(state)) out.state = state as ConnectionState
-  if (str(d.identity)) out.identity = d.identity as string
+  if (state && isKnownState(state)) out.state = state
+  const identity = str(d.identity)
+  if (identity) out.identity = identity
   if (Array.isArray(d.entitlements)) {
     const entitlements = d.entitlements.filter((e): e is string => typeof e === "string" && e !== "")
     if (entitlements.length > 0) out.entitlements = entitlements
   }
-  if (str(d.expires_at)) out.expires_at = d.expires_at as string
+  const expires = str(d.expires_at)
+  if (expires) out.expires_at = expires
   const devices = whitelistDevices(d.devices)
   if (devices) out.devices = devices
-  if (str(d.validated_at)) out.validated_at = d.validated_at as string
+  const validated = str(d.validated_at)
+  if (validated) out.validated_at = validated
   return out
 }
 
@@ -387,8 +403,8 @@ function parseIdBody(rawBody: string): ConnectionType | undefined {
   const body = parseMutationBody(rawBody)
   if (!body) return undefined
   const id = body.id
-  if (typeof id !== "string" || !(CONNECTION_IDS as string[]).includes(id)) return undefined
-  return id as ConnectionType
+  if (typeof id !== "string") return undefined
+  return CONNECTION_IDS.find((known) => known === id)
 }
 
 /** POST /amicode/connections/disconnect — body {id}. Clears the credential

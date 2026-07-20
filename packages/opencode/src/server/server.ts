@@ -6,6 +6,7 @@ import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
 import { createServer } from "node:http"
 import { MDNS } from "./mdns"
+import * as AmicodeConnections from "./amicode/connections"
 import { HttpApiApp } from "./routes/instance/httpapi/server"
 import { disposeMiddleware } from "./routes/instance/httpapi/lifecycle"
 import { WebSocketTracker } from "./routes/instance/httpapi/websocket-tracker"
@@ -81,6 +82,10 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
 
 const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
   function* (opts: ListenOptions) {
+    // amicode: record the bind so credential-mutation routes can refuse to
+    // serve beyond loopback (amicode#165 AC5). Last listener wins — the
+    // in-process webHandler never binds, so "never recorded" stays loopback.
+    yield* Effect.sync(() => AmicodeConnections.setBindHostname(opts.hostname))
     const state = yield* startWithPortFallback(opts)
     const address = yield* tcpAddress(state)
     const listenerUrl = makeURL(opts.hostname, address.port)

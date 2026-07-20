@@ -188,7 +188,10 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
 
   test("statusBody is a pure builder over injectable inputs (profile.ts idiom)", () => {
     const file = path.join(dir, "alt-connections.json")
-    writeFileSync(file, JSON.stringify({ "company-compute": { state: "invalid", validated_at: "2026-07-19T00:00:00Z" } }))
+    writeFileSync(
+      file,
+      JSON.stringify({ "company-compute": { state: "invalid", validated_at: "2026-07-19T00:00:00Z" } }),
+    )
     const parsed = JSON.parse(
       statusBody({ file, overlay: new Map(), hasCredential: () => true, now: Date.parse("2026-07-19T01:00:00Z") }),
     )
@@ -345,7 +348,9 @@ describe("disconnect + revalidate (AC4)", () => {
       probes++
       return { status: 200 }
     }
-    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }))
+    const parsed = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }),
+    )
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("needs-key")
     expect(probes).toBe(0)
@@ -376,7 +381,9 @@ describe("loopback guard on mutations (AC5)", () => {
       ),
     )
     const disconnect = JSON.parse(disconnectResponse(JSON.stringify({ id: "company-compute" })))
-    const revalidate = JSON.parse(await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }))
+    const revalidate = JSON.parse(
+      await revalidateResponse(JSON.stringify({ id: "company-compute" }), { fetchImpl: counting }),
+    )
     for (const parsed of [submit, disconnect, revalidate]) {
       expect(parsed.ok).toBe(false)
       expect(parsed.error).toStartWith("non_loopback:")
