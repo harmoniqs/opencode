@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { writeCredential } from "@/server/amicode/credentials"
+import { readCredential, writeCredential } from "@/server/amicode/credentials"
 import {
   connectionsFile,
   inflightOverlay,
@@ -17,6 +17,7 @@ import {
   statusResponse,
   STALE_MS,
   statusBody,
+  submitCredentialResponse,
   type FetchImpl,
 } from "@/server/amicode/connections"
 
@@ -188,5 +189,92 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     )
     expect(parsed.connections[0].state).toBe("invalid")
     expect(parsed.connections[0].stale).toBe(false)
+  })
+})
+
+describe("submit credential — probe → save → terminal status, one round trip (AC1, AC2)", () => {
+  test("submit: valid key → credential written through the #162 seam + connected in the SAME response (AC1)", async () => {
+    const body = JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co/", token: "tok-good" })
+    const parsed = JSON.parse(await submitCredentialResponse(body, { fetchImpl: respond(404) }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    expect(parsed.connection.id).toBe("company-compute")
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.stale).toBe(false)
+    expect(Date.now() - Date.parse(parsed.connection.validated_at)).toBeLessThan(10_000)
+    // written via the seam: the frozen byte shape, trailing slash trimmed
+    expect(readCredential("company-compute")).toEqual({ base_url: "https://solves.example.co", token: "tok-good" })
+    // a follow-up GET agrees without another probe
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected")
+  })
+
+  test("submit: 401 → invalid, NOTHING written; a pre-existing credential survives untouched (AC2)", async () => {
+    const body = JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-bad" })
+    const rejected = JSON.parse(await submitCredentialResponse(body, { fetchImpl: respond(401) }))
+    expect(rejected.ok).toBe(true)
+    expect(rejected.connection.state).toBe("invalid")
+    expect(readCredential("company-compute")).toBeUndefined()
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("invalid")
+    // now with an older good credential on disk: the failed attempt must not clobber it
+    writeCredential("company-compute", cloudCredential)
+    await submitCredentialResponse(body, { fetchImpl: respond(401) })
+    expect(readCredential("company-compute")).toEqual(cloudCredential)
+  })
+
+  test("submit: network/server trouble → unreachable, nothing written, token-free fixed message (AC2)", async () => {
+    const boom: FetchImpl = async () => {
+      throw new Error("connect ECONNREFUSED 10.0.0.1:443")
+    }
+    for (const fetchImpl of [boom, respond(500)]) {
+      const raw = await submitCredentialResponse(
+        JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-hidden" }),
+        { fetchImpl },
+      )
+      const parsed = JSON.parse(raw)
+      expect(parsed.connection.state).toBe("unreachable")
+      expect(raw).not.toContain("tok-hidden")
+      expect(readCredential("company-compute")).toBeUndefined()
+    }
+  })
+
+  test("submit: while the probe is in flight, concurrent GETs render 'validating'; terminal state clears it", async () => {
+    let release!: (v: { status: number }) => void
+    const gate = new Promise<{ status: number }>((resolve) => (release = resolve))
+    const blocking: FetchImpl = () => gate
+    const pending = submitCredentialResponse(
+      JSON.stringify({ id: "company-compute", base_url: "https://solves.example.co", token: "tok-slow" }),
+      { fetchImpl: blocking },
+    )
+    await Bun.sleep(0) // let the submit reach the probe await
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("validating")
+    release({ status: 200 })
+    expect(JSON.parse(await pending).connection.state).toBe("connected")
+    expect(inflightOverlay.size).toBe(0)
+    expect(JSON.parse(statusResponse()).connections[0].state).toBe("connected")
+  })
+
+  test("submit: malformed bodies → ok:false with VALUE-FREE errors; nothing written, no probe fired", async () => {
+    let probes = 0
+    const counting: FetchImpl = async () => {
+      probes++
+      return { status: 200 }
+    }
+    const cases = [
+      "not json {{{",
+      JSON.stringify({ id: "company-compute", token: "tok-orphan-xyz" }), // base_url required in body
+      JSON.stringify({ id: "company-compute", base_url: "https://x.co", token: "" }),
+      JSON.stringify({ id: "company-compute", base_url: "ftp://x.co", token: "tok-orphan-xyz" }),
+      JSON.stringify({ id: "pasqal-cloud", base_url: "https://x.co", token: "tok-orphan-xyz" }), // later slice
+      JSON.stringify({ id: "who-knows", base_url: "https://x.co", token: "tok-orphan-xyz" }),
+    ]
+    for (const body of cases) {
+      const raw = await submitCredentialResponse(body, { fetchImpl: counting })
+      const parsed = JSON.parse(raw)
+      expect(parsed.ok).toBe(false)
+      expect(parsed.connection).toBeNull()
+      expect(raw).not.toContain("tok-orphan-xyz") // error text never echoes what was rejected
+    }
+    expect(probes).toBe(0)
+    expect(readCredential("company-compute")).toBeUndefined()
   })
 })

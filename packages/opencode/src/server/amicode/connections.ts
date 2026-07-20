@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
-import { readCredential, type ConnectionType } from "./credentials"
+import { atomicWriteFileSync, readCredential, writeCredential, type ConnectionType } from "./credentials"
 
 // --- status contract (parent #159 data contract; secret-free by construction) ---
 
@@ -237,4 +237,112 @@ export async function probeCompanyCompute(
   if (status === 401) return "invalid"
   if ((status >= 200 && status < 300) || status === 403 || status === 404) return "valid"
   return "unreachable"
+}
+
+// --- status cache writes: everything lands through the same whitelist, so a
+// poisoned in-memory object can never serialize, and a poisoned file gets
+// scrubbed on the next write. Atomic replace via the #162 writer.
+
+function persistStatus(id: ConnectionType, entry: Partial<ConnectionStatus>): void {
+  const file = connectionsFile()
+  const cache = readCacheFile(file)
+  const out: Record<string, unknown> = {}
+  for (const key of CONNECTION_IDS) if (key in cache) out[key] = whitelistPersisted(cache[key])
+  out[id] = whitelistPersisted(entry)
+  atomicWriteFileSync(file, JSON.stringify(out, null, 2) + "\n")
+}
+
+function clearStatus(id: ConnectionType): void {
+  const file = connectionsFile()
+  const cache = readCacheFile(file)
+  const out: Record<string, unknown> = {}
+  for (const key of CONNECTION_IDS) if (key !== id && key in cache) out[key] = whitelistPersisted(cache[key])
+  atomicWriteFileSync(file, JSON.stringify(out, null, 2) + "\n")
+}
+
+// --- mutation bodies (POST routes). One shape per route family, sibling
+// discipline: never reject, ok:false + "code: detail" on failure. SECURITY:
+// every failure message is a FIXED string — nothing the caller sent (token,
+// base_url, anything an encoder rejects) is ever echoed.
+
+export function synthesizeConnection(code: string, detail: string): string {
+  return JSON.stringify({ ok: false, connection: null, error: `${code}: ${detail}` })
+}
+
+const MAX_BODY_BYTES = 16 * 1024 // credentials are small; bigger is a mistake
+
+export interface MutationDeps {
+  fetchImpl?: FetchImpl
+}
+
+function renderCurrent(id: ConnectionType): string {
+  const cache = readCacheFile(connectionsFile())
+  const connection = renderStatus(id, whitelistPersisted(cache[id]), {
+    inflight: inflightOverlay.has(id),
+    credential: readCredential(id) !== undefined,
+    now: Date.now(),
+  })
+  return JSON.stringify({ ok: true, connection, error: null })
+}
+
+function parseMutationBody(rawBody: string): { id?: unknown; base_url?: unknown; token?: unknown } | undefined {
+  if (rawBody.length > MAX_BODY_BYTES) return undefined
+  try {
+    const parsed: unknown = JSON.parse(rawBody)
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined
+    return parsed as { id?: unknown; base_url?: unknown; token?: unknown }
+  } catch {
+    return undefined
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+/** POST /amicode/connections/credential — body {id:"company-compute",
+ *  base_url, token}. Probe FIRST; only the auth-passed class writes through
+ *  the #162 seam. The terminal status rides back in the SAME response; while
+ *  the probe runs, the overlay renders "validating" for concurrent GETs. */
+export async function submitCredentialResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const body = parseMutationBody(rawBody)
+  if (!body) return synthesizeConnection("bad_request", "body must be JSON {id, base_url, token}")
+  if (body.id !== "company-compute") {
+    if (body.id === "pasqal-cloud")
+      return synthesizeConnection("unsupported_connection", "pasqal-cloud lands in a later slice")
+    return synthesizeConnection("unknown_connection", "id must be a known connection id")
+  }
+  const base = typeof body.base_url === "string" ? body.base_url.trim().replace(/\/+$/, "") : ""
+  const token = typeof body.token === "string" ? body.token.trim() : ""
+  if (base === "" || token === "")
+    return synthesizeConnection("bad_request", "non-empty base_url and token are required")
+  if (!isHttpUrl(base)) return synthesizeConnection("bad_request", "base_url must be an http(s) URL")
+
+  const id: ConnectionType = "company-compute"
+  inflightOverlay.set(id, { state: "validating" })
+  let outcome: ProbeOutcome
+  try {
+    outcome = await probeCompanyCompute(base, token, deps.fetchImpl)
+  } finally {
+    inflightOverlay.delete(id)
+  }
+  const validated_at = new Date().toISOString()
+  if (outcome === "valid") {
+    try {
+      writeCredential(id, { base_url: base, token })
+    } catch {
+      // value-free by contract: never echo what the encoder rejected
+      return synthesizeConnection("write_failed", "credential could not be saved")
+    }
+    persistStatus(id, { state: "connected", validated_at })
+  } else {
+    // nothing written — an existing credential (if any) stays untouched
+    persistStatus(id, { state: outcome, validated_at })
+  }
+  return renderCurrent(id)
 }
