@@ -302,6 +302,9 @@ const CARD_STATES: ConnectionCardState[] = [
   "unreachable",
   "unentitled",
   "validating",
+  "waiting-browser",
+  "waiting-code",
+  "choose-project",
   "unknown",
 ]
 
@@ -313,6 +316,9 @@ const labels: ConnectionStateLabels = {
   unreachable: "Service unreachable",
   unentitled: "Project not authorized — check the project ID",
   validating: "Validating key…",
+  "waiting-browser": "Waiting for your browser — finish signing in there",
+  "waiting-code": "Waiting for the code — enter it on any device",
+  "choose-project": "Signed in — pick the project runs should bill to",
   unknown: "Status needs attention",
 }
 

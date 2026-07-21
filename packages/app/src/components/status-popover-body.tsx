@@ -658,6 +658,9 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
       unreachable: language.t("dialog.connections.state.unreachable"),
       unentitled: language.t("dialog.connections.state.unentitled"),
       validating: language.t("dialog.connections.state.validating"),
+      "waiting-browser": language.t("dialog.connections.state.waitingBrowser"),
+      "waiting-code": language.t("dialog.connections.state.waitingCode"),
+      "choose-project": language.t("dialog.connections.state.chooseProject"),
       unknown: language.t("dialog.connections.state.unknown"),
     },
     baseUrlPlaceholder: language.t("dialog.connections.baseUrlPlaceholder"),
@@ -673,6 +676,20 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     // raw {{slot}} templates — the ui card fills them with render-time values
     offlineHint: language.t("dialog.connections.offline"),
     driftHint: language.t("dialog.connections.drift"),
+    // auth-path scaffold (#194): reachable only when the wire advertises
+    // methods / mid-flow states — today's producer never does
+    methods: {
+      credentials: language.t("dialog.connections.method.credentials"),
+      browser: language.t("dialog.connections.method.browser"),
+      "device-code": language.t("dialog.connections.method.deviceCode"),
+      token: language.t("dialog.connections.method.token"),
+    },
+    startBrowser: language.t("dialog.connections.startBrowser"),
+    startDeviceCode: language.t("dialog.connections.startDeviceCode"),
+    cancel: language.t("dialog.connections.cancel"),
+    userCodeHint: language.t("dialog.connections.userCode"),
+    codeExpiresHint: language.t("dialog.connections.codeExpires"),
+    useProject: language.t("dialog.connections.useProject"),
   }))
 
   return {

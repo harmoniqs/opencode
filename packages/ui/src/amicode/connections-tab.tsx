@@ -9,18 +9,26 @@ import { createEffect, createSignal, For, Show } from "solid-js"
 import { Button } from "../components/button"
 import {
   cardModel,
-  connectionFormKind,
+  chooseProjectPayload,
+  connectionAuthMethods,
   connectionTitle,
   driftCopy,
+  fillLabelTemplate,
+  methodEntryKind,
   offlineCopy,
   pasqalSubmitPayload,
+  pasqalTokenSubmitPayload,
+  startAuthPayload,
   stateCopy,
   submitPayload,
   type ConnectionActionView,
+  type ConnectionAuthMethod,
   type ConnectionsView,
   type ConnectionStateLabels,
   type ConnectionView,
   type CredentialSubmitPayload,
+  type ChooseProjectPayload,
+  type StartAuthPayload,
 } from "./connections"
 
 export type ConnectionsTabLabels = {
@@ -41,6 +49,16 @@ export type ConnectionsTabLabels = {
   offlineHint: string
   /** {{answered}}/{{stored}} template — the submitter-drift diff (170 AC4) */
   driftHint: string
+  /** auth-path scaffold (#194) — chooser chips, starts, mid-flow copy */
+  methods: Record<ConnectionAuthMethod, string>
+  startBrowser: string
+  startDeviceCode: string
+  cancel: string
+  /** {{url}} template — where the device code gets entered */
+  userCodeHint: string
+  /** {{at}} template — pending-code expiry */
+  codeExpiresHint: string
+  useProject: string
 }
 
 export function AmicodeConnectionsTab(props: {
@@ -51,6 +69,11 @@ export function AmicodeConnectionsTab(props: {
   onDisconnect: (id: string) => void
   onRevalidate: (id: string) => void
   onRetry: () => void
+  /** auth-path scaffold (#194) — optional until the server routes exist; the
+   *  UI that needs them is only reachable when the wire advertises methods */
+  onStartAuth?: (payload: StartAuthPayload) => void
+  onChooseProject?: (payload: ChooseProjectPayload) => void
+  onCancelAuth?: (id: string) => void
 }) {
   return (
     <div class="flex flex-col" data-component="amicode-connections-tab">
@@ -91,6 +114,9 @@ export function AmicodeConnectionsTab(props: {
                     onSubmit={props.onSubmit}
                     onDisconnect={props.onDisconnect}
                     onRevalidate={props.onRevalidate}
+                    onStartAuth={props.onStartAuth}
+                    onChooseProject={props.onChooseProject}
+                    onCancelAuth={props.onCancelAuth}
                   />
                 )}
               </For>
@@ -117,9 +143,20 @@ function ConnectionCard(props: {
   onSubmit: (payload: CredentialSubmitPayload) => Promise<ConnectionActionView>
   onDisconnect: (id: string) => void
   onRevalidate: (id: string) => void
+  onStartAuth?: (payload: StartAuthPayload) => void
+  onChooseProject?: (payload: ChooseProjectPayload) => void
+  onCancelAuth?: (id: string) => void
 }) {
   const model = () => cardModel(props.conn)
-  const formKind = () => connectionFormKind(props.conn.id)
+  const methods = () => connectionAuthMethods(props.conn)
+  // chooser selection (#194): defaults to the first advertised method and
+  // snaps back if a re-fetch stops advertising the chosen one
+  const [chosen, setChosen] = createSignal<ConnectionAuthMethod | undefined>(undefined)
+  const method = () => {
+    const current = chosen()
+    return current && methods().includes(current) ? current : methods()[0]
+  }
+  const entryKind = () => methodEntryKind(props.conn.id, method())
   const [baseUrl, setBaseUrl] = createSignal("")
   const [token, setToken] = createSignal("")
   // pasqal credentials (#169): request-scope only — the password signal feeds
@@ -127,6 +164,7 @@ function ConnectionCard(props: {
   const [username, setUsername] = createSignal("")
   const [password, setPassword] = createSignal("")
   const [projectId, setProjectId] = createSignal("")
+  const [pickedProject, setPickedProject] = createSignal("")
 
   // wire-offered prefill fills an untouched field only, never overwrites input
   createEffect(() => {
@@ -136,10 +174,13 @@ function ConnectionCard(props: {
 
   const submit = async (event: Event) => {
     event.preventDefault()
+    const kind = entryKind()
     const payload =
-      formKind() === "pasqal-credentials"
+      kind === "pasqal-credentials"
         ? pasqalSubmitPayload(props.conn.id, username(), password(), projectId())
-        : submitPayload(props.conn.id, baseUrl(), token())
+        : kind === "pasqal-token"
+          ? pasqalTokenSubmitPayload(props.conn.id, token(), projectId())
+          : submitPayload(props.conn.id, baseUrl(), token())
     if (!payload) return // AC3: empty submission — no request, no state change
     const result = await props.onSubmit(payload)
     // clear the masked inputs once accepted; secrets are never echoed back
@@ -147,6 +188,16 @@ function ConnectionCard(props: {
       setToken("")
       setPassword("")
     }
+  }
+
+  const startAuth = () => {
+    const payload = startAuthPayload(props.conn, method())
+    if (payload) props.onStartAuth?.(payload)
+  }
+
+  const chooseProject = () => {
+    const payload = chooseProjectPayload(props.conn, pickedProject() || (props.conn.projects?.[0]?.id ?? ""))
+    if (payload) props.onChooseProject?.(payload)
   }
 
   return (
@@ -210,12 +261,139 @@ function ConnectionCard(props: {
         </div>
       </Show>
 
+      <Show when={model().showUserCode}>
+        <div class="flex flex-col gap-1 pl-3.5 pt-1.5" data-slot="amicode-connection-user-code">
+          <div
+            class="text-14-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base text-center"
+            style={{ "font-family": "ui-monospace, monospace", "letter-spacing": "0.14em", "user-select": "all" }}
+          >
+            {props.conn.userCode}
+          </div>
+          <Show when={props.conn.verificationUrl}>
+            <span class="text-11-regular text-text-weak truncate">
+              {fillLabelTemplate(props.labels.userCodeHint, { url: props.conn.verificationUrl ?? "—" })}
+            </span>
+          </Show>
+          <Show when={props.conn.codeExpiresAt}>
+            <span class="text-11-regular text-text-weaker truncate">
+              {fillLabelTemplate(props.labels.codeExpiresHint, { at: props.conn.codeExpiresAt ?? "—" })}
+            </span>
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={model().showProjectPicker}>
+        <div
+          class="flex flex-col gap-1 pl-3.5 pt-1.5"
+          data-slot="amicode-connection-projects"
+          role="radiogroup"
+          aria-label={connectionTitle(props.conn.id)}
+        >
+          <For each={props.conn.projects}>
+            {(project) => (
+              <label class="flex items-baseline gap-2 text-12-regular text-text-base cursor-pointer min-w-0">
+                <input
+                  type="radio"
+                  name={`amicode-project-${props.conn.id}`}
+                  value={project.id}
+                  checked={(pickedProject() || props.conn.projects?.[0]?.id) === project.id}
+                  onInput={() => setPickedProject(project.id)}
+                />
+                <span class="truncate">{project.name}</span>
+                <span class="text-11-regular text-text-weaker truncate">{project.id}</span>
+              </label>
+            )}
+          </For>
+          <Button
+            type="button"
+            variant="primary"
+            size="small"
+            class="self-start"
+            data-slot="amicode-connection-use-project"
+            onClick={chooseProject}
+          >
+            {props.labels.useProject}
+          </Button>
+        </div>
+      </Show>
+
+      <Show when={model().showWaiting}>
+        <div class="flex items-center gap-2 pl-3.5 pt-1" data-slot="amicode-connection-waiting">
+          <div class="size-1.5 rounded-full shrink-0 bg-icon-warning-base animate-pulse" />
+          <div class="flex-1" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            data-slot="amicode-connection-cancel"
+            onClick={() => props.onCancelAuth?.(props.conn.id)}
+          >
+            {props.labels.cancel}
+          </Button>
+        </div>
+      </Show>
+
       <Show when={model().showForm}>
-        <form class="flex flex-col gap-1.5 pl-3.5 pt-1.5" data-slot="amicode-connection-form" onSubmit={submit}>
+        <div class="flex flex-col gap-1.5 pl-3.5 pt-1.5">
+          <Show when={methods().length > 1}>
+            <div class="flex gap-1 flex-wrap" data-slot="amicode-connection-methods" role="group">
+              <For each={methods()}>
+                {(entry) => (
+                  <Button
+                    type="button"
+                    variant={method() === entry ? "secondary" : "ghost"}
+                    size="small"
+                    aria-pressed={method() === entry}
+                    data-method={entry}
+                    onClick={() => setChosen(entry)}
+                  >
+                    {props.labels.methods[entry]}
+                  </Button>
+                )}
+              </For>
+            </div>
+          </Show>
           <Show
-            when={formKind() === "pasqal-credentials"}
+            when={entryKind() !== "none"}
             fallback={
-              <>
+              <Button
+                type="button"
+                variant="primary"
+                size="small"
+                class="self-start"
+                disabled={model().formDisabled}
+                data-slot="amicode-connection-start"
+                onClick={startAuth}
+              >
+                {method() === "browser" ? props.labels.startBrowser : props.labels.startDeviceCode}
+              </Button>
+            }
+          >
+            <form class="flex flex-col gap-1.5" data-slot="amicode-connection-form" onSubmit={submit}>
+              <Show when={entryKind() === "pasqal-credentials"}>
+                <input
+                  type="text"
+                  name="username"
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder={props.labels.usernamePlaceholder}
+                  value={username()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setUsername(event.currentTarget.value)}
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+                />
+                <input
+                  type="password"
+                  name="password"
+                  autocomplete="off"
+                  placeholder={props.labels.passwordPlaceholder}
+                  value={password()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setPassword(event.currentTarget.value)}
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+                />
+              </Show>
+              <Show when={entryKind() === "base-url-token"}>
                 <input
                   type="text"
                   name="base_url"
@@ -227,6 +405,8 @@ function ConnectionCard(props: {
                   onInput={(event) => setBaseUrl(event.currentTarget.value)}
                   class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
                 />
+              </Show>
+              <Show when={entryKind() === "base-url-token" || entryKind() === "pasqal-token"}>
                 <input
                   type="password"
                   name="token"
@@ -237,53 +417,33 @@ function ConnectionCard(props: {
                   onInput={(event) => setToken(event.currentTarget.value)}
                   class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
                 />
-              </>
-            }
-          >
-            <input
-              type="text"
-              name="username"
-              autocomplete="off"
-              spellcheck={false}
-              placeholder={props.labels.usernamePlaceholder}
-              value={username()}
-              disabled={model().formDisabled}
-              onInput={(event) => setUsername(event.currentTarget.value)}
-              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
-            />
-            <input
-              type="password"
-              name="password"
-              autocomplete="off"
-              placeholder={props.labels.passwordPlaceholder}
-              value={password()}
-              disabled={model().formDisabled}
-              onInput={(event) => setPassword(event.currentTarget.value)}
-              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
-            />
-            <input
-              type="text"
-              name="project_id"
-              autocomplete="off"
-              spellcheck={false}
-              placeholder={props.labels.projectIdPlaceholder}
-              value={projectId()}
-              disabled={model().formDisabled}
-              onInput={(event) => setProjectId(event.currentTarget.value)}
-              class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
-            />
+              </Show>
+              <Show when={entryKind() === "pasqal-credentials" || entryKind() === "pasqal-token"}>
+                <input
+                  type="text"
+                  name="project_id"
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder={props.labels.projectIdPlaceholder}
+                  value={projectId()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setProjectId(event.currentTarget.value)}
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
+                />
+              </Show>
+              <Button
+                type="submit"
+                variant="primary"
+                size="small"
+                disabled={model().formDisabled}
+                data-slot="amicode-connection-submit"
+                class="self-start"
+              >
+                {props.labels.submit}
+              </Button>
+            </form>
           </Show>
-          <Button
-            type="submit"
-            variant="primary"
-            size="small"
-            disabled={model().formDisabled}
-            data-slot="amicode-connection-submit"
-            class="self-start"
-          >
-            {props.labels.submit}
-          </Button>
-        </form>
+        </div>
       </Show>
 
       <Show when={model().showActions}>
