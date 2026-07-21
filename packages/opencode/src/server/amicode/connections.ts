@@ -18,6 +18,7 @@ import {
   type ConnectionType,
   type PasqalCredential,
 } from "./credentials"
+import { pasqalSecretStore } from "./pasqal-secret"
 import { parseTomlLite } from "./toml-lite"
 
 // --- status contract (parent #159 data contract; secret-free by construction) ---
@@ -295,7 +296,7 @@ export function statusBody(input: StatusInput): string {
  *  success shape like every other amicode route. Stale connected claims render
  *  IMMEDIATELY from cache and kick a background revalidation (170 AC1) whose
  *  result lands in the cache for the NEXT read — the GET never waits. */
-export function statusResponse(deps: { fetchImpl?: FetchImpl } = {}): string {
+export function statusResponse(deps: { fetchImpl?: FetchImpl; pasqalSpawn?: PasqalSpawn } = {}): string {
   try {
     const body = statusBody({
       file: connectionsFile(),
@@ -328,7 +329,7 @@ export function backgroundRevalidationsSettled(): Promise<void> {
  *  status body. Skips ids already refreshing, ids with a submit/revalidate in
  *  flight, session-only claims (nothing at rest to re-check), and ids without
  *  a stored credential. */
-function kickStaleRevalidations(body: string, deps: { fetchImpl?: FetchImpl }): void {
+function kickStaleRevalidations(body: string, deps: { fetchImpl?: FetchImpl; pasqalSpawn?: PasqalSpawn }): void {
   let entries: unknown
   try {
     entries = (JSON.parse(body) as { connections?: unknown }).connections
@@ -346,7 +347,7 @@ function kickStaleRevalidations(body: string, deps: { fetchImpl?: FetchImpl }): 
     const task = (async () => {
       try {
         if (id === "company-compute") await backgroundRevalidateCompanyCompute(deps)
-        else backgroundRevalidatePasqal()
+        else await backgroundRevalidatePasqal(deps)
       } catch {
         // background refresh must never surface trouble; the next GET retries
       }
@@ -414,11 +415,13 @@ async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl 
   })
 }
 
-/** Pasqal background refresh: the SAME token-mode freshness check the manual
- *  revalidate runs (169) — local expiry math only, never a validator spawn. */
-function backgroundRevalidatePasqal(): void {
+/** Pasqal background refresh: local expiry math (169), now with the #194
+ *  silent re-mint — an expired token with a stored keychain password renews
+ *  itself without blocking the GET that noticed the staleness. */
+async function backgroundRevalidatePasqal(deps: MutationDeps): Promise<void> {
   const credential = readCredential("pasqal-cloud")
   if (!credential) return
+  if (pasqalExpired(credential) && (await attemptPasqalSilentReauth(deps))) return
   refreshPasqalFreshness(credential)
 }
 
@@ -890,6 +893,14 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
     } catch {
       return synthesizeConnection("write_failed", "credential could not be saved")
     }
+    // ADR 0001 addendum (#194): the ~24h token cannot be renewed without the
+    // password (refresh tokens 403; no browser/device grant), so the password
+    // goes to the OS keychain — NOT the credential file — to enable silent
+    // re-mint on expiry. write() reporting false means the keychain was
+    // unreachable and the password is session-memory only: the connection
+    // still stands on the persisted token; only cross-restart silent re-auth
+    // is lost. The secret never touches the status cache or any response.
+    pasqalSecretStore().write(PASQAL_SECRET_ACCOUNT, { username, password })
     persistStatus(id, {
       state: "connected",
       validated_at,
@@ -943,6 +954,9 @@ export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): st
     clearCredential(id)
     clearStatus(id)
     sessionOnlyOverlay.delete(id) // a session-only claim ends with disconnect too
+    // #194: disconnect wipes the keychain password too — the interim's secret
+    // never outlives the connection. Harmless for company-compute (no slot).
+    if (id === "pasqal-cloud") pasqalSecretStore().clear(PASQAL_SECRET_ACCOUNT)
   } catch {
     return synthesizeConnection("write_failed", "credential could not be cleared")
   }
@@ -957,7 +971,7 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
   if (refusal) return refusal
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
-  if (id === "pasqal-cloud") return revalidatePasqal()
+  if (id === "pasqal-cloud") return revalidatePasqal(deps)
   const credential = readCredential("company-compute")
   if (!credential) {
     clearStatus(id) // a status claim without a credential behind it is noise
@@ -996,16 +1010,97 @@ export async function revalidateResponse(rawBody: string, deps: MutationDeps = {
  *  stands. A live token-mode probe against the service is #160's device-path
  *  territory. Session-only claims are left standing: there is nothing to
  *  re-check without a password, and revalidate must not destroy them. */
-function revalidatePasqal(): string {
+async function revalidatePasqal(deps: MutationDeps): Promise<string> {
   const id: ConnectionType = "pasqal-cloud"
   const credential = readCredential(id)
   if (!credential) {
     if (sessionOnlyOverlay.has(id)) return renderCurrent(id)
+    // no token at rest (e.g. a restart dropped an in-memory one) but a keychain
+    // password may have survived → silent login rather than a needs-key prompt
+    if (await attemptPasqalSilentReauth(deps)) return renderCurrent(id)
     clearStatus(id) // a status claim without a credential behind it is noise
     return renderCurrent(id)
   }
+  // ADR 0001 addendum (#194): an expired token silently re-mints from the
+  // keychain password when one is stored; otherwise it renders expired as before.
+  if (pasqalExpired(credential) && (await attemptPasqalSilentReauth(deps))) return renderCurrent(id)
   refreshPasqalFreshness(credential)
   return renderCurrent(id)
+}
+
+/** Keychain account slot for the Pasqal password (ADR 0001 addendum). One
+ *  Pasqal connection → one slot; Jack's `UserSession` used the same "default". */
+export const PASQAL_SECRET_ACCOUNT = "default"
+
+/** Is this credential's token past (or without) its expiry? */
+function pasqalExpired(credential: PasqalCredential): boolean {
+  const at = credential.expires_at === undefined ? Number.NaN : Date.parse(credential.expires_at)
+  return Number.isFinite(at) && at <= Date.now()
+}
+
+/** Silent re-mint (ADR 0001 addendum, #194): the ~24h token lapsed but the
+ *  password is in the keychain, so re-run the #164 validator with the stored
+ *  credential and rewrite the token file — no user prompt. Returns true when it
+ *  produced a terminal status (connected on success; needs-key if the stored
+ *  password is now rejected), false when it could not refresh (no stored
+ *  secret, no project to mint against, or a transient service/config failure)
+ *  so the caller keeps the existing claim and marks expired/offline as before.
+ *  SECURITY: the password reaches ONLY the child env here — exactly as submit
+ *  does — never argv, never a status field, never a response. */
+async function attemptPasqalSilentReauth(deps: MutationDeps): Promise<boolean> {
+  const id: ConnectionType = "pasqal-cloud"
+  const secret = pasqalSecretStore().read(PASQAL_SECRET_ACCOUNT)
+  if (!secret) return false
+  const projectId = readCredential(id)?.project_id ?? ""
+  if (projectId === "") return false // nothing to re-mint against without a project
+  const spawn = deps.pasqalSpawn ?? spawnPasqalValidator
+  const argv = [pasqalPython(), pasqalValidatorScript()] // no secret ever rides argv
+  const env = {
+    PATH: process.env.PATH ?? "",
+    PASQAL_USERNAME: secret.username,
+    PASQAL_PASSWORD: secret.password,
+    PASQAL_PROJECT_ID: projectId,
+  }
+  inflightOverlay.set(id, { state: "validating" })
+  let outcome: PasqalOutcome
+  try {
+    outcome = classifyValidatorRun(await spawn(argv, env))
+  } catch {
+    outcome = { kind: "config" }
+  } finally {
+    inflightOverlay.delete(id)
+  }
+  const validated_at = new Date().toISOString()
+  if (outcome.kind === "valid" && outcome.token !== null) {
+    try {
+      writeCredential(id, {
+        project_id: outcome.project_id,
+        token: outcome.token,
+        ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+      })
+    } catch {
+      return false // fresh token could not be persisted — keep the old claim
+    }
+    persistStatus(id, {
+      state: "connected",
+      validated_at,
+      identity: outcome.project_id,
+      devices: outcome.devices,
+      ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+    })
+    return true
+  }
+  if (outcome.kind === "invalid") {
+    // the stored password no longer authenticates (changed/revoked): wipe the
+    // dead secret + token so the card falls to needs-key and a fresh login
+    pasqalSecretStore().clear(PASQAL_SECRET_ACCOUNT)
+    clearCredential(id)
+    clearStatus(id)
+    return true
+  }
+  // valid-but-null-token / unreachable / config: NOT a credential verdict —
+  // leave the token + secret + claim untouched; the caller renders expired/offline
+  return false
 }
 
 /** The persist half of the Pasqal freshness check — shared by the manual
