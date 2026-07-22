@@ -1,7 +1,6 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
-import { Icon } from "@opencode-ai/ui/icon"
 import {
   hpAfterConnect,
   hpClickAction,
@@ -258,7 +257,13 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             >
               Piccolo
             </button>
-            <div style={{ display: "flex", gap: "4px", "align-items": "stretch" }}>
+            {/* One bordered control (Kate, 2026-07-22): the row wears the radio
+                border; select and details are two borderless click zones inside
+                it, so the kebab lives WITHIN the component, not beside it. */}
+            <div
+              data-slot="amicode-solver-hp-row"
+              style={{ ...radio(hp()), padding: "0", display: "flex", "align-items": "stretch", gap: "0" }}
+            >
               <button
                 type="button"
                 data-slot="amicode-solver-hp"
@@ -266,7 +271,21 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 aria-pressed={hp()}
                 aria-expanded={computeOpen()}
                 aria-controls="amicode-capsule-compute"
-                style={{ ...radio(hp()), flex: "1 1 0", "min-width": "0" }}
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "7px",
+                  flex: "1 1 0",
+                  "min-width": "0",
+                  padding: "6px 10px",
+                  border: "none",
+                  background: "transparent",
+                  color: "inherit",
+                  font: "inherit",
+                  "font-weight": "inherit",
+                  "text-align": "left",
+                  cursor: "pointer",
+                }}
                 onClick={onHpClick}
                 aria-label={
                   dot() === "connected"
@@ -319,16 +338,21 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     display: "flex",
                     "align-items": "center",
                     "justify-content": "center",
-                    padding: "0 8px",
-                    border: "1px solid var(--v2-border-border-base)",
-                    "border-radius": "7px",
-                    background: computeOpen() ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
-                    color: "var(--v2-text-text-muted)",
+                    padding: "0 9px",
+                    border: "none",
+                    background: "transparent",
+                    color: computeOpen() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
                     cursor: "pointer",
                     "flex-shrink": "0",
                   }}
                 >
-                  <Icon name="settings-gear" size="small" />
+                  {/* kebab — no ellipsis glyph in the sprite yet; inline vector,
+                      currentColor so it themes with the row states */}
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="3" cy="8" r="1.4" />
+                    <circle cx="8" cy="8" r="1.4" />
+                    <circle cx="13" cy="8" r="1.4" />
+                  </svg>
                 </button>
               </Show>
             </div>
