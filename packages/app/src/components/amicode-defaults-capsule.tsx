@@ -257,13 +257,32 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             >
               Piccolo
             </button>
-            {/* One bordered control (Kate, 2026-07-22): the row wears the radio
-                border; select and details are two borderless click zones inside
-                it, so the kebab lives WITHIN the component, not beside it. */}
+            {/* One bordered control (Kate, 2026-07-22): a single accordion —
+                header row (select + kebab click zones) and the API-key card
+                expand/collapse INSIDE the same border, split by a hairline. */}
             <div
               data-slot="amicode-solver-hp-row"
-              style={{ ...radio(hp()), padding: "0", display: "flex", "align-items": "stretch", gap: "0" }}
+              style={{
+                border: hp()
+                  ? "1px solid var(--v2-icon-icon-accent)"
+                  : "1px solid var(--v2-border-border-base)",
+                "border-radius": "7px",
+                overflow: "hidden",
+                display: "flex",
+                "flex-direction": "column",
+              }}
             >
+              <div
+                style={{
+                  display: "flex",
+                  "align-items": "stretch",
+                  gap: "0",
+                  "font-size": "12px",
+                  "font-weight": hp() ? "650" : "450",
+                  background: hp() ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
+                  color: hp() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                }}
+              >
               <button
                 type="button"
                 data-slot="amicode-solver-hp"
@@ -355,27 +374,25 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   </svg>
                 </button>
               </Show>
-            </div>
-            <Show when={props.compute && computeOpen()}>
-              {/* aria-live: the card's state copy (validating → connected /
-                  error) announces to screen readers; focus lands here on open
-                  so keyboard users reach the form without tabbing blind.
-                  The dot on the radio is color-only — its aria-label carries
-                  the state in text (WCAG color-not-only). */}
-              <div
-                id="amicode-capsule-compute"
-                data-slot="amicode-capsule-compute"
-                aria-live="polite"
-                tabIndex={-1}
-                ref={(el) => setTimeout(() => el.focus(), 0)}
-                style={{
-                  "margin-top": "4px",
-                  border: "1px solid var(--v2-border-border-base)",
-                  "border-radius": "7px",
-                  padding: "4px 2px",
-                  outline: "none",
-                }}
-              >
+              </div>
+              <Show when={props.compute && computeOpen()}>
+                {/* aria-live: the card's state copy (validating → connected /
+                    error) announces to screen readers; focus lands here on open
+                    so keyboard users reach the form without tabbing blind.
+                    The dot on the radio is color-only — its aria-label carries
+                    the state in text (WCAG color-not-only). */}
+                <div
+                  id="amicode-capsule-compute"
+                  data-slot="amicode-capsule-compute"
+                  aria-live="polite"
+                  tabIndex={-1}
+                  ref={(el) => setTimeout(() => el.focus(), 0)}
+                  style={{
+                    "border-top": "1px solid var(--v2-border-border-base)",
+                    padding: "4px 2px",
+                    outline: "none",
+                  }}
+                >
                 <Show
                   when={props.compute!.view()}
                   fallback={<div class="h-8 mx-2 my-1 rounded-md bg-surface-raised-base animate-pulse" aria-hidden />}
@@ -390,9 +407,10 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                       onRevalidate={props.compute!.onRevalidate}
                     />
                   )}
-                </Show>
-              </div>
-            </Show>
+                  </Show>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </Show>
