@@ -103,6 +103,27 @@ export const inflightOverlay = new Map<string, Record<string, unknown>>()
  *  before any response. */
 export const sessionOnlyOverlay = new Map<string, Record<string, unknown>>()
 
+/** In-memory pending project selection (#194 choose-project): after a
+ *  username+password validation lists projects but before one is chosen, the
+ *  projects + the still-unpersisted credential live HERE (process memory only,
+ *  never disk) until chooseProjectResponse finalizes or a cancel/disconnect
+ *  clears it. Holding the password briefly in memory (session-memory class) is
+ *  the two-step cost; it is written to the keychain only once a project is
+ *  chosen and the connection lands. */
+interface PendingProject {
+  projects: ConnectionProject[]
+  username: string
+  password: string
+}
+const pendingProjectOverlay = new Map<string, PendingProject>()
+
+/** Test seam: drop all pending project selections. They are process-memory only
+ *  (production clears per-connection on choose/disconnect); this exists so suites
+ *  start clean without exposing the password-bearing map. */
+export function clearPendingProjectSelections(): void {
+  pendingProjectOverlay.clear()
+}
+
 // --- the redacting whitelist parser: the ONLY way status inputs become a
 // response. It builds a FRESH object from declared fields with type checks —
 // unknown keys (token, password, anything) have no path into the output.
@@ -537,17 +558,39 @@ const spawnPasqalValidator: PasqalSpawn = async (argv, env) => {
   return { exitCode, stdout }
 }
 
+/** A pickable project from LIST mode (#194 choose-project). */
+export interface ConnectionProject {
+  id: string
+  name: string
+}
+
 type PasqalOutcome =
   | { kind: "valid"; project_id: string; devices: ConnectionDevice[]; token: string | null; expires_at?: string }
+  // LIST mode (#194): authenticated, no project chosen yet — the caller's
+  // projects for the picker. Token is held only to finalize a choice.
+  | { kind: "list"; projects: ConnectionProject[]; token: string | null; expires_at?: string }
   | { kind: "invalid" }
   | { kind: "unreachable" }
   | { kind: "unentitled" }
   | { kind: "config" }
 
+function whitelistProjects(v: unknown): ConnectionProject[] {
+  if (!Array.isArray(v)) return []
+  const out: ConnectionProject[] = []
+  for (const raw of v) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue
+    const d = raw as Record<string, unknown>
+    const id = str(d.id)
+    if (!id) continue
+    out.push({ id, name: str(d.name) ?? id })
+  }
+  return out
+}
+
 /** #164 exit-code contract → outcome: 0 valid (stdout must carry ONE
- *  parseable ok:true JSON line) · 2 invalid-credentials · 3 unreachable ·
- *  4 project-unauthorized · 1/anything-else config-class (missing env /
- *  missing SDK / broken interpreter). */
+ *  parseable ok:true JSON line; mode:"list" → a project list, else a bound
+ *  project) · 2 invalid-credentials · 3 unreachable · 4 project-unauthorized ·
+ *  1/anything-else config-class (missing env / missing SDK / broken interpreter). */
 function classifyValidatorRun(run: PasqalValidatorRun): PasqalOutcome {
   if (run.exitCode === 2) return { kind: "invalid" }
   if (run.exitCode === 3) return { kind: "unreachable" }
@@ -561,8 +604,15 @@ function classifyValidatorRun(run: PasqalValidatorRun): PasqalOutcome {
   }
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { kind: "config" }
   const d = raw as Record<string, unknown>
+  if (d.ok !== true) return { kind: "config" }
+  if (d.mode === "list") {
+    // LIST mode: projects[] + a token; no project_id / devices in this shape.
+    const token = typeof d.token === "string" && d.token !== "" ? d.token : null
+    const expires = str(d.expires_at)
+    return { kind: "list", projects: whitelistProjects(d.projects), token, ...(expires ? { expires_at: expires } : {}) }
+  }
   const project = str(d.project_id)
-  if (d.ok !== true || !project) return { kind: "config" }
+  if (!project) return { kind: "config" }
   const devices: ConnectionDevice[] = []
   if (Array.isArray(d.devices)) {
     for (const device of d.devices) {
@@ -852,31 +902,77 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
 export const PASQAL_CONFIG_WARNING =
   "pasqal_validator_config: the Pasqal validator could not run — check the Python interpreter and the pasqal-cloud SDK"
 
-async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): Promise<string> {
-  const username = typeof body.username === "string" ? body.username.trim() : ""
-  const password = typeof body.password === "string" ? body.password : ""
-  const projectId = typeof body.project_id === "string" ? body.project_id.trim() : ""
-  if (username === "" || password.trim() === "" || projectId === "")
-    return synthesizeConnection("bad_request", "non-empty username, password and project_id are required")
+/** Build a one-shot choose-project mutation response (#194): the panel holds
+ *  this and renders the project picker; it is NOT persisted into the GET
+ *  status pipeline (the selection is transient, in pendingProjectOverlay). */
+function chooseProjectResponseBody(id: ConnectionType, pending: PendingProject, warning?: string): string {
+  return JSON.stringify({
+    ok: true,
+    connection: {
+      id,
+      state: "choose-project",
+      identity: pending.username,
+      projects: pending.projects, // [{id,name}] — validator-sourced, whitelisted
+      validated_at: null,
+      stale: false,
+    },
+    error: warning ?? null,
+  })
+}
 
-  const id: ConnectionType = "pasqal-cloud"
+/** Run the #164 validator for pasqal-cloud. project_id "" → LIST mode
+ *  (authenticate, list projects); non-empty → CONNECT mode (bind + mint). The
+ *  password rides the child env only. */
+async function runPasqalValidator(
+  username: string,
+  password: string,
+  projectId: string,
+  deps: MutationDeps,
+): Promise<PasqalOutcome> {
   const spawn = deps.pasqalSpawn ?? spawnPasqalValidator
   const argv = [pasqalPython(), pasqalValidatorScript()] // no secret ever rides argv
   const env = {
     PATH: process.env.PATH ?? "", // interpreter resolution only
     PASQAL_USERNAME: username,
     PASQAL_PASSWORD: password,
-    PASQAL_PROJECT_ID: projectId,
+    PASQAL_PROJECT_ID: projectId, // "" → the validator's LIST mode
   }
-  inflightOverlay.set(id, { state: "validating" })
-  let outcome: PasqalOutcome
+  inflightOverlay.set("pasqal-cloud", { state: "validating" })
   try {
-    outcome = classifyValidatorRun(await spawn(argv, env))
+    return classifyValidatorRun(await spawn(argv, env))
   } catch {
-    outcome = { kind: "config" } // spawn trouble (missing interpreter/script) is config-class
+    return { kind: "config" } // spawn trouble (missing interpreter/script) is config-class
   } finally {
-    inflightOverlay.delete(id)
+    inflightOverlay.delete("pasqal-cloud")
   }
+}
+
+async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): Promise<string> {
+  const username = typeof body.username === "string" ? body.username.trim() : ""
+  const password = typeof body.password === "string" ? body.password : ""
+  // project_id is OPTIONAL now (#194): absent → authenticate + list projects
+  // for the picker; present → connect straight to that project (token paste /
+  // back-compat).
+  const projectId = typeof body.project_id === "string" ? body.project_id.trim() : ""
+  if (username === "" || password.trim() === "")
+    return synthesizeConnection("bad_request", "non-empty username and password are required")
+
+  const id: ConnectionType = "pasqal-cloud"
+  const outcome = await runPasqalValidator(username, password, projectId, deps)
+
+  // LIST mode result (project_id was absent): park the selection in memory and
+  // hand the panel the picker. Nothing at rest, no keychain write yet.
+  if (outcome.kind === "list") {
+    if (outcome.projects.length === 0) {
+      pendingProjectOverlay.delete(id)
+      return synthesizeConnection("no_projects", "no Pasqal projects are available for this account")
+    }
+    const pending: PendingProject = { projects: outcome.projects, username, password }
+    pendingProjectOverlay.set(id, pending)
+    return chooseProjectResponseBody(id, pending)
+  }
+  // Any non-list outcome supersedes a stale pending selection.
+  pendingProjectOverlay.delete(id)
 
   const validated_at = new Date().toISOString()
   sessionOnlyOverlay.delete(id) // every terminal outcome supersedes a session-only claim
@@ -932,6 +1028,73 @@ async function submitPasqalCredential(body: MutationBody, deps: MutationDeps): P
   return renderCurrent(id, warning)
 }
 
+/** POST /amicode/connections/choose-project — body {id, project_id}. Step 2 of
+ *  the #194 picker flow: finalize the pending username+password against the
+ *  CHOSEN project. The secret is the one held in pendingProjectOverlay from the
+ *  submit that listed the projects — it never rides this request. */
+export async function chooseProjectResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
+  const body = parseMutationBody(rawBody)
+  if (!body) return synthesizeConnection("bad_request", "body must be JSON with an id and project_id")
+  const id: ConnectionType = "pasqal-cloud"
+  if (body.id !== id) return synthesizeConnection("unknown_connection", "choose-project applies to pasqal-cloud only")
+  const pending = pendingProjectOverlay.get(id)
+  if (!pending)
+    return synthesizeConnection("no_pending_selection", "no pending project selection — reconnect and pick a project")
+  const projectId = typeof body.project_id === "string" ? body.project_id.trim() : ""
+  if (projectId === "" || !pending.projects.some((p) => p.id === projectId))
+    return chooseProjectResponseBody(id, pending, "invalid_project: pick one of the listed projects")
+
+  // Connect to the chosen project with the held credential.
+  const outcome = await runPasqalValidator(pending.username, pending.password, projectId, deps)
+  const validated_at = new Date().toISOString()
+  if (outcome.kind === "valid" && outcome.token !== null) {
+    try {
+      writeCredential(id, {
+        project_id: projectId,
+        token: outcome.token,
+        ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+      })
+    } catch {
+      return synthesizeConnection("write_failed", "credential could not be saved")
+    }
+    // project chosen and connection landed — NOW the password earns the keychain
+    pasqalSecretStore().write(PASQAL_SECRET_ACCOUNT, { username: pending.username, password: pending.password })
+    persistStatus(id, {
+      state: "connected",
+      validated_at,
+      identity: projectId,
+      devices: outcome.devices,
+      ...(outcome.expires_at ? { expires_at: outcome.expires_at } : {}),
+    })
+    pendingProjectOverlay.delete(id)
+    return renderCurrent(id)
+  }
+  if (outcome.kind === "valid") {
+    // null token → session-only connected (mint unsupported); pending consumed
+    clearStatus(id)
+    sessionOnlyOverlay.set(id, { state: "connected", validated_at, identity: projectId, devices: outcome.devices })
+    pendingProjectOverlay.delete(id)
+    return renderCurrent(id)
+  }
+  if (outcome.kind === "invalid") {
+    // creds unexpectedly rejected between listing and choosing — abandon it
+    pendingProjectOverlay.delete(id)
+    persistStatus(id, { state: "invalid", validated_at })
+    return renderCurrent(id)
+  }
+  // unreachable / unentitled / (defensive) list / config — keep the pending
+  // selection so the user can retry the pick; surface the trouble on the picker.
+  const warn =
+    outcome.kind === "unentitled"
+      ? "unentitled: that project refused authorization — pick another"
+      : outcome.kind === "config"
+        ? PASQAL_CONFIG_WARNING
+        : "unreachable: Pasqal Cloud is unreachable — try again"
+  return chooseProjectResponseBody(id, pending, warn)
+}
+
 /** id-only mutation bodies (disconnect/revalidate) — the secret NEVER rides
  *  these requests; revalidation reads the stored credential server-side. */
 function parseIdBody(rawBody: string): ConnectionType | undefined {
@@ -954,9 +1117,13 @@ export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): st
     clearCredential(id)
     clearStatus(id)
     sessionOnlyOverlay.delete(id) // a session-only claim ends with disconnect too
-    // #194: disconnect wipes the keychain password too — the interim's secret
-    // never outlives the connection. Harmless for company-compute (no slot).
-    if (id === "pasqal-cloud") pasqalSecretStore().clear(PASQAL_SECRET_ACCOUNT)
+    // #194: disconnect wipes the keychain password AND any pending project
+    // selection — the interim's secret never outlives the connection. Harmless
+    // for company-compute (no slot, no pending).
+    if (id === "pasqal-cloud") {
+      pasqalSecretStore().clear(PASQAL_SECRET_ACCOUNT)
+      pendingProjectOverlay.delete(id)
+    }
   } catch {
     return synthesizeConnection("write_failed", "credential could not be cleared")
   }

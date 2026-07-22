@@ -177,7 +177,7 @@ function ConnectionCard(props: {
     const kind = entryKind()
     const payload =
       kind === "pasqal-credentials"
-        ? pasqalSubmitPayload(props.conn.id, username(), password(), projectId())
+        ? pasqalSubmitPayload(props.conn.id, username(), password()) // #194: no project_id → server lists projects
         : kind === "pasqal-token"
           ? pasqalTokenSubmitPayload(props.conn.id, token(), projectId())
           : submitPayload(props.conn.id, baseUrl(), token())
@@ -418,7 +418,7 @@ function ConnectionCard(props: {
                   class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1 border border-border-weak-base"
                 />
               </Show>
-              <Show when={entryKind() === "pasqal-credentials" || entryKind() === "pasqal-token"}>
+              <Show when={entryKind() === "pasqal-token"}>
                 <input
                   type="text"
                   name="project_id"

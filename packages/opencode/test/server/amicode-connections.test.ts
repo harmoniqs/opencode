@@ -33,6 +33,7 @@ import {
   STALE_MS,
   statusBody,
   submitCredentialResponse,
+  chooseProjectResponse,
   disconnectResponse,
   revalidateResponse,
   isLoopbackHostname,
@@ -40,6 +41,7 @@ import {
   sessionOnlyOverlay,
   PASQAL_CONFIG_WARNING,
   PASQAL_SECRET_ACCOUNT,
+  clearPendingProjectSelections,
   type FetchImpl,
   type PasqalSpawn,
 } from "@/server/amicode/connections"
@@ -79,6 +81,7 @@ beforeEach(() => {
   process.env.AMICO_PASQAL_VALIDATOR = "/opt/amico/scripts/pasqal_validate.py"
   inflightOverlay.clear()
   sessionOnlyOverlay.clear()
+  clearPendingProjectSelections()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(async () => {
@@ -90,6 +93,7 @@ afterEach(async () => {
   }
   inflightOverlay.clear()
   sessionOnlyOverlay.clear()
+  clearPendingProjectSelections()
   setBindHostname(undefined)
 })
 
@@ -715,14 +719,13 @@ describe("pasqal submit — validator spawn contract (169 AC1)", () => {
     )
   })
 
-  test("missing/blank username, password or project_id → bad_request, NO spawn, value-free error", async () => {
+  test("missing/blank username or password → bad_request, NO spawn, value-free error (#194: project_id is optional)", async () => {
     const { calls, spawn } = scripted(0, validatorLine())
     const cases = [
       JSON.stringify({ id: "pasqal-cloud" }),
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, project_id: PASQAL.project_id }), // no password
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password, project_id: "  " }),
-      JSON.stringify({ id: "pasqal-cloud", username: "", password: PASQAL.password, project_id: PASQAL.project_id }),
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: "   ", project_id: PASQAL.project_id }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username }), // no password
+      JSON.stringify({ id: "pasqal-cloud", username: "", password: PASQAL.password }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: "   " }),
     ]
     for (const body of cases) {
       const raw = await submitCredentialResponse(body, { pasqalSpawn: spawn })
@@ -1595,5 +1598,143 @@ describe("past expiry renders the reconnect prompt (170 AC5)", () => {
     expect(entry.offline).toBeUndefined() // offline is connected-only
     await backgroundRevalidationsSettled()
     expect(probes).toBe(0) // an expired claim re-enters via the form, not a probe
+  })
+})
+
+// #194 two-step project picker: username+password → the validator LIST mode
+// returns the caller's projects (a one-shot choose-project response held by the
+// panel, NOT persisted into GET status); choose-project then connects to the
+// picked project with the held credential. The staged validator's LIST output
+// is {ok, mode:"list", projects, token, expires_at}; CONNECT output is the
+// existing project-bound line.
+describe("pasqal two-step project picker (#194)", () => {
+  // A validator stub that mirrors the real one: PASQAL_PROJECT_ID empty → LIST
+  // mode; set → CONNECT mode. Records calls so we can assert the secret path.
+  function twoStepSpawn() {
+    const calls: { argv: string[]; env: Record<string, string> }[] = []
+    const spawn: PasqalSpawn = async (argv, env) => {
+      calls.push({ argv: [...argv], env: { ...env } })
+      if ((env.PASQAL_PROJECT_ID ?? "") === "") {
+        return {
+          exitCode: 0,
+          stdout:
+            JSON.stringify({
+              ok: true,
+              mode: "list",
+              projects: [
+                { id: "proj-mis", name: "MIS ladder" },
+                { id: "proj-sandbox", name: "Hackathon sandbox" },
+              ],
+              token: "tok-list",
+              expires_at: "2099-01-01T00:00:00+00:00",
+            }) + "\n",
+        }
+      }
+      return {
+        exitCode: 0,
+        stdout:
+          JSON.stringify({
+            ok: true,
+            project_id: env.PASQAL_PROJECT_ID,
+            devices: ["EMU_FREE", "FRESNEL"],
+            token: "tok-" + env.PASQAL_PROJECT_ID,
+            expires_at: "2099-01-01T00:00:00+00:00",
+          }) + "\n",
+      }
+    }
+    return { calls, spawn }
+  }
+
+  const creds = JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password })
+
+  test("no project_id → LIST mode → choose-project response with the projects, nothing at rest", async () => {
+    const { spawn } = twoStepSpawn()
+    const parsed = JSON.parse(await submitCredentialResponse(creds, { pasqalSpawn: spawn }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("choose-project")
+    expect(parsed.connection.identity).toBe(PASQAL.username)
+    expect(parsed.connection.projects).toEqual([
+      { id: "proj-mis", name: "MIS ladder" },
+      { id: "proj-sandbox", name: "Hackathon sandbox" },
+    ])
+    // nothing persisted, nothing in the keychain YET (project not chosen)
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined()
+    expect(pasqalEntry(statusResponse()).state).toBe("needs-key") // GET is unaware of the transient pick
+  })
+
+  test("choose-project connects to the PICKED project, storing token + keychain password", async () => {
+    const { calls, spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn }) // list
+    const parsed = JSON.parse(
+      await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-sandbox" }), {
+        pasqalSpawn: spawn,
+      }),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("proj-sandbox")
+    expect(readCredential("pasqal-cloud")).toEqual({
+      project_id: "proj-sandbox",
+      token: "tok-proj-sandbox",
+      expires_at: "2099-01-01T00:00:00+00:00",
+    })
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toEqual({ username: PASQAL.username, password: PASQAL.password })
+    // the password rode the connect spawn's env, never argv or the response
+    const connectCall = calls.find((c) => c.env.PASQAL_PROJECT_ID === "proj-sandbox")!
+    expect(connectCall.env.PASQAL_PASSWORD).toBe(PASQAL.password)
+    expect(connectCall.argv.join(" ")).not.toContain(PASQAL.password)
+    expect(JSON.stringify(parsed)).not.toContain(PASQAL.password)
+    expect(JSON.stringify(parsed)).not.toContain("tok-proj-sandbox")
+  })
+
+  test("choosing an off-list project is refused; the picker stands", async () => {
+    const { spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn })
+    const parsed = JSON.parse(
+      await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-not-mine" }), {
+        pasqalSpawn: spawn,
+      }),
+    )
+    expect(parsed.connection.state).toBe("choose-project") // still choosing
+    expect(parsed.error).toContain("invalid_project")
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("choose-project with no pending selection → actionable error, never a crash", async () => {
+    const parsed = JSON.parse(await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-mis" })))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toContain("no_pending_selection")
+  })
+
+  test("disconnect during the pick clears the pending selection (no dangling secret)", async () => {
+    const { spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn })
+    disconnectResponse(JSON.stringify({ id: "pasqal-cloud" }))
+    // after cancel, a choose attempt finds nothing pending
+    const parsed = JSON.parse(await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-mis" })))
+    expect(parsed.error).toContain("no_pending_selection")
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined()
+  })
+
+  test("an account with zero projects → distinct no_projects error, not an empty picker", async () => {
+    const emptySpawn: PasqalSpawn = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ ok: true, mode: "list", projects: [], token: "t", expires_at: null }) + "\n",
+    })
+    const parsed = JSON.parse(await submitCredentialResponse(creds, { pasqalSpawn: emptySpawn }))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toContain("no_projects")
+  })
+
+  test("a project_id supplied up front still connects directly (token-paste / back-compat)", async () => {
+    const { spawn } = twoStepSpawn()
+    const parsed = JSON.parse(
+      await submitCredentialResponse(
+        JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password, project_id: "proj-direct" }),
+        { pasqalSpawn: spawn },
+      ),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("proj-direct")
   })
 })

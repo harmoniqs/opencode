@@ -37,6 +37,7 @@ import {
   applyConnectionOverlay,
   parseConnectionActionResponse,
   parseConnectionsResponse,
+  type ChooseProjectPayload,
   type ConnectionActionView,
   type ConnectionOverlay,
   type ConnectionsView,
@@ -647,6 +648,11 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     runConnectionAction(payload.id, "/amicode/connections/credential", payload)
   const onDisconnectConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
   const onRevalidateConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/revalidate", { id })
+  // #194 two-step picker: finalize the chosen project, or cancel back to a
+  // clean disconnect (the server drops the pending selection either way).
+  const onChooseProject = (payload: ChooseProjectPayload) =>
+    void runConnectionAction(payload.id, "/amicode/connections/choose-project", payload)
+  const onCancelAuth = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
   const connectionsLabels = createMemo(() => ({
     empty: language.t("dialog.connections.empty"),
     retry: language.t("dialog.connections.retry"),
@@ -705,6 +711,8 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     onSubmitCredential,
     onDisconnectConnection,
     onRevalidateConnection,
+    onChooseProject,
+    onCancelAuth,
   }
 }
 
@@ -767,6 +775,8 @@ function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState }) {
               onDisconnect={props.state.onDisconnectConnection}
               onRevalidate={props.state.onRevalidateConnection}
               onRetry={props.state.refetchConnections}
+              onChooseProject={props.state.onChooseProject}
+              onCancelAuth={props.state.onCancelAuth}
             />
           </div>
         </div>

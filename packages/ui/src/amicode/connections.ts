@@ -344,7 +344,9 @@ export function parseConnectionActionResponse(raw: unknown): ConnectionActionVie
 // fires no request and changes no state when this returns undefined.
 
 export type BaseUrlTokenPayload = { id: string; base_url: string; token: string }
-export type PasqalCredentialsPayload = { id: string; username: string; password: string; project_id: string }
+/** #194 two-step: the credentials form collects ONLY username+password — the
+ *  project is chosen from the picker the server returns, not typed here. */
+export type PasqalCredentialsPayload = { id: string; username: string; password: string }
 /** paste-a-token method (#194): a portal-minted token + explicit project —
  *  the only path where project id stays a typed field (no authenticated
  *  listing exists before connect) */
@@ -415,19 +417,18 @@ export function submitPayload(id: string, baseUrl: string, token: string): BaseU
   return { id, base_url: base, token: key }
 }
 
-/** Pasqal submit gate (169): all three fields required; username/project are
- *  trimmed, the password rides VERBATIM (spaces can be legitimate) — it lives
- *  only in this payload and the POST body, never in any view state. */
+/** Pasqal submit gate (#194 two-step): username+password required; the
+ *  username is trimmed, the password rides VERBATIM (spaces can be legitimate).
+ *  No project_id — an empty project_id tells the server to list projects for
+ *  the picker. The secret lives only in this payload and the POST body. */
 export function pasqalSubmitPayload(
   id: string,
   username: string,
   password: string,
-  projectId: string,
 ): PasqalCredentialsPayload | undefined {
   const user = username.trim()
-  const project = projectId.trim()
-  if (user === "" || password.trim() === "" || project === "") return undefined
-  return { id, username: user, password, project_id: project }
+  if (user === "" || password.trim() === "") return undefined
+  return { id, username: user, password }
 }
 
 // --- action overlay (AC2): the app layer wraps ONE round trip with this —

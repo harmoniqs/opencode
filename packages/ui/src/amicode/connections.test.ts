@@ -522,22 +522,22 @@ describe("submitPayload", () => {
   })
 })
 
-describe("pasqalSubmitPayload", () => {
-  test("any empty or whitespace-only field yields no payload at all — no request fires (169)", () => {
-    expect(pasqalSubmitPayload("pasqal-cloud", "", "", "")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "", "proj-1")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "", "hunter2", "proj-1")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "hunter2", "   ")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "  \t ", "proj-1")).toBeUndefined()
+describe("pasqalSubmitPayload (#194 two-step: username+password only, no project_id)", () => {
+  test("an empty or whitespace-only username or password yields no payload — no request fires", () => {
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "hunter2")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "  \t ")).toBeUndefined()
   })
 
-  test("all fields present: username/project trimmed, the password passed VERBATIM", () => {
-    expect(pasqalSubmitPayload("pasqal-cloud", "  kate@example.com ", " p4ss word ", " proj-1 ")).toEqual({
+  test("username trimmed, password VERBATIM, and NO project_id (the server lists projects)", () => {
+    const payload = pasqalSubmitPayload("pasqal-cloud", "  kate@example.com ", " p4ss word ")
+    expect(payload).toEqual({
       id: "pasqal-cloud",
       username: "kate@example.com",
       password: " p4ss word ", // passwords may legitimately carry spaces — never trimmed
-      project_id: "proj-1",
     })
+    expect(payload && "project_id" in payload).toBe(false)
   })
 })
 
