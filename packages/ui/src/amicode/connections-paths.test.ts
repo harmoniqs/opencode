@@ -107,6 +107,7 @@ describe("mid-flow card models", () => {
     expect(withProjects.showProjectPicker).toBe(true)
     expect(withProjects.showWaiting).toBe(false)
     expect(withProjects.showIdentity).toBe(true)
+    expect(withProjects.showLoading).toBe(true) // spinner in the status slot through the picker, not a pending dot
     const empty = cardModel(parseOne({ id: "pasqal-cloud", state: "choose-project" }))
     expect(empty.showProjectPicker).toBe(false)
     expect(empty.showWaiting).toBe(true)

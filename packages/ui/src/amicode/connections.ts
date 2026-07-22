@@ -285,12 +285,15 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
       }
     case "choose-project":
       // authenticated, one choice left; no wire projects → waiting row keeps
-      // the cancel exit open instead of rendering an empty picker
+      // the cancel exit open instead of rendering an empty picker. The connect
+      // flow isn't done until a project lands, so the status slot keeps the
+      // loading spinner (not a static pending dot) all the way through the picker.
       return {
         ...base,
         tone: "pending",
         showForm: false,
         showActions: false,
+        showLoading: true,
         showIdentity: view.identity !== undefined,
         showProjectPicker: (view.projects?.length ?? 0) > 0,
         showWaiting: (view.projects?.length ?? 0) === 0,
