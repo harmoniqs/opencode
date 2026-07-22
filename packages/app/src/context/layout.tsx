@@ -262,7 +262,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         review: {
           diffStyle: "split" as ReviewDiffStyle,
-          panelOpened: true,
+          panelOpened: false,
         },
         fileTree: {
           opened: false,
@@ -636,7 +636,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         diffStyle: createMemo(() => store.review?.diffStyle ?? "split"),
         setDiffStyle(diffStyle: ReviewDiffStyle) {
           if (!store.review) {
-            setStore("review", { diffStyle, panelOpened: true })
+            setStore("review", { diffStyle, panelOpened: false })
             return
           }
           setStore("review", "diffStyle", diffStyle)
@@ -751,7 +751,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         const key = createSessionKeyReader(sessionKey, ensureKey)
         const s = createMemo(() => store.sessionView[key()] ?? { scroll: {} })
         const terminalOpened = createMemo(() => store.terminal?.opened ?? false)
-        const reviewPanelOpened = createMemo(() => store.review?.panelOpened ?? true)
+        const reviewPanelOpened = createMemo(() => store.review?.panelOpened ?? false)
 
         function setTerminalOpened(next: boolean) {
           const current = store.terminal
@@ -772,7 +772,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             return
           }
 
-          const value = current.panelOpened ?? true
+          const value = current.panelOpened ?? false
           if (value === next) return
           setStore("review", "panelOpened", next)
         }
