@@ -18,7 +18,13 @@
 // status entry, or any rendered response — this module returns it only to the
 // re-auth spawn, which passes it via the child env (never argv).
 
-const KEYCHAIN_SERVICE = "pasqal-cloud"
+/** Keychain service (namespace) for the Pasqal password. $AMICO_PASQAL_KEYCHAIN_SERVICE
+ *  overrides the default so an isolated sandbox / test run gets its own slot and
+ *  never shares the real connection's secret. */
+function keychainService(): string {
+  const env = process.env.AMICO_PASQAL_KEYCHAIN_SERVICE
+  return env && env.trim() !== "" ? env.trim() : "pasqal-cloud"
+}
 
 export interface PasqalSecret {
   username: string
@@ -70,7 +76,7 @@ export const keychainSecretStore: PasqalSecretStore = {
     const Entry = loadKeyring()
     if (Entry) {
       try {
-        const raw = new Entry(KEYCHAIN_SERVICE, account).getPassword()
+        const raw = new Entry(keychainService(), account).getPassword()
         const parsed: unknown = JSON.parse(raw)
         if (typeof parsed === "object" && parsed !== null) {
           const d = parsed as Record<string, unknown>
@@ -87,7 +93,7 @@ export const keychainSecretStore: PasqalSecretStore = {
     const Entry = loadKeyring()
     if (Entry) {
       try {
-        new Entry(KEYCHAIN_SERVICE, account).setPassword(JSON.stringify(secret))
+        new Entry(keychainService(), account).setPassword(JSON.stringify(secret))
         sessionMemory.delete(account) // durable now wins; don't keep a RAM copy too
         return true
       } catch {
@@ -102,7 +108,7 @@ export const keychainSecretStore: PasqalSecretStore = {
     const Entry = loadKeyring()
     if (!Entry) return
     try {
-      new Entry(KEYCHAIN_SERVICE, account).deletePassword()
+      new Entry(keychainService(), account).deletePassword()
     } catch {
       // nothing stored / already gone — clear is best-effort
     }
