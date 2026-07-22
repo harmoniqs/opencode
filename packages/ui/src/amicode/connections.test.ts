@@ -478,7 +478,7 @@ describe("driftCopy (170 AC4)", () => {
 
 describe("connectionTitle", () => {
   test("known products get names; unknown ids render verbatim", () => {
-    expect(connectionTitle("company-compute")).toBe("Company Compute")
+    expect(connectionTitle("company-compute")).toBe("Solver API key")
     expect(connectionTitle("pasqal-cloud")).toBe("Pasqal Cloud")
     expect(connectionTitle("(unknown)")).toBe("(unknown)")
   })

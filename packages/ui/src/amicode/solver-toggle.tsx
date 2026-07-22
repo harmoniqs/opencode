@@ -43,14 +43,21 @@ export function solverConnectionDot(view: ConnectionView | undefined): SolverCon
   return "attention"
 }
 
-/** What an HP-segment click does: activate the mode (connected, not yet hp),
- *  open the connect form (anything not connected — AC7: never activate
- *  unconnected), or open management (already hp and connected). */
-export type HpClickAction = "activate" | "connect" | "manage"
+/** What an HP-radio click does: activate the mode (connected), or open the
+ *  connect form (anything else — AC7: never activate unconnected). Management
+ *  lives behind the always-visible details affordance, not a hidden
+ *  second-click on the radio (Kate's test feedback, 2026-07-22). */
+export type HpClickAction = "activate" | "connect"
 
-export function hpClickAction(mode: SolverMode, dot: SolverConnectionDot): HpClickAction {
-  if (dot !== "connected") return "connect"
-  return mode === "hp" ? "manage" : "activate"
+export function hpClickAction(dot: SolverConnectionDot): HpClickAction {
+  return dot === "connected" ? "activate" : "connect"
+}
+
+/** The details (gear) affordance shows whenever a credential exists to
+ *  inspect — connected or in trouble. No key yet → the radio itself is the
+ *  connect entry, and a details button would open an empty card. */
+export function showConnectionDetails(dot: SolverConnectionDot): boolean {
+  return dot !== "none"
 }
 
 /** AC2: HP flips on only when a credential submit LANDS connected. */
@@ -84,7 +91,7 @@ export function AmicodeSolverToggle() {
   return (
     <div
       data-component="amicode-solver-toggle"
-      title="Solver — High-Performance runs on Company Compute"
+      title="Solver — High-Performance runs in the cloud with your API key"
       style={{ display: "flex", "align-items": "center", gap: "10px" }}
     >
       <span

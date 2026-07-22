@@ -1,12 +1,14 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
+import { Icon } from "@opencode-ai/ui/icon"
 import {
   hpAfterConnect,
   hpClickAction,
   loadSolverMode,
   modeAfterDisconnect,
   saveSolverMode,
+  showConnectionDetails,
   solverConnectionDot,
   type SolverMode,
 } from "@opencode-ai/ui/amicode-solver-toggle"
@@ -82,15 +84,24 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
       pick("hp") // legacy seam: unwired hosts keep the old behavior
       return
     }
-    const action = hpClickAction(mode(), dot())
-    if (action === "activate") {
+    if (hpClickAction(dot()) === "activate") {
       pick("hp")
+      return
+    }
+    // not connected — reveal the connect card inline; freshen the view
+    setComputeOpen(true)
+    props.compute.refetch()
+  }
+  // details (gear): the persistent way back to the connection card once a
+  // credential exists — connect success must never strand the user with no
+  // visible route to identity / revalidate / disconnect (Kate, 2026-07-22)
+  const onDetailsClick = () => {
+    if (computeOpen()) {
       setComputeOpen(false)
       return
     }
-    // connect | manage — reveal the connection card inline; freshen the view
     setComputeOpen(true)
-    props.compute.refetch()
+    props.compute?.refetch()
   }
   const submitCredential = async (payload: CredentialSubmitPayload) => {
     const result = await props.compute!.onSubmit(payload)
@@ -247,53 +258,80 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             >
               Piccolo
             </button>
-            <button
-              type="button"
-              data-slot="amicode-solver-hp"
-              data-dot={dot()}
-              aria-pressed={hp()}
-              aria-expanded={computeOpen()}
-              aria-controls="amicode-capsule-compute"
-              style={radio(hp())}
-              onClick={onHpClick}
-              aria-label={
-                dot() === "connected"
-                  ? "Piccolissimo + Altissimo solver — Company Compute connected"
-                  : dot() === "attention"
-                    ? "Piccolissimo + Altissimo solver — Company Compute connection needs attention"
-                    : "Piccolissimo + Altissimo solver — connect Company Compute to enable"
-              }
-              title={
-                dot() === "connected"
-                  ? "Company Compute connected"
-                  : dot() === "attention"
-                    ? "Company Compute needs attention — click to fix"
-                    : "Runs on Company Compute — click to connect"
-              }
-            >
-              <span class={`size-1.5 rounded-full shrink-0 ${DOT_CLASS[dot()]}`} data-slot="amicode-solver-hp-dot" />
-              <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                Piccolissimo + Altissimo
-              </span>
-              {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
-                  border, 10% currentColor tint — state lives in the text color. */}
-              <span
-                style={{
-                  "font-size": "9px",
-                  "font-weight": "600",
-                  "letter-spacing": "0.5px",
-                  padding: "4px 7px",
-                  "line-height": "1",
-                  "border-radius": "999px",
-                  border: "1px solid currentColor",
-                  background: "color-mix(in srgb, currentColor 10%, transparent)",
-                  color: "var(--v2-text-text-accent)",
-                  "flex-shrink": "0",
-                }}
+            <div style={{ display: "flex", gap: "4px", "align-items": "stretch" }}>
+              <button
+                type="button"
+                data-slot="amicode-solver-hp"
+                data-dot={dot()}
+                aria-pressed={hp()}
+                aria-expanded={computeOpen()}
+                aria-controls="amicode-capsule-compute"
+                style={{ ...radio(hp()), flex: "1 1 0", "min-width": "0" }}
+                onClick={onHpClick}
+                aria-label={
+                  dot() === "connected"
+                    ? "Piccolissimo + Altissimo solver — API key connected"
+                    : dot() === "attention"
+                      ? "Piccolissimo + Altissimo solver — API key needs attention"
+                      : "Piccolissimo + Altissimo solver — add your API key to enable"
+                }
+                title={
+                  dot() === "connected"
+                    ? "API key connected"
+                    : dot() === "attention"
+                      ? "API key needs attention — click to fix"
+                      : "Runs in the cloud — click to add your API key"
+                }
               >
-                PRO
-              </span>
-            </button>
+                <span class={`size-1.5 rounded-full shrink-0 ${DOT_CLASS[dot()]}`} data-slot="amicode-solver-hp-dot" />
+                <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                  Piccolissimo + Altissimo
+                </span>
+                {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
+                    border, 10% currentColor tint — state lives in the text color. */}
+                <span
+                  style={{
+                    "font-size": "9px",
+                    "font-weight": "600",
+                    "letter-spacing": "0.5px",
+                    padding: "4px 7px",
+                    "line-height": "1",
+                    "border-radius": "999px",
+                    border: "1px solid currentColor",
+                    background: "color-mix(in srgb, currentColor 10%, transparent)",
+                    color: "var(--v2-text-text-accent)",
+                    "flex-shrink": "0",
+                  }}
+                >
+                  PRO
+                </span>
+              </button>
+              <Show when={props.compute && showConnectionDetails(dot())}>
+                <button
+                  type="button"
+                  data-slot="amicode-solver-hp-details"
+                  aria-label="Solver API key — connection details"
+                  aria-expanded={computeOpen()}
+                  aria-controls="amicode-capsule-compute"
+                  title="Connection details"
+                  onClick={onDetailsClick}
+                  style={{
+                    display: "flex",
+                    "align-items": "center",
+                    "justify-content": "center",
+                    padding: "0 8px",
+                    border: "1px solid var(--v2-border-border-base)",
+                    "border-radius": "7px",
+                    background: computeOpen() ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
+                    color: "var(--v2-text-text-muted)",
+                    cursor: "pointer",
+                    "flex-shrink": "0",
+                  }}
+                >
+                  <Icon name="settings-gear" size="small" />
+                </button>
+              </Show>
+            </div>
             <Show when={props.compute && computeOpen()}>
               {/* aria-live: the card's state copy (validating → connected /
                   error) announces to screen readers; focus lands here on open

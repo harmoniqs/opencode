@@ -30,7 +30,13 @@ describe("solver mode persistence", () => {
 })
 
 // ── amicode#200: the solver toggle owns the Company Compute connection ──────
-import { solverConnectionDot, hpClickAction, hpAfterConnect, modeAfterDisconnect } from "./solver-toggle"
+import {
+  solverConnectionDot,
+  hpClickAction,
+  hpAfterConnect,
+  modeAfterDisconnect,
+  showConnectionDetails,
+} from "./solver-toggle"
 import type { ConnectionView } from "./connections"
 
 const view = (state: ConnectionView["state"]): ConnectionView => ({
@@ -53,11 +59,15 @@ describe("solver connection dot (#200 AC1)", () => {
 })
 
 describe("HP segment click routing (#200 AC2/AC3)", () => {
-  test("unconnected always routes to connect; connected activates, or manages when already hp", () => {
-    expect(hpClickAction("piccolo", "none")).toBe("connect")
-    expect(hpClickAction("hp", "attention")).toBe("connect")
-    expect(hpClickAction("piccolo", "connected")).toBe("activate")
-    expect(hpClickAction("hp", "connected")).toBe("manage")
+  test("unconnected always routes to connect; connected activates", () => {
+    expect(hpClickAction("none")).toBe("connect")
+    expect(hpClickAction("attention")).toBe("connect")
+    expect(hpClickAction("connected")).toBe("activate")
+  })
+  test("details affordance shows whenever a credential exists (connected or troubled)", () => {
+    expect(showConnectionDetails("connected")).toBe(true)
+    expect(showConnectionDetails("attention")).toBe(true)
+    expect(showConnectionDetails("none")).toBe(false)
   })
 })
 

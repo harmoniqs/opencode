@@ -88,7 +88,10 @@ export const PASQAL_ID = "pasqal-cloud"
 
 /** Product names are not translated; ids without one render verbatim. */
 export function connectionTitle(id: string): string {
-  if (id === COMPANY_COMPUTE_ID) return "Company Compute"
+  // amicode#200 (Kate): one credential, one service — present it as what it
+  // is (the API key that unlocks the cloud solvers), not a separate product.
+  // The wire id stays "company-compute": server contract, not presentation.
+  if (id === COMPANY_COMPUTE_ID) return "Solver API key"
   if (id === PASQAL_ID) return "Pasqal Cloud"
   return id
 }
