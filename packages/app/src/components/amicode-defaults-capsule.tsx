@@ -349,9 +349,9 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   {/* kebab — no ellipsis glyph in the sprite yet; inline vector,
                       currentColor so it themes with the row states */}
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <circle cx="3" cy="8" r="1.4" />
+                    <circle cx="8" cy="3" r="1.4" />
                     <circle cx="8" cy="8" r="1.4" />
-                    <circle cx="13" cy="8" r="1.4" />
+                    <circle cx="8" cy="13" r="1.4" />
                   </svg>
                 </button>
               </Show>
