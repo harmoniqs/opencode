@@ -7,7 +7,6 @@ import {
   loadSolverMode,
   modeAfterDisconnect,
   saveSolverMode,
-  showConnectionDetails,
   solverConnectionDot,
   type SolverMode,
 } from "@opencode-ai/ui/amicode-solver-toggle"
@@ -120,12 +119,19 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const hp = () => mode() === "hp"
 
   let root: HTMLDivElement | undefined
+  let hpRow: HTMLDivElement | undefined
   const close = () => {
     setOpen(false)
     setComputeOpen(false)
   }
   const onDocPointer = (e: PointerEvent) => {
-    if (root && !root.contains(e.target as Node)) close()
+    if (root && !root.contains(e.target as Node)) {
+      close()
+      return
+    }
+    // inside the popover but outside the HP accordion → collapse the card
+    // (Kate: the disclosure dismisses like any other; the kebab reopens it)
+    if (computeOpen() && hpRow && !hpRow.contains(e.target as Node)) setComputeOpen(false)
   }
   const onDocKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close()
@@ -252,7 +258,10 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
               data-slot="amicode-solver-piccolo"
               aria-pressed={!hp()}
               style={radio(!hp())}
-              onClick={() => pick("piccolo")}
+              onClick={() => {
+                pick("piccolo")
+                setComputeOpen(false)
+              }}
             >
               Piccolo
             </button>
@@ -260,6 +269,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 header row (select + kebab click zones) and the API-key card
                 expand/collapse INSIDE the same border, split by a hairline. */}
             <div
+              ref={hpRow}
               data-slot="amicode-solver-hp-row"
               style={{
                 // accent border while ACTIVE (hp) or while the connect/manage
@@ -348,7 +358,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   PRO
                 </span>
               </button>
-              <Show when={props.compute && showConnectionDetails(dot())}>
+              <Show when={props.compute}>
                 <button
                   type="button"
                   data-slot="amicode-solver-hp-details"

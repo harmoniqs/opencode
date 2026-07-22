@@ -52,14 +52,6 @@ export type HpClickAction = "activate" | "connect"
 export function hpClickAction(dot: SolverConnectionDot): HpClickAction {
   return dot === "connected" ? "activate" : "connect"
 }
-
-/** The details (gear) affordance shows whenever a credential exists to
- *  inspect — connected or in trouble. No key yet → the radio itself is the
- *  connect entry, and a details button would open an empty card. */
-export function showConnectionDetails(dot: SolverConnectionDot): boolean {
-  return dot !== "none"
-}
-
 /** AC2: HP flips on only when a credential submit LANDS connected. */
 export function hpAfterConnect(result: { ok: boolean; connection?: { state: string } }): boolean {
   return result.ok && result.connection?.state === "connected"
