@@ -363,6 +363,13 @@ const amicodeConnectionsRoute = HttpRouter.use((router) =>
         return HttpServerResponse.text(out, { contentType: "application/json" })
       }),
     )
+    yield* router.add("POST", "/amicode/connections/choose-project", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = yield* Effect.promise(() => AmicodeConnections.chooseProjectResponse(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 

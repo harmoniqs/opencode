@@ -17,11 +17,25 @@ export const CONNECTION_WIRE_STATES = [
   "unreachable",
   "unentitled",
   "validating",
+  // auth-path scaffold (amicode#194 atlas): mid-flow states the server emits
+  // once an interactive method is live. Today's producer never sends them —
+  // every card renders exactly as before until it does.
+  "waiting-browser",
+  "waiting-code",
+  "choose-project",
 ] as const
 export type ConnectionWireState = (typeof CONNECTION_WIRE_STATES)[number]
 /** Everything the wire might say beyond the contract states renders via the
  *  "unknown" fallback. */
 export type ConnectionCardState = ConnectionWireState | "unknown"
+
+/** Auth methods a connection MAY advertise (amicode#194): how the token gets
+ *  minted. Absent on the wire → legacy behavior (the per-id credential form),
+ *  chooser hidden — the mechanism decision stays open server-side. */
+export const CONNECTION_AUTH_METHODS = ["credentials", "browser", "device-code", "token"] as const
+export type ConnectionAuthMethod = (typeof CONNECTION_AUTH_METHODS)[number]
+
+export type ConnectionProject = { id: string; name: string }
 
 export type ConnectionView = {
   id: string
@@ -45,6 +59,18 @@ export type ConnectionView = {
   /** display string: locale-formatted timestamp or an em dash */
   validatedAt: string
   stale: boolean
+  /** auth methods the server advertises (#194); unknown strings are dropped */
+  authMethods?: ConnectionAuthMethod[]
+  /** device-code flow: the short human code — non-secret BY DESIGN (it is
+   *  typed on another machine) and useless without that signed-in session */
+  userCode?: string
+  /** device-code flow: where the code gets entered */
+  verificationUrl?: string
+  /** display string: when the pending code stops working */
+  codeExpiresAt?: string
+  /** choose-project: the authenticated account's projects (name falls back
+   *  to id; entries without an id are dropped) */
+  projects?: ConnectionProject[]
 }
 
 export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; error?: string }
@@ -88,9 +114,37 @@ function parseDevices(raw: unknown): string[] | undefined {
   return names.length > 0 ? names : undefined
 }
 
+const AUTH_METHODS: ReadonlySet<string> = new Set(CONNECTION_AUTH_METHODS)
+
+/** Wire auth_methods → known methods; unknown strings and dupes are dropped,
+ *  an empty result is absent (→ legacy per-id form, no chooser). */
+function parseAuthMethods(raw: unknown): ConnectionAuthMethod[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const methods = raw.filter(
+    (method, index): method is ConnectionAuthMethod =>
+      typeof method === "string" && AUTH_METHODS.has(method) && raw.indexOf(method) === index,
+  )
+  return methods.length > 0 ? methods : undefined
+}
+
+/** Wire projects ({id, name?} objects) → picker entries; entries without an
+ *  id are dropped, an empty result is absent. */
+function parseProjects(raw: unknown): ConnectionProject[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const projects = raw.flatMap((project): ConnectionProject[] => {
+    if (typeof project !== "object" || project === null || Array.isArray(project)) return []
+    const p = project as Record<string, unknown>
+    const id = str(p.id)
+    if (!id) return []
+    return [{ id, name: str(p.name) ?? id }]
+  })
+  return projects.length > 0 ? projects : undefined
+}
+
 function parseConnectionEntry(raw: unknown): ConnectionView {
   const entry = (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>
   const rawState = str(entry.state) ?? "unknown"
+  const codeExpires = str(entry.code_expires_at) ? validatedAtDisplay(entry.code_expires_at) : "—"
   return {
     id: str(entry.id) ?? "(unknown)",
     state: WIRE_STATES.has(rawState) ? (rawState as ConnectionWireState) : "unknown",
@@ -103,6 +157,11 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     offline: entry.offline === true ? true : undefined,
     validatedAt: validatedAtDisplay(entry.validated_at),
     stale: entry.stale === true,
+    authMethods: parseAuthMethods(entry.auth_methods),
+    userCode: str(entry.user_code),
+    verificationUrl: str(entry.verification_url),
+    codeExpiresAt: codeExpires === "—" ? undefined : codeExpires,
+    projects: parseProjects(entry.projects),
   }
 }
 
@@ -143,7 +202,6 @@ export type ConnectionCardModel = {
   showIdentity: boolean
   showStale: boolean
   /** device names listed on a connected card (Pasqal, 169 AC2) */
-  showDevices: boolean
   /** session-only note on a connected card (Pasqal, 169 AC4) */
   showSessionOnly: boolean
   /** offline last-verified line on a connected card (170 AC3) */
@@ -152,6 +210,19 @@ export type ConnectionCardModel = {
   showDrift: boolean
   /** unknown states show the wire's raw word beside the fallback copy */
   showRawState: boolean
+  /** mid-flow waiting row (browser handoff / device code) with a cancel exit */
+  showWaiting: boolean
+  // NOTE: the connected card intentionally does NOT list devices — the
+  // validator's get_device_specs_dict() is Pasqal's device CATALOG, not the
+  // project's entitled set, so it can mislead. Device selection happens fresh
+  // at submit time (#160). The wire `devices` field is kept for that path.
+  /** the short human code block + where to enter it (waiting-code) */
+  showUserCode: boolean
+  /** the authenticated account's project picker (choose-project) */
+  showProjectPicker: boolean
+  /** in-flight indicator (validating): a spinner + status copy, no frozen form —
+   *  shown for both connect and choose-project round trips */
+  showLoading: boolean
 }
 
 export function cardModel(view: ConnectionView): ConnectionCardModel {
@@ -161,11 +232,14 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showValidatedAt: false,
     showIdentity: false,
     showStale: false,
-    showDevices: false,
     showSessionOnly: false,
     showOffline: false,
     showDrift: false,
     showRawState: false,
+    showWaiting: false,
+    showUserCode: false,
+    showProjectPicker: false,
+    showLoading: false,
   }
   switch (view.state) {
     case "connected":
@@ -177,7 +251,6 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showValidatedAt: true,
         showIdentity: view.identity !== undefined,
         showStale: view.stale,
-        showDevices: (view.devices?.length ?? 0) > 0,
         showSessionOnly: view.sessionOnly === true,
         showOffline: view.offline === true,
         showDrift: view.identityDrift !== undefined,
@@ -195,7 +268,37 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
       // project-authorization refusal: the fix is a corrected project id
       return { ...base, tone: "critical", showForm: true, showActions: false }
     case "validating":
-      return { ...base, tone: "pending", showForm: true, formDisabled: true, showActions: false }
+      // in-flight (connect or choose-project): a spinner + "validating" copy,
+      // not a frozen form — clean and identical for both round trips
+      return { ...base, tone: "pending", showForm: false, showActions: false, showLoading: true }
+    case "waiting-browser":
+      // the attempt lives in the user's browser; the card is passive + cancellable
+      return { ...base, tone: "pending", showForm: false, showActions: false, showWaiting: true }
+    case "waiting-code":
+      // code typed on another device; the code itself is non-secret by design
+      return {
+        ...base,
+        tone: "pending",
+        showForm: false,
+        showActions: false,
+        showWaiting: true,
+        showUserCode: view.userCode !== undefined,
+      }
+    case "choose-project":
+      // authenticated, one choice left; no wire projects → waiting row keeps
+      // the cancel exit open instead of rendering an empty picker. The connect
+      // flow isn't done until a project lands, so the status slot keeps the
+      // loading spinner (not a static pending dot) all the way through the picker.
+      return {
+        ...base,
+        tone: "pending",
+        showForm: false,
+        showActions: false,
+        showLoading: true,
+        showIdentity: view.identity !== undefined,
+        showProjectPicker: (view.projects?.length ?? 0) > 0,
+        showWaiting: (view.projects?.length ?? 0) === 0,
+      }
     default:
       // safe fallback (AC4): keep every exit open — re-key, disconnect, or
       // revalidate — and surface whatever the wire said as a raw badge.
@@ -251,8 +354,14 @@ export function parseConnectionActionResponse(raw: unknown): ConnectionActionVie
 // fires no request and changes no state when this returns undefined.
 
 export type BaseUrlTokenPayload = { id: string; base_url: string; token: string }
-export type PasqalCredentialsPayload = { id: string; username: string; password: string; project_id: string }
-export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload
+/** #194 two-step: the credentials form collects ONLY username+password — the
+ *  project is chosen from the picker the server returns, not typed here. */
+export type PasqalCredentialsPayload = { id: string; username: string; password: string }
+/** paste-a-token method (#194): a portal-minted token + explicit project —
+ *  the only path where project id stays a typed field (no authenticated
+ *  listing exists before connect) */
+export type PasqalTokenPayload = { id: string; token: string; project_id: string }
+export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload | PasqalTokenPayload
 
 /** Which credential fields a card's form collects (169): pasqal-cloud takes
  *  username/password/project_id; every other id keeps base_url + token. */
@@ -262,6 +371,55 @@ export function connectionFormKind(id: string): ConnectionFormKind {
   return id === PASQAL_ID ? "pasqal-credentials" : "base-url-token"
 }
 
+// --- auth-path scaffold (#194): method model + start/choose payload gates.
+// The chooser exists only when the wire advertises ≥2 methods; an un-advertised
+// method can never produce a payload, so a stale UI cannot start a flow the
+// server no longer offers.
+
+/** Methods this card offers. Wire-advertised when present; otherwise the
+ *  legacy single method implied by the card's form kind. */
+export function connectionAuthMethods(view: ConnectionView): ConnectionAuthMethod[] {
+  if (view.authMethods && view.authMethods.length > 0) return view.authMethods
+  return connectionFormKind(view.id) === "pasqal-credentials" ? ["credentials"] : ["token"]
+}
+
+/** What the entry area renders for a chosen method: a field set or a start
+ *  button ("none" — browser/device-code hand the work elsewhere). */
+export type MethodEntryKind = "base-url-token" | "pasqal-credentials" | "pasqal-token" | "none"
+
+export function methodEntryKind(id: string, method: ConnectionAuthMethod): MethodEntryKind {
+  if (method === "browser" || method === "device-code") return "none"
+  if (method === "credentials") return connectionFormKind(id)
+  return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+}
+
+export type StartAuthPayload = { id: string; method: ConnectionAuthMethod }
+
+/** Start gate: only wire-advertised interactive methods may start a flow. */
+export function startAuthPayload(view: ConnectionView, method: ConnectionAuthMethod): StartAuthPayload | undefined {
+  if (method !== "browser" && method !== "device-code") return undefined
+  if (!connectionAuthMethods(view).includes(method)) return undefined
+  return { id: view.id, method }
+}
+
+export type ChooseProjectPayload = { id: string; project_id: string }
+
+/** Choose-project gate: the id must be one of the wire-offered projects. */
+export function chooseProjectPayload(view: ConnectionView, projectId: string): ChooseProjectPayload | undefined {
+  const project = projectId.trim()
+  if (project === "" || !view.projects?.some((entry) => entry.id === project)) return undefined
+  return { id: view.id, project_id: project }
+}
+
+/** Pasqal paste-a-token gate (#194): both fields required, both trimmed —
+ *  tokens and project ids have no legitimate edge whitespace. */
+export function pasqalTokenSubmitPayload(id: string, token: string, projectId: string): PasqalTokenPayload | undefined {
+  const key = token.trim()
+  const project = projectId.trim()
+  if (key === "" || project === "") return undefined
+  return { id, token: key, project_id: project }
+}
+
 export function submitPayload(id: string, baseUrl: string, token: string): BaseUrlTokenPayload | undefined {
   const base = baseUrl.trim()
   const key = token.trim()
@@ -269,19 +427,18 @@ export function submitPayload(id: string, baseUrl: string, token: string): BaseU
   return { id, base_url: base, token: key }
 }
 
-/** Pasqal submit gate (169): all three fields required; username/project are
- *  trimmed, the password rides VERBATIM (spaces can be legitimate) — it lives
- *  only in this payload and the POST body, never in any view state. */
+/** Pasqal submit gate (#194 two-step): username+password required; the
+ *  username is trimmed, the password rides VERBATIM (spaces can be legitimate).
+ *  No project_id — an empty project_id tells the server to list projects for
+ *  the picker. The secret lives only in this payload and the POST body. */
 export function pasqalSubmitPayload(
   id: string,
   username: string,
   password: string,
-  projectId: string,
 ): PasqalCredentialsPayload | undefined {
   const user = username.trim()
-  const project = projectId.trim()
-  if (user === "" || password.trim() === "" || project === "") return undefined
-  return { id, username: user, password, project_id: project }
+  if (user === "" || password.trim() === "") return undefined
+  return { id, username: user, password }
 }
 
 // --- action overlay (AC2): the app layer wraps ONE round trip with this —

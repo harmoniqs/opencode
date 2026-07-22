@@ -302,6 +302,9 @@ const CARD_STATES: ConnectionCardState[] = [
   "unreachable",
   "unentitled",
   "validating",
+  "waiting-browser",
+  "waiting-code",
+  "choose-project",
   "unknown",
 ]
 
@@ -313,6 +316,9 @@ const labels: ConnectionStateLabels = {
   unreachable: "Service unreachable",
   unentitled: "Project not authorized — check the project ID",
   validating: "Validating key…",
+  "waiting-browser": "Waiting for your browser — finish signing in there",
+  "waiting-code": "Waiting for the code — enter it on any device",
+  "choose-project": "Signed in — pick the project runs should bill to",
   unknown: "Status needs attention",
 }
 
@@ -372,16 +378,6 @@ describe("cardModel", () => {
     }
   })
 
-  test("connected with devices lists them; other states keep the device list out of the way (169 AC2)", () => {
-    const connected = cardModel(viewFor("connected", { devices: ["EMU_FREE", "FRESNEL"] }))
-    expect(connected.showDevices).toBe(true)
-    expect(cardModel(viewFor("connected")).showDevices).toBe(false)
-    expect(cardModel(viewFor("connected", { devices: [] })).showDevices).toBe(false)
-    for (const state of ["invalid", "expired", "unentitled"] as const) {
-      expect(cardModel(viewFor(state, { devices: ["EMU_FREE"] })).showDevices).toBe(false)
-    }
-  })
-
   test("session-only connected surfaces the note; a durable connect does not (169 AC4)", () => {
     expect(cardModel(viewFor("connected", { sessionOnly: true })).showSessionOnly).toBe(true)
     expect(cardModel(viewFor("connected")).showSessionOnly).toBe(false)
@@ -406,11 +402,12 @@ describe("cardModel", () => {
     }
   })
 
-  test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
+  test("validating: a loading spinner, not a frozen form — the in-flight render (#194)", () => {
     const model = cardModel(viewFor("validating"))
-    expect(model.showForm).toBe(true)
-    expect(model.formDisabled).toBe(true)
+    expect(model.showLoading).toBe(true)
+    expect(model.showForm).toBe(false)
     expect(model.showActions).toBe(false)
+    expect(model.showProjectPicker).toBe(false)
     expect(model.tone).toBe("pending")
   })
 
@@ -516,22 +513,22 @@ describe("submitPayload", () => {
   })
 })
 
-describe("pasqalSubmitPayload", () => {
-  test("any empty or whitespace-only field yields no payload at all — no request fires (169)", () => {
-    expect(pasqalSubmitPayload("pasqal-cloud", "", "", "")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "", "proj-1")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "", "hunter2", "proj-1")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "hunter2", "   ")).toBeUndefined()
-    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "  \t ", "proj-1")).toBeUndefined()
+describe("pasqalSubmitPayload (#194 two-step: username+password only, no project_id)", () => {
+  test("an empty or whitespace-only username or password yields no payload — no request fires", () => {
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "", "hunter2")).toBeUndefined()
+    expect(pasqalSubmitPayload("pasqal-cloud", "kate@example.com", "  \t ")).toBeUndefined()
   })
 
-  test("all fields present: username/project trimmed, the password passed VERBATIM", () => {
-    expect(pasqalSubmitPayload("pasqal-cloud", "  kate@example.com ", " p4ss word ", " proj-1 ")).toEqual({
+  test("username trimmed, password VERBATIM, and NO project_id (the server lists projects)", () => {
+    const payload = pasqalSubmitPayload("pasqal-cloud", "  kate@example.com ", " p4ss word ")
+    expect(payload).toEqual({
       id: "pasqal-cloud",
       username: "kate@example.com",
       password: " p4ss word ", // passwords may legitimately carry spaces — never trimmed
-      project_id: "proj-1",
     })
+    expect(payload && "project_id" in payload).toBe(false)
   })
 })
 

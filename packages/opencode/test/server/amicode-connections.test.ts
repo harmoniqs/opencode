@@ -33,15 +33,19 @@ import {
   STALE_MS,
   statusBody,
   submitCredentialResponse,
+  chooseProjectResponse,
   disconnectResponse,
   revalidateResponse,
   isLoopbackHostname,
   setBindHostname,
   sessionOnlyOverlay,
   PASQAL_CONFIG_WARNING,
+  PASQAL_SECRET_ACCOUNT,
+  clearPendingProjectSelections,
   type FetchImpl,
   type PasqalSpawn,
 } from "@/server/amicode/connections"
+import { inMemorySecretStore, setPasqalSecretStore, type PasqalSecretStore } from "@/server/amicode/pasqal-secret"
 
 const respond =
   (status: number): FetchImpl =>
@@ -59,9 +63,15 @@ const ENV_KEYS = [
 ] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
+// Hermetic secret store: every test gets a fresh in-memory keychain, so the
+// suite never touches the real OS keychain and secrets never leak across tests.
+let secretStore: PasqalSecretStore
+let restoreSecretStore: () => void
 
 beforeEach(() => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
+  secretStore = inMemorySecretStore()
+  restoreSecretStore = setPasqalSecretStore(secretStore)
   dir = mkdtempSync(path.join(tmpdir(), "amicode-conn-"))
   process.env.AMICO_CLOUD_FILE = path.join(dir, "cloud.json")
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
@@ -71,16 +81,19 @@ beforeEach(() => {
   process.env.AMICO_PASQAL_VALIDATOR = "/opt/amico/scripts/pasqal_validate.py"
   inflightOverlay.clear()
   sessionOnlyOverlay.clear()
+  clearPendingProjectSelections()
   setBindHostname(undefined) // isolation from any listener another test file bound
 })
 afterEach(async () => {
   await backgroundRevalidationsSettled() // drain background refreshes BEFORE the env flips to the next test's dir
+  restoreSecretStore()
   for (const k of ENV_KEYS) {
     if (savedEnv[k] === undefined) delete process.env[k]
     else process.env[k] = savedEnv[k]
   }
   inflightOverlay.clear()
   sessionOnlyOverlay.clear()
+  clearPendingProjectSelections()
   setBindHostname(undefined)
 })
 
@@ -706,14 +719,13 @@ describe("pasqal submit — validator spawn contract (169 AC1)", () => {
     )
   })
 
-  test("missing/blank username, password or project_id → bad_request, NO spawn, value-free error", async () => {
+  test("missing/blank username or password → bad_request, NO spawn, value-free error (#194: project_id is optional)", async () => {
     const { calls, spawn } = scripted(0, validatorLine())
     const cases = [
       JSON.stringify({ id: "pasqal-cloud" }),
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, project_id: PASQAL.project_id }), // no password
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password, project_id: "  " }),
-      JSON.stringify({ id: "pasqal-cloud", username: "", password: PASQAL.password, project_id: PASQAL.project_id }),
-      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: "   ", project_id: PASQAL.project_id }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username }), // no password
+      JSON.stringify({ id: "pasqal-cloud", username: "", password: PASQAL.password }),
+      JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: "   " }),
     ]
     for (const body of cases) {
       const raw = await submitCredentialResponse(body, { pasqalSpawn: spawn })
@@ -900,12 +912,12 @@ describe("pasqal submit — null token → session-only connected (169 AC4)", ()
   })
 })
 
-describe("pasqal revalidate — TOKEN-mode freshness check, never a re-auth (169)", () => {
-  test("revalidate NEVER spawns the validator: the stored credential has no password to re-auth with", async () => {
+describe("pasqal revalidate — freshness check + #194 keychain silent re-auth", () => {
+  test("an UNEXPIRED token never spawns the validator — freshness is local expiry math", async () => {
     await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
     const { calls, spawn } = scripted(0, validatorLine())
     const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: spawn }))
-    expect(calls).toHaveLength(0)
+    expect(calls).toHaveLength(0) // unexpired → no re-auth, no spawn
     expect(parsed.ok).toBe(true)
     expect(parsed.connection.state).toBe("connected")
   })
@@ -927,14 +939,16 @@ describe("pasqal revalidate — TOKEN-mode freshness check, never a re-auth (169
     expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }]) // metadata survives
   })
 
-  test("expires_at in the past → expired (distinct state), credential KEPT for #160's token-mode probe", async () => {
+  test("expired token with NO stored password → expired, credential KEPT for #160's token-mode probe", async () => {
     const pastExpiry = validatorLine({ expires_at: "2026-07-18T00:00:00+00:00" }) // yesterday
     await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, pastExpiry).spawn })
-    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
-    expect(parsed.ok).toBe(true)
+    secretStore.clear(PASQAL_SECRET_ACCOUNT) // simulate keychain unreachable / password lost
+    const { calls, spawn } = scripted(0, validatorLine())
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: spawn }))
+    expect(calls).toHaveLength(0) // no password → no silent re-auth attempt
     expect(parsed.connection.state).toBe("expired")
     expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted") // user data survives
-    expect(pasqalEntry(statusResponse()).state).toBe("expired") // persisted for follow-up GETs
+    expect(pasqalEntry(statusResponse()).state).toBe("expired")
   })
 
   test("no expiry metadata → connected stands (honest minimum; a live token probe is #160 territory)", async () => {
@@ -956,6 +970,67 @@ describe("pasqal revalidate — TOKEN-mode freshness check, never a re-auth (169
     const session = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
     expect(session.connection.state).toBe("connected")
     expect(session.connection.session_only).toBe(true)
+  })
+})
+
+// #194 (ADR 0001 addendum): Pasqal's API accepts only password-grant and
+// service-account tokens — refresh tokens 403, browser/device grants are
+// client-disabled — so the ~24h user token must be silently re-minted from a
+// keychain-stored password. These tests inject the in-memory keychain
+// (beforeEach) and a scripted validator; the real @napi-rs/keyring backend +
+// bun-compiled-binary load is verified on a real machine (see the ADR).
+describe("pasqal silent re-auth — keychain password re-mints the expired token (#194)", () => {
+  const expiredLine = validatorLine({ expires_at: "2026-07-18T00:00:00+00:00" })
+  const freshLine = validatorLine({ token: "tok-reminted", expires_at: "2099-01-01T00:00:00+00:00" })
+
+  test("a valid submit stores the password in the keychain — never in the token file", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toEqual({ username: PASQAL.username, password: PASQAL.password })
+    // the credential file carries only project_id + token + expiry — no password field
+    expect(Object.keys(readCredential("pasqal-cloud") ?? {}).sort()).toEqual(["expires_at", "project_id", "token"])
+    expect(JSON.stringify(readCredential("pasqal-cloud"))).not.toContain(PASQAL.password)
+  })
+
+  test("expired token + stored password → silent re-mint to connected, fresh token on disk", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, expiredLine).spawn })
+    expect(pasqalEntry(statusResponse()).state).toBe("expired") // pre-condition: aged out
+    const { calls, spawn } = scripted(0, freshLine)
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: spawn }))
+    expect(calls).toHaveLength(1) // the validator DID re-run
+    expect(calls[0].env.PASQAL_PASSWORD).toBe(PASQAL.password) // password rode the child env, not argv
+    expect(calls[0].argv.join(" ")).not.toContain(PASQAL.password)
+    expect(parsed.connection.state).toBe("connected")
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-reminted") // token file refreshed
+  })
+
+  test("silent re-auth rejected (password changed/revoked) → keychain + token wiped, needs-key", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, expiredLine).spawn })
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: scripted(2).spawn }))
+    expect(parsed.connection.state).toBe("needs-key")
+    expect(readCredential("pasqal-cloud")).toBeUndefined() // dead token cleared
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined() // dead password cleared
+  })
+
+  test("silent re-auth unreachable → the expired claim + token + password all STAND (offline, not a verdict)", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, expiredLine).spawn })
+    const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: scripted(3).spawn }))
+    expect(parsed.connection.state).toBe("expired") // unreachable is never a credential verdict
+    expect(readCredential("pasqal-cloud")?.token).toBe("tok-pasqal-minted") // token kept
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).not.toBeUndefined() // password kept for the next try
+  })
+
+  test("disconnect wipes the keychain password too — the secret never outlives the connection", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, validatorLine()).spawn })
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).not.toBeUndefined()
+    disconnectResponse(JSON.stringify({ id: "pasqal-cloud" }))
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined()
+  })
+
+  test("re-minted token never appears in the rendered response (secret-free contract holds through re-auth)", async () => {
+    await submitCredentialResponse(pasqalSubmit, { pasqalSpawn: scripted(0, expiredLine).spawn })
+    const body = await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" }), { pasqalSpawn: scripted(0, freshLine).spawn })
+    expect(body).not.toContain("tok-reminted")
+    expect(body).not.toContain(PASQAL.password)
   })
 })
 
@@ -1523,5 +1598,143 @@ describe("past expiry renders the reconnect prompt (170 AC5)", () => {
     expect(entry.offline).toBeUndefined() // offline is connected-only
     await backgroundRevalidationsSettled()
     expect(probes).toBe(0) // an expired claim re-enters via the form, not a probe
+  })
+})
+
+// #194 two-step project picker: username+password → the validator LIST mode
+// returns the caller's projects (a one-shot choose-project response held by the
+// panel, NOT persisted into GET status); choose-project then connects to the
+// picked project with the held credential. The staged validator's LIST output
+// is {ok, mode:"list", projects, token, expires_at}; CONNECT output is the
+// existing project-bound line.
+describe("pasqal two-step project picker (#194)", () => {
+  // A validator stub that mirrors the real one: PASQAL_PROJECT_ID empty → LIST
+  // mode; set → CONNECT mode. Records calls so we can assert the secret path.
+  function twoStepSpawn() {
+    const calls: { argv: string[]; env: Record<string, string> }[] = []
+    const spawn: PasqalSpawn = async (argv, env) => {
+      calls.push({ argv: [...argv], env: { ...env } })
+      if ((env.PASQAL_PROJECT_ID ?? "") === "") {
+        return {
+          exitCode: 0,
+          stdout:
+            JSON.stringify({
+              ok: true,
+              mode: "list",
+              projects: [
+                { id: "proj-mis", name: "MIS ladder" },
+                { id: "proj-sandbox", name: "Hackathon sandbox" },
+              ],
+              token: "tok-list",
+              expires_at: "2099-01-01T00:00:00+00:00",
+            }) + "\n",
+        }
+      }
+      return {
+        exitCode: 0,
+        stdout:
+          JSON.stringify({
+            ok: true,
+            project_id: env.PASQAL_PROJECT_ID,
+            devices: ["EMU_FREE", "FRESNEL"],
+            token: "tok-" + env.PASQAL_PROJECT_ID,
+            expires_at: "2099-01-01T00:00:00+00:00",
+          }) + "\n",
+      }
+    }
+    return { calls, spawn }
+  }
+
+  const creds = JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password })
+
+  test("no project_id → LIST mode → choose-project response with the projects, nothing at rest", async () => {
+    const { spawn } = twoStepSpawn()
+    const parsed = JSON.parse(await submitCredentialResponse(creds, { pasqalSpawn: spawn }))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.connection.state).toBe("choose-project")
+    expect(parsed.connection.identity).toBe(PASQAL.username)
+    expect(parsed.connection.projects).toEqual([
+      { id: "proj-mis", name: "MIS ladder" },
+      { id: "proj-sandbox", name: "Hackathon sandbox" },
+    ])
+    // nothing persisted, nothing in the keychain YET (project not chosen)
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined()
+    expect(pasqalEntry(statusResponse()).state).toBe("needs-key") // GET is unaware of the transient pick
+  })
+
+  test("choose-project connects to the PICKED project, storing token + keychain password", async () => {
+    const { calls, spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn }) // list
+    const parsed = JSON.parse(
+      await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-sandbox" }), {
+        pasqalSpawn: spawn,
+      }),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("proj-sandbox")
+    expect(readCredential("pasqal-cloud")).toEqual({
+      project_id: "proj-sandbox",
+      token: "tok-proj-sandbox",
+      expires_at: "2099-01-01T00:00:00+00:00",
+    })
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toEqual({ username: PASQAL.username, password: PASQAL.password })
+    // the password rode the connect spawn's env, never argv or the response
+    const connectCall = calls.find((c) => c.env.PASQAL_PROJECT_ID === "proj-sandbox")!
+    expect(connectCall.env.PASQAL_PASSWORD).toBe(PASQAL.password)
+    expect(connectCall.argv.join(" ")).not.toContain(PASQAL.password)
+    expect(JSON.stringify(parsed)).not.toContain(PASQAL.password)
+    expect(JSON.stringify(parsed)).not.toContain("tok-proj-sandbox")
+  })
+
+  test("choosing an off-list project is refused; the picker stands", async () => {
+    const { spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn })
+    const parsed = JSON.parse(
+      await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-not-mine" }), {
+        pasqalSpawn: spawn,
+      }),
+    )
+    expect(parsed.connection.state).toBe("choose-project") // still choosing
+    expect(parsed.error).toContain("invalid_project")
+    expect(readCredential("pasqal-cloud")).toBeUndefined()
+  })
+
+  test("choose-project with no pending selection → actionable error, never a crash", async () => {
+    const parsed = JSON.parse(await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-mis" })))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toContain("no_pending_selection")
+  })
+
+  test("disconnect during the pick clears the pending selection (no dangling secret)", async () => {
+    const { spawn } = twoStepSpawn()
+    await submitCredentialResponse(creds, { pasqalSpawn: spawn })
+    disconnectResponse(JSON.stringify({ id: "pasqal-cloud" }))
+    // after cancel, a choose attempt finds nothing pending
+    const parsed = JSON.parse(await chooseProjectResponse(JSON.stringify({ id: "pasqal-cloud", project_id: "proj-mis" })))
+    expect(parsed.error).toContain("no_pending_selection")
+    expect(secretStore.read(PASQAL_SECRET_ACCOUNT)).toBeUndefined()
+  })
+
+  test("an account with zero projects → distinct no_projects error, not an empty picker", async () => {
+    const emptySpawn: PasqalSpawn = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ ok: true, mode: "list", projects: [], token: "t", expires_at: null }) + "\n",
+    })
+    const parsed = JSON.parse(await submitCredentialResponse(creds, { pasqalSpawn: emptySpawn }))
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toContain("no_projects")
+  })
+
+  test("a project_id supplied up front still connects directly (token-paste / back-compat)", async () => {
+    const { spawn } = twoStepSpawn()
+    const parsed = JSON.parse(
+      await submitCredentialResponse(
+        JSON.stringify({ id: "pasqal-cloud", username: PASQAL.username, password: PASQAL.password, project_id: "proj-direct" }),
+        { pasqalSpawn: spawn },
+      ),
+    )
+    expect(parsed.connection.state).toBe("connected")
+    expect(parsed.connection.identity).toBe("proj-direct")
   })
 })

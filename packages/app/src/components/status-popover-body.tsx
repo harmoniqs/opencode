@@ -37,6 +37,7 @@ import {
   applyConnectionOverlay,
   parseConnectionActionResponse,
   parseConnectionsResponse,
+  type ChooseProjectPayload,
   type ConnectionActionView,
   type ConnectionOverlay,
   type ConnectionsView,
@@ -647,6 +648,11 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     runConnectionAction(payload.id, "/amicode/connections/credential", payload)
   const onDisconnectConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
   const onRevalidateConnection = (id: string) => void runConnectionAction(id, "/amicode/connections/revalidate", { id })
+  // #194 two-step picker: finalize the chosen project, or cancel back to a
+  // clean disconnect (the server drops the pending selection either way).
+  const onChooseProject = (payload: ChooseProjectPayload) =>
+    void runConnectionAction(payload.id, "/amicode/connections/choose-project", payload)
+  const onCancelAuth = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
   const connectionsLabels = createMemo(() => ({
     empty: language.t("dialog.connections.empty"),
     retry: language.t("dialog.connections.retry"),
@@ -658,6 +664,9 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
       unreachable: language.t("dialog.connections.state.unreachable"),
       unentitled: language.t("dialog.connections.state.unentitled"),
       validating: language.t("dialog.connections.state.validating"),
+      "waiting-browser": language.t("dialog.connections.state.waitingBrowser"),
+      "waiting-code": language.t("dialog.connections.state.waitingCode"),
+      "choose-project": language.t("dialog.connections.state.chooseProject"),
       unknown: language.t("dialog.connections.state.unknown"),
     },
     baseUrlPlaceholder: language.t("dialog.connections.baseUrlPlaceholder"),
@@ -673,6 +682,20 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     // raw {{slot}} templates — the ui card fills them with render-time values
     offlineHint: language.t("dialog.connections.offline"),
     driftHint: language.t("dialog.connections.drift"),
+    // auth-path scaffold (#194): reachable only when the wire advertises
+    // methods / mid-flow states — today's producer never does
+    methods: {
+      credentials: language.t("dialog.connections.method.credentials"),
+      browser: language.t("dialog.connections.method.browser"),
+      "device-code": language.t("dialog.connections.method.deviceCode"),
+      token: language.t("dialog.connections.method.token"),
+    },
+    startBrowser: language.t("dialog.connections.startBrowser"),
+    startDeviceCode: language.t("dialog.connections.startDeviceCode"),
+    cancel: language.t("dialog.connections.cancel"),
+    userCodeHint: language.t("dialog.connections.userCode"),
+    codeExpiresHint: language.t("dialog.connections.codeExpires"),
+    useProject: language.t("dialog.connections.useProject"),
   }))
 
   return {
@@ -688,6 +711,8 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     onSubmitCredential,
     onDisconnectConnection,
     onRevalidateConnection,
+    onChooseProject,
+    onCancelAuth,
   }
 }
 
@@ -750,6 +775,8 @@ function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState }) {
               onDisconnect={props.state.onDisconnectConnection}
               onRevalidate={props.state.onRevalidateConnection}
               onRetry={props.state.refetchConnections}
+              onChooseProject={props.state.onChooseProject}
+              onCancelAuth={props.state.onCancelAuth}
             />
           </div>
         </div>

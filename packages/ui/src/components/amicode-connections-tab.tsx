@@ -7,8 +7,11 @@ export {
   applyConnectionOverlay,
   parseConnectionActionResponse,
   parseConnectionsResponse,
+  type ChooseProjectPayload,
   type ConnectionActionView,
+  type ConnectionAuthMethod,
   type ConnectionOverlay,
   type ConnectionsView,
   type CredentialSubmitPayload,
+  type StartAuthPayload,
 } from "../amicode/connections"
