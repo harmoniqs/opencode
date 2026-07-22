@@ -241,6 +241,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             <button
               type="button"
               data-slot="amicode-solver-piccolo"
+              aria-pressed={!hp()}
               style={radio(!hp())}
               onClick={() => pick("piccolo")}
             >
@@ -250,8 +251,18 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
               type="button"
               data-slot="amicode-solver-hp"
               data-dot={dot()}
+              aria-pressed={hp()}
+              aria-expanded={computeOpen()}
+              aria-controls="amicode-capsule-compute"
               style={radio(hp())}
               onClick={onHpClick}
+              aria-label={
+                dot() === "connected"
+                  ? "Piccolissimo + Altissimo solver — Company Compute connected"
+                  : dot() === "attention"
+                    ? "Piccolissimo + Altissimo solver — Company Compute connection needs attention"
+                    : "Piccolissimo + Altissimo solver — connect Company Compute to enable"
+              }
               title={
                 dot() === "connected"
                   ? "Company Compute connected"
@@ -284,13 +295,23 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
               </span>
             </button>
             <Show when={props.compute && computeOpen()}>
+              {/* aria-live: the card's state copy (validating → connected /
+                  error) announces to screen readers; focus lands here on open
+                  so keyboard users reach the form without tabbing blind.
+                  The dot on the radio is color-only — its aria-label carries
+                  the state in text (WCAG color-not-only). */}
               <div
+                id="amicode-capsule-compute"
                 data-slot="amicode-capsule-compute"
+                aria-live="polite"
+                tabIndex={-1}
+                ref={(el) => setTimeout(() => el.focus(), 0)}
                 style={{
                   "margin-top": "4px",
                   border: "1px solid var(--v2-border-border-base)",
                   "border-radius": "7px",
                   padding: "4px 2px",
+                  outline: "none",
                 }}
               >
                 <Show

@@ -394,6 +394,7 @@ export function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.usernamePlaceholder}
+                  aria-label={props.labels.usernamePlaceholder}
                   value={username()}
                   disabled={model().formDisabled}
                   onInput={(event) => setUsername(event.currentTarget.value)}
@@ -404,6 +405,7 @@ export function ConnectionCard(props: {
                   name="password"
                   autocomplete="off"
                   placeholder={props.labels.passwordPlaceholder}
+                  aria-label={props.labels.passwordPlaceholder}
                   value={password()}
                   disabled={model().formDisabled}
                   onInput={(event) => setPassword(event.currentTarget.value)}
@@ -417,6 +419,7 @@ export function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.baseUrlPlaceholder}
+                  aria-label={props.labels.baseUrlPlaceholder}
                   value={baseUrl()}
                   disabled={model().formDisabled}
                   onInput={(event) => setBaseUrl(event.currentTarget.value)}
@@ -429,6 +432,7 @@ export function ConnectionCard(props: {
                   name="token"
                   autocomplete="off"
                   placeholder={props.labels.tokenPlaceholder}
+                  aria-label={props.labels.tokenPlaceholder}
                   value={token()}
                   disabled={model().formDisabled}
                   onInput={(event) => setToken(event.currentTarget.value)}
@@ -442,6 +446,7 @@ export function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.projectIdPlaceholder}
+                  aria-label={props.labels.projectIdPlaceholder}
                   value={projectId()}
                   disabled={model().formDisabled}
                   onInput={(event) => setProjectId(event.currentTarget.value)}
