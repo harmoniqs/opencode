@@ -63,7 +63,9 @@ import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { AmicodeOnboardingWizard, shouldShowWizard } from "@opencode-ai/ui/amicode-onboarding-wizard"
 import { AMICODE_MANAGE_VAULTS_PROMPT } from "@opencode-ai/ui/amicode-vaults-tab"
-import { AmicodeDefaultsCapsule } from "@/components/amicode-defaults-capsule"
+import { AmicodeDefaultsCapsule, type AmicodeComputeControl } from "@/components/amicode-defaults-capsule"
+import { createAmicodeConnectionsState } from "@/components/status-popover-body"
+import { COMPANY_COMPUTE_ID } from "@opencode-ai/ui/amicode-connections-tab"
 import { GlobalConnectionsPopover } from "@/components/status-popover"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { AmicodeHomeCards, parseProfileResponse, type HomeLiveRun } from "@opencode-ai/ui/amicode-home-cards"
@@ -171,6 +173,26 @@ function HomeDesign() {
   const global = useGlobal()
   const command = useCommand()
   const notification = useNotification()
+
+  // amicode#200: the defaults capsule owns the Company Compute connection —
+  // an always-warm connections instance so the HP dot is truthful from mount
+  // (popover instances stay open-gated; mutations reconcile via fresh GETs).
+  const chromeConnections = createAmicodeConnectionsState(() => true)
+  const computeControl: AmicodeComputeControl = {
+    view: () => chromeConnections.connectionsView()?.connections.find((c) => c.id === COMPANY_COMPUTE_ID),
+    // capsule mount: the connect form sits directly under the status line, so
+    // the "— enter a key to connect" guidance is redundant there (Kate). The
+    // Connections tab keeps the full copy.
+    labels: () => {
+      const base = chromeConnections.connectionsLabels()
+      return { ...base, states: { ...base.states, "needs-key": "Not connected" } }
+    },
+    actionError: chromeConnections.connectionsActionError,
+    onSubmit: chromeConnections.onSubmitCredential,
+    onDisconnect: chromeConnections.onDisconnectConnection,
+    onRevalidate: chromeConnections.onRevalidateConnection,
+    refetch: chromeConnections.refetchConnections,
+  }
   let focusSessionSearch: (() => void) | undefined
   const [state, setState] = createStore({
     search: "",
@@ -816,7 +838,7 @@ function HomeDesign() {
                 vertical dropdown (amicode.css). Rendered ONCE, so each control
                 keeps its own popover state across the reflow. */}
             <div data-slot="amicode-chrome-actions" data-open={menuOpen() ? "true" : "false"}>
-              <AmicodeDefaultsCapsule />
+              <AmicodeDefaultsCapsule compute={computeControl} />
               <div ref={flyoutRoot} data-slot="amicode-chrome-sessions" style={{ position: "relative" }}>
                 <button
                   type="button"

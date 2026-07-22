@@ -583,12 +583,30 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     return view?.ok ? view.mounts.length : 0
   }
 
-  // amicode: Connections tab (#166) — same per-active-server fetch idiom as
-  // vaults above. Mutations are ONE round trip (#165 contract): the overlay
-  // renders "validating" while the POST runs, then the terminal connection
-  // from the SAME response replaces it. No polling loop.
+  const connections = createAmicodeConnectionsState(opts.shown)
+
+  return {
+    vaultsView,
+    vaultsCount,
+    refetchVaults,
+    onManageVaults: opts.onManageVaults,
+    ...connections,
+  }
+}
+
+// amicode#200: the Connections state, extracted verbatim from the tabs factory
+// so the defaults capsule (the solver toggle owns Company Compute now) can host
+// its own always-warm instance. Same fetch idiom, same one-round-trip mutation
+// contract (#165/#166); depends only on app-root contexts.
+export function createAmicodeConnectionsState(shown: Accessor<boolean>) {
+  const server = useServer()
+  const language = useLanguage()
+
+  // Mutations are ONE round trip (#165 contract): the overlay renders
+  // "validating" while the POST runs, then the terminal connection from the
+  // SAME response replaces it. No polling loop.
   const [connectionsRaw, { refetch: refetchConnections }] = createResource(
-    () => (opts.shown() && server.current ? ServerConnection.key(server.current) : undefined),
+    () => (shown() && server.current ? ServerConnection.key(server.current) : undefined),
     async () => {
       const conn = server.current
       if (!conn) return undefined
@@ -699,10 +717,6 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
   }))
 
   return {
-    vaultsView,
-    vaultsCount,
-    refetchVaults,
-    onManageVaults: opts.onManageVaults,
     connectionsView,
     connectionsCount,
     connectionsLabels,

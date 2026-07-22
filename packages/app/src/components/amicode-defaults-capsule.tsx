@@ -1,7 +1,22 @@
-import { Show, createMemo, createSignal, onCleanup } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
-import { loadSolverMode, saveSolverMode, type SolverMode } from "@opencode-ai/ui/amicode-solver-toggle"
+import {
+  hpAfterConnect,
+  hpClickAction,
+  loadSolverMode,
+  modeAfterDisconnect,
+  saveSolverMode,
+  solverConnectionDot,
+  type SolverMode,
+} from "@opencode-ai/ui/amicode-solver-toggle"
+import {
+  ConnectionCard,
+  type ConnectionActionView,
+  type ConnectionsTabLabels,
+  type ConnectionView,
+  type CredentialSubmitPayload,
+} from "@opencode-ai/ui/amicode-connections-tab"
 
 // AMICODE: the chrome strip's DEFAULTS CAPSULE (nav redesign, Kate 2026-07-15).
 // One compact control carries both session defaults — model and solver — so the
@@ -12,14 +27,87 @@ import { loadSolverMode, saveSolverMode, type SolverMode } from "@opencode-ai/ui
 // high-performance solver is on, the face wears the accent border — the PRO
 // funnel stays visible at every width instead of being the first casualty
 // of a narrow column.
+//
+// amicode#200: the solver toggle owns the Company Compute connection. The HP
+// radio wears a status dot (green connected / amber attention / gray no key),
+// and clicking it while unconnected expands the SAME connection card the
+// status popover used to host — connect here, HP flips on when the credential
+// lands connected. Connected + already-HP clicks open the card in its
+// management state (identity, validated-at, revalidate, disconnect).
+// Disconnect always drops the mode back to Piccolo: HP is cloud-only.
 
-export function AmicodeDefaultsCapsule() {
+/** The Company Compute slice of createAmicodeConnectionsState, passed down by
+ *  the host chrome. Optional so bare mounts (storybook) keep legacy behavior. */
+export type AmicodeComputeControl = {
+  view: Accessor<ConnectionView | undefined>
+  labels: Accessor<ConnectionsTabLabels>
+  actionError: Accessor<string | undefined>
+  onSubmit: (payload: CredentialSubmitPayload) => Promise<ConnectionActionView>
+  onDisconnect: (id: string) => void
+  onRevalidate: (id: string) => void
+  refetch: () => void
+}
+
+// The status dot lives on the connection card's STATUS line (Kate: the dot
+// accompanies "not connected…", never the solver name — same idiom as the
+// Connections tab, where the dot leads the card's first line). The header
+// row signals state non-visually via aria-label/title and data-dot.
+
+// amicode#200 AC6: the Connect Cloud palette command deep-links here. The
+// extension posts an "open-compute-connect" envelope through the webview
+// bridge; the app-shell listener calls requestComputeConnect() and the next
+// mounted capsule opens straight into the connect flow. Timestamped so a
+// request fired while another page was showing can't pop the popover minutes
+// later (15s freshness window).
+const [connectRequestAt, setConnectRequestAt] = createSignal(0)
+export function requestComputeConnect() {
+  setConnectRequestAt(Date.now())
+}
+const CONNECT_REQUEST_TTL_MS = 15_000
+
+export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl }) {
   const models = useModels()
   const [open, setOpen] = createSignal(false)
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
+  const [computeOpen, setComputeOpen] = createSignal(false)
   const pick = (m: SolverMode) => {
     setMode(m)
     saveSolverMode(m)
+  }
+
+  const dot = createMemo(() => solverConnectionDot(props.compute?.view()))
+  const onHpClick = () => {
+    if (!props.compute) {
+      pick("hp") // legacy seam: unwired hosts keep the old behavior
+      return
+    }
+    if (hpClickAction(dot()) === "activate") {
+      pick("hp")
+      return
+    }
+    // not connected — reveal the connect card inline; freshen the view
+    setComputeOpen(true)
+    props.compute.refetch()
+  }
+  // details (gear): the persistent way back to the connection card once a
+  // credential exists — connect success must never strand the user with no
+  // visible route to identity / revalidate / disconnect (Kate, 2026-07-22)
+  const onDetailsClick = () => {
+    if (computeOpen()) {
+      setComputeOpen(false)
+      return
+    }
+    setComputeOpen(true)
+    props.compute?.refetch()
+  }
+  const submitCredential = async (payload: CredentialSubmitPayload) => {
+    const result = await props.compute!.onSubmit(payload)
+    if (hpAfterConnect(result)) pick("hp")
+    return result
+  }
+  const disconnectCompute = (id: string) => {
+    props.compute!.onDisconnect(id)
+    pick(modeAfterDisconnect())
   }
 
   const modelName = createMemo(() => {
@@ -31,22 +119,49 @@ export function AmicodeDefaultsCapsule() {
   const hp = () => mode() === "hp"
 
   let root: HTMLDivElement | undefined
+  let hpRow: HTMLDivElement | undefined
+  const close = () => {
+    setOpen(false)
+    setComputeOpen(false)
+  }
   const onDocPointer = (e: PointerEvent) => {
-    if (root && !root.contains(e.target as Node)) setOpen(false)
+    if (root && !root.contains(e.target as Node)) {
+      close()
+      return
+    }
+    // inside the popover but outside the HP accordion → collapse the card
+    // (Kate: the disclosure dismisses like any other; the kebab reopens it)
+    if (computeOpen() && hpRow && !hpRow.contains(e.target as Node)) setComputeOpen(false)
   }
   const onDocKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") setOpen(false)
+    if (e.key === "Escape") close()
+  }
+  const openPopover = () => {
+    if (open()) return
+    setOpen(true)
+    document.addEventListener("pointerdown", onDocPointer, true)
+    document.addEventListener("keydown", onDocKey, true)
   }
   const toggle = () => {
-    const next = !open()
-    setOpen(next)
-    if (next) {
-      document.addEventListener("pointerdown", onDocPointer, true)
-      document.addEventListener("keydown", onDocKey, true)
-    } else {
+    if (open()) {
+      close()
       teardown()
+    } else {
+      openPopover()
     }
   }
+
+  // amicode#200 AC6: consume a pending Connect Cloud deep-link — open the
+  // popover directly into the compute connect flow.
+  createEffect(() => {
+    const at = connectRequestAt()
+    if (!at || !props.compute) return
+    setConnectRequestAt(0)
+    if (Date.now() - at > CONNECT_REQUEST_TTL_MS) return
+    openPopover()
+    setComputeOpen(true)
+    props.compute.refetch()
+  })
   const teardown = () => {
     document.removeEventListener("pointerdown", onDocPointer, true)
     document.removeEventListener("keydown", onDocKey, true)
@@ -141,34 +256,175 @@ export function AmicodeDefaultsCapsule() {
             <button
               type="button"
               data-slot="amicode-solver-piccolo"
+              aria-pressed={!hp()}
               style={radio(!hp())}
-              onClick={() => pick("piccolo")}
+              onClick={() => {
+                pick("piccolo")
+                setComputeOpen(false)
+              }}
             >
               Piccolo
             </button>
-            <button type="button" data-slot="amicode-solver-hp" style={radio(hp())} onClick={() => pick("hp")}>
-              <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
-                Piccolissimo + Altissimo
-              </span>
-              {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
-                  border, 10% currentColor tint — state lives in the text color. */}
-              <span
+            {/* One bordered control (Kate, 2026-07-22): a single accordion —
+                header row (select + kebab click zones) and the API-key card
+                expand/collapse INSIDE the same border, split by a hairline. */}
+            <div
+              ref={hpRow}
+              data-slot="amicode-solver-hp-row"
+              style={{
+                // accent border while ACTIVE (hp) or while the connect/manage
+                // flow is open — the expanded-but-unconnected state signals
+                // "the choice is moving here"; the header tint (selection
+                // truth) still flips only when the credential lands (Kate,
+                // 2026-07-22: don't flip Piccolo off before the switch is real)
+                border:
+                  hp() || computeOpen()
+                    ? "1px solid var(--v2-icon-icon-accent)"
+                    : "1px solid var(--v2-border-border-base)",
+                "border-radius": "7px",
+                overflow: "hidden",
+                display: "flex",
+                "flex-direction": "column",
+              }}
+            >
+              <div
                 style={{
-                  "font-size": "9px",
-                  "font-weight": "600",
-                  "letter-spacing": "0.5px",
-                  padding: "4px 7px",
-                  "line-height": "1",
-                  "border-radius": "999px",
-                  border: "1px solid currentColor",
-                  background: "color-mix(in srgb, currentColor 10%, transparent)",
-                  color: "var(--v2-text-text-accent)",
-                  "flex-shrink": "0",
+                  display: "flex",
+                  "align-items": "stretch",
+                  gap: "0",
+                  "font-size": "12px",
+                  "font-weight": hp() ? "650" : "450",
+                  background: hp() ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
+                  color: hp() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
                 }}
               >
-                PRO
-              </span>
-            </button>
+              <button
+                type="button"
+                data-slot="amicode-solver-hp"
+                data-dot={dot()}
+                aria-pressed={hp()}
+                aria-expanded={computeOpen()}
+                aria-controls="amicode-capsule-compute"
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "7px",
+                  flex: "1 1 0",
+                  "min-width": "0",
+                  padding: "6px 10px",
+                  border: "none",
+                  background: "transparent",
+                  color: "inherit",
+                  font: "inherit",
+                  "font-weight": "inherit",
+                  "text-align": "left",
+                  cursor: "pointer",
+                }}
+                onClick={onHpClick}
+                aria-label={
+                  dot() === "connected"
+                    ? "Piccolissimo + Altissimo solver — API key connected"
+                    : dot() === "attention"
+                      ? "Piccolissimo + Altissimo solver — API key needs attention"
+                      : "Piccolissimo + Altissimo solver — add your API key to enable"
+                }
+                title={
+                  dot() === "connected"
+                    ? "API key connected"
+                    : dot() === "attention"
+                      ? "API key needs attention — click to fix"
+                      : "Runs in the cloud — click to add your API key"
+                }
+              >
+                <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+                  Piccolissimo + Altissimo
+                </span>
+                {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
+                    border, 10% currentColor tint — state lives in the text color. */}
+                <span
+                  style={{
+                    "font-size": "9px",
+                    "font-weight": "600",
+                    "letter-spacing": "0.5px",
+                    padding: "4px 7px",
+                    "line-height": "1",
+                    "border-radius": "999px",
+                    border: "1px solid currentColor",
+                    background: "color-mix(in srgb, currentColor 10%, transparent)",
+                    color: "var(--v2-text-text-accent)",
+                    "flex-shrink": "0",
+                  }}
+                >
+                  PRO
+                </span>
+              </button>
+              <Show when={props.compute}>
+                <button
+                  type="button"
+                  data-slot="amicode-solver-hp-details"
+                  aria-label="Solver API key — connection details"
+                  aria-expanded={computeOpen()}
+                  aria-controls="amicode-capsule-compute"
+                  title="Connection details"
+                  onClick={onDetailsClick}
+                  style={{
+                    display: "flex",
+                    "align-items": "center",
+                    "justify-content": "center",
+                    padding: "0 9px",
+                    border: "none",
+                    background: "transparent",
+                    color: computeOpen() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                    cursor: "pointer",
+                    "flex-shrink": "0",
+                  }}
+                >
+                  {/* kebab — no ellipsis glyph in the sprite yet; inline vector,
+                      currentColor so it themes with the row states */}
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="8" cy="3" r="1.4" />
+                    <circle cx="8" cy="8" r="1.4" />
+                    <circle cx="8" cy="13" r="1.4" />
+                  </svg>
+                </button>
+              </Show>
+              </div>
+              <Show when={props.compute && computeOpen()}>
+                {/* aria-live: the card's state copy (validating → connected /
+                    error) announces to screen readers; focus lands here on open
+                    so keyboard users reach the form without tabbing blind.
+                    The dot on the radio is color-only — its aria-label carries
+                    the state in text (WCAG color-not-only). */}
+                <div
+                  id="amicode-capsule-compute"
+                  data-slot="amicode-capsule-compute"
+                  aria-live="polite"
+                  tabIndex={-1}
+                  ref={(el) => setTimeout(() => el.focus(), 0)}
+                  style={{
+                    padding: "0 2px 4px",
+                    outline: "none",
+                  }}
+                >
+                <Show
+                  when={props.compute!.view()}
+                  fallback={<div class="h-8 mx-2 my-1 rounded-md bg-surface-raised-base animate-pulse" aria-hidden />}
+                >
+                  {(conn) => (
+                    <ConnectionCard
+                      conn={conn()}
+                      labels={props.compute!.labels()}
+                      actionError={props.compute!.actionError()}
+                      onSubmit={submitCredential}
+                      onDisconnect={disconnectCompute}
+                      onRevalidate={props.compute!.onRevalidate}
+                      hideHeader
+                    />
+                  )}
+                  </Show>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </Show>

@@ -21,6 +21,7 @@ import {
   pasqalTokenSubmitPayload,
   startAuthPayload,
   stateCopy,
+  statusTabConnections,
   submitPayload,
   type ConnectionActionView,
   type ConnectionAuthMethod,
@@ -103,10 +104,10 @@ export function AmicodeConnectionsTab(props: {
             }
           >
             <Show
-              when={view().connections.length > 0}
+              when={statusTabConnections(view().connections).length > 0}
               fallback={<div class="text-14-regular text-text-base text-center my-auto py-1">{props.labels.empty}</div>}
             >
-              <For each={view().connections}>
+              <For each={statusTabConnections(view().connections)}>
                 {(conn) => (
                   <ConnectionCard
                     conn={conn}
@@ -137,7 +138,9 @@ const TONE_DOT: Record<ReturnType<typeof cardModel>["tone"], string> = {
   neutral: "bg-border-weak-base",
 }
 
-function ConnectionCard(props: {
+/** amicode#200: exported — the solver toggle's popover mounts the SAME card
+ *  for Company Compute (connect / connected-manage / expired states). */
+export function ConnectionCard(props: {
   conn: ConnectionView
   labels: ConnectionsTabLabels
   actionError?: string
@@ -147,6 +150,10 @@ function ConnectionCard(props: {
   onStartAuth?: (payload: StartAuthPayload) => void
   onChooseProject?: (payload: ChooseProjectPayload) => void
   onCancelAuth?: (id: string) => void
+  /** amicode#200 (capsule mount): the accordion header already names and
+   *  dots the connection — hide the card's own title row so the connection
+   *  STATUS is the first and only heading text. */
+  hideHeader?: boolean
 }) {
   const model = () => cardModel(props.conn)
   const methods = () => connectionAuthMethods(props.conn)
@@ -203,28 +210,41 @@ function ConnectionCard(props: {
 
   return (
     <div class="flex flex-col w-full px-2 py-1" data-slot="amicode-connection-card" data-state={props.conn.state}>
-      <div class="flex items-center gap-2 w-full min-w-0">
-        <Show
-          when={model().showLoading}
-          fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
-        >
-          <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
-        </Show>
-        <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
-        <Show when={model().showRawState}>
-          <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
-            {props.conn.rawState}
-          </span>
-        </Show>
-        <div class="flex-1" />
-        <Show when={model().showValidatedAt}>
-          <span class="text-12-regular text-text-weak shrink-0" data-slot="amicode-connection-validated-at">
-            {props.conn.validatedAt}
-          </span>
-        </Show>
-      </div>
+      <Show when={!props.hideHeader}>
+        <div class="flex items-center gap-2 w-full min-w-0">
+          <Show
+            when={model().showLoading}
+            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
+          >
+            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
+          </Show>
+          <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
+          <Show when={model().showRawState}>
+            <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
+              {props.conn.rawState}
+            </span>
+          </Show>
+          <div class="flex-1" />
+          <Show when={model().showValidatedAt}>
+            <span class="text-12-regular text-text-weak shrink-0" data-slot="amicode-connection-validated-at">
+              {props.conn.validatedAt}
+            </span>
+          </Show>
+        </div>
+      </Show>
 
-      <div class="pl-3.5 text-12-regular text-text-weak" data-slot="amicode-connection-state-copy">
+      <div
+        class={`${props.hideHeader ? "flex items-center gap-2 " : "pl-3.5 "}text-12-regular text-text-weak`}
+        data-slot="amicode-connection-state-copy"
+      >
+        <Show when={props.hideHeader}>
+          <Show
+            when={model().showLoading}
+            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
+          >
+            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
+          </Show>
+        </Show>
         {stateCopy(props.conn, props.labels.states)}
         <Show when={model().showIdentity}>
           <span class="text-text-base"> · {props.conn.identity}</span>
@@ -391,6 +411,7 @@ function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.usernamePlaceholder}
+                  aria-label={props.labels.usernamePlaceholder}
                   value={username()}
                   disabled={model().formDisabled}
                   onInput={(event) => setUsername(event.currentTarget.value)}
@@ -401,6 +422,7 @@ function ConnectionCard(props: {
                   name="password"
                   autocomplete="off"
                   placeholder={props.labels.passwordPlaceholder}
+                  aria-label={props.labels.passwordPlaceholder}
                   value={password()}
                   disabled={model().formDisabled}
                   onInput={(event) => setPassword(event.currentTarget.value)}
@@ -414,6 +436,7 @@ function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.baseUrlPlaceholder}
+                  aria-label={props.labels.baseUrlPlaceholder}
                   value={baseUrl()}
                   disabled={model().formDisabled}
                   onInput={(event) => setBaseUrl(event.currentTarget.value)}
@@ -426,6 +449,7 @@ function ConnectionCard(props: {
                   name="token"
                   autocomplete="off"
                   placeholder={props.labels.tokenPlaceholder}
+                  aria-label={props.labels.tokenPlaceholder}
                   value={token()}
                   disabled={model().formDisabled}
                   onInput={(event) => setToken(event.currentTarget.value)}
@@ -439,6 +463,7 @@ function ConnectionCard(props: {
                   autocomplete="off"
                   spellcheck={false}
                   placeholder={props.labels.projectIdPlaceholder}
+                  aria-label={props.labels.projectIdPlaceholder}
                   value={projectId()}
                   disabled={model().formDisabled}
                   onInput={(event) => setProjectId(event.currentTarget.value)}

@@ -26,6 +26,42 @@ export function saveSolverMode(mode: SolverMode, storage: Pick<Storage, "setItem
   }
 }
 
+// ── amicode#200: the solver toggle owns the Company Compute connection ──────
+// Pure decision helpers — the capsule (packages/app) renders from these so the
+// dot/click/flip contract stays testable without a DOM.
+
+import type { ConnectionView } from "./connections"
+
+/** Dot on the HP segment: connected (green) / attention (amber — anything
+ *  wrong or in flight) / none (gray — no credential yet, or no data). */
+export type SolverConnectionDot = "connected" | "attention" | "none"
+
+export function solverConnectionDot(view: ConnectionView | undefined): SolverConnectionDot {
+  if (!view) return "none"
+  if (view.state === "connected") return "connected"
+  if (view.state === "needs-key") return "none"
+  return "attention"
+}
+
+/** What an HP-radio click does: activate the mode (connected), or open the
+ *  connect form (anything else — AC7: never activate unconnected). Management
+ *  lives behind the always-visible details affordance, not a hidden
+ *  second-click on the radio (Kate's test feedback, 2026-07-22). */
+export type HpClickAction = "activate" | "connect"
+
+export function hpClickAction(dot: SolverConnectionDot): HpClickAction {
+  return dot === "connected" ? "activate" : "connect"
+}
+/** AC2: HP flips on only when a credential submit LANDS connected. */
+export function hpAfterConnect(result: { ok: boolean; connection?: { state: string } }): boolean {
+  return result.ok && result.connection?.state === "connected"
+}
+
+/** Invariant: disconnecting Company Compute can never leave HP selected. */
+export function modeAfterDisconnect(): SolverMode {
+  return "piccolo"
+}
+
 export function AmicodeSolverToggle() {
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
   const pick = (m: SolverMode) => {
@@ -47,7 +83,7 @@ export function AmicodeSolverToggle() {
   return (
     <div
       data-component="amicode-solver-toggle"
-      title="Preview — GPU cloud solver rolling out"
+      title="Solver — High-Performance runs in the cloud with your API key"
       style={{ display: "flex", "align-items": "center", gap: "10px" }}
     >
       <span

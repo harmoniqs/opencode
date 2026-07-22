@@ -478,7 +478,7 @@ describe("driftCopy (170 AC4)", () => {
 
 describe("connectionTitle", () => {
   test("known products get names; unknown ids render verbatim", () => {
-    expect(connectionTitle("company-compute")).toBe("Company Compute")
+    expect(connectionTitle("company-compute")).toBe("Solver API key")
     expect(connectionTitle("pasqal-cloud")).toBe("Pasqal Cloud")
     expect(connectionTitle("(unknown)")).toBe("(unknown)")
   })
@@ -589,5 +589,20 @@ describe("applyConnectionOverlay", () => {
     const view = applyConnectionOverlay(twoCards, { validating: "company-compute" })
     expect(view?.connections[1]).toEqual(twoCards.connections[1])
     expect(view?.connections[0].state).toBe("validating")
+  })
+})
+
+// ── amicode#200 AC5: Company Compute relocated to the solver toggle ─────────
+import { statusTabConnections, COMPANY_COMPUTE_ID as COMPUTE_ID } from "./connections"
+
+describe("status-tab connection list (#200 AC5)", () => {
+  const mk = (id: string) => ({ id, state: "connected" as const, rawState: "connected", validatedAt: "—", stale: false })
+  test("excludes company-compute; everything else passes through in order", () => {
+    const list = [mk(COMPUTE_ID), mk("pasqal-cloud"), mk("future-target")]
+    expect(statusTabConnections(list).map((c) => c.id)).toEqual(["pasqal-cloud", "future-target"])
+  })
+  test("empty and compute-only lists yield empty", () => {
+    expect(statusTabConnections([])).toEqual([])
+    expect(statusTabConnections([mk(COMPUTE_ID)])).toEqual([])
   })
 })
