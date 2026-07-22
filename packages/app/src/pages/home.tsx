@@ -136,7 +136,18 @@ function buildHomeSessionRecords(input: {
     .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     .flatMap((session) => {
       const project = projectForSession(session, input.projects(), input.projectByID())
-      if (!project) return []
+      // amicode#203 AC7: a session whose directory matches no registered
+      // project is an ORPHAN — surfaced under its directory, never dropped
+      // (the old `return []` silently hid ghost sessions).
+      if (!project) {
+        const dir = session.directory
+        const base = dir.split("/").filter(Boolean).pop() ?? dir
+        return {
+          session,
+          project: { worktree: dir, expanded: false } as LocalProject,
+          projectName: base,
+        }
+      }
       return {
         session,
         project,
@@ -883,9 +894,10 @@ function HomeDesign() {
                     cursor: "pointer",
                   }}
                 >
-                  Sessions
-                  {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
-                  border, 10% currentColor tint — accent ink only when unseen. */}
+                  Projects
+                  {/* amicode#203: the entry is Projects now — the pill shows the
+                  project count, or the unseen-session badge (accent ink) when
+                  there are unread sessions. */}
                   <span
                     style={{
                       "font-size": "10px",
@@ -900,7 +912,7 @@ function HomeDesign() {
                       "font-variant-numeric": "tabular-nums",
                     }}
                   >
-                    {unseenTotal() > 0 ? unseenTotal() : totalSessions()}
+                    {unseenTotal() > 0 ? unseenTotal() : projects().length}
                   </span>
                   <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
                     ▾
