@@ -150,6 +150,10 @@ export function ConnectionCard(props: {
   onStartAuth?: (payload: StartAuthPayload) => void
   onChooseProject?: (payload: ChooseProjectPayload) => void
   onCancelAuth?: (id: string) => void
+  /** amicode#200 (capsule mount): the accordion header already names and
+   *  dots the connection — hide the card's own title row so the connection
+   *  STATUS is the first and only heading text. */
+  hideHeader?: boolean
 }) {
   const model = () => cardModel(props.conn)
   const methods = () => connectionAuthMethods(props.conn)
@@ -206,28 +210,33 @@ export function ConnectionCard(props: {
 
   return (
     <div class="flex flex-col w-full px-2 py-1" data-slot="amicode-connection-card" data-state={props.conn.state}>
-      <div class="flex items-center gap-2 w-full min-w-0">
-        <Show
-          when={model().showLoading}
-          fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
-        >
-          <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
-        </Show>
-        <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
-        <Show when={model().showRawState}>
-          <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
-            {props.conn.rawState}
-          </span>
-        </Show>
-        <div class="flex-1" />
-        <Show when={model().showValidatedAt}>
-          <span class="text-12-regular text-text-weak shrink-0" data-slot="amicode-connection-validated-at">
-            {props.conn.validatedAt}
-          </span>
-        </Show>
-      </div>
+      <Show when={!props.hideHeader}>
+        <div class="flex items-center gap-2 w-full min-w-0">
+          <Show
+            when={model().showLoading}
+            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
+          >
+            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
+          </Show>
+          <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
+          <Show when={model().showRawState}>
+            <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
+              {props.conn.rawState}
+            </span>
+          </Show>
+          <div class="flex-1" />
+          <Show when={model().showValidatedAt}>
+            <span class="text-12-regular text-text-weak shrink-0" data-slot="amicode-connection-validated-at">
+              {props.conn.validatedAt}
+            </span>
+          </Show>
+        </div>
+      </Show>
 
-      <div class="pl-3.5 text-12-regular text-text-weak" data-slot="amicode-connection-state-copy">
+      <div
+        class={`${props.hideHeader ? "" : "pl-3.5 "}text-12-regular text-text-weak`}
+        data-slot="amicode-connection-state-copy"
+      >
         {stateCopy(props.conn, props.labels.states)}
         <Show when={model().showIdentity}>
           <span class="text-text-base"> · {props.conn.identity}</span>

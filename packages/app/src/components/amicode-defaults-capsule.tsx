@@ -388,8 +388,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   tabIndex={-1}
                   ref={(el) => setTimeout(() => el.focus(), 0)}
                   style={{
-                    "border-top": "1px solid var(--v2-border-border-base)",
-                    padding: "4px 2px",
+                    padding: "0 2px 4px",
                     outline: "none",
                   }}
                 >
@@ -405,6 +404,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                       onSubmit={submitCredential}
                       onDisconnect={disconnectCompute}
                       onRevalidate={props.compute!.onRevalidate}
+                      hideHeader
                     />
                   )}
                   </Show>
