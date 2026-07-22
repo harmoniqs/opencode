@@ -49,11 +49,10 @@ export type AmicodeComputeControl = {
   refetch: () => void
 }
 
-const DOT_CLASS: Record<ReturnType<typeof solverConnectionDot>, string> = {
-  connected: "bg-icon-success-base",
-  attention: "bg-icon-warning-base",
-  none: "bg-border-weak-base",
-}
+// The status dot lives on the connection card's STATUS line (Kate: the dot
+// accompanies "not connected…", never the solver name — same idiom as the
+// Connections tab, where the dot leads the card's first line). The header
+// row signals state non-visually via aria-label/title and data-dot.
 
 // amicode#200 AC6: the Connect Cloud palette command deep-links here. The
 // extension posts an "open-compute-connect" envelope through the webview
@@ -321,7 +320,6 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                       : "Runs in the cloud — click to add your API key"
                 }
               >
-                <span class={`size-1.5 rounded-full shrink-0 ${DOT_CLASS[dot()]}`} data-slot="amicode-solver-hp-dot" />
                 <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
                   Piccolissimo + Altissimo
                 </span>

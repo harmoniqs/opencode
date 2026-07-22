@@ -234,9 +234,17 @@ export function ConnectionCard(props: {
       </Show>
 
       <div
-        class={`${props.hideHeader ? "" : "pl-3.5 "}text-12-regular text-text-weak`}
+        class={`${props.hideHeader ? "flex items-center gap-2 " : "pl-3.5 "}text-12-regular text-text-weak`}
         data-slot="amicode-connection-state-copy"
       >
+        <Show when={props.hideHeader}>
+          <Show
+            when={model().showLoading}
+            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
+          >
+            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
+          </Show>
+        </Show>
         {stateCopy(props.conn, props.labels.states)}
         <Show when={model().showIdentity}>
           <span class="text-text-base"> · {props.conn.identity}</span>
