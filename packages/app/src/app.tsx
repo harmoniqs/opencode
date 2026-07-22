@@ -1,5 +1,6 @@
 import "@/index.css"
 import * as Sentry from "@sentry/solid"
+import { requestComputeConnect } from "@/components/amicode-defaults-capsule"
 import { I18nProvider } from "@opencode-ai/ui/context"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
 import { FileComponentProvider } from "@opencode-ai/ui/context/file"
@@ -235,7 +236,14 @@ function AmicodeThemeBridge() {
   const theme = useTheme()
   const onMsg = (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; colorScheme?: string } | undefined
-    if (d?.source !== "amicode" || d.kind !== "theme") return
+    if (d?.source !== "amicode") return
+    // amicode#200 AC6: the Connect Cloud palette command deep-links into the
+    // defaults capsule's compute-connect flow (consumed when home is showing).
+    if (d.kind === "open-compute-connect") {
+      requestComputeConnect()
+      return
+    }
+    if (d.kind !== "theme") return
     if (d.colorScheme === "light" || d.colorScheme === "dark") theme.setColorScheme(d.colorScheme)
   }
   window.addEventListener("message", onMsg)

@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
 import {
@@ -53,6 +53,18 @@ const DOT_CLASS: Record<ReturnType<typeof solverConnectionDot>, string> = {
   attention: "bg-icon-warning-base",
   none: "bg-border-weak-base",
 }
+
+// amicode#200 AC6: the Connect Cloud palette command deep-links here. The
+// extension posts an "open-compute-connect" envelope through the webview
+// bridge; the app-shell listener calls requestComputeConnect() and the next
+// mounted capsule opens straight into the connect flow. Timestamped so a
+// request fired while another page was showing can't pop the popover minutes
+// later (15s freshness window).
+const [connectRequestAt, setConnectRequestAt] = createSignal(0)
+export function requestComputeConnect() {
+  setConnectRequestAt(Date.now())
+}
+const CONNECT_REQUEST_TTL_MS = 15_000
 
 export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl }) {
   const models = useModels()
@@ -109,17 +121,32 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const onDocKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close()
   }
+  const openPopover = () => {
+    if (open()) return
+    setOpen(true)
+    document.addEventListener("pointerdown", onDocPointer, true)
+    document.addEventListener("keydown", onDocKey, true)
+  }
   const toggle = () => {
-    const next = !open()
-    setOpen(next)
-    if (!next) setComputeOpen(false)
-    if (next) {
-      document.addEventListener("pointerdown", onDocPointer, true)
-      document.addEventListener("keydown", onDocKey, true)
-    } else {
+    if (open()) {
+      close()
       teardown()
+    } else {
+      openPopover()
     }
   }
+
+  // amicode#200 AC6: consume a pending Connect Cloud deep-link — open the
+  // popover directly into the compute connect flow.
+  createEffect(() => {
+    const at = connectRequestAt()
+    if (!at || !props.compute) return
+    setConnectRequestAt(0)
+    if (Date.now() - at > CONNECT_REQUEST_TTL_MS) return
+    openPopover()
+    setComputeOpen(true)
+    props.compute.refetch()
+  })
   const teardown = () => {
     document.removeEventListener("pointerdown", onDocPointer, true)
     document.removeEventListener("keydown", onDocKey, true)
