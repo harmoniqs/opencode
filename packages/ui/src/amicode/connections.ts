@@ -77,6 +77,13 @@ export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; erro
 export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; error?: string }
 
 export const COMPANY_COMPUTE_ID = "company-compute"
+
+/** amicode#200: Company Compute lives in the solver toggle now — the status
+ *  popover's Connections tab shows execution targets (Pasqal, future hardware)
+ *  only. The wire still carries every connection; this is a render filter. */
+export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
+  return connections.filter((c) => c.id !== COMPANY_COMPUTE_ID)
+}
 export const PASQAL_ID = "pasqal-cloud"
 
 /** Product names are not translated; ids without one render verbatim. */

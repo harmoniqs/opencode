@@ -26,6 +26,43 @@ export function saveSolverMode(mode: SolverMode, storage: Pick<Storage, "setItem
   }
 }
 
+// ── amicode#200: the solver toggle owns the Company Compute connection ──────
+// Pure decision helpers — the capsule (packages/app) renders from these so the
+// dot/click/flip contract stays testable without a DOM.
+
+import type { ConnectionView } from "./connections"
+
+/** Dot on the HP segment: connected (green) / attention (amber — anything
+ *  wrong or in flight) / none (gray — no credential yet, or no data). */
+export type SolverConnectionDot = "connected" | "attention" | "none"
+
+export function solverConnectionDot(view: ConnectionView | undefined): SolverConnectionDot {
+  if (!view) return "none"
+  if (view.state === "connected") return "connected"
+  if (view.state === "needs-key") return "none"
+  return "attention"
+}
+
+/** What an HP-segment click does: activate the mode (connected, not yet hp),
+ *  open the connect form (anything not connected — AC7: never activate
+ *  unconnected), or open management (already hp and connected). */
+export type HpClickAction = "activate" | "connect" | "manage"
+
+export function hpClickAction(mode: SolverMode, dot: SolverConnectionDot): HpClickAction {
+  if (dot !== "connected") return "connect"
+  return mode === "hp" ? "manage" : "activate"
+}
+
+/** AC2: HP flips on only when a credential submit LANDS connected. */
+export function hpAfterConnect(result: { ok: boolean; connection?: { state: string } }): boolean {
+  return result.ok && result.connection?.state === "connected"
+}
+
+/** Invariant: disconnecting Company Compute can never leave HP selected. */
+export function modeAfterDisconnect(): SolverMode {
+  return "piccolo"
+}
+
 export function AmicodeSolverToggle() {
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
   const pick = (m: SolverMode) => {
@@ -47,7 +84,7 @@ export function AmicodeSolverToggle() {
   return (
     <div
       data-component="amicode-solver-toggle"
-      title="Preview — GPU cloud solver rolling out"
+      title="Solver — High-Performance runs on Company Compute"
       style={{ display: "flex", "align-items": "center", gap: "10px" }}
     >
       <span

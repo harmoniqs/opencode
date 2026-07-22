@@ -1,7 +1,22 @@
-import { Show, createMemo, createSignal, onCleanup } from "solid-js"
+import { Show, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
-import { loadSolverMode, saveSolverMode, type SolverMode } from "@opencode-ai/ui/amicode-solver-toggle"
+import {
+  hpAfterConnect,
+  hpClickAction,
+  loadSolverMode,
+  modeAfterDisconnect,
+  saveSolverMode,
+  solverConnectionDot,
+  type SolverMode,
+} from "@opencode-ai/ui/amicode-solver-toggle"
+import {
+  ConnectionCard,
+  type ConnectionActionView,
+  type ConnectionsTabLabels,
+  type ConnectionView,
+  type CredentialSubmitPayload,
+} from "@opencode-ai/ui/amicode-connections-tab"
 
 // AMICODE: the chrome strip's DEFAULTS CAPSULE (nav redesign, Kate 2026-07-15).
 // One compact control carries both session defaults — model and solver — so the
@@ -12,14 +27,67 @@ import { loadSolverMode, saveSolverMode, type SolverMode } from "@opencode-ai/ui
 // high-performance solver is on, the face wears the accent border — the PRO
 // funnel stays visible at every width instead of being the first casualty
 // of a narrow column.
+//
+// amicode#200: the solver toggle owns the Company Compute connection. The HP
+// radio wears a status dot (green connected / amber attention / gray no key),
+// and clicking it while unconnected expands the SAME connection card the
+// status popover used to host — connect here, HP flips on when the credential
+// lands connected. Connected + already-HP clicks open the card in its
+// management state (identity, validated-at, revalidate, disconnect).
+// Disconnect always drops the mode back to Piccolo: HP is cloud-only.
 
-export function AmicodeDefaultsCapsule() {
+/** The Company Compute slice of createAmicodeConnectionsState, passed down by
+ *  the host chrome. Optional so bare mounts (storybook) keep legacy behavior. */
+export type AmicodeComputeControl = {
+  view: Accessor<ConnectionView | undefined>
+  labels: Accessor<ConnectionsTabLabels>
+  actionError: Accessor<string | undefined>
+  onSubmit: (payload: CredentialSubmitPayload) => Promise<ConnectionActionView>
+  onDisconnect: (id: string) => void
+  onRevalidate: (id: string) => void
+  refetch: () => void
+}
+
+const DOT_CLASS: Record<ReturnType<typeof solverConnectionDot>, string> = {
+  connected: "bg-icon-success-base",
+  attention: "bg-icon-warning-base",
+  none: "bg-border-weak-base",
+}
+
+export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl }) {
   const models = useModels()
   const [open, setOpen] = createSignal(false)
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
+  const [computeOpen, setComputeOpen] = createSignal(false)
   const pick = (m: SolverMode) => {
     setMode(m)
     saveSolverMode(m)
+  }
+
+  const dot = createMemo(() => solverConnectionDot(props.compute?.view()))
+  const onHpClick = () => {
+    if (!props.compute) {
+      pick("hp") // legacy seam: unwired hosts keep the old behavior
+      return
+    }
+    const action = hpClickAction(mode(), dot())
+    if (action === "activate") {
+      pick("hp")
+      setComputeOpen(false)
+      return
+    }
+    // connect | manage — reveal the connection card inline; freshen the view
+    setComputeOpen(true)
+    props.compute.refetch()
+  }
+  const submitCredential = async (payload: CredentialSubmitPayload) => {
+    const result = await props.compute!.onSubmit(payload)
+    if (hpAfterConnect(result)) pick("hp")
+    return result
+  }
+  const disconnectCompute = (id: string) => {
+    props.compute!.onDisconnect(id)
+    pick(modeAfterDisconnect())
   }
 
   const modelName = createMemo(() => {
@@ -31,15 +99,20 @@ export function AmicodeDefaultsCapsule() {
   const hp = () => mode() === "hp"
 
   let root: HTMLDivElement | undefined
+  const close = () => {
+    setOpen(false)
+    setComputeOpen(false)
+  }
   const onDocPointer = (e: PointerEvent) => {
-    if (root && !root.contains(e.target as Node)) setOpen(false)
+    if (root && !root.contains(e.target as Node)) close()
   }
   const onDocKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") setOpen(false)
+    if (e.key === "Escape") close()
   }
   const toggle = () => {
     const next = !open()
     setOpen(next)
+    if (!next) setComputeOpen(false)
     if (next) {
       document.addEventListener("pointerdown", onDocPointer, true)
       document.addEventListener("keydown", onDocKey, true)
@@ -146,7 +219,21 @@ export function AmicodeDefaultsCapsule() {
             >
               Piccolo
             </button>
-            <button type="button" data-slot="amicode-solver-hp" style={radio(hp())} onClick={() => pick("hp")}>
+            <button
+              type="button"
+              data-slot="amicode-solver-hp"
+              data-dot={dot()}
+              style={radio(hp())}
+              onClick={onHpClick}
+              title={
+                dot() === "connected"
+                  ? "Company Compute connected"
+                  : dot() === "attention"
+                    ? "Company Compute needs attention — click to fix"
+                    : "Runs on Company Compute — click to connect"
+              }
+            >
+              <span class={`size-1.5 rounded-full shrink-0 ${DOT_CLASS[dot()]}`} data-slot="amicode-solver-hp-dot" />
               <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
                 Piccolissimo + Altissimo
               </span>
@@ -169,6 +256,33 @@ export function AmicodeDefaultsCapsule() {
                 PRO
               </span>
             </button>
+            <Show when={props.compute && computeOpen()}>
+              <div
+                data-slot="amicode-capsule-compute"
+                style={{
+                  "margin-top": "4px",
+                  border: "1px solid var(--v2-border-border-base)",
+                  "border-radius": "7px",
+                  padding: "4px 2px",
+                }}
+              >
+                <Show
+                  when={props.compute!.view()}
+                  fallback={<div class="h-8 mx-2 my-1 rounded-md bg-surface-raised-base animate-pulse" aria-hidden />}
+                >
+                  {(conn) => (
+                    <ConnectionCard
+                      conn={conn()}
+                      labels={props.compute!.labels()}
+                      actionError={props.compute!.actionError()}
+                      onSubmit={submitCredential}
+                      onDisconnect={disconnectCompute}
+                      onRevalidate={props.compute!.onRevalidate}
+                    />
+                  )}
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
       </Show>

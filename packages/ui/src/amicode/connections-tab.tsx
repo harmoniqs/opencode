@@ -21,6 +21,7 @@ import {
   pasqalTokenSubmitPayload,
   startAuthPayload,
   stateCopy,
+  statusTabConnections,
   submitPayload,
   type ConnectionActionView,
   type ConnectionAuthMethod,
@@ -103,10 +104,10 @@ export function AmicodeConnectionsTab(props: {
             }
           >
             <Show
-              when={view().connections.length > 0}
+              when={statusTabConnections(view().connections).length > 0}
               fallback={<div class="text-14-regular text-text-base text-center my-auto py-1">{props.labels.empty}</div>}
             >
-              <For each={view().connections}>
+              <For each={statusTabConnections(view().connections)}>
                 {(conn) => (
                   <ConnectionCard
                     conn={conn}
@@ -137,7 +138,9 @@ const TONE_DOT: Record<ReturnType<typeof cardModel>["tone"], string> = {
   neutral: "bg-border-weak-base",
 }
 
-function ConnectionCard(props: {
+/** amicode#200: exported — the solver toggle's popover mounts the SAME card
+ *  for Company Compute (connect / connected-manage / expired states). */
+export function ConnectionCard(props: {
   conn: ConnectionView
   labels: ConnectionsTabLabels
   actionError?: string
