@@ -180,7 +180,13 @@ function HomeDesign() {
   const chromeConnections = createAmicodeConnectionsState(() => true)
   const computeControl: AmicodeComputeControl = {
     view: () => chromeConnections.connectionsView()?.connections.find((c) => c.id === COMPANY_COMPUTE_ID),
-    labels: chromeConnections.connectionsLabels,
+    // capsule mount: the connect form sits directly under the status line, so
+    // the "— enter a key to connect" guidance is redundant there (Kate). The
+    // Connections tab keeps the full copy.
+    labels: () => {
+      const base = chromeConnections.connectionsLabels()
+      return { ...base, states: { ...base.states, "needs-key": "Not connected" } }
+    },
     actionError: chromeConnections.connectionsActionError,
     onSubmit: chromeConnections.onSubmitCredential,
     onDisconnect: chromeConnections.onDisconnectConnection,

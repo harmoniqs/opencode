@@ -262,9 +262,15 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             <div
               data-slot="amicode-solver-hp-row"
               style={{
-                border: hp()
-                  ? "1px solid var(--v2-icon-icon-accent)"
-                  : "1px solid var(--v2-border-border-base)",
+                // accent border while ACTIVE (hp) or while the connect/manage
+                // flow is open — the expanded-but-unconnected state signals
+                // "the choice is moving here"; the header tint (selection
+                // truth) still flips only when the credential lands (Kate,
+                // 2026-07-22: don't flip Piccolo off before the switch is real)
+                border:
+                  hp() || computeOpen()
+                    ? "1px solid var(--v2-icon-icon-accent)"
+                    : "1px solid var(--v2-border-border-base)",
                 "border-radius": "7px",
                 overflow: "hidden",
                 display: "flex",
