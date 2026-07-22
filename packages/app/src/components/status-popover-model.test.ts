@@ -24,12 +24,13 @@ describe("statusTriggerVisibility", () => {
 })
 
 describe("global status surface (home chrome entry)", () => {
-  // amicode#174 AC1: the home-chrome entry opens the same Vaults + Connections
-  // surface the session popover hosts, with Connections pre-selected. The
-  // per-directory tabs (mcp/lsp/plugins) are NOT part of the global surface —
-  // home has no directory-scoped sync context.
-  test("global surface hosts exactly vaults + connections", () => {
-    expect([...GLOBAL_STATUS_TABS]).toEqual(["vaults", "connections"])
+  // amicode#202: vaults moved to the native Armonia sidebar panel, so the
+  // home-chrome entry hosts Connections only (was vaults + connections in
+  // #174). The per-directory tabs (mcp/lsp/plugins) are NOT part of the global
+  // surface — home has no directory-scoped sync context.
+  test("global surface hosts connections only (vaults moved to the sidebar)", () => {
+    expect([...GLOBAL_STATUS_TABS]).toEqual(["connections"])
+    expect([...GLOBAL_STATUS_TABS]).not.toContain("vaults")
   })
 
   test("connections is the pre-selected tab", () => {

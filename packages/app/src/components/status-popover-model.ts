@@ -31,7 +31,9 @@ export function statusTriggerVisibility(input: { desktopV2: boolean; showStatus:
  * per-directory (they read the directory-scoped sync context, which the home
  * route does not mount) and are meaningless before a session exists.
  */
-export const GLOBAL_STATUS_TABS = ["vaults", "connections"] as const
+// amicode#202: vaults moved to the native Armonia sidebar panel, so the
+// global home-chrome surface hosts Connections only.
+export const GLOBAL_STATUS_TABS = ["connections"] as const
 export type GlobalStatusTab = (typeof GLOBAL_STATUS_TABS)[number]
 
 /** The home entry is labeled "Connections", so that tab opens pre-selected. */

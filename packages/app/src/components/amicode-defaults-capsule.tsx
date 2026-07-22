@@ -189,7 +189,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
       <button
         type="button"
         data-slot="amicode-defaults-face"
-        title="Session defaults — model & solver"
+        title="Defaults — model & solver, apply everywhere"
         aria-expanded={open()}
         onClick={toggle}
         style={{
@@ -222,7 +222,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
         <div
           data-slot="amicode-defaults-pop"
           role="dialog"
-          aria-label="Session defaults"
+          aria-label="Defaults"
           style={{
             position: "absolute",
             right: "0",
