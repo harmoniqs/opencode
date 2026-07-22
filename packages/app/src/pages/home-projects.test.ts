@@ -28,9 +28,8 @@ describe("resolveCreationTarget", () => {
       slug: "my-gate",
       path: "/home/kate/proj/my-gate",
     })
-    expect(resolveCreationTarget({ name: "My Gate", parentDir: "/home/kate/proj/" }).path).toBe(
-      "/home/kate/proj/my-gate",
-    )
+    const trailing = resolveCreationTarget({ name: "My Gate", parentDir: "/home/kate/proj/" })
+    expect(trailing.ok && trailing.path).toBe("/home/kate/proj/my-gate")
   })
   test("rejects a name that slugifies to nothing", () => {
     expect(resolveCreationTarget({ name: "  ", parentDir: "/x" })).toEqual({ ok: false, reason: "empty-name" })

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { slugify, planCreate, classifyFsError, createProjectAt, createProject } from "@/server/amicode/project"
+import { slugify, planCreate, classifyFsError, createProjectAt, createProject, defaultParentDir } from "@/server/amicode/project"
 
 describe("slugify (server, mirrors app projectNameToSlug)", () => {
   test("normalizes to a safe folder basename", () => {
@@ -17,11 +17,16 @@ describe("slugify (server, mirrors app projectNameToSlug)", () => {
 })
 
 describe("planCreate", () => {
-  test("rejects an empty name and a non-absolute/empty parent", () => {
+  test("rejects an empty name and a provided-but-relative parent", () => {
     expect(planCreate(JSON.stringify({ name: "  ", parentDir: "/abs" }))).toMatchObject({ ok: false, error: "empty-name" })
     expect(planCreate(JSON.stringify({ name: "X", parentDir: "rel/ative" }))).toMatchObject({ ok: false, error: "bad-parent" })
-    expect(planCreate(JSON.stringify({ name: "X" }))).toMatchObject({ ok: false, error: "bad-parent" })
     expect(planCreate("not json")).toMatchObject({ ok: false, error: "other" })
+  })
+  test("no parent → the server default (~/AmicodeProjects)", () => {
+    expect(planCreate(JSON.stringify({ name: "X" }))).toEqual({
+      target: path.join(defaultParentDir(), "x"),
+      slug: "x",
+    })
   })
   test("joins an absolute parent with the slug", () => {
     expect(planCreate(JSON.stringify({ name: "My Gate", parentDir: "/home/kate/p" }))).toEqual({

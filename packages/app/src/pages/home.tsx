@@ -52,6 +52,7 @@ import {
 } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { sessionTitle } from "@/utils/session-title"
+import { showToast } from "@/utils/toast"
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
@@ -790,6 +791,30 @@ function HomeDesign() {
     })
   }
 
+  // amicode#203: true project creation — the New-project dialog names + creates
+  // the directory (server does mkdir + best-effort git init), then we register
+  // it and open a first session. "Open existing folder instead…" falls back to
+  // chooseProject. git-absent is non-blocking (AC4): a toast, project still opens.
+  function newProject(conn: ServerConnection.Any) {
+    void import("@/components/dialog-new-project").then((x) => {
+      dialog.show(() => (
+        <x.DialogNewProject
+          server={conn}
+          onCreated={({ path, gitInitialized }) => {
+            openProjectNewSession(conn, path)
+            if (!gitInitialized)
+              showToast({
+                variant: "default",
+                title: "Project created",
+                description: "Change tracking is off — git wasn't found on your PATH.",
+              })
+          }}
+          onOpenExisting={() => chooseProject(conn)}
+        />
+      ))
+    })
+  }
+
   function openSettings() {
     void import("@/components/settings-v2").then((x) => {
       dialog.show(() => <x.DialogSettings />)
@@ -919,6 +944,7 @@ function HomeDesign() {
                       selectProject={selectProject}
                       openNewSession={openProjectNewSession}
                       chooseProject={(conn) => void chooseProject(conn)}
+                      newProject={(conn) => void newProject(conn)}
                       editProject={editProject}
                       closeProject={(conn, directory) => {
                         const next = closeHomeProject(
@@ -1175,6 +1201,7 @@ function HomeProjectColumn(props: {
   selectProject: (server: ServerConnection.Any, directory: string) => void
   openNewSession: (server: ServerConnection.Any, directory: string) => void
   chooseProject: (server: ServerConnection.Any) => void
+  newProject: (server: ServerConnection.Any) => void
   editProject: (server: ServerConnection.Any, project: LocalProject) => void
   closeProject: (server: ServerConnection.Any, directory: string) => void
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
@@ -1246,7 +1273,7 @@ function HomeProjectColumn(props: {
             size="large"
             class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
             icon={<IconV2 name="folder-add-left" />}
-            onClick={() => props.chooseProject(global.servers.list()[0]!)}
+            onClick={() => props.newProject(global.servers.list()[0]!)}
             aria-label={props.language.t("home.project.add")}
           />
         </Show>
@@ -1270,6 +1297,7 @@ function HomeProjectColumn(props: {
                   controller={controller}
                   focusServer={props.focusServer}
                   chooseProject={props.chooseProject}
+                  newProject={props.newProject}
                   openEdit={(server) => dialog.show(() => <DialogServerV2 mode="edit" server={server} />)}
                   language={props.language}
                 />
@@ -1306,6 +1334,7 @@ function HomeServerRow(props: {
   controller: ReturnType<typeof useServerManagementController>
   focusServer: (server: ServerConnection.Any) => void
   chooseProject: (server: ServerConnection.Any) => void
+  newProject: (server: ServerConnection.Any) => void
   openEdit: (server: ServerConnection.Http) => void
   language: ReturnType<typeof useLanguage>
 }) {
@@ -1350,7 +1379,7 @@ function HomeServerRow(props: {
           size="small"
           icon={<IconV2 name="folder-add-left" />}
           aria-label={props.language.t("home.project.add")}
-          onClick={() => props.chooseProject(props.server)}
+          onClick={() => props.newProject(props.server)}
         />
       </div>
     </div>

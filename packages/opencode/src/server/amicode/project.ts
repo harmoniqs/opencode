@@ -5,7 +5,14 @@
 // dialog can render an inline, recoverable error.
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, rmSync } from "node:fs"
+import { homedir } from "node:os"
 import path from "node:path"
+
+/** The default parent when the client sends none — the webview doesn't know the
+ *  user's home dir, so the server owns the default (created on first use). */
+export function defaultParentDir(home: string = homedir()): string {
+  return path.join(home, "AmicodeProjects")
+}
 
 /** Slugify a project name into a folder basename. Mirrors the app-side
  *  projectNameToSlug (home-projects.ts) — kept in sync by tests on both sides. */
@@ -37,12 +44,13 @@ export function planCreate(rawBody: string): { target: string; slug: string } | 
   const parentDir = typeof body.parentDir === "string" ? body.parentDir : ""
   const slug = slugify(name)
   if (!slug) return { ok: false, error: "empty-name", message: "Enter a project name." }
-  // parentDir must be an absolute path — never resolve a client-supplied
-  // relative path against the server's cwd, and the sanitized slug can't
-  // traverse (it is [a-z0-9-] only).
-  if (!parentDir || !path.isAbsolute(parentDir))
+  // No parent → the server default (~/AmicodeProjects); a provided parent must
+  // be absolute (never resolve a client-supplied relative path against the
+  // server cwd). The sanitized slug can't traverse (it is [a-z0-9-] only).
+  const parent = parentDir ? parentDir : defaultParentDir()
+  if (!path.isAbsolute(parent))
     return { ok: false, error: "bad-parent", message: "Choose a location for the project." }
-  return { target: path.join(parentDir, slug), slug }
+  return { target: path.join(parent, slug), slug }
 }
 
 /** Map a Node fs error to the inline error kind the dialog shows. */
