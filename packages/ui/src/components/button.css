@@ -38,31 +38,6 @@
     }
   }
 
-  /* AMICODE brand accent (#194 connections): the yellow fill CTA. Yellow is a
-   * FILL, never ink — text is ALWAYS black on it (brand rule). */
-  &[data-variant="accent"] {
-    background-color: var(--v2-background-bg-accent);
-    border-color: var(--v2-background-bg-accent);
-    color: #000000;
-
-    [data-slot="icon-svg"] {
-      color: #000000;
-    }
-
-    &:hover:not(:disabled) {
-      filter: brightness(0.95);
-    }
-    &:focus-visible:not(:disabled) {
-      filter: brightness(0.95);
-    }
-    &:active:not(:disabled) {
-      filter: brightness(0.9);
-    }
-    &:disabled {
-      opacity: 0.6;
-    }
-  }
-
   &[data-variant="ghost"] {
     border-color: transparent;
     background-color: transparent;

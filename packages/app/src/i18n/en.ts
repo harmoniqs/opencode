@@ -722,8 +722,6 @@ export const dict = {
   "dialog.connections.startBrowser": "Connect with browser",
   "dialog.connections.startDeviceCode": "Connect with a code",
   "dialog.connections.cancel": "Cancel",
-  "dialog.connections.keychainHint":
-    "Your Pasqal password is saved to your system keychain so runs stay signed in — never to disk.",
   "dialog.connections.userCode": "Enter this code at {{url}}",
   "dialog.connections.codeExpires": "Code expires {{at}}",
   "dialog.connections.useProject": "Use this project",

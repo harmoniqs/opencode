@@ -7,6 +7,7 @@
 // text and the masked input clears when a submit lands connected.
 import { createEffect, createSignal, For, Show } from "solid-js"
 import { Button } from "../components/button"
+import { Spinner } from "../components/spinner"
 import {
   cardModel,
   chooseProjectPayload,
@@ -54,9 +55,6 @@ export type ConnectionsTabLabels = {
   startBrowser: string
   startDeviceCode: string
   cancel: string
-  /** the [0600] assurance line under the credentials form (#194): the password
-   *  is kept in the OS keychain, not the token file */
-  keychainHint: string
   /** {{url}} template — where the device code gets entered */
   userCodeHint: string
   /** {{at}} template — pending-code expiry */
@@ -206,7 +204,12 @@ function ConnectionCard(props: {
   return (
     <div class="flex flex-col w-full px-2 py-1" data-slot="amicode-connection-card" data-state={props.conn.state}>
       <div class="flex items-center gap-2 w-full min-w-0">
-        <div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />
+        <Show
+          when={model().showLoading}
+          fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
+        >
+          <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
+        </Show>
         <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
         <Show when={model().showRawState}>
           <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
@@ -301,10 +304,8 @@ function ConnectionCard(props: {
                   data-slot="amicode-connection-project"
                   data-selected={selected()}
                   style={{
-                    "border-color": selected() ? "var(--v2-background-bg-accent)" : "var(--border-weak-base)",
-                    "background-color": selected()
-                      ? "color-mix(in srgb, var(--v2-background-bg-accent) 16%, var(--surface-base))"
-                      : "var(--surface-base)",
+                    "border-color": selected() ? "var(--v2-text-text-accent)" : "var(--border-weak-base)",
+                    "background-color": selected() ? "var(--surface-raised-base)" : "var(--surface-base)",
                   }}
                 >
                   <input
@@ -317,7 +318,7 @@ function ConnectionCard(props: {
                   />
                   <span class="flex flex-col min-w-0 gap-0.5">
                     <span class="text-12-regular text-text-base truncate">{project.name}</span>
-                    <span class="text-12-mono text-text-weaker truncate">{project.id}</span>
+                    <span class="text-11-regular text-text-weaker truncate">{project.id}</span>
                   </span>
                 </label>
               )
@@ -325,7 +326,7 @@ function ConnectionCard(props: {
           </For>
           <Button
             type="button"
-            variant="accent"
+            variant="primary"
             size="small"
             class="self-start mt-0.5"
             data-slot="amicode-connection-use-project"
@@ -377,7 +378,7 @@ function ConnectionCard(props: {
             fallback={
               <Button
                 type="button"
-                variant="accent"
+                variant="primary"
                 size="small"
                 class="self-start"
                 disabled={model().formDisabled}
@@ -399,7 +400,7 @@ function ConnectionCard(props: {
                   value={username()}
                   disabled={model().formDisabled}
                   onInput={(event) => setUsername(event.currentTarget.value)}
-                  class="text-12-mono text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
                 />
                 <input
                   type="password"
@@ -409,7 +410,7 @@ function ConnectionCard(props: {
                   value={password()}
                   disabled={model().formDisabled}
                   onInput={(event) => setPassword(event.currentTarget.value)}
-                  class="text-12-mono text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
                 />
               </Show>
               <Show when={entryKind() === "base-url-token"}>
@@ -422,7 +423,7 @@ function ConnectionCard(props: {
                   value={baseUrl()}
                   disabled={model().formDisabled}
                   onInput={(event) => setBaseUrl(event.currentTarget.value)}
-                  class="text-12-mono text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
                 />
               </Show>
               <Show when={entryKind() === "base-url-token" || entryKind() === "pasqal-token"}>
@@ -434,7 +435,7 @@ function ConnectionCard(props: {
                   value={token()}
                   disabled={model().formDisabled}
                   onInput={(event) => setToken(event.currentTarget.value)}
-                  class="text-12-mono text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
                 />
               </Show>
               <Show when={entryKind() === "pasqal-token"}>
@@ -447,12 +448,12 @@ function ConnectionCard(props: {
                   value={projectId()}
                   disabled={model().formDisabled}
                   onInput={(event) => setProjectId(event.currentTarget.value)}
-                  class="text-12-mono text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
                 />
               </Show>
               <Button
                 type="submit"
-                variant="accent"
+                variant="primary"
                 size="small"
                 disabled={model().formDisabled}
                 data-slot="amicode-connection-submit"
@@ -460,17 +461,6 @@ function ConnectionCard(props: {
               >
                 {props.labels.submit}
               </Button>
-              <Show when={entryKind() === "pasqal-credentials"}>
-                <div
-                  class="flex gap-2 pt-2 mt-1 border-t border-border-weak-base"
-                  data-slot="amicode-connection-assurance"
-                >
-                  <span class="text-12-mono shrink-0" style={{ color: "var(--v2-text-text-accent)" }}>
-                    [0600]
-                  </span>
-                  <span class="text-11-regular text-text-weak">{props.labels.keychainHint}</span>
-                </div>
-              </Show>
             </form>
           </Show>
         </div>

@@ -693,7 +693,6 @@ function createAmicodeStatusTabs(opts: { shown: Accessor<boolean>; onManageVault
     startBrowser: language.t("dialog.connections.startBrowser"),
     startDeviceCode: language.t("dialog.connections.startDeviceCode"),
     cancel: language.t("dialog.connections.cancel"),
-    keychainHint: language.t("dialog.connections.keychainHint"),
     userCodeHint: language.t("dialog.connections.userCode"),
     codeExpiresHint: language.t("dialog.connections.codeExpires"),
     useProject: language.t("dialog.connections.useProject"),

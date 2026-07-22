@@ -217,6 +217,9 @@ export type ConnectionCardModel = {
   showUserCode: boolean
   /** the authenticated account's project picker (choose-project) */
   showProjectPicker: boolean
+  /** in-flight indicator (validating): a spinner + status copy, no frozen form —
+   *  shown for both connect and choose-project round trips */
+  showLoading: boolean
 }
 
 export function cardModel(view: ConnectionView): ConnectionCardModel {
@@ -234,6 +237,7 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showWaiting: false,
     showUserCode: false,
     showProjectPicker: false,
+    showLoading: false,
   }
   switch (view.state) {
     case "connected":
@@ -263,7 +267,9 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
       // project-authorization refusal: the fix is a corrected project id
       return { ...base, tone: "critical", showForm: true, showActions: false }
     case "validating":
-      return { ...base, tone: "pending", showForm: true, formDisabled: true, showActions: false }
+      // in-flight (connect or choose-project): a spinner + "validating" copy,
+      // not a frozen form — clean and identical for both round trips
+      return { ...base, tone: "pending", showForm: false, showActions: false, showLoading: true }
     case "waiting-browser":
       // the attempt lives in the user's browser; the card is passive + cancellable
       return { ...base, tone: "pending", showForm: false, showActions: false, showWaiting: true }

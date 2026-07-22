@@ -412,11 +412,12 @@ describe("cardModel", () => {
     }
   })
 
-  test("validating: form stays visible but disabled — the in-flight render (AC2)", () => {
+  test("validating: a loading spinner, not a frozen form — the in-flight render (#194)", () => {
     const model = cardModel(viewFor("validating"))
-    expect(model.showForm).toBe(true)
-    expect(model.formDisabled).toBe(true)
+    expect(model.showLoading).toBe(true)
+    expect(model.showForm).toBe(false)
     expect(model.showActions).toBe(false)
+    expect(model.showProjectPicker).toBe(false)
     expect(model.tone).toBe("pending")
   })
 
