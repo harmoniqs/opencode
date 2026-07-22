@@ -103,11 +103,6 @@ type HomeSessionRecord = {
   projectName: string
 }
 
-type HomeSessionGroup = {
-  id: "today" | "yesterday" | "older"
-  title: string
-  sessions: HomeSessionRecord[]
-}
 
 const HOME_SESSION_SEARCH_RESULTS_ID = "home-session-search-results"
 const HOME_SEARCH_RESULT_ROW =
@@ -266,7 +261,19 @@ function HomeDesign() {
     return allRecords().filter((record) => matchesHomeSessionSearch(record, query))
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
-  const groups = createMemo(() => groupSessions(records(), language))
+  // amicode#203 AC6: sessions nest under the SELECTED project — its recent
+  // sessions show; other projects stay collapsed until selected. Sessions in
+  // no registered project surface under "Other folders" (AC7, never dropped).
+  const registeredWorktrees = createMemo(() => new Set(projects().map((p) => p.worktree)))
+  const selectedProjectSessions = createMemo(() =>
+    state.selection.directory
+      ? records().filter((r) => r.project.worktree === state.selection.directory)
+      : [],
+  )
+  const orphanSessions = createMemo(() => {
+    const reg = registeredWorktrees()
+    return records().filter((r) => !reg.has(r.project.worktree))
+  })
   const tabs = useTabs()
 
   // amicode: home-card data. All read from the focused server's /amicode/* raw
@@ -389,7 +396,6 @@ function HomeDesign() {
     onCleanup(() => clearInterval(timer))
   })
 
-  const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
   // Shared by the About-You card and the onboarding wizard: identity fields
   // ride query params on the raw POST route; refetch renders the saved state.
   async function saveProfileFields(fields: Record<string, string | undefined>) {
@@ -675,7 +681,6 @@ function HomeDesign() {
       document.removeEventListener("keydown", onKey)
     })
   })
-  const totalSessions = createMemo(() => groups().reduce((n, g) => n + g.sessions.length, 0))
   const unseenTotal = createMemo(() => {
     const conn = focusedServer()
     if (!conn) return 0
@@ -1007,7 +1012,7 @@ function HomeDesign() {
                             fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                           >
                             <Show
-                              when={groups().length > 0}
+                              when={selectedProjectSessions().length > 0 || orphanSessions().length > 0}
                               fallback={
                                 <div class="flex min-w-0 flex-col gap-4">
                                   <HomeSessionGroupHeader
@@ -1017,71 +1022,48 @@ function HomeDesign() {
                                 </div>
                               }
                             >
-                              {(() => {
-                                // amicode: collapsed = the 3 most recent sessions across all
-                                // groups; "Show all (N)" expands. Pure derivation off the
-                                // existing groups() memo — no second data path to drift.
-                                const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
-                                const visible = () => {
-                                  if (sessionsExpanded() || total() <= 3) return groups()
-                                  let budget = 3
-                                  const out: typeof groups extends () => infer G ? G : never = [] as never
-                                  for (const g of groups()) {
-                                    if (budget <= 0) break
-                                    const take = g.sessions.slice(0, budget)
-                                    budget -= take.length
-                                    ;(out as { title: string; sessions: typeof g.sessions }[]).push({
-                                      ...g,
-                                      sessions: take,
-                                    })
-                                  }
-                                  return out as ReturnType<typeof groups>
-                                }
-                                return (
-                                  <>
-                                    <For each={visible()}>
-                                      {(group, index) => (
-                                        <div class="flex min-w-0 flex-col gap-4">
-                                          <HomeSessionGroupHeader
-                                            title={group.title}
-                                            onNewSession={
-                                              index() === 0 && newSessionProject() ? openNewSession : undefined
-                                            }
-                                          />
-                                          <div class="flex min-w-0 flex-col gap-px">
-                                            <For each={group.sessions}>
-                                              {(record) => (
-                                                <HomeSessionRow
-                                                  record={record}
-                                                  server={state.selection.server}
-                                                  activeServer={state.selection.server === server.key}
-                                                  openSession={openSession}
-                                                />
-                                              )}
-                                            </For>
-                                          </div>
-                                        </div>
+                              {/* amicode#203 AC6: the SELECTED project's recent
+                                  sessions, then any orphans under "Other folders".
+                                  Selecting a different project (list above) swaps
+                                  this list — non-selected projects' sessions stay
+                                  collapsed/hidden until their project is selected. */}
+                              <Show when={selectedProjectSessions().length > 0}>
+                                <div class="flex min-w-0 flex-col gap-4">
+                                  <HomeSessionGroupHeader
+                                    title={language.t("sidebar.project.recentSessions")}
+                                    onNewSession={newSessionProject() ? openNewSession : undefined}
+                                  />
+                                  <div class="flex min-w-0 flex-col gap-px">
+                                    <For each={selectedProjectSessions()}>
+                                      {(record) => (
+                                        <HomeSessionRow
+                                          record={record}
+                                          server={state.selection.server}
+                                          activeServer={state.selection.server === server.key}
+                                          openSession={openSession}
+                                        />
                                       )}
                                     </For>
-                                    <Show when={total() > 3}>
-                                      <button
-                                        type="button"
-                                        data-action="home-sessions-toggle"
-                                        class="self-start px-4 text-[12px]"
-                                        style={{
-                                          color: "var(--v2-text-text-muted)",
-                                          background: "none",
-                                          border: "none",
-                                          cursor: "pointer",
-                                        }}
-                                        onClick={() => setSessionsExpanded(!sessionsExpanded())}
-                                      >
-                                        {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
-                                      </button>
-                                    </Show>
-                                  </>
-                                )
-                              })()}
+                                  </div>
+                                </div>
+                              </Show>
+                              <Show when={orphanSessions().length > 0}>
+                                <div class="flex min-w-0 flex-col gap-4">
+                                  <HomeSessionGroupHeader title="Other folders" />
+                                  <div class="flex min-w-0 flex-col gap-px">
+                                    <For each={orphanSessions()}>
+                                      {(record) => (
+                                        <HomeSessionRow
+                                          record={record}
+                                          server={state.selection.server}
+                                          activeServer={state.selection.server === server.key}
+                                          openSession={openSession}
+                                        />
+                                      )}
+                                    </For>
+                                  </div>
+                                </div>
+                              </Show>
                             </Show>
                           </Show>
                         </div>
@@ -1898,31 +1880,6 @@ function HomeSessionSkeleton(props: { label: string }) {
       </div>
     </div>
   )
-}
-
-function groupSessions(records: HomeSessionRecord[], language: ReturnType<typeof useLanguage>): HomeSessionGroup[] {
-  const now = DateTime.local()
-  const yesterday = now.minus({ days: 1 })
-  const todaySessions = records.filter((record) =>
-    DateTime.fromMillis(record.session.time.updated ?? record.session.time.created).hasSame(now, "day"),
-  )
-  const yesterdaySessions = records.filter((record) =>
-    DateTime.fromMillis(record.session.time.updated ?? record.session.time.created).hasSame(yesterday, "day"),
-  )
-  const olderSessions = records.filter((record) => {
-    const time = DateTime.fromMillis(record.session.time.updated ?? record.session.time.created)
-    return !time.hasSame(now, "day") && !time.hasSame(yesterday, "day")
-  })
-  const olderTitle =
-    todaySessions.length === 0 && yesterdaySessions.length === 0
-      ? language.t("sidebar.project.recentSessions")
-      : language.t("home.sessions.group.older")
-
-  return [
-    { id: "today" as const, title: language.t("home.sessions.group.today"), sessions: todaySessions },
-    { id: "yesterday" as const, title: language.t("home.sessions.group.yesterday"), sessions: yesterdaySessions },
-    { id: "older" as const, title: olderTitle, sessions: olderSessions },
-  ].filter((group) => group.sessions.length > 0)
 }
 
 function LegacyHome() {
