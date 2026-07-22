@@ -238,12 +238,6 @@ function ConnectionCard(props: {
         </div>
       </Show>
 
-      <Show when={model().showDevices}>
-        <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-devices">
-          {props.conn.devices?.join(" · ")}
-        </div>
-      </Show>
-
       <Show when={model().showSessionOnly}>
         <div class="pl-3.5 text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
           {props.labels.sessionOnlyHint}

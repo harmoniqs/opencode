@@ -378,16 +378,6 @@ describe("cardModel", () => {
     }
   })
 
-  test("connected with devices lists them; other states keep the device list out of the way (169 AC2)", () => {
-    const connected = cardModel(viewFor("connected", { devices: ["EMU_FREE", "FRESNEL"] }))
-    expect(connected.showDevices).toBe(true)
-    expect(cardModel(viewFor("connected")).showDevices).toBe(false)
-    expect(cardModel(viewFor("connected", { devices: [] })).showDevices).toBe(false)
-    for (const state of ["invalid", "expired", "unentitled"] as const) {
-      expect(cardModel(viewFor(state, { devices: ["EMU_FREE"] })).showDevices).toBe(false)
-    }
-  })
-
   test("session-only connected surfaces the note; a durable connect does not (169 AC4)", () => {
     expect(cardModel(viewFor("connected", { sessionOnly: true })).showSessionOnly).toBe(true)
     expect(cardModel(viewFor("connected")).showSessionOnly).toBe(false)

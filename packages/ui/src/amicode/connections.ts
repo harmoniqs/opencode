@@ -202,7 +202,6 @@ export type ConnectionCardModel = {
   showIdentity: boolean
   showStale: boolean
   /** device names listed on a connected card (Pasqal, 169 AC2) */
-  showDevices: boolean
   /** session-only note on a connected card (Pasqal, 169 AC4) */
   showSessionOnly: boolean
   /** offline last-verified line on a connected card (170 AC3) */
@@ -213,6 +212,10 @@ export type ConnectionCardModel = {
   showRawState: boolean
   /** mid-flow waiting row (browser handoff / device code) with a cancel exit */
   showWaiting: boolean
+  // NOTE: the connected card intentionally does NOT list devices — the
+  // validator's get_device_specs_dict() is Pasqal's device CATALOG, not the
+  // project's entitled set, so it can mislead. Device selection happens fresh
+  // at submit time (#160). The wire `devices` field is kept for that path.
   /** the short human code block + where to enter it (waiting-code) */
   showUserCode: boolean
   /** the authenticated account's project picker (choose-project) */
@@ -229,7 +232,6 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
     showValidatedAt: false,
     showIdentity: false,
     showStale: false,
-    showDevices: false,
     showSessionOnly: false,
     showOffline: false,
     showDrift: false,
@@ -249,7 +251,6 @@ export function cardModel(view: ConnectionView): ConnectionCardModel {
         showValidatedAt: true,
         showIdentity: view.identity !== undefined,
         showStale: view.stale,
-        showDevices: (view.devices?.length ?? 0) > 0,
         showSessionOnly: view.sessionOnly === true,
         showOffline: view.offline === true,
         showDrift: view.identityDrift !== undefined,
