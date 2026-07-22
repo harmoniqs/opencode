@@ -58,6 +58,7 @@ const LABELS = {
   startBrowser: "Connect with browser",
   startDeviceCode: "Connect with a code",
   cancel: "Cancel",
+  keychainHint: "Your Pasqal password is saved to your system keychain so runs stay signed in.",
   userCodeHint: "Enter this code at {{url}}",
   codeExpiresHint: "Code expires {{at}}",
   useProject: "Use this project",
