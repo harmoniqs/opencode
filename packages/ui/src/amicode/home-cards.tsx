@@ -588,8 +588,8 @@ function AboutYouCard(props: {
                   "margin-top": "10px",
                   padding: "8px 10px",
                   "border-radius": "8px",
-                  background: "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                  background: "var(--accent-fill-soft)",
+                  border: "1px solid var(--accent-edge)",
                 }}
               >
                 <Show

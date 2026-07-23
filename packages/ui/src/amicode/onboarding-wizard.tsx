@@ -520,8 +520,8 @@ export function AmicodeOnboardingWizard(props: {
                 gap: "12px",
                 padding: "12px 16px",
                 "border-radius": "10px",
-                background: "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
-                border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                background: "var(--accent-fill-soft)",
+                border: "1px solid var(--accent-edge)",
               }}
             >
               <Show when={fields().affiliation_logo} fallback={<Mark class="w-9 h-auto" />}>

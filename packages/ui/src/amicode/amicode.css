@@ -401,8 +401,8 @@
 [data-component="amicode-entity-view"] .amc-field:hover .amc-edit { opacity: 1; }
 [data-component="amicode-entity-view"] .amc-edit:hover {
   color: var(--v2-text-text-accent);
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-edit:focus-visible {
   outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
@@ -476,7 +476,7 @@
   border: 1.5px solid var(--v2-text-text-faint);
 }
 [data-component="amicode-entity-view"] .amc-event[data-anchored] {
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-event[data-anchored]::before {
   background: var(--v2-icon-icon-accent);
@@ -647,7 +647,7 @@
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):hover {
-  border-color: var(--v2-icon-icon-accent) !important;
+  border-color: var(--accent-edge) !important;
   background: var(--v2-background-bg-layer-03) !important;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):active {
@@ -717,8 +717,8 @@
   font-size: 0.76rem;
 }
 [data-component="amicode-formulation-view"] .amc-badge.active {
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-formulation-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
 [data-component="amicode-formulation-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
@@ -801,8 +801,8 @@
 [data-component="amicode-widget-editbar"] {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   padding: 8px 12px; border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 7%, var(--v2-background-bg-layer-01));
+  border: 1px solid var(--accent-edge);
+  background: var(--accent-fill-soft);
   font-size: 11px; color: var(--v2-text-text-muted);
 }
 [data-component="amicode-widget-editbar"] b { color: var(--v2-text-text-base); font-weight: 600; }
@@ -924,12 +924,12 @@
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin {
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
-  border-radius: 7px; background: color-mix(in srgb, var(--v2-icon-icon-accent) 12%, var(--v2-background-bg-layer-02));
+  border: 1px solid var(--accent-edge);
+  border-radius: 7px; background: var(--accent-fill-soft);
   color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-background-bg-layer-02));
+  background: color-mix(in srgb, var(--accent) 20%, var(--v2-background-bg-layer-02));
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {

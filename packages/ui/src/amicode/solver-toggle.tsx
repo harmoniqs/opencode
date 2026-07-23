@@ -77,7 +77,7 @@ export function AmicodeSolverToggle() {
     "font-weight": active ? "650" : "450",
     border: "none",
     cursor: "pointer",
-    background: active ? "color-mix(in srgb, var(--v2-icon-icon-accent) 14%, transparent)" : "transparent",
+    background: active ? "var(--accent-fill-soft)" : "transparent",
     color: active ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
   })
   return (
@@ -100,7 +100,7 @@ export function AmicodeSolverToggle() {
       <div
         style={{
           display: "inline-flex",
-          border: mode() === "hp" ? "1px solid var(--v2-icon-icon-accent)" : "1px solid var(--v2-border-border-base)",
+          border: mode() === "hp" ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
           "border-radius": "8px",
           overflow: "hidden",
           transition: "border-color 0.15s ease",
