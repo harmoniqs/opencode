@@ -19,12 +19,12 @@ import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
-import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { useTabs } from "@/context/tabs"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
-import { getProjectAvatarVariant, useLayout, type LocalProject } from "@/context/layout"
+import { useLayout, type LocalProject } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -35,14 +35,12 @@ import { useDirectoryPicker } from "@/components/directory-picker"
 import { DialogSelectServer, useServerManagementController } from "@/components/dialog-select-server"
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
 import { ServerConnection, useServer } from "@/context/server"
-import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import {
   closeHomeProject,
   displayName,
-  getProjectAvatarSource,
   homeProjectDirectories,
   homeProjectNavigation,
   type HomeProjectSelection,
@@ -50,7 +48,6 @@ import {
   sortedRootSessions,
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
-import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
@@ -1492,62 +1489,15 @@ function HomeProjectRow(props: {
   )
 }
 
-function HomeProjectAvatar(props: { project: LocalProject }) {
-  const name = createMemo(() => displayName(props.project))
+function HomeProjectAvatar(_props: { project: LocalProject }) {
+  // amicode#203 (Kate): a sleek folder glyph, not the first-letter avatar.
   return (
-    <ProjectAvatar
-      fallback={name()}
-      src={getProjectAvatarSource(props.project.id, props.project.icon)}
-      variant={getProjectAvatarVariant(props.project.icon?.color)}
-    />
-  )
-}
-
-function HomeSessionAvatar(props: { project: LocalProject; session: Session; activeServer: boolean }) {
-  const directory = () => props.session.directory
-  const sessionId = () => props.session.id
-  const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
-  // amicode: a quiet chevron for session rows (the brand mark everywhere was
-  // too much; the working-spinner was removed too — one wedged run left it
-  // spinning forever). Unread keeps its accent dot.
-  return (
-    <span
-      class="relative inline-flex size-5 shrink-0 items-center justify-center"
-      style={{ color: "var(--v2-icon-icon-muted)" }}
-    >
-      <IconV2 name="chevron-right" />
-      <Show when={state.unread()}>
-        <span
-          aria-hidden="true"
-          class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
-          style={{ background: "var(--v2-icon-icon-accent)" }}
-        />
-      </Show>
+    <span class="inline-flex size-5 shrink-0 items-center justify-center text-v2-icon-icon-muted">
+      <Icon name="folder" class="size-4" />
     </span>
   )
 }
 
-function HomeSessionLeading(props: {
-  project: LocalProject
-  session: Session
-  server: ServerConnection.Key
-  activeServer: boolean
-}) {
-  const tabs = useTabs()
-  const hasOpenTab = createMemo(() => sessionHasOpenTab(tabs.store, props.server, props.session))
-  return (
-    <div class="relative shrink-0">
-      <Show when={hasOpenTab()}>
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute top-1/2 h-[7px] w-[3px] -translate-y-1/2 rounded-[2px] bg-v2-background-bg-layer-04"
-          style={{ right: "calc(100% + 12px)" }}
-        />
-      </Show>
-      <HomeSessionAvatar project={props.project} session={props.session} activeServer={props.activeServer} />
-    </div>
-  )
-}
 
 function HomeSessionSearch(props: {
   value: string
@@ -1782,12 +1732,6 @@ function HomeSessionSearchResultRow(props: {
       onMouseEnter={() => props.onHighlight()}
       onClick={() => props.onSelect(props.record.session)}
     >
-      <HomeSessionLeading
-        project={props.record.project}
-        session={props.record.session}
-        server={props.server}
-        activeServer={props.activeServer}
-      />
       <div class="flex min-w-0 flex-1 items-center gap-1.5">
         <span
           class={`${HOME_SEARCH_RESULT_TITLE} ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
@@ -1840,12 +1784,7 @@ function HomeSessionRow(props: {
       class={`${HOME_ROW} h-10 gap-2 px-6 py-3 pl-4`}
       onClick={() => props.openSession(props.record.session)}
     >
-      <HomeSessionLeading
-        project={props.record.project}
-        session={props.record.session}
-        server={props.server}
-        activeServer={props.activeServer}
-      />
+      {/* amicode#203 (Kate): no leading icon/indicator on session rows for now. */}
       <span
         class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-base [font-weight:530] ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
       >
