@@ -49,7 +49,7 @@ import {
   sortedRootSessions,
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
-import { isUnder, parseAmicodeProjects, reconcileProjectList, sameProjectList } from "@/pages/home-projects"
+import { hiddenCwdWorktree, parseAmicodeProjects, reconcileProjectList, sameProjectList } from "@/pages/home-projects"
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
@@ -123,6 +123,7 @@ function buildHomeSessionRecords(input: {
   sync: Pick<ReturnType<typeof useServerSync>, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
+  isHidden: (worktree: string) => boolean
 }) {
   return [
     ...new Map(
@@ -155,10 +156,11 @@ function buildHomeSessionRecords(input: {
       return {
         session,
         project,
-        // amicode#203: sessions in the extension's scaffold project show
-        // unlabeled (the scaffold is hidden from the switcher; its name never
-        // surfaces). Real projects keep their display name.
-        projectName: project.worktree === hiddenProjectWorktree() ? "" : displayName(project),
+        // amicode: sessions in a project that's hidden from the switcher (the
+        // extension scaffold, or the standalone/dev server cwd like the opencode
+        // repo) show UNLABELED — the hidden project's name never surfaces, even in
+        // Recent. Real projects keep their display name.
+        projectName: input.isHidden(project.worktree) ? "" : displayName(project),
       }
     })
 }
@@ -248,26 +250,23 @@ function HomeDesign() {
     const next = reconcileProjectList({ tracked, amicodeDirs: view.projects.map((p) => p.path) })
     if (!sameProjectList(tracked, next)) ctx.projects.replace(next)
   })
-  // amicode#203: the project SWITCHER hides the extension's scaffold project
-  // (it's the server's cwd, not a user project) — but records()/projectDirectories
-  // still use the full `projects()`, so the sessions that land in the scaffold by
-  // default stay visible in Recent (labeled neutrally, see buildHomeSessionRecords).
-  // Only set in the amicode webview; standalone opencode is untouched.
-  const visibleProjects = createMemo(() => {
-    const hidden = hiddenProjectWorktree()
-    // amicode: in standalone/dev there's no scaffold param, but the server's own
-    // cwd (e.g. the opencode repo) still registered as a project. Once real
-    // AmicodeProjects folders exist, hide that cwd from the SWITCHER too — unless
-    // the cwd IS an AmicodeProjects folder. Folders the user explicitly opened
-    // elsewhere are left alone. Sessions in the hidden dirs stay reachable in
-    // Recent (records use the full projects() list).
+  // amicode: worktrees hidden from the project SWITCHER (but kept in the store so
+  // their sessions stay reachable in Recent, labeled neutrally): the extension's
+  // scaffold (via the boot param, amicode webview only) AND — in standalone/dev —
+  // the server's own cwd (e.g. the opencode repo), once real AmicodeProjects
+  // folders exist. A cwd that IS an AmicodeProjects folder is a real project and
+  // is NOT hidden, so a project genuinely named "opencode" under ~/AmicodeProjects
+  // still shows.
+  const hiddenCwd = createMemo(() => {
     const amc = amicodeProjects()
-    const cwd = focusedSync().data.path.directory
-    const hideCwd =
-      cwd && amc.ok && amc.projects.length > 0 && !isUnder(cwd, amc.parentDir) ? cwd : undefined
-    if (!hidden && !hideCwd) return projects()
-    return projects().filter((p) => p.worktree !== hidden && p.worktree !== hideCwd)
+    return hiddenCwdWorktree({
+      cwd: focusedSync().data.path.directory || undefined,
+      amicodeParent: amc.ok ? amc.parentDir : undefined,
+      amicodeProjectCount: amc.ok ? amc.projects.length : 0,
+    })
   })
+  const isHiddenProject = (worktree: string) => worktree === hiddenProjectWorktree() || worktree === hiddenCwd()
+  const visibleProjects = createMemo(() => projects().filter((p) => !isHiddenProject(p.worktree)))
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
     () =>
@@ -299,6 +298,7 @@ function HomeDesign() {
       sync: focusedSync(),
       projectDirectories,
       projects,
+      isHidden: isHiddenProject,
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))

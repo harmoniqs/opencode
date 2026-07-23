@@ -80,6 +80,23 @@ export function isUnder(child: string, parent: string): boolean {
   return child === p || child.startsWith(p + "/")
 }
 
+/** The server's own working directory to hide from the switcher (and to leave
+ *  unlabeled in Recent), or undefined. In standalone/dev the server's cwd — e.g.
+ *  the opencode repo — registers as a project; it isn't one of the user's
+ *  AmicodeProjects, so hide it once at least one real AmicodeProjects folder
+ *  exists (a bare machine keeps the cwd as the new-session fallback). A cwd that
+ *  IS itself an AmicodeProjects folder is a legitimate project and is kept —
+ *  so a folder the user genuinely named "opencode" under ~/AmicodeProjects still
+ *  shows; only the incidental repo cwd is hidden. */
+export function hiddenCwdWorktree(input: {
+  cwd: string | undefined
+  amicodeParent: string | undefined
+  amicodeProjectCount: number
+}): string | undefined {
+  if (!input.cwd || !input.amicodeParent || input.amicodeProjectCount <= 0) return undefined
+  return isUnder(input.cwd, input.amicodeParent) ? undefined : input.cwd
+}
+
 /** amicode: fold the AmicodeProjects folders on disk into the tracked list so a
  *  project surfaces the moment its folder exists — even if it was never opened.
  *  This is what fixes the "created a folder, it's invisible, yet its name is

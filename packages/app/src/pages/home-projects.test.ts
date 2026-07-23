@@ -3,6 +3,7 @@ import {
   classifyCreateError,
   gitInitNeedsNotice,
   groupSessionsByProject,
+  hiddenCwdWorktree,
   isUnder,
   parseAmicodeProjects,
   projectNameToSlug,
@@ -207,6 +208,30 @@ describe("reconcileProjectList (additive — surfaces on-disk folders, never rem
     const once = reconcileProjectList(input)
     const twice = reconcileProjectList({ ...input, tracked: once })
     expect(sameProjectList(once, twice)).toBe(true)
+  })
+})
+
+describe("hiddenCwdWorktree", () => {
+  const PARENT = "/home/kate/AmicodeProjects"
+
+  test("hides the server cwd when it's outside AmicodeProjects and real folders exist (the opencode repo)", () => {
+    expect(
+      hiddenCwdWorktree({ cwd: "/Users/kate/dev/opencode", amicodeParent: PARENT, amicodeProjectCount: 3 }),
+    ).toBe("/Users/kate/dev/opencode")
+  })
+  test("keeps a cwd that IS an AmicodeProjects folder — a project genuinely named 'opencode' still shows", () => {
+    expect(
+      hiddenCwdWorktree({ cwd: `${PARENT}/opencode`, amicodeParent: PARENT, amicodeProjectCount: 3 }),
+    ).toBeUndefined()
+  })
+  test("keeps the cwd on a bare machine (no AmicodeProjects folders yet) so the new-session fallback works", () => {
+    expect(
+      hiddenCwdWorktree({ cwd: "/Users/kate/dev/opencode", amicodeParent: PARENT, amicodeProjectCount: 0 }),
+    ).toBeUndefined()
+  })
+  test("undefined when cwd or parent is unknown (nothing to hide yet)", () => {
+    expect(hiddenCwdWorktree({ cwd: undefined, amicodeParent: PARENT, amicodeProjectCount: 3 })).toBeUndefined()
+    expect(hiddenCwdWorktree({ cwd: "/x", amicodeParent: undefined, amicodeProjectCount: 3 })).toBeUndefined()
   })
 })
 
