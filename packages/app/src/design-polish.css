@@ -110,3 +110,54 @@ textarea,
     --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
   }
 }
+
+/* ============================================================
+   SMOOTH PASS (rchari/shell-smooth) — Kimi-inspired softening on
+   Kate's chat-first shell. Levers: quieter borders app-wide, a big
+   soft composer card, circular send, rounder rail interactions.
+   ============================================================ */
+
+/* 1 · borders carry most of the "terminal" feel — soften globally */
+:root, [data-color-scheme="light"] {
+  --v2-border-border-muted: rgba(20, 22, 28, 0.055);
+  --v2-border-border-base: rgba(20, 22, 28, 0.08);
+}
+[data-color-scheme="dark"] {
+  --v2-border-border-muted: rgba(255, 255, 255, 0.05);
+  --v2-border-border-base: rgba(255, 255, 255, 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --v2-border-border-muted: rgba(255, 255, 255, 0.05);
+    --v2-border-border-base: rgba(255, 255, 255, 0.07);
+  }
+}
+
+/* 2 · the composer: Kimi's centerpiece — big radius, raised layer,
+      soft edge that firms up on focus */
+[data-component="session-new-composer"],
+[data-component="session-composer"] {
+  border-radius: 22px !important;
+  background: var(--v2-background-bg-layer-01) !important;
+  border: 1px solid var(--v2-border-border-base);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+[data-component="session-new-composer"] { min-height: 116px !important; }
+[data-component="session-new-composer"]:focus-within,
+[data-component="session-composer"]:focus-within {
+  border-color: var(--v2-border-border-strong);
+  box-shadow: var(--v2-elevation-raised);
+}
+
+/* 3 · send: a confident round button in the brand accent */
+[data-action="prompt-submit"] {
+  border-radius: 999px !important;
+  background: var(--v2-background-bg-accent) !important;
+  color: var(--v2-background-bg-base) !important;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+[data-action="prompt-submit"]:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* 4 · the rail: rounder, calmer — hovers glow instead of boxing */
+[data-component="sidebar-rail"] button { border-radius: 12px; }
+[data-component="sidebar-rail"] [class*="border-b"] { border-color: var(--v2-border-border-muted); }
