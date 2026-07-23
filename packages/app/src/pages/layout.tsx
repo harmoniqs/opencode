@@ -19,6 +19,8 @@ import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { amicodeGet } from "@/utils/amicode-fetch"
+import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
+import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -180,6 +182,7 @@ export default function Layout(props: ParentProps) {
     peek: undefined as string | undefined,
     peeked: false,
     railSurface: null as RailSurface | null,
+    galleryOpen: false,
   })
 
   const updateVersion = () => {
@@ -2359,6 +2362,19 @@ export default function Layout(props: ParentProps) {
     const raw = libraryRaw() as { ok?: boolean; papers?: { name?: string }[] } | undefined
     return raw?.ok === true && Array.isArray(raw.papers) ? raw.papers : []
   })
+  const [runCardsRaw] = createResource(
+    () => (state.railSurface === "gallery" || state.galleryOpen ? state.railSurface ?? "gallery" : undefined),
+    () => amicodeGet(railConn(), "/amicode/run-cards").catch(() => undefined),
+  )
+  const runCards = createMemo(() => {
+    const raw = runCardsRaw()
+    return raw === undefined ? undefined : parseRunCardsResponse(raw)
+  })
+  // PNG downloads are dead inside the webview iframe — route through the
+  // extension's save-file bridge (mirrors home.tsx); plain browsers use <a download>.
+  const saveCardPng = (filename: string, dataUrl: string) => {
+    window.parent.postMessage({ source: "amicode", kind: "save-file", filename, dataUrl }, "*")
+  }
 
   // Warm-start / new-chat-with-prompt from a Panel: navigate to the current (or
   // first) project's session route with ?prompt=, which the auto-draft seeds.
@@ -2483,7 +2499,29 @@ export default function Layout(props: ParentProps) {
             </div>
           </Show>
 
-          <Show when={panelProps.surface === "chats" || panelProps.surface === "gallery"}>
+          <Show when={panelProps.surface === "gallery"}>
+            <div class="flex flex-col gap-3 px-1 py-1">
+              <div class="text-14-regular text-text-base">
+                {runCards() === undefined
+                  ? "…"
+                  : `${runCards()!.length} completed solve${runCards()!.length === 1 ? "" : "s"}`}
+              </div>
+              <button
+                type="button"
+                class="w-full text-left px-3 py-2 rounded-md text-14-medium text-text-strong bg-background-stronger hover:bg-background-hover disabled:opacity-50"
+                disabled={!runCards() || runCards()!.length === 0}
+                onClick={() => {
+                  setState("railSurface", null)
+                  layout.sidebar.close()
+                  setState("galleryOpen", true)
+                }}
+              >
+                Open run gallery
+              </button>
+            </div>
+          </Show>
+
+          <Show when={panelProps.surface === "chats"}>
             <div class="px-2 py-2 text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
               {meta()?.label}
             </div>
@@ -2689,6 +2727,13 @@ export default function Layout(props: ParentProps) {
           </div>
           {import.meta.env.DEV && <DebugBar />}
         </div>
+        <Show when={state.galleryOpen}>
+          <AmicodeRunGallery
+            cards={runCards()}
+            onClose={() => setState("galleryOpen", false)}
+            onSave={window.parent !== window ? saveCardPng : undefined}
+          />
+        </Show>
         <ToastRegion v2={newDesign()} />
       </div>
     </Show>
