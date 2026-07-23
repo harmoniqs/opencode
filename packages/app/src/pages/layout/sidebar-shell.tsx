@@ -31,6 +31,10 @@ export const SidebarContent = (props: {
   helpLabel: Accessor<string>
   onOpenHelp: () => void
   renderPanel: () => JSX.Element
+  // Chat-first shell (ADR 0001): the unified rail's navigation surfaces
+  // (Chats · Projects · Run gallery · Pulse bank · Library), rendered above
+  // the project avatars. Optional so standalone opencode is untouched.
+  renderNav?: () => JSX.Element
 }): JSX.Element => {
   const expanded = createMemo(() => !!props.mobile || props.opened())
   const placement = () => (props.mobile ? "bottom" : "right")
@@ -63,6 +67,11 @@ export const SidebarContent = (props: {
             <DragDropSensors />
             <ConstrainDragXAxis />
             <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-3 overflow-y-auto no-scrollbar">
+              <Show when={props.renderNav}>
+                <div class="w-full shrink-0 flex flex-col items-center gap-2 pb-3 border-b border-border-weaker-base">
+                  {props.renderNav!()}
+                </div>
+              </Show>
               <SortableProvider ids={props.projects().map((p) => p.worktree)}>
                 <For each={props.projects()}>{(project) => props.renderProject(project)}</For>
               </SortableProvider>

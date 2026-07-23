@@ -91,6 +91,18 @@ import {
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
 
+// Chat-first shell (ADR 0001): the unified rail's five navigation surfaces.
+// Each opens a dismissible Panel beside the persistent chat (one at a time).
+// Icon names must exist in @opencode-ai/ui icon set. Labels are shown on hover.
+const RAIL_SURFACES = [
+  { id: "chats", label: "Chats", icon: "speech-bubble" },
+  { id: "projects", label: "Projects", icon: "folder" },
+  { id: "gallery", label: "Run gallery", icon: "photo" },
+  { id: "pulse", label: "Pulse bank", icon: "archive" },
+  { id: "library", label: "Library", icon: "glasses" },
+] as const
+type RailSurface = (typeof RAIL_SURFACES)[number]["id"]
+
 export default function Layout(props: ParentProps) {
   const serverSDK = useServerSDK()
   const [store, setStore, , ready] = persisted(
@@ -166,6 +178,7 @@ export default function Layout(props: ParentProps) {
     sizing: false,
     peek: undefined as string | undefined,
     peeked: false,
+    railSurface: null as RailSurface | null,
   })
 
   const updateVersion = () => {
@@ -2324,12 +2337,80 @@ export default function Layout(props: ParentProps) {
 
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
+
+  // Chat-first shell (ADR 0001): open a rail surface's Panel beside the chat,
+  // one at a time. Re-clicking the active surface (while open) closes it. Reuses
+  // the existing sidebar open/offset/resize machinery — opening a surface just
+  // opens the sidebar with the surface selected; closing returns to chat-only.
+  const selectRailSurface = (surface: RailSurface) => {
+    if (state.railSurface === surface && layout.sidebar.opened()) {
+      layout.sidebar.close()
+      setState("railSurface", null)
+      return
+    }
+    setState("railSurface", surface)
+    layout.sidebar.open()
+  }
+
+  const railNav = (mobile?: boolean) => (
+    <For each={RAIL_SURFACES}>
+      {(surface) => {
+        const active = () => state.railSurface === surface.id && layout.sidebar.opened()
+        return (
+          <Tooltip placement={mobile ? "bottom" : "right"} value={surface.label}>
+            <IconButton
+              icon={surface.icon}
+              variant={active() ? "primary" : "ghost"}
+              size="large"
+              aria-label={surface.label}
+              aria-pressed={active()}
+              onClick={() => selectRailSurface(surface.id)}
+            />
+          </Tooltip>
+        )
+      }}
+    </For>
+  )
+
+  // Slice 2 renders the surface Panel chrome (title + close); Slice 3 fills each
+  // surface with its re-homed widget data (Chats/Projects/Gallery/Pulse/Library).
+  const RailSurfacePanel = (panelProps: { surface: RailSurface; mobile?: boolean }) => {
+    const meta = createMemo(() => RAIL_SURFACES.find((s) => s.id === panelProps.surface))
+    return (
+      <div
+        classList={{
+          "flex flex-col min-h-0 min-w-0 box-border rounded-tl-[12px] border-l border-t border-border-weaker-base bg-background-base":
+            true,
+          "flex-1 min-w-0 max-w-full overflow-hidden": !!panelProps.mobile,
+        }}
+        style={{ width: panelProps.mobile ? undefined : `${panel()}px` }}
+      >
+        <div class="shrink-0 flex items-center justify-between px-4 h-12 border-b border-border-weaker-base">
+          <span class="text-14-medium text-text-strong">{meta()?.label}</span>
+          <IconButton
+            icon="close"
+            variant="ghost"
+            size="small"
+            aria-label={language.t("common.close")}
+            onClick={() => selectRailSurface(panelProps.surface)}
+          />
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+          <div class="text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
+            {meta()?.label}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const sidebarContent = (mobile?: boolean) => (
     <SidebarContent
       mobile={mobile}
       opened={() => layout.sidebar.opened()}
       aimMove={aim.move}
       projects={projects}
+      renderNav={() => railNav(mobile)}
       renderProject={(project) => (
         <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
       )}
@@ -2345,9 +2426,11 @@ export default function Layout(props: ParentProps) {
       onOpenSettings={openSettings}
       helpLabel={() => language.t("sidebar.help")}
       onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-      renderPanel={() =>
-        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
-      }
+      renderPanel={() => {
+        const surface = state.railSurface
+        if (surface) return <RailSurfacePanel surface={surface} mobile={mobile} />
+        return mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
+      }}
     />
   )
 
