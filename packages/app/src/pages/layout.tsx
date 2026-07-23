@@ -2352,6 +2352,14 @@ export default function Layout(props: ParentProps) {
     layout.sidebar.open()
   }
 
+  // Selecting an item inside a Panel acts in the chat: dismiss the Panel, then
+  // navigate. Keeps the chat the hub (ADR 0001 — never a full-page nav away).
+  const openFromRailPanel = (href: string) => {
+    setState("railSurface", null)
+    layout.sidebar.close()
+    navigateWithSidebarReset(href)
+  }
+
   const railNav = (mobile?: boolean) => (
     <For each={RAIL_SURFACES}>
       {(surface) => {
@@ -2395,10 +2403,35 @@ export default function Layout(props: ParentProps) {
             onClick={() => selectRailSurface(panelProps.surface)}
           />
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-          <div class="text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
-            {meta()?.label}
-          </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-2 py-2">
+          <Show
+            when={panelProps.surface === "projects"}
+            fallback={
+              <div
+                class="px-2 py-2 text-14-regular text-text-weak"
+                style={{ "line-height": "var(--line-height-normal)" }}
+              >
+                {meta()?.label}
+              </div>
+            }
+          >
+            <div class="flex flex-col gap-0.5">
+              <For
+                each={projects()}
+                fallback={<div class="px-2 py-2 text-14-regular text-text-weak">{language.t("sidebar.empty.title")}</div>}
+              >
+                {(project) => (
+                  <button
+                    type="button"
+                    class="w-full text-left px-2 py-1.5 rounded-md text-14-regular text-text-base hover:bg-background-stronger truncate"
+                    onClick={() => openFromRailPanel(`/${base64Encode(project.worktree)}/session`)}
+                  >
+                    {project.name || getFilename(project.worktree)}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </div>
     )
