@@ -1624,6 +1624,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Show when={newSession() && !selectedProject()}>
                     <ComposerPickerTrigger state={newProjectTriggerState()} />
                   </Show>
+                </div>
+                {/* amicode chat-redesign (Kate): model + speed live on the RIGHT,
+                    clustered with the submit arrow (Kimi-style). */}
+                <div class="flex items-center gap-1">
                   <ComposerModelControl state={modelControlState()} />
                   <Show when={store.mode !== "shell" && showVariantControl()}>
                     <div
@@ -1658,23 +1662,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       </TooltipKeybind>
                     </div>
                   </Show>
+                  <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
+                    {/* submit: HIGH-CONTRAST inverted fill (Kate: more contrast in
+                        dark). bg-inverse (near-black in light / near-white in
+                        dark) pairs with the variant's inverted arrow → crisp
+                        white-on-black in light, black-on-white in dark. */}
+                    <IconButton
+                      data-action="prompt-submit"
+                      type="submit"
+                      disabled={!working() && blank()}
+                      tabIndex={store.mode === "normal" ? undefined : -1}
+                      icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
+                      variant="primary"
+                      class={`size-7 rounded-md p-[6px] transition-opacity duration-100 hover:opacity-85 active:opacity-70 disabled:opacity-40 disabled:cursor-default ${working() ? "animate-pulse" : ""}`}
+                      style={{ background: "var(--v2-background-bg-inverse)" }}
+                      aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+                    />
+                  </Tooltip>
                 </div>
-                <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
-                  <IconButton
-                    data-action="prompt-submit"
-                    type="submit"
-                    disabled={!working() && blank()}
-                    tabIndex={store.mode === "normal" ? undefined : -1}
-                    icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
-                    variant="primary"
-                    class="size-7 rounded-md p-[6px] text-v2-icon-icon-muted shadow-[var(--v2-elevation-button-contrast)] disabled:opacity-50"
-                    style={{
-                      "background-image":
-                        "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-contrast) 0%,var(--v2-background-bg-contrast) 100%)",
-                    }}
-                    aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-                  />
-                </Tooltip>
               </div>
             </DockShellForm>
             <Show when={newSession() && selectedProject()}>
@@ -1786,8 +1791,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 class="pointer-events-none absolute inset-x-0 bottom-0"
                 style={{
                   height: space,
-                  background:
-                    "linear-gradient(to top, var(--surface-raised-stronger-non-alpha) calc(100% - 20px), transparent)",
+                  // flat (Kate): solid block, no fade gradient — text simply
+                  // clips at the controls edge.
+                  background: "var(--surface-raised-stronger-non-alpha)",
                 }}
               />
 
@@ -2083,17 +2089,31 @@ function ComposerPickerTrigger(props: ComponentProps<"button"> & { state: Compos
       {...rest}
       data-action={local.state.action}
       type="button"
-      class={`flex h-7 min-w-0 items-center gap-1.5 rounded px-2 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint transition-colors hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:outline-none ${local.state.class ?? ""}`}
+      // radius: rounded-md (6px) to match the footer's other controls (+,
+      // submit, model & speed pickers all use --radius-md); it was the lone 4px.
+      // hover (Kate): contrast comes from the surface lifting to layer-02 + ink
+      // brightening to base — NO border/ring (Kate: "no border, keep the radius").
+      class={`group/picker flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint transition-[color,background-color] duration-120 hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base focus-visible:bg-v2-background-bg-layer-02 focus-visible:text-v2-text-text-base focus-visible:outline-none ${local.state.class ?? ""}`}
       style={local.state.style}
       onClick={() => local.state.onPress()}
     >
       <Show when={local.state.icon}>
-        {(icon) => <Icon name={icon()} size="small" class="shrink-0 text-v2-icon-icon-muted" />}
+        {(icon) => (
+          <Icon
+            name={icon()}
+            size="small"
+            class="shrink-0 text-v2-icon-icon-muted transition-colors duration-120 group-hover/picker:text-v2-icon-icon-base"
+          />
+        )}
       </Show>
       <Show when={local.state.label}>
         <span class="min-w-0 truncate leading-5">{local.state.label}</span>
       </Show>
-      <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
+      <Icon
+        name="chevron-down"
+        size="small"
+        class="shrink-0 text-v2-icon-icon-muted transition-colors duration-120 group-hover/picker:text-v2-icon-icon-base"
+      />
     </button>
   )
 }

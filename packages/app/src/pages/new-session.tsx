@@ -10,7 +10,7 @@ import { useServer } from "@/context/server"
 import { startPrompt as startPromptWith } from "@/utils/start-prompt"
 import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
-import { AmicodeGettingStarted } from "@opencode-ai/ui/amicode-getting-started"
+import { AmicodeStarterChips } from "@opencode-ai/ui/amicode-getting-started"
 import { createSessionComposerState, SessionComposerRegion } from "@/pages/session/composer"
 import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
 
@@ -83,7 +83,10 @@ export default function NewSessionPage() {
           <div class="flex-1 min-h-0 overflow-hidden rounded-[10px]">
             <NewSessionDesignView
               gettingStarted={
-                <AmicodeGettingStarted
+                // Chips persist while typing (Kate: no jump). They disappear on
+                // submit, when this page navigates to the real session — so no
+                // dirty()-gated fade that yanks the layout mid-keystroke.
+                <AmicodeStarterChips
                   onStart={startPrompt}
                   resumeName={resumeProblem()?.name}
                   onResume={() => {
