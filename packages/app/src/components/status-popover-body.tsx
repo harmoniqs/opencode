@@ -836,9 +836,8 @@ export function StatusPopoverGlobalBody(props: {
         defaultValue={GLOBAL_STATUS_DEFAULT_TAB}
         variant="alt"
       >
-        <Tabs.List data-slot="tablist" class="bg-transparent border-b-0 px-4 pt-2 pb-0 gap-4 h-10">
-          <AmicodeStatusTabTriggers state={amicodeTabs} includeVaults={false} />
-        </Tabs.List>
+        {/* amicode#203 (Kate): no tab-header — Connections is the only surface
+            here now (vaults moved to the sidebar), so the label is redundant. */}
         <AmicodeStatusTabContents state={amicodeTabs} includeVaults={false} />
       </Tabs>
     </div>

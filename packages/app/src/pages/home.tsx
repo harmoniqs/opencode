@@ -95,7 +95,8 @@ const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whi
 // indented to align under the project name. A plain overlay hover, vs the
 // project row's bordered select, keeps the parent/child hierarchy legible.
 const HOME_SESSION_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base`
-const HOME_PROJECT_NAV_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base hover:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:bg-v2-background-bg-layer-02 data-[selected]:text-v2-text-text-base data-[selected]:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:hover:bg-v2-background-bg-layer-02 focus-visible:bg-v2-background-bg-layer-01 focus-visible:text-v2-text-text-base focus-visible:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)]`
+// amicode#203 (Kate): no border on hover/selected — background-only treatment.
+const HOME_PROJECT_NAV_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base data-[selected]:bg-v2-background-bg-layer-02 data-[selected]:text-v2-text-text-base data-[selected]:hover:bg-v2-background-bg-layer-02 focus-visible:bg-v2-background-bg-layer-01 focus-visible:text-v2-text-text-base`
 const HOME_SECTION_LABEL = "text-v2-text-text-muted [font-weight:440]"
 
 type HomeSessionRecord = {
@@ -932,8 +933,36 @@ function HomeDesign() {
                       padding: "14px",
                     }}
                   >
-                    {/* amicode#203 (option b): Recent (resume-primary) on top,
-                        the project switcher below. */}
+                    {/* amicode#203 (Kate): Projects section at the top, then the
+                        search + Recent-sessions list below. */}
+                    <HomeProjectColumn
+                      compact
+                      projects={visibleProjects()}
+                      selected={state.selection}
+                      focusServer={focusServer}
+                      selectProject={selectProject}
+                      openNewSession={openProjectNewSession}
+                      chooseProject={(conn) => void chooseProject(conn)}
+                      newProject={(conn) => void newProject(conn)}
+                      editProject={editProject}
+                      closeProject={(conn, directory) => {
+                        const next = closeHomeProject(
+                          state.selection,
+                          ServerConnection.key(conn),
+                          global.createServerCtx(conn).projects,
+                          directory,
+                        )
+                        if (next) setSelection(next)
+                      }}
+                      clearNotifications={clearNotifications}
+                      unseenCount={unseenCount}
+                      sessionsFor={(worktree) => allRecords().filter((r) => r.project.worktree === worktree)}
+                      onOpenSession={openSession}
+                      activeServerKey={server.key}
+                      openSettings={openSettings}
+                      language={language}
+                    />
+                    <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
                     <section
                       class="isolate min-h-0 min-w-0 flex flex-col"
                       aria-label={language.t("sidebar.project.recentSessions")}
@@ -967,26 +996,41 @@ function HomeDesign() {
                             when={!sessionLoad.isLoading}
                             fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                           >
-                            <Show
-                              when={records().length > 0}
-                              fallback={
-                                <div class="flex min-w-0 flex-col gap-4">
-                                  <HomeSessionGroupHeader
-                                    title={language.t("home.sessions.empty")}
-                                    onNewSession={newSessionProject() ? openNewSession : undefined}
+                            <div class="flex min-w-0 flex-col gap-1">
+                              {/* amicode#203 (Kate): header matches the PROJECTS
+                                  header — uppercase faint label + ghost icon button. */}
+                              <div class="flex h-7 min-w-0 items-center justify-between">
+                                <span
+                                  style={{
+                                    "font-size": "10px",
+                                    "font-weight": "700",
+                                    "letter-spacing": "0.08em",
+                                    "text-transform": "uppercase",
+                                    color: "var(--v2-text-text-faint)",
+                                  }}
+                                >
+                                  {language.t("sidebar.project.recentSessions")}
+                                </span>
+                                <Show when={newSessionProject()}>
+                                  <IconButtonV2
+                                    data-action="home-new-session"
+                                    variant="ghost-muted"
+                                    size="large"
+                                    class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                                    icon={<IconV2 name="edit" />}
+                                    onClick={openNewSession}
+                                    aria-label={language.t("command.session.new")}
                                   />
-                                </div>
-                              }
-                            >
-                              {/* amicode#203 (option b): Recent = recent sessions
-                                  across ALL projects, each labeled with its
-                                  project/folder (orphans included). Resume-primary;
-                                  the project switcher lives below. */}
-                              <div class="flex min-w-0 flex-col gap-4">
-                                <HomeSessionGroupHeader
-                                  title={language.t("sidebar.project.recentSessions")}
-                                  onNewSession={newSessionProject() ? openNewSession : undefined}
-                                />
+                                </Show>
+                              </div>
+                              <Show
+                                when={records().length > 0}
+                                fallback={
+                                  <div class="pl-1.5 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                                    {language.t("home.sessions.empty")}
+                                  </div>
+                                }
+                              >
                                 <div class="flex min-w-0 flex-col gap-px">
                                   <For each={records()}>
                                     {(record) => (
@@ -999,40 +1043,12 @@ function HomeDesign() {
                                     )}
                                   </For>
                                 </div>
-                              </div>
-                            </Show>
+                              </Show>
+                            </div>
                           </Show>
                         </div>
                       </div>
                     </section>
-                    <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
-                    <HomeProjectColumn
-                      compact
-                      projects={visibleProjects()}
-                      selected={state.selection}
-                      focusServer={focusServer}
-                      selectProject={selectProject}
-                      openNewSession={openProjectNewSession}
-                      chooseProject={(conn) => void chooseProject(conn)}
-                      newProject={(conn) => void newProject(conn)}
-                      editProject={editProject}
-                      closeProject={(conn, directory) => {
-                        const next = closeHomeProject(
-                          state.selection,
-                          ServerConnection.key(conn),
-                          global.createServerCtx(conn).projects,
-                          directory,
-                        )
-                        if (next) setSelection(next)
-                      }}
-                      clearNotifications={clearNotifications}
-                      unseenCount={unseenCount}
-                      sessionsFor={(worktree) => allRecords().filter((r) => r.project.worktree === worktree)}
-                      onOpenSession={openSession}
-                      activeServerKey={server.key}
-                      openSettings={openSettings}
-                      language={language}
-                    />
                   </div>
                 </Show>
               </div>
@@ -1752,28 +1768,6 @@ function HomeSessionSearchResultRow(props: {
   )
 }
 
-function HomeSessionGroupHeader(props: { title: string; onNewSession?: () => void }) {
-  const language = useLanguage()
-  return (
-    <div class="flex h-7 min-w-0 items-center justify-between pl-4 pr-2">
-      <div class={HOME_SECTION_LABEL}>{props.title}</div>
-      <Show when={props.onNewSession}>
-        {(onNewSession) => (
-          <ButtonV2
-            data-action="home-new-session"
-            variant="ghost-muted"
-            size="normal"
-            icon="edit"
-            class="h-7 px-2 [font-weight:530]"
-            onClick={onNewSession()}
-          >
-            {language.t("command.session.new")}
-          </ButtonV2>
-        )}
-      </Show>
-    </div>
-  )
-}
 
 function HomeSessionRow(props: {
   record: HomeSessionRecord
