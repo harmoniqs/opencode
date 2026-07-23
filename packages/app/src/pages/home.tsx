@@ -895,25 +895,26 @@ function HomeDesign() {
                   }}
                 >
                   Projects
-                  {/* amicode#203: the entry is Projects now — the pill shows the
-                  project count, or the unseen-session badge (accent ink) when
-                  there are unread sessions. */}
-                  <span
-                    style={{
-                      "font-size": "10px",
-                      "font-weight": "600",
-                      "letter-spacing": "0.5px",
-                      "border-radius": "999px",
-                      border: "1px solid currentColor",
-                      padding: "4px 7px",
-                      "line-height": "1",
-                      background: "color-mix(in srgb, currentColor 10%, transparent)",
-                      color: unseenTotal() > 0 ? "var(--v2-text-text-accent)" : "var(--v2-text-text-muted)",
-                      "font-variant-numeric": "tabular-nums",
-                    }}
-                  >
-                    {unseenTotal() > 0 ? unseenTotal() : projects().length}
-                  </span>
+                  {/* amicode#203: no project counter — only an unread badge when
+                  there are unseen sessions (accent ink); otherwise just the label. */}
+                  <Show when={unseenTotal() > 0}>
+                    <span
+                      style={{
+                        "font-size": "10px",
+                        "font-weight": "600",
+                        "letter-spacing": "0.5px",
+                        "border-radius": "999px",
+                        border: "1px solid currentColor",
+                        padding: "4px 7px",
+                        "line-height": "1",
+                        background: "color-mix(in srgb, currentColor 10%, transparent)",
+                        color: "var(--v2-text-text-accent)",
+                        "font-variant-numeric": "tabular-nums",
+                      }}
+                    >
+                      {unseenTotal()}
+                    </span>
+                  </Show>
                   <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
                     ▾
                   </span>
