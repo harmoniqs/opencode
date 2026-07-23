@@ -224,7 +224,7 @@ function StatusPopoverView(props: { state: StatusPopoverState }) {
 // nothing here touches the directory-scoped sync or prompt contexts, so it can
 // mount before any session exists. One wiring, two mounts — the body is the
 // same module the session-header popover lazy-loads.
-export function GlobalConnectionsPopover(props: { onManageVaults: () => void; compact?: boolean }) {
+export function GlobalConnectionsPopover(props: { onManageVaults: () => void; compact?: boolean; rail?: boolean }) {
   const language = useLanguage()
   const [shown, setShownRaw] = createSignal(false)
   // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
@@ -246,7 +246,28 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void; co
       onOpenChange={setShown}
       triggerAs="button"
       triggerProps={
-        props.compact
+        props.rail
+          ? ({
+              type: "button",
+              "data-action": "home-connections-toggle",
+              "aria-label": language.t("home.connections.trigger"),
+              style: {
+                display: "flex",
+                "align-items": "center",
+                gap: "10px",
+                width: "100%",
+                height: "36px",
+                padding: "0 12px",
+                "border-radius": "10px",
+                background: "transparent",
+                color: "var(--v2-text-text-muted)",
+                "font-size": "13px",
+                "font-weight": "500",
+                cursor: "pointer",
+                transition: "background-color 0.15s ease, color 0.15s ease",
+              },
+            } as ComponentProps<"button">)
+          : props.compact
           ? ({
               type: "button",
               "data-action": "home-connections-toggle",
@@ -286,7 +307,14 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void; co
             } as ComponentProps<"button">)
       }
       trigger={
-        props.compact ? (
+        props.rail ? (
+          <>
+            <Icon name="server" size="small" />
+            <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
+              {language.t("home.connections.trigger")}
+            </span>
+          </>
+        ) : props.compact ? (
           <Icon name="server" />
         ) : (
           <>
@@ -299,7 +327,7 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void; co
       }
       class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
       gutter={8}
-      placement={props.compact ? "right-end" : "bottom-end"}
+      placement={props.compact || props.rail ? "right-end" : "bottom-end"}
     >
       <Show when={shown()}>
         <Suspense

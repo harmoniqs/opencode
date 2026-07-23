@@ -67,7 +67,7 @@ export function requestComputeConnect() {
 }
 const CONNECT_REQUEST_TTL_MS = 15_000
 
-export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl; compact?: boolean }) {
+export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl; compact?: boolean; rail?: boolean }) {
   const models = useModels()
   const [open, setOpen] = createSignal(false)
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
@@ -208,7 +208,26 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl;
         aria-expanded={open()}
         onClick={toggle}
         style={
-          props.compact
+          props.rail
+            ? {
+                display: "flex",
+                "align-items": "center",
+                gap: "10px",
+                width: "100%",
+                height: "36px",
+                padding: "0 12px",
+                "border-radius": "10px",
+                border: hp()
+                  ? "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent)"
+                  : "1px solid transparent",
+                background: "transparent",
+                color: "var(--v2-text-text-muted)",
+                "font-size": "13px",
+                "font-weight": "500",
+                cursor: "pointer",
+                transition: "background-color 0.15s ease, color 0.15s ease",
+              }
+            : props.compact
             ? {
                 display: "inline-flex",
                 "align-items": "center",
@@ -245,6 +264,8 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl;
         }
       >
         <Show
+          when={props.rail}
+          fallback={<Show
           when={props.compact}
           fallback={
             <>
@@ -263,6 +284,12 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl;
           }
         >
           <Icon name="sliders" />
+        </Show>}
+        >
+          <Icon name="sliders" size="small" />
+          <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap", "min-width": "0" }}>
+            {modelName()} · {hp() ? "Piccolissimo+Altissimo" : "Piccolo"}
+          </span>
         </Show>
       </button>
       <Show when={open()}>
@@ -272,7 +299,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl;
           aria-label="Defaults"
           style={{
             position: "absolute",
-            ...(props.compact
+            ...(props.compact || props.rail
               ? { left: "calc(100% + 8px)", bottom: "0" }
               : { right: "0", top: "calc(100% + 8px)" }),
             "z-index": "40",

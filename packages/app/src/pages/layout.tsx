@@ -2730,8 +2730,8 @@ export default function Layout(props: ParentProps) {
               <div class="flex-1 min-h-0" />
               {liveSolveIndicator(false)}
               {/* Account zone: solver/model defaults (+ Company Compute key/URL), Connections (Pasqal). */}
-              <AmicodeDefaultsCapsule compute={computeControl} />
-              <GlobalConnectionsPopover onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
+              <AmicodeDefaultsCapsule compute={computeControl} rail />
+              <GlobalConnectionsPopover rail onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
               <button
                 type="button"
                 data-slot="rail-nav-row"
