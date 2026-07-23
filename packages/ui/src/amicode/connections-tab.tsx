@@ -234,7 +234,7 @@ export function ConnectionCard(props: {
       </Show>
 
       <div
-        class={`${props.hideHeader ? "flex items-center gap-2 " : "pl-3.5 "}text-12-regular text-text-weak`}
+        class={`${props.hideHeader ? "flex items-center gap-2 " : ""}text-12-regular text-text-weak`}
         data-slot="amicode-connection-state-copy"
       >
         <Show when={props.hideHeader}>
@@ -252,37 +252,37 @@ export function ConnectionCard(props: {
       </div>
 
       <Show when={model().showDrift}>
-        <div class="flex items-center gap-2 pl-3.5" data-slot="amicode-connection-drift">
+        <div class="flex items-center gap-2" data-slot="amicode-connection-drift">
           <div class="size-1 rounded-full shrink-0 bg-icon-warning-base" />
           <span class="text-11-regular text-text-weak">{driftCopy(props.conn, props.labels.driftHint)}</span>
         </div>
       </Show>
 
       <Show when={model().showSessionOnly}>
-        <div class="pl-3.5 text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
+        <div class="text-11-regular text-text-weaker truncate" data-slot="amicode-connection-session-only">
           {props.labels.sessionOnlyHint}
         </div>
       </Show>
 
       <Show when={model().showOffline}>
-        <div class="pl-3.5 text-11-regular text-text-weak truncate" data-slot="amicode-connection-offline">
+        <div class="text-11-regular text-text-weak truncate" data-slot="amicode-connection-offline">
           {offlineCopy(props.conn, props.labels.offlineHint)}
         </div>
       </Show>
 
       <Show when={model().showStale}>
-        <div class="pl-3.5 text-11-regular text-text-weaker truncate">{props.labels.staleHint}</div>
+        <div class="text-11-regular text-text-weaker truncate">{props.labels.staleHint}</div>
       </Show>
 
       <Show when={props.actionError}>
-        <div class="flex items-center gap-2 pl-3.5" data-slot="amicode-connection-action-error">
+        <div class="flex items-center gap-2" data-slot="amicode-connection-action-error">
           <div class="size-1 rounded-full shrink-0 bg-icon-critical-base" />
           <span class="text-11-regular text-text-weak truncate">{props.actionError}</span>
         </div>
       </Show>
 
       <Show when={model().showUserCode}>
-        <div class="flex flex-col gap-1 pl-3.5 pt-1.5" data-slot="amicode-connection-user-code">
+        <div class="flex flex-col gap-1 pt-1.5" data-slot="amicode-connection-user-code">
           <div
             class="text-14-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base text-center"
             style={{ "font-family": "ui-monospace, monospace", "letter-spacing": "0.14em", "user-select": "all" }}
@@ -304,7 +304,7 @@ export function ConnectionCard(props: {
 
       <Show when={model().showProjectPicker}>
         <div
-          class="flex flex-col gap-1.5 pl-3.5 pt-1.5"
+          class="flex flex-col gap-1.5 pt-1.5"
           data-slot="amicode-connection-projects"
           role="radiogroup"
           aria-label={connectionTitle(props.conn.id)}
@@ -352,7 +352,7 @@ export function ConnectionCard(props: {
       </Show>
 
       <Show when={model().showWaiting}>
-        <div class="flex items-center gap-2 pl-3.5 pt-1" data-slot="amicode-connection-waiting">
+        <div class="flex items-center gap-2 pt-1" data-slot="amicode-connection-waiting">
           <div class="size-1.5 rounded-full shrink-0 bg-icon-warning-base animate-pulse" />
           <div class="flex-1" />
           <Button
@@ -368,7 +368,7 @@ export function ConnectionCard(props: {
       </Show>
 
       <Show when={model().showForm}>
-        <div class="flex flex-col gap-1.5 pl-3.5 pt-1.5">
+        <div class="flex flex-col gap-1.5 pt-1.5">
           <Show when={methods().length > 1}>
             <div class="flex gap-1 flex-wrap" data-slot="amicode-connection-methods" role="group">
               <For each={methods()}>
@@ -486,7 +486,7 @@ export function ConnectionCard(props: {
       </Show>
 
       <Show when={model().showActions}>
-        <div class="flex gap-3 pl-3.5 pt-1">
+        <div class="flex gap-3 pt-1">
           <Button
             type="button"
             variant="secondary"
