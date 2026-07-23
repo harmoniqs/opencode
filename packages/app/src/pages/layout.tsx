@@ -21,6 +21,8 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { amicodeGet } from "@/utils/amicode-fetch"
 import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
+import { GlobalConnectionsPopover } from "@/components/status-popover"
+import { Icon } from "@opencode-ai/ui/icon"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -2525,6 +2527,14 @@ export default function Layout(props: ParentProps) {
                   </button>
                 )}
               </For>
+              <button
+                type="button"
+                class="w-full text-left px-2 py-1.5 mt-1 rounded-md text-14-medium text-text-base hover:bg-background-stronger flex items-center gap-2"
+                onClick={() => chooseProject()}
+              >
+                <Icon name="folder-add-left" size="small" />
+                Add project
+              </button>
             </div>
           </Show>
 
@@ -2651,6 +2661,8 @@ export default function Layout(props: ParentProps) {
               {railNav(false)}
               <div class="flex-1 min-h-0" />
               {liveSolveIndicator(false)}
+              {/* Account zone: Connections (Company Compute solver key + Pasqal + vaults). */}
+              <GlobalConnectionsPopover onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
               <Tooltip placement="right" value={language.t("sidebar.settings")}>
                 <IconButton
                   icon="settings-gear"
