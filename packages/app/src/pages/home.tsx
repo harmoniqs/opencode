@@ -119,7 +119,6 @@ function buildHomeSessionRecords(input: {
   sync: Pick<ReturnType<typeof useServerSync>, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
-  projectByID: () => Map<string, LocalProject>
 }) {
   return [
     ...new Map(
@@ -131,7 +130,12 @@ function buildHomeSessionRecords(input: {
   ]
     .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     .flatMap((session) => {
-      const project = projectForSession(session, input.projects(), input.projectByID())
+      // amicode#203: resolve by DIRECTORY, not projectID. opencode lumps every
+      // amicode directory under a single `global` project id, so id-based
+      // resolution (projectForSession's default) collapses all sessions onto one
+      // project. The dashboard's projects ARE directories, so an empty byID map
+      // forces projectForSession to match session.directory → project.worktree.
+      const project = projectForSession(session, input.projects(), new Map())
       // amicode#203 AC7: a session whose directory matches no registered
       // project is an ORPHAN — surfaced under its directory, never dropped
       // (the old `return []` silently hid ghost sessions).
@@ -256,15 +260,11 @@ function HomeDesign() {
     },
   }))
 
-  const projectByID = createMemo(
-    () => new Map(projects().flatMap((project) => (project.id ? [[project.id, project] as const] : []))),
-  )
   const allRecords = createMemo(() =>
     buildHomeSessionRecords({
       sync: focusedSync(),
       projectDirectories,
       projects,
-      projectByID,
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
@@ -776,7 +776,10 @@ function HomeDesign() {
   }
 
   function openSession(session: Session) {
-    const project = projectForSession(session, projects(), projectByID())
+    // amicode#203: resolve by directory (empty byID) — projectID collapses to
+    // `global` across all amicode dirs, so id-resolution would open the wrong
+    // project's worktree. Navigation already uses session.directory.
+    const project = projectForSession(session, projects(), new Map())
     const conn = focusedServer()
     if (!conn) return
     const directory = project?.worktree ?? session.directory

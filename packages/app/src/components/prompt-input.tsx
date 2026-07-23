@@ -78,6 +78,7 @@ import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
 import { useDirectoryPicker } from "./directory-picker"
 import { showToast } from "@/utils/toast"
+import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { useQueries } from "@tanstack/solid-query"
 import { useQueryOptions } from "@/context/server-sync"
@@ -1370,7 +1371,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }))
 
   const newSession = () => props.variant === "new-session"
-  const projects = createMemo(() => layout.projects.list())
+  // amicode#203: hide the extension's scaffold project from the composer picker
+  // too (same filter as the dashboard). Only set in the amicode webview.
+  const projects = createMemo(() => {
+    const list = layout.projects.list()
+    const hidden = hiddenProjectWorktree()
+    return hidden ? list.filter((p) => p.worktree !== hidden) : list
+  })
   const projectForDirectory = (directory: string | undefined) => {
     if (!directory) return
     const key = pathKey(directory)
