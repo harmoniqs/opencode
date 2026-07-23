@@ -94,9 +94,10 @@ reader meeting them in older code or notes should map them forward:
 - **Project-avatar strip** (the always-visible `w-16` avatar rail in `sidebar-shell`) →
   legacy-only; it is already absent when the redesign flag is on. Project switching lives
   in the Projects **Rail surface**.
-- **User-authored widget subsystem** (`amicode_author_widget`, "pin to dashboard",
-  the widget grid, `/amicode/dashboard`) → retired with the dashboard. Authoring and
-  pinning are removed, not re-homed; re-homing authored widgets as in-Chat artifacts is
-  a possible future, not part of this redesign. See ADR 0001.
+- **Dashboard widget pinning** ("pin to dashboard", the aggregate grid,
+  `/amicode/dashboard`) → retired: the dashboard is unreachable, so nothing pins there.
+  The widget infrastructure itself (`amicode_author_widget`, the widget grid) is **kept** —
+  widgets still render inline in the Chat (the message timeline). Only the dashboard as a
+  pin target is gone. See ADR 0001.
 - **Home cards** "Meet Amico" and "Jump back in" → folded into the first-run Landing and
   the Chats surface respectively; they are no longer standalone surfaces.

@@ -46,11 +46,13 @@ Account zone, Live-solve indicator, Setup nudge) and the retired concepts.
 - **The landing runs at `/`, which has no directory context**, unlike the existing
   session-route auto-draft. The root landing must resolve a working directory first —
   reusing the server-cwd fallback on a fresh install with no tracked project.
-- **A shipped capability is retired:** dissolving the dashboard removes the home for the
-  user-authored-widget subsystem (`amicode_author_widget`, pin-to-dashboard, the widget
-  grid, `/amicode/dashboard`), so authoring and pinning are removed rather than re-homed.
-  Existing pinned widgets stop appearing. Re-homing authored widgets as in-Chat artifacts
-  is a possible future enhancement, deliberately out of this cutover.
+- **Dashboard pinning is retired, but the widget infrastructure is kept.** Dissolving the
+  dashboard removes the *pin target* — "pin to dashboard", the aggregate grid, and
+  `/amicode/dashboard` no longer have a surface. But widgets also render **inline in chat**
+  (the message timeline imports the widget grid), so `amicode_author_widget` and the widget
+  grid remain. Only dashboard pinning is gone; in-chat widgets are unaffected. (Implemented
+  differently from the first draft of this ADR, which said "delete the subsystem" — that
+  would have broken in-chat widgets.)
 - Fastest path to value: a researcher can type a prompt the instant the window opens.
 - Discoverability of the collections (gallery, pulse bank, library) drops from
   "on screen by default" to "one Rail click away." Accepted, because the Rail's
