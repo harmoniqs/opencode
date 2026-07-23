@@ -238,11 +238,11 @@ function HomeDesign() {
       projects()[0],
   )
   const directories = (project: LocalProject) => [project.worktree, ...(project.sandboxes ?? [])]
-  const projectDirectories = createMemo(() => {
-    const project = selectedProject()
-    if (!project) return projects().flatMap(directories)
-    return directories(project)
-  })
+  // amicode#203: the dashboard shows ONE flat "all sessions" list PLUS per-project
+  // lists, so it must load EVERY project's sessions regardless of selection.
+  // Scoping to the selected project (the old behavior) made the flat list flip
+  // empty/populated with selection and hid non-selected projects' sessions.
+  const projectDirectories = createMemo(() => projects().flatMap(directories))
   const search = createMemo(() => state.search.trim())
   const sessionLoad = useQuery(() => ({
     queryKey: ["home", "sessions", state.selection.server, ...projectDirectories()] as const,
@@ -1024,7 +1024,7 @@ function HomeDesign() {
                       }}
                       clearNotifications={clearNotifications}
                       unseenCount={unseenCount}
-                      sessionsFor={(worktree) => records().filter((r) => r.project.worktree === worktree)}
+                      sessionsFor={(worktree) => allRecords().filter((r) => r.project.worktree === worktree)}
                       onOpenSession={openSession}
                       activeServerKey={server.key}
                       openSettings={openSettings}
