@@ -212,6 +212,14 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
         return HttpServerResponse.text(out, { contentType: "application/json" })
       }),
     )
+    // amicode: Projects list — enumerate ~/AmicodeProjects folders (each folder
+    // is a project). Source of truth for the Projects menu, so a created folder
+    // surfaces even before it's opened. Never rejects.
+    yield* router.add("GET", "/amicode/projects", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeProject.listProjects(), { contentType: "application/json" }),
+      ),
+    )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 

@@ -13,6 +13,7 @@ import {
   Show,
   Switch,
   createSignal,
+  untrack,
 } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
@@ -48,6 +49,7 @@ import {
   sortedRootSessions,
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
+import { hiddenCwdWorktree, parseAmicodeProjects, reconcileProjectList, sameProjectList } from "@/pages/home-projects"
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
@@ -121,6 +123,7 @@ function buildHomeSessionRecords(input: {
   sync: Pick<ReturnType<typeof useServerSync>, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
+  isHidden: (worktree: string) => boolean
 }) {
   return [
     ...new Map(
@@ -153,10 +156,11 @@ function buildHomeSessionRecords(input: {
       return {
         session,
         project,
-        // amicode#203: sessions in the extension's scaffold project show
-        // unlabeled (the scaffold is hidden from the switcher; its name never
-        // surfaces). Real projects keep their display name.
-        projectName: project.worktree === hiddenProjectWorktree() ? "" : displayName(project),
+        // amicode: sessions in a project that's hidden from the switcher (the
+        // extension scaffold, or the standalone/dev server cwd like the opencode
+        // repo) show UNLABELED — the hidden project's name never surfaces, even in
+        // Recent. Real projects keep their display name.
+        projectName: input.isHidden(project.worktree) ? "" : displayName(project),
       }
     })
 }
@@ -227,15 +231,42 @@ function HomeDesign() {
   })
   const focusedSync = () => focusedServerCtx()?.sync ?? sync
   const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
-  // amicode#203: the project SWITCHER hides the extension's scaffold project
-  // (it's the server's cwd, not a user project) — but records()/projectDirectories
-  // still use the full `projects()`, so the sessions that land in the scaffold by
-  // default stay visible in Recent (labeled neutrally, see buildHomeSessionRecords).
-  // Only set in the amicode webview; standalone opencode is untouched.
-  const visibleProjects = createMemo(() => {
-    const hidden = hiddenProjectWorktree()
-    return hidden ? projects().filter((p) => p.worktree !== hidden) : projects()
+  // amicode: the Projects list mirrors ~/AmicodeProjects on disk (folder-first).
+  // Fetch the folders the server sees (keyed by active server) and fold them into
+  // the tracked list so every created folder surfaces — even one that was never
+  // opened — fixing the "created but invisible, yet name already taken" desync.
+  const [amicodeProjectsRaw] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/projects").catch(() => undefined),
+  )
+  const amicodeProjects = createMemo(() => parseAmicodeProjects(amicodeProjectsRaw()))
+  createEffect(() => {
+    const conn = focusedServer()
+    const view = amicodeProjects()
+    if (!conn || !view.ok) return
+    const ctx = global.createServerCtx(conn)
+    // untrack the store read so writing it back doesn't re-trigger this effect.
+    const tracked = untrack(() => ctx.projects.list().map((p) => ({ worktree: p.worktree, expanded: p.expanded })))
+    const next = reconcileProjectList({ tracked, amicodeDirs: view.projects.map((p) => p.path) })
+    if (!sameProjectList(tracked, next)) ctx.projects.replace(next)
   })
+  // amicode: worktrees hidden from the project SWITCHER (but kept in the store so
+  // their sessions stay reachable in Recent, labeled neutrally): the extension's
+  // scaffold (via the boot param, amicode webview only) AND — in standalone/dev —
+  // the server's own cwd (e.g. the opencode repo), once real AmicodeProjects
+  // folders exist. A cwd that IS an AmicodeProjects folder is a real project and
+  // is NOT hidden, so a project genuinely named "opencode" under ~/AmicodeProjects
+  // still shows.
+  const hiddenCwd = createMemo(() => {
+    const amc = amicodeProjects()
+    return hiddenCwdWorktree({
+      cwd: focusedSync().data.path.directory || undefined,
+      amicodeParent: amc.ok ? amc.parentDir : undefined,
+      amicodeProjectCount: amc.ok ? amc.projects.length : 0,
+    })
+  })
+  const isHiddenProject = (worktree: string) => worktree === hiddenProjectWorktree() || worktree === hiddenCwd()
+  const visibleProjects = createMemo(() => projects().filter((p) => !isHiddenProject(p.worktree)))
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
     () =>
@@ -267,6 +298,7 @@ function HomeDesign() {
       sync: focusedSync(),
       projectDirectories,
       projects,
+      isHidden: isHiddenProject,
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))

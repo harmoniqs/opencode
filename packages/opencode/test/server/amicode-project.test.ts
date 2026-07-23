@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, existsSync } from "node:fs"
+import { mkdtempSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { slugify, planCreate, classifyFsError, createProjectAt, createProject, defaultParentDir } from "@/server/amicode/project"
+import {
+  slugify,
+  planCreate,
+  classifyFsError,
+  createProjectAt,
+  createProject,
+  defaultParentDir,
+  listProjectDirs,
+  listProjects,
+} from "@/server/amicode/project"
 
 describe("slugify (server, mirrors app projectNameToSlug)", () => {
   test("normalizes to a safe folder basename", () => {
@@ -89,5 +98,49 @@ describe("createProject (end-to-end against a real temp dir)", () => {
     // second create at the same name collides
     const dup = JSON.parse(createProject(JSON.stringify({ name: "Rydberg MIS", parentDir: parent })))
     expect(dup).toMatchObject({ ok: false, error: "collision" })
+  })
+})
+
+describe("listProjectDirs (injected deps)", () => {
+  test("returns [] when the parent doesn't exist yet (before the first create)", () => {
+    expect(listProjectDirs("/nope", { exists: () => false })).toEqual([])
+  })
+  test("keeps only directories, drops dotfiles and files, name-sorted, absolute paths", () => {
+    const entries = [
+      { name: "kate-test-3", isDirectory: true },
+      { name: "kate-test", isDirectory: true },
+      { name: ".DS_Store", isDirectory: false },
+      { name: ".hidden-dir", isDirectory: true },
+      { name: "notes.md", isDirectory: false },
+      { name: "kate-test-2", isDirectory: true },
+    ]
+    expect(listProjectDirs("/home/kate/AmicodeProjects", { exists: () => true, readEntries: () => entries })).toEqual([
+      { slug: "kate-test", path: "/home/kate/AmicodeProjects/kate-test" },
+      { slug: "kate-test-2", path: "/home/kate/AmicodeProjects/kate-test-2" },
+      { slug: "kate-test-3", path: "/home/kate/AmicodeProjects/kate-test-3" },
+    ])
+  })
+})
+
+describe("listProjectDirs / listProjects (real temp dir)", () => {
+  test("enumerates the folders a user created — surfaces a created-but-never-opened folder", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "amicode-list-"))
+    mkdirSync(path.join(parent, "kate-test-2"))
+    mkdirSync(path.join(parent, "kate-test-3"))
+    writeFileSync(path.join(parent, "loose-file.txt"), "x")
+    const dirs = listProjectDirs(parent)
+    expect(dirs.map((d) => d.slug)).toEqual(["kate-test-2", "kate-test-3"])
+
+    const body = JSON.parse(listProjects(parent))
+    expect(body.ok).toBe(true)
+    expect(body.parentDir).toBe(parent)
+    expect(body.projects.map((p: { slug: string }) => p.slug)).toEqual(["kate-test-2", "kate-test-3"])
+  })
+  test("listProjects degrades to an empty list rather than throwing", () => {
+    // defaultParentDir may not exist in CI; listProjects must still return ok:true.
+    const body = JSON.parse(listProjects())
+    expect(body.ok).toBe(true)
+    expect(Array.isArray(body.projects)).toBe(true)
+    expect(body.parentDir).toBe(defaultParentDir())
   })
 })

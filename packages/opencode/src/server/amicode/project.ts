@@ -4,7 +4,7 @@
 // JSON string, never a rejection — failures come back as ok:false bodies so the
 // dialog can render an inline, recoverable error.
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 
@@ -107,6 +107,47 @@ export function createProject(rawBody: string): string {
   const plan = planCreate(rawBody)
   if ("ok" in plan) return JSON.stringify(plan)
   return JSON.stringify(createProjectAt(plan.target, plan.slug))
+}
+
+export type ProjectDirEntry = { slug: string; path: string }
+
+/** Enumerate the immediate subdirectories of the projects parent — each folder
+ *  IS a project (amicode is folder-first). This is the source of truth for the
+ *  Projects list, so a project surfaces the moment its folder exists, even if it
+ *  was never opened — closing the "created-but-invisible" desync where the
+ *  collision check (existsSync) saw a folder the list never did. Returns [] when
+ *  the parent doesn't exist yet (before the first create). Dotfiles and
+ *  non-directories are skipped; results are name-sorted. Injectable for tests. */
+export function listProjectDirs(
+  parentDir: string = defaultParentDir(),
+  deps: {
+    exists?: (p: string) => boolean
+    readEntries?: (p: string) => Array<{ name: string; isDirectory: boolean }>
+  } = {},
+): ProjectDirEntry[] {
+  const exists = deps.exists ?? existsSync
+  const readEntries =
+    deps.readEntries ??
+    ((p: string) => readdirSync(p, { withFileTypes: true }).map((d) => ({ name: d.name, isDirectory: d.isDirectory() })))
+  if (!exists(parentDir)) return []
+  return readEntries(parentDir)
+    .filter((e) => e.isDirectory && !e.name.startsWith("."))
+    .map((e) => ({ slug: e.name, path: path.join(parentDir, e.name) }))
+    .sort((a, b) => a.slug.localeCompare(b.slug))
+}
+
+export type ListProjectsResult = { ok: true; parentDir: string; projects: ProjectDirEntry[] }
+
+/** GET /amicode/projects handler → JSON string (never rejects). A read error
+ *  (e.g. permission) degrades to an empty list rather than failing the list. */
+export function listProjects(parentDir: string = defaultParentDir()): string {
+  const body: ListProjectsResult = { ok: true, parentDir, projects: [] }
+  try {
+    body.projects = listProjectDirs(parentDir)
+  } catch {
+    /* unreadable parent → empty list */
+  }
+  return JSON.stringify(body)
 }
 
 // re-export for a create-then-cleanup path if a caller ever needs to roll back
