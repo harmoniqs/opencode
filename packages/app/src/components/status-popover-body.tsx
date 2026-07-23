@@ -202,10 +202,10 @@ export function StatusPopoverServerBody() {
 
 function ServerStatusPopoverView(props: { state: ServerStatusState }) {
   return (
-    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+    <div class="flex items-center gap-1 w-[360px] rounded-lg shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={props.state.ariaLabel}
-        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-lg overflow-hidden"
         data-component="tabs"
         data-active="servers"
         defaultValue="servers"
@@ -334,10 +334,10 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
   })
 
   return (
-    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+    <div class="flex items-center gap-1 w-[360px] rounded-lg shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={language.t("status.popover.ariaLabel")}
-        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-lg overflow-hidden"
         data-component="tabs"
         data-active={settings.general.newLayoutDesigns() ? "mcp" : "servers"}
         defaultValue={settings.general.newLayoutDesigns() ? "mcp" : "servers"}
@@ -789,14 +789,8 @@ function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState; includ
         {/* amicode#203 (Kate): the header-less global mount uses a single flat
             14px padding (matching the other chrome dropdowns) instead of the
             tabbed mount's inset card (px-2 pb-2 + p-3 raised box). */}
-        <div
-          class={
-            (props.includeVaults ?? true)
-              ? "flex flex-col px-2 pb-2"
-              : "flex flex-col p-3.5"
-          }
-        >
-          <div class={(props.includeVaults ?? true) ? "flex flex-col p-3 bg-background-base rounded-sm min-h-14" : "flex flex-col min-h-14"}>
+        <div class="flex flex-col p-3">
+          <div class="flex flex-col min-h-14">
             <AmicodeConnectionsTab
               view={props.state.connectionsView()}
               labels={props.state.connectionsLabels()}
@@ -836,10 +830,10 @@ export function StatusPopoverGlobalBody(props: {
   })
 
   return (
-    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+    <div class="flex items-center gap-1 w-[360px] rounded-lg shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={language.t("status.popover.ariaLabel")}
-        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-lg overflow-hidden"
         data-component="tabs"
         data-active={GLOBAL_STATUS_DEFAULT_TAB}
         defaultValue={GLOBAL_STATUS_DEFAULT_TAB}

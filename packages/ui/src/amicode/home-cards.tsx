@@ -290,7 +290,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           gap: "10px",
           "margin-top": "4px",
           padding: "12px 20px",
-          border: "none",
+          border: "1px solid color-mix(in srgb, var(--accent-ink) 14%, transparent)",
           "border-radius": "var(--radius-md)",
           cursor: "pointer",
           background: "var(--accent, #fff676)",
@@ -302,7 +302,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
       >
         Open chat
         <span aria-hidden="true" style={{ "font-size": "16px", "line-height": "1" }}>
-          ↗
+          →
         </span>
       </button>
     </div>
