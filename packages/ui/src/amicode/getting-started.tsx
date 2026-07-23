@@ -50,7 +50,9 @@ const STEPS = ["① Define your system and problem", "② Optimize and iterate",
 
 /** amicode chat-redesign (Kate): chips-only row for the composer-as-hero start
  *  screen — no tagline, no byline, no steps. Quiet neutral pills (Kimi-style):
- *  hairline border, pill radius, muted ink that lifts on hover. */
+ *  a filled body (bg-layer-02) + a hairline (border-strong) so they read on the
+ *  near-white start page; muted ink that lifts on hover. A transparent fill with
+ *  a 10%-alpha border was ~1.25:1 vs the page — effectively invisible in light. */
 export function AmicodeStarterChips(props: {
   onStart: (prompt: string) => void
   resumeName?: string
@@ -59,7 +61,7 @@ export function AmicodeStarterChips(props: {
   // The chips' OWN wrapping row (Kate: separate container from the folder
   // picker) — centered, quiet pills. Class-based styling so hover works.
   const pill =
-    "rounded-full border border-[var(--v2-border-border-base)] bg-transparent px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-01)]"
+    "rounded-full border border-[var(--v2-border-border-strong)] bg-[var(--v2-background-bg-layer-02)] px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-03)]"
   return (
     <div
       data-component="amicode-starter-chips"
@@ -67,7 +69,12 @@ export function AmicodeStarterChips(props: {
     >
       <For each={AMICODE_STARTERS}>
         {(starter) => (
-          <button type="button" data-slot="amicode-gs-starter" class={pill} onClick={() => props.onStart(starter.prompt)}>
+          <button
+            type="button"
+            data-slot="amicode-gs-starter"
+            class={pill}
+            onClick={() => props.onStart(starter.prompt)}
+          >
             {starter.label}
           </button>
         )}
