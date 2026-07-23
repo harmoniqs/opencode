@@ -15,11 +15,10 @@ export function NewSessionDesignView(props: { children: JSX.Element; gettingStar
         <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
           {/* Kimi-style hero: the low-contrast mark + the AMICODE wordmark
               (Logo), full-ink in the neutral text color. */}
-          <MarkDetailed
-            class="w-24 h-auto mb-4"
-            style={{ color: "color-mix(in srgb, var(--v2-icon-icon-muted) 45%, var(--v2-background-bg-base))" }}
-          />
-          <Logo class="w-52 max-w-full h-auto mb-8 text-v2-text-text-base" />
+          {/* mark + wordmark share one ink (Kate 2026-07-23): the Logo wordmark
+              fills with var(--icon-base) in logo.tsx, so the mark matches it. */}
+          <MarkDetailed class="w-24 h-auto mb-4" style={{ color: "var(--icon-base)" }} />
+          <Logo class="w-52 max-w-full h-auto mb-8" />
           {/* chips sit directly below the mark, above the composer (Kate) */}
           <Show when={props.gettingStarted}>
             <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>
