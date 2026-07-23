@@ -2393,6 +2393,48 @@ export default function Layout(props: ParentProps) {
       .slice(0, 40)
   })
 
+  // Ambient live-solve indicator (ADR 0001): poll run-status; when a solve is
+  // running, a pinned rail-foot control shows it (detail on hover) and jumps to
+  // the running solve on click. Absent when nothing is solving.
+  const [runStatusRaw, { refetch: refetchRunStatus }] = createResource(
+    () => (railConn() ? "solve-status" : undefined),
+    () => amicodeGet(railConn(), "/amicode/run-status").catch(() => undefined),
+  )
+  onMount(() => {
+    const t = setInterval(() => void refetchRunStatus(), 5000)
+    onCleanup(() => clearInterval(t))
+  })
+  const solvingRun = createMemo(() => {
+    const raw = runStatusRaw()
+    if (typeof raw !== "object" || raw === null) return undefined
+    const view = raw as { ok?: boolean; runs?: { run_id?: string; status?: string; iteration?: number }[] }
+    if (view.ok !== true || !Array.isArray(view.runs)) return undefined
+    const solving = view.runs.filter((r) => r && typeof r.run_id === "string" && r.status === "solving")
+    if (solving.length === 0) return undefined
+    return {
+      iteration: typeof solving[0]!.iteration === "number" ? solving[0]!.iteration : null,
+      count: solving.length,
+    }
+  })
+  const liveSolveIndicator = (mobile?: boolean) => (
+    <Show when={solvingRun()}>
+      {(run) => (
+        <Tooltip
+          placement={mobile ? "bottom" : "right"}
+          value={`Solving${run().count > 1 ? ` — ${run().count} runs` : ""}${run().iteration !== null ? ` · iteration ${run().iteration}` : ""}`}
+        >
+          <IconButton
+            icon="status"
+            variant="primary"
+            size="large"
+            aria-label="Show the running solve"
+            onClick={() => startChatWithPrompt("show me the running solve")}
+          />
+        </Tooltip>
+      )}
+    </Show>
+  )
+
   // Warm-start / new-chat-with-prompt from a Panel: navigate to the current (or
   // first) project's session route with ?prompt=, which the auto-draft seeds.
   const startChatWithPrompt = (prompt: string) => {
@@ -2568,6 +2610,7 @@ export default function Layout(props: ParentProps) {
       aimMove={aim.move}
       projects={projects}
       renderNav={() => railNav(mobile)}
+      renderStatus={() => liveSolveIndicator(mobile)}
       renderProject={(project) => (
         <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
       )}

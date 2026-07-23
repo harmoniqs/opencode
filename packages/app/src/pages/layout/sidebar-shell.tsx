@@ -35,6 +35,8 @@ export const SidebarContent = (props: {
   // (Chats · Projects · Run gallery · Pulse bank · Library), rendered above
   // the project avatars. Optional so standalone opencode is untouched.
   renderNav?: () => JSX.Element
+  // Ambient live-solve indicator, pinned at the rail foot above settings/help.
+  renderStatus?: () => JSX.Element
 }): JSX.Element => {
   const expanded = createMemo(() => !!props.mobile || props.opened())
   const placement = () => (props.mobile ? "bottom" : "right")
@@ -99,6 +101,7 @@ export const SidebarContent = (props: {
           </DragDropProvider>
         </div>
         <div class="shrink-0 w-full pt-3 pb-6 flex flex-col items-center gap-2">
+          <Show when={props.renderStatus}>{props.renderStatus!()}</Show>
           <TooltipKeybind placement={placement()} title={props.settingsLabel()} keybind={props.settingsKeybind() ?? ""}>
             <IconButton
               icon="settings-gear"
