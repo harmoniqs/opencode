@@ -23,6 +23,9 @@ import { AmicodeRunGallery } from "@opencode-ai/ui/amicode-run-gallery"
 import { parseRunCardsResponse } from "@opencode-ai/ui/amicode-run-card"
 import { GlobalConnectionsPopover } from "@/components/status-popover"
 import { Icon } from "@opencode-ai/ui/icon"
+import { AmicodeDefaultsCapsule, type AmicodeComputeControl } from "@/components/amicode-defaults-capsule"
+import { createAmicodeConnectionsState } from "@/components/status-popover-body"
+import { COMPANY_COMPUTE_ID } from "@opencode-ai/ui/amicode-connections-tab"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -105,6 +108,7 @@ const RAIL_SURFACES = [
   { id: "gallery", label: "Run gallery", icon: "photo" },
   { id: "pulse", label: "Pulse bank", icon: "archive" },
   { id: "library", label: "Library", icon: "glasses" },
+  { id: "vaults", label: "Vaults", icon: "brain" },
 ] as const
 type RailSurface = (typeof RAIL_SURFACES)[number]["id"]
 
@@ -2348,6 +2352,22 @@ export default function Layout(props: ParentProps) {
   // Fetched from the active server's /amicode/* routes, lazily — the source
   // returns undefined (no fetch) unless that surface is the open one.
   const railConn = () => server.current
+
+  // Account zone: Company Compute connection state feeds the defaults capsule
+  // (solver mode + model + solver API key/URL). Mirrors home.tsx's chrome wiring.
+  const chromeConnections = createAmicodeConnectionsState(() => true)
+  const computeControl: AmicodeComputeControl = {
+    view: () => chromeConnections.connectionsView()?.connections.find((c) => c.id === COMPANY_COMPUTE_ID),
+    labels: () => {
+      const base = chromeConnections.connectionsLabels()
+      return { ...base, states: { ...base.states, "needs-key": "Not connected" } }
+    },
+    actionError: chromeConnections.connectionsActionError,
+    onSubmit: chromeConnections.onSubmitCredential,
+    onDisconnect: chromeConnections.onDisconnectConnection,
+    onRevalidate: chromeConnections.onRevalidateConnection,
+    refetch: chromeConnections.refetchConnections,
+  }
   const [pulseRaw] = createResource(
     () => (state.railSurface === "pulse" ? state.railSurface : undefined),
     () => amicodeGet(railConn(), "/amicode/profile").catch(() => undefined),
@@ -2608,6 +2628,21 @@ export default function Layout(props: ParentProps) {
               </For>
             </div>
           </Show>
+
+          <Show when={panelProps.surface === "vaults"}>
+            <div class="flex flex-col gap-3 px-1 py-1">
+              <div class="text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
+                Attach an Obsidian vault so Amico can read your notes.
+              </div>
+              <button
+                type="button"
+                class="w-full text-left px-3 py-2 rounded-md text-14-medium text-text-strong bg-background-stronger hover:bg-background-hover"
+                onClick={() => startChatWithPrompt("Help me attach and manage my vaults.")}
+              >
+                Manage vaults
+              </button>
+            </div>
+          </Show>
         </div>
       </div>
     )
@@ -2651,6 +2686,10 @@ export default function Layout(props: ParentProps) {
         <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
           {autoselecting() ?? ""}
           <Titlebar update={titlebarUpdate} />
+          {/* Session defaults: model + solver mode + Company Compute (solver API key / URL). */}
+          <div class="shrink-0 flex items-center justify-end px-3 py-1.5 border-b border-border-weaker-base">
+            <AmicodeDefaultsCapsule compute={computeControl} />
+          </div>
           <div class="flex-1 min-h-0 min-w-0 flex">
             {/* Chat-first shell rail (ADR 0001), mounted in the flag-on (v2) design. */}
             <nav
@@ -2662,7 +2701,7 @@ export default function Layout(props: ParentProps) {
               <div class="flex-1 min-h-0" />
               {liveSolveIndicator(false)}
               {/* Account zone: Connections (Company Compute solver key + Pasqal + vaults). */}
-              <GlobalConnectionsPopover onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
+              <GlobalConnectionsPopover compact onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
               <Tooltip placement="right" value={language.t("sidebar.settings")}>
                 <IconButton
                   icon="settings-gear"

@@ -224,7 +224,7 @@ function StatusPopoverView(props: { state: StatusPopoverState }) {
 // nothing here touches the directory-scoped sync or prompt contexts, so it can
 // mount before any session exists. One wiring, two mounts — the body is the
 // same module the session-header popover lazy-loads.
-export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) {
+export function GlobalConnectionsPopover(props: { onManageVaults: () => void; compact?: boolean }) {
   const language = useLanguage()
   const [shown, setShownRaw] = createSignal(false)
   // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
@@ -246,38 +246,60 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
       onOpenChange={setShown}
       triggerAs="button"
       triggerProps={
-        {
-          type: "button",
-          // the collapse-to-hamburger CSS keys off this action id (amicode.css)
-          "data-action": "home-connections-toggle",
-          "aria-label": language.t("home.connections.trigger"),
-          // Mirrors the Sessions pill next door (home.tsx chrome strip).
-          style: {
-            display: "inline-flex",
-            "align-items": "center",
-            gap: "6px",
-            border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "7px",
-            background: "var(--v2-background-bg-layer-01)",
-            color: "var(--v2-text-text-base)",
-            padding: "4px 10px",
-            "font-size": "12px",
-            "font-weight": "600",
-            cursor: "pointer",
-          },
-        } as ComponentProps<"button">
+        props.compact
+          ? ({
+              type: "button",
+              "data-action": "home-connections-toggle",
+              "aria-label": language.t("home.connections.trigger"),
+              // Rail-foot icon: square, borderless, matches the other rail icons.
+              style: {
+                display: "inline-flex",
+                "align-items": "center",
+                "justify-content": "center",
+                width: "36px",
+                height: "36px",
+                "border-radius": "8px",
+                background: "transparent",
+                color: "var(--v2-text-text-base)",
+                cursor: "pointer",
+              },
+            } as ComponentProps<"button">)
+          : ({
+              type: "button",
+              // the collapse-to-hamburger CSS keys off this action id (amicode.css)
+              "data-action": "home-connections-toggle",
+              "aria-label": language.t("home.connections.trigger"),
+              // Mirrors the Sessions pill next door (home.tsx chrome strip).
+              style: {
+                display: "inline-flex",
+                "align-items": "center",
+                gap: "6px",
+                border: "1px solid var(--v2-border-border-base)",
+                "border-radius": "7px",
+                background: "var(--v2-background-bg-layer-01)",
+                color: "var(--v2-text-text-base)",
+                padding: "4px 10px",
+                "font-size": "12px",
+                "font-weight": "600",
+                cursor: "pointer",
+              },
+            } as ComponentProps<"button">)
       }
       trigger={
-        <>
-          {language.t("home.connections.trigger")}
-          <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
-            ▾
-          </span>
-        </>
+        props.compact ? (
+          <Icon name="server" />
+        ) : (
+          <>
+            {language.t("home.connections.trigger")}
+            <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
+              ▾
+            </span>
+          </>
+        )
       }
       class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
       gutter={8}
-      placement="bottom-end"
+      placement={props.compact ? "right-end" : "bottom-end"}
     >
       <Show when={shown()}>
         <Suspense
