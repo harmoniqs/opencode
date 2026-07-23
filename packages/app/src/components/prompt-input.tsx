@@ -1513,6 +1513,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               onSubmit={handleSubmit}
               classList={{
                 "group/prompt-input min-h-[96px] w-full rounded-xl bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]": true,
+                // Start-screen composer floats on the near-white page (bg-base is
+                // #fff, brighter than the #fcfcfc page) with only the raised
+                // shadow's 0.5px ring to hold its edge (~1.35:1). Give it a real
+                // hairline so it reads. Scoped to newSession() — the in-session
+                // composer sits over message content and doesn't need it. Off
+                // while dragging so the dashed drop affordance below still wins.
+                "border border-[var(--v2-border-border-strong)]": newSession() && store.draggingType === null,
                 "border-icon-info-active border-dashed": store.draggingType !== null,
                 [props.class ?? ""]: !!props.class,
               }}
