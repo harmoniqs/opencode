@@ -279,7 +279,7 @@ export function AmicodeEntityRail(props: {
                 "flex-shrink": "0",
                 gap: "4px",
                 border: "1px solid var(--v2-border-border-base)",
-                "border-radius": "5px",
+                "border-radius": "var(--radius-sm)",
                 background: "none",
                 color: "var(--v2-text-text-accent)",
                 padding: "1px 8px",

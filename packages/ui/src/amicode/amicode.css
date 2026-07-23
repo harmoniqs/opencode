@@ -126,9 +126,9 @@
   text-align: left;
   /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
-  padding: 5px 9px 5px 10px;
+  padding: 4px 8px;
   font-size: 12.5px;
   line-height: 17px;
   color: var(--v2-text-text-base);
@@ -151,7 +151,7 @@
   transform: translateY(0.5px);
 }
 [data-component="amicode-card"]:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 [data-component="amicode-card"][data-state="error"] {
@@ -287,7 +287,7 @@
   text-transform: uppercase;
   font-weight: 600;
   padding: 3px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02);
   color: var(--v2-text-text-muted);
 }
@@ -298,8 +298,8 @@
 
 [data-component="amicode-entity-view"] .amc-ev-formula {
   margin: 8px 0;
-  padding: 14px 16px;
-  border-radius: 10px;
+  padding: 16px 16px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   border: 1px solid var(--v2-border-border-muted);
   overflow-x: auto;
@@ -343,8 +343,8 @@
   grid-template-columns: 160px 1fr auto;
   align-items: baseline;
   gap: 14px;
-  padding: 7px 8px 7px 4px;
-  border-radius: 8px;
+  padding: 8px 8px 8px 4px;
+  border-radius: var(--radius-md);
   transition: background 0.12s ease;
 }
 [data-component="amicode-entity-view"] .amc-field:hover { background: var(--v2-background-bg-layer-01); }
@@ -388,7 +388,7 @@
   color: var(--v2-text-text-muted);
   background: transparent;
   border: 1px solid var(--v2-border-border-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
   cursor: pointer;
   display: inline-flex;
@@ -401,11 +401,11 @@
 [data-component="amicode-entity-view"] .amc-field:hover .amc-edit { opacity: 1; }
 [data-component="amicode-entity-view"] .amc-edit:hover {
   color: var(--v2-text-text-accent);
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-edit:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 1px;
   opacity: 1;
 }
@@ -447,9 +447,9 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
-  outline: 2px solid var(--v2-icon-icon-accent);
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 [data-component="amicode-entity-view"] .amc-timeline {
   display: flex;
@@ -461,8 +461,8 @@
 }
 [data-component="amicode-entity-view"] .amc-event {
   position: relative;
-  padding: 9px 10px 9px 20px;
-  border-radius: 8px;
+  padding: 8px 8px 8px 20px;
+  border-radius: var(--radius-md);
 }
 [data-component="amicode-entity-view"] .amc-event::before {
   content: "";
@@ -476,7 +476,7 @@
   border: 1.5px solid var(--v2-text-text-faint);
 }
 [data-component="amicode-entity-view"] .amc-event[data-anchored] {
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 9%, transparent);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-event[data-anchored]::before {
   background: var(--v2-icon-icon-accent);
@@ -494,7 +494,7 @@
   font-size: 10px;
   color: var(--v2-text-text-muted);
   background: var(--v2-background-bg-layer-02);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 1px 6px;
 }
 [data-component="amicode-entity-view"] .amc-event .src {
@@ -529,7 +529,7 @@
   align-items: center;
   gap: 9px;
   margin-top: 18px;
-  padding: 12px 4px 6px;
+  padding: 12px 4px 8px;
   border-top: 1px solid var(--v2-border-border-muted);
   font-size: 12px;
   color: var(--v2-text-text-muted);
@@ -577,20 +577,20 @@
   color: var(--v2-text-text-base);
   background: transparent;
   border: 1px solid var(--v2-border-border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 3px 10px;
   cursor: pointer;
   flex-shrink: 0;
 }
 [data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
 [data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 1px;
 }
 
 [data-component="amicode-entity-view"] .amc-sk {
   height: 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02);
   position: relative;
   overflow: hidden;
@@ -617,14 +617,14 @@
 [data-component="amicode-run-window"] {
   /* Rail-free and tint-free: neutral hairline + surface across the AMICO family. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
 }
 
 /* rail chip hover */
 [data-component="amicode-entity-rail"] [data-slot="amicode-rail-chip"] {
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
   margin: -1px -1px;
   transition: background 0.14s ease;
@@ -638,7 +638,7 @@
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
 [data-component="amicode-run-window"] button:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 
@@ -647,7 +647,7 @@
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):hover {
-  border-color: var(--v2-icon-icon-accent) !important;
+  border-color: var(--accent-edge) !important;
   background: var(--v2-background-bg-layer-03) !important;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):active {
@@ -676,7 +676,7 @@
 }
 [data-component="amicode-system-view"] .amc-node {
   display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 6px 12px; border-radius: 8px;
+  padding: 6px 12px; border-radius: var(--radius-md);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-01);
 }
@@ -712,13 +712,13 @@
 [data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }
 [data-component="amicode-formulation-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
 [data-component="amicode-formulation-view"] .amc-badge {
-  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: var(--radius-full);
   border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
   font-size: 0.76rem;
 }
 [data-component="amicode-formulation-view"] .amc-badge.active {
-  border-color: color-mix(in srgb, var(--v2-icon-icon-accent) 42%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 8%, var(--v2-background-bg-layer-01));
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-formulation-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
 [data-component="amicode-formulation-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
@@ -769,27 +769,27 @@
    The scrim also intercepts pointer events so the widget beneath can't be
    clicked while arranging. ------------------------------------------------- */
 [data-component="amicode-widget-cell"] { position: relative; }
-.amc-wg-framewrap { position: relative; border-radius: 10px; transition: outline-color 0.16s ease; }
+.amc-wg-framewrap { position: relative; border-radius: var(--radius-lg); transition: outline-color 0.16s ease; }
 [data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-framewrap {
   outline: 1px dashed var(--v2-border-border-base);
   outline-offset: 3px;
 }
 .amc-wg-scrim {
-  position: absolute; inset: 0; z-index: 1; border-radius: 10px; cursor: default;
+  position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-lg); cursor: default;
   background: color-mix(in srgb, var(--v2-background-bg-base) 44%, transparent);
 }
 .amc-wg-placeholder .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
 .amc-wg-pill {
   position: absolute; top: 7px; right: 7px; z-index: 2;
   display: flex; align-items: center; gap: 1px; padding: 3px;
-  border-radius: 9px; background: var(--v2-background-bg-layer-01);
+  border-radius: var(--radius-lg); background: var(--v2-background-bg-layer-01);
   border: 1px solid var(--v2-border-border-base);
   box-shadow: 0 3px 12px color-mix(in srgb, var(--v2-background-bg-base) 70%, transparent);
 }
 .amc-wg-pill button {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 24px; height: 24px; padding: 0 5px;
-  border: none; background: transparent; border-radius: 6px;
+  border: none; background: transparent; border-radius: var(--radius-md);
   color: var(--v2-text-text-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
 .amc-wg-pill button:hover:not(:disabled) {
@@ -800,14 +800,14 @@
 
 [data-component="amicode-widget-editbar"] {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  padding: 8px 12px; border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 7%, var(--v2-background-bg-layer-01));
+  padding: 8px 12px; border-radius: var(--radius-lg);
+  border: 1px solid var(--accent-edge);
+  background: var(--accent-fill-soft);
   font-size: 11px; color: var(--v2-text-text-muted);
 }
 [data-component="amicode-widget-editbar"] b { color: var(--v2-text-text-base); font-weight: 600; }
 [data-component="amicode-widget-editbar"] .amc-wg-editdone {
-  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: 6px;
+  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
   font-size: 11px; padding: 3px 12px; cursor: pointer;
 }
@@ -815,9 +815,9 @@
 
 .amc-wg-placeholder {
   display: flex; align-items: center; min-height: 68px;
-  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
-  padding: 10px 12px; font-size: 11px; color: var(--v2-text-text-faint);
+  padding: 12px 12px; font-size: 11px; color: var(--v2-text-text-faint);
 }
 
 [data-component="amicode-widget-tray"] { display: flex; flex-direction: column; gap: 8px; }
@@ -852,11 +852,11 @@
 .amc-wg-traycard .amc-wg-framewrap { height: 100%; }
 .amc-wg-trayadd {
   position: absolute; inset: 0; display: flex; align-items: flex-end;
-  border: 0; border-radius: 10px; background: transparent;
+  border: 0; border-radius: var(--radius-lg); background: transparent;
   cursor: pointer; padding: 6px;
 }
 .amc-wg-trayadd span {
-  font-size: 11px; padding: 3px 11px; border-radius: 999px;
+  font-size: 11px; padding: 3px 11px; border-radius: var(--radius-full);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-muted);
 }
@@ -871,7 +871,7 @@
 .amc-wg-ghost {
   min-height: 140px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: var(--radius-lg);
   background: transparent; color: var(--v2-text-text-faint);
   font-size: 11px; cursor: pointer;
   transition: border-color 0.16s ease, color 0.16s ease;
@@ -888,8 +888,8 @@
 /* ---- In-chat widget preview (Stage 2 chat authoring) --------------------- */
 [data-component="amicode-widget-preview"] {
   display: flex; flex-direction: column; gap: 8px;
-  border: 1px solid var(--v2-border-border-base); border-radius: 12px;
-  background: var(--v2-background-bg-layer-01); padding: 10px 12px; max-width: 100%;
+  border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-lg);
+  background: var(--v2-background-bg-layer-01); padding: 12px 12px; max-width: 100%;
 }
 [data-component="amicode-widget-preview"] .amc-wp-head {
   display: flex; align-items: baseline; gap: 8px; min-width: 0;
@@ -903,10 +903,10 @@
 }
 [data-component="amicode-widget-preview"] .amc-wp-badge {
   font-size: 10px; color: var(--v2-text-text-muted);
-  border: 1px solid var(--v2-border-border-base); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-full); padding: 1px 7px;
 }
 [data-component="amicode-widget-preview"] .amc-wp-stage {
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--radius-lg); overflow: hidden;
   /* faint checker so a widget's own transparent areas read as "canvas" */
   background:
     repeating-linear-gradient(45deg,
@@ -924,12 +924,12 @@
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin {
-  border: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, var(--v2-border-border-base));
-  border-radius: 7px; background: color-mix(in srgb, var(--v2-icon-icon-accent) 12%, var(--v2-background-bg-layer-02));
+  border: 1px solid var(--accent-edge);
+  border-radius: var(--radius-md); background: var(--accent-fill-soft);
   color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--v2-icon-icon-accent) 20%, var(--v2-background-bg-layer-02));
+  background: color-mix(in srgb, var(--accent) 20%, var(--v2-background-bg-layer-02));
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {
@@ -966,7 +966,7 @@
     max-width: min(320px, 92cqw);
     padding: 12px;
     border: 1px solid var(--v2-border-border-base);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: var(--v2-background-bg-base);
     box-shadow: 0 14px 40px -18px rgba(0, 0, 0, 0.55);
   }
@@ -1000,7 +1000,7 @@
   justify-content: center;
   width: 26px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-01);
   color: var(--v2-text-text-muted);
@@ -1040,7 +1040,7 @@
   padding: 5px;
   background: var(--v2-background-bg-base);
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.55);
 }
 .amc-wg-menu button {
@@ -1051,7 +1051,7 @@
   text-align: left;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 9px;
   font-size: 12px;
   color: var(--v2-text-text-base);
@@ -1085,7 +1085,7 @@
  * Reduced motion kills the slide transitions. */
 .amc-wg-sortable { touch-action: none; min-width: 0; }
 .amc-wg-sortable.amc-wg-active { position: relative; z-index: 5; }
-.amc-wg-sortable:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 2px; border-radius: 10px; }
+.amc-wg-sortable:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 2px; border-radius: var(--radius-lg); }
 [data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-scrim { cursor: grab; }
 .amc-wg-sortable.amc-wg-active .amc-wg-scrim { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {

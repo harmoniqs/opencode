@@ -38,7 +38,15 @@ const SOURCES: [amc: string, v2: string, fallback: string][] = [
   ["--amc-text", "--v2-text-text-base", "#E9ECF4"],
   ["--amc-text-muted", "--v2-text-text-muted", "#8B94A9"],
   ["--amc-text-faint", "--v2-text-text-faint", "#6A7286"],
-  ["--amc-accent", "--v2-icon-icon-accent", "#F2C94C"],
+  // Accent FOREGROUND (links, chevrons, borders, glyphs): neutral on light /
+  // yellow on dark, tracking the host's icon-accent. Yellow is illegible as a
+  // foreground on white, so this is neutral there — see the design-system skill.
+  ["--amc-accent", "--v2-icon-icon-accent", "#FFF676"],
+  // Accent solid FILL (CTA / chip background): the brand hue #fff676 in BOTH
+  // schemes, sourced from design-polish's --accent. Pair only with --amc-accent-ink.
+  ["--amc-accent-fill", "--accent", "#FFF676"],
+  // Ink ON a yellow fill: always near-black, never --amc-bg (which is white on light).
+  ["--amc-accent-ink", "--accent-ink", "#111214"],
   ["--amc-success", "--v2-state-fg-success", "#5BC873"],
   ["--amc-warning", "--v2-state-fg-warning", "#E5B454"],
   ["--amc-danger", "--v2-state-fg-danger", "#E56A6A"],

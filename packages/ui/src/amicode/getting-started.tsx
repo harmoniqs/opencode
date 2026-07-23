@@ -155,7 +155,7 @@ export function AmicodeGettingStarted(props: {
               onClick={() => props.onStart(starter.prompt)}
               style={{
                 border: "1px solid var(--v2-icon-icon-accent)",
-                "border-radius": "6px",
+                "border-radius": "var(--radius-md)",
                 background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
                 padding: "4px 12px",
@@ -175,7 +175,7 @@ export function AmicodeGettingStarted(props: {
             onClick={() => props.onResume?.()}
             style={{
               border: "1px solid var(--v2-icon-icon-accent)",
-              "border-radius": "6px",
+              "border-radius": "var(--radius-md)",
               background: "var(--v2-background-bg-layer-02)",
               color: "var(--v2-text-text-base)",
               padding: "4px 12px",

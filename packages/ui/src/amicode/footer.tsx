@@ -69,7 +69,7 @@ export function AmicodeFooter() {
             "font-size": "10px",
             color: "var(--v2-text-text-faint)",
             border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "999px",
+            "border-radius": "var(--radius-full)",
             padding: "2px 8px",
           }}
         >

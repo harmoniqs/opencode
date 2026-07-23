@@ -38,7 +38,7 @@ const FIELD: Record<string, string> = {
   "box-sizing": "border-box",
   background: "var(--v2-background-bg-layer-02, transparent)",
   border: "1px solid var(--v2-border-border-base)",
-  "border-radius": "8px",
+  "border-radius": "var(--radius-md)",
   padding: "9px 12px",
   "font-size": "13px",
   color: "var(--v2-text-text-base)",
@@ -175,7 +175,7 @@ export function AmicodeOnboardingWizard(props: {
             style={{
               width: "6px",
               height: "6px",
-              "border-radius": "999px",
+              "border-radius": "var(--radius-full)",
               background: step() === i ? "var(--v2-icon-icon-accent)" : "var(--v2-border-border-base)",
             }}
           />
@@ -190,10 +190,10 @@ export function AmicodeOnboardingWizard(props: {
       disabled={p.disabled}
       onClick={() => p.onClick()}
       style={{
-        background: "var(--v2-icon-icon-accent)",
-        color: "var(--v2-background-bg-base, #000)",
+        background: "var(--accent, #fff676)",
+        color: "var(--accent-ink, #111214)",
         border: "none",
-        "border-radius": "10px",
+        "border-radius": "var(--radius-lg)",
         padding: "10px 22px",
         "font-size": "14px",
         "font-weight": "650",
@@ -240,7 +240,7 @@ export function AmicodeOnboardingWizard(props: {
           width: "min(560px, calc(100vw - 48px))",
           "max-height": "min(640px, calc(100vh - 48px))",
           "overflow-y": "auto",
-          "border-radius": "16px",
+          "border-radius": "var(--radius-xl)",
           border: "1px solid var(--v2-border-border-base)",
           background: "var(--v2-background-bg-base)",
           padding: "28px 32px 22px",
@@ -325,7 +325,7 @@ export function AmicodeOnboardingWizard(props: {
                       width: "26px",
                       height: "26px",
                       "object-fit": "contain",
-                      "border-radius": "5px",
+                      "border-radius": "var(--radius-sm)",
                       flex: "none",
                       background: "#FFF",
                       padding: "2px",
@@ -353,7 +353,7 @@ export function AmicodeOnboardingWizard(props: {
                     "z-index": "5",
                     background: "var(--v2-background-bg-layer-01)",
                     border: "1px solid var(--v2-border-border-base)",
-                    "border-radius": "8px",
+                    "border-radius": "var(--radius-md)",
                     "margin-top": "4px",
                     overflow: "hidden",
                   }}
@@ -384,7 +384,7 @@ export function AmicodeOnboardingWizard(props: {
                             width: "18px",
                             height: "18px",
                             "object-fit": "contain",
-                            "border-radius": "4px",
+                            "border-radius": "var(--radius-sm)",
                             flex: "none",
                           }}
                           onError={(e) => (e.currentTarget.style.display = "none")}
@@ -519,9 +519,9 @@ export function AmicodeOnboardingWizard(props: {
                 "align-items": "center",
                 gap: "12px",
                 padding: "12px 16px",
-                "border-radius": "10px",
-                background: "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
-                border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                "border-radius": "var(--radius-lg)",
+                background: "var(--accent-fill-soft)",
+                border: "1px solid var(--accent-edge)",
               }}
             >
               <Show when={fields().affiliation_logo} fallback={<Mark class="w-9 h-auto" />}>
@@ -532,7 +532,7 @@ export function AmicodeOnboardingWizard(props: {
                     "justify-content": "center",
                     width: "40px",
                     height: "40px",
-                    "border-radius": "8px",
+                    "border-radius": "var(--radius-md)",
                     background: "#FFF",
                     padding: "4px",
                   }}

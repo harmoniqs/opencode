@@ -112,7 +112,7 @@ export function WidgetFrame(props: {
           data-component="amicode-widget-error"
           style={{
             border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "10px",
+            "border-radius": "var(--radius-lg)",
             background: "var(--v2-background-bg-layer-01)",
             padding: "10px 12px",
             "font-size": "11px",

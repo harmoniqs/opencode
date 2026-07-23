@@ -129,7 +129,7 @@ const CARD: JSX.CSSProperties = {
   "flex-direction": "column",
   "min-width": "0",
   border: "1px solid var(--v2-border-border-base)",
-  "border-radius": "10px",
+  "border-radius": "var(--radius-lg)",
   background: "var(--v2-background-bg-layer-01)",
   padding: "14px 16px",
 }
@@ -172,7 +172,7 @@ function PrimaryButton(props: { children: JSX.Element; onClick: () => void; slot
       style={{
         "align-self": "flex-start",
         border: "1px solid var(--v2-icon-icon-accent)",
-        "border-radius": "6px",
+        "border-radius": "var(--radius-md)",
         background: "var(--v2-background-bg-layer-02)",
         color: "var(--v2-text-text-base)",
         padding: "5px 12px",
@@ -289,12 +289,12 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           "align-items": "center",
           gap: "10px",
           "margin-top": "4px",
-          padding: "12px 22px",
-          border: "none",
-          "border-radius": "10px",
+          padding: "12px 20px",
+          border: "1px solid color-mix(in srgb, var(--accent-ink) 14%, transparent)",
+          "border-radius": "var(--radius-md)",
           cursor: "pointer",
-          background: "var(--v2-icon-icon-accent)",
-          color: "var(--v2-background-bg-base, #000)",
+          background: "var(--accent, #fff676)",
+          color: "var(--accent-ink, #111214)",
           "font-size": "15px",
           "font-weight": "650",
           "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
@@ -302,7 +302,7 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
       >
         Open chat
         <span aria-hidden="true" style={{ "font-size": "16px", "line-height": "1" }}>
-          ↗
+          →
         </span>
       </button>
     </div>
@@ -322,7 +322,7 @@ function Avatar(props: { name: string; src: string | null }) {
             width: "44px",
             height: "44px",
             "flex-shrink": "0",
-            "border-radius": "10px",
+            "border-radius": "var(--radius-lg)",
             background: "var(--v2-background-bg-layer-03)",
             color: "var(--v2-text-text-muted)",
             display: "flex",
@@ -341,7 +341,7 @@ function Avatar(props: { name: string; src: string | null }) {
         <img
           src={src()}
           alt={props.name}
-          style={{ width: "44px", height: "44px", "border-radius": "10px", "object-fit": "cover", "flex-shrink": "0" }}
+          style={{ width: "44px", height: "44px", "border-radius": "var(--radius-lg)", "object-fit": "cover", "flex-shrink": "0" }}
         />
       )}
     </Show>
@@ -520,7 +520,7 @@ function AboutYouCard(props: {
     "box-sizing": "border-box",
     background: "var(--v2-background-bg-layer-02, transparent)",
     border: "1px solid var(--v2-border-border-base)",
-    "border-radius": "6px",
+    "border-radius": "var(--radius-md)",
     padding: "4px 8px",
     "font-size": "12px",
     color: "var(--v2-text-text-base)",
@@ -587,9 +587,9 @@ function AboutYouCard(props: {
                   "align-items": "center",
                   "margin-top": "10px",
                   padding: "8px 10px",
-                  "border-radius": "8px",
-                  background: "color-mix(in srgb, var(--v2-icon-icon-accent) 7%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 25%, var(--v2-border-border-base))",
+                  "border-radius": "var(--radius-md)",
+                  background: "var(--accent-fill-soft)",
+                  border: "1px solid var(--accent-edge)",
                 }}
               >
                 <Show
@@ -602,10 +602,10 @@ function AboutYouCard(props: {
                         "justify-content": "center",
                         width: "44px",
                         height: "44px",
-                        "border-radius": "8px",
+                        "border-radius": "var(--radius-md)",
                         flex: "none",
-                        background: "var(--v2-icon-icon-accent)",
-                        color: "var(--v2-background-bg-base, #000)",
+                        background: "var(--accent, #fff676)",
+                        color: "var(--accent-ink, #111214)",
                         "font-size": "15px",
                         "font-weight": "700",
                         "letter-spacing": "0.5px",
@@ -629,7 +629,7 @@ function AboutYouCard(props: {
                       "justify-content": "center",
                       width: "44px",
                       height: "44px",
-                      "border-radius": "8px",
+                      "border-radius": "var(--radius-md)",
                       flex: "none",
                       background: "#FFFFFF",
                       border: "1px solid var(--v2-border-border-base)",
@@ -702,7 +702,7 @@ function AboutYouCard(props: {
                             color: "var(--v2-text-text-accent)",
                             background: "none",
                             border: "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 40%, transparent)",
-                            "border-radius": "999px",
+                            "border-radius": "var(--radius-full)",
                             padding: "3px 10px",
                           }}
                         >
@@ -736,7 +736,7 @@ function AboutYouCard(props: {
                                   width: "20px",
                                   height: "20px",
                                   "object-fit": "contain",
-                                  "border-radius": "4px",
+                                  "border-radius": "var(--radius-sm)",
                                   flex: "none",
                                 }}
                                 onError={(e) => (e.currentTarget.style.display = "none")}
@@ -767,7 +767,7 @@ function AboutYouCard(props: {
                                 right: "0",
                                 "z-index": "10",
                                 "margin-top": "4px",
-                                "border-radius": "8px",
+                                "border-radius": "var(--radius-md)",
                                 overflow: "hidden",
                                 background: "var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))",
                                 border: "1px solid var(--v2-border-border-base)",
@@ -800,7 +800,7 @@ function AboutYouCard(props: {
                                         width: "18px",
                                         height: "18px",
                                         "object-fit": "contain",
-                                        "border-radius": "4px",
+                                        "border-radius": "var(--radius-sm)",
                                         flex: "none",
                                       }}
                                       onError={(e) => (e.currentTarget.style.display = "none")}
@@ -849,10 +849,10 @@ function AboutYouCard(props: {
                             disabled={saving() || resolvingLogo() > 0}
                             onClick={() => void save()}
                             style={{
-                              background: "var(--v2-icon-icon-accent)",
-                              color: "var(--v2-background-bg-base, #000)",
+                              background: "var(--accent, #fff676)",
+                              color: "var(--accent-ink, #111214)",
                               border: "none",
-                              "border-radius": "6px",
+                              "border-radius": "var(--radius-md)",
                               padding: "4px 10px",
                               "font-size": "12px",
                               "font-weight": "600",
@@ -1075,8 +1075,8 @@ function LibraryCard(props: {
             fileInput?.click()
           }}
           style={{
-            border: "1px solid var(--v2-icon-icon-accent)",
-            "border-radius": "6px",
+            border: "1px solid var(--v2-border-border-base)",
+            "border-radius": "var(--radius-md)",
             background: "var(--v2-background-bg-layer-02)",
             color: "var(--v2-text-text-base)",
             padding: "3px 10px",

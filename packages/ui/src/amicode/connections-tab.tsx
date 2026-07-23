@@ -318,8 +318,8 @@ export function ConnectionCard(props: {
                   data-slot="amicode-connection-project"
                   data-selected={selected()}
                   style={{
-                    "border-color": selected() ? "var(--v2-text-text-accent)" : "var(--border-weak-base)",
-                    "background-color": selected() ? "var(--surface-raised-base)" : "var(--surface-base)",
+                    "border-color": selected() ? "var(--accent-edge)" : "var(--border-weak-base)",
+                    "background-color": selected() ? "var(--accent-fill-soft)" : "var(--surface-base)",
                   }}
                 >
                   <input
@@ -328,7 +328,7 @@ export function ConnectionCard(props: {
                     value={project.id}
                     checked={selected()}
                     onInput={() => setPickedProject(project.id)}
-                    style={{ "accent-color": "var(--v2-background-bg-accent)", "flex-shrink": "0" }}
+                    style={{ "accent-color": "var(--v2-border-border-focus)", "flex-shrink": "0" }}
                   />
                   <span class="flex flex-col min-w-0 gap-0.5">
                     <span class="text-12-regular text-text-base truncate">{project.name}</span>
@@ -415,7 +415,7 @@ export function ConnectionCard(props: {
                   value={username()}
                   disabled={model().formDisabled}
                   onInput={(event) => setUsername(event.currentTarget.value)}
-                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-[var(--v2-text-text-base)] bg-[var(--v2-background-bg-layer-02)] rounded-md px-2 py-1.5 border border-[var(--v2-border-border-base)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--v2-border-border-focus)]"
                 />
                 <input
                   type="password"
@@ -426,7 +426,7 @@ export function ConnectionCard(props: {
                   value={password()}
                   disabled={model().formDisabled}
                   onInput={(event) => setPassword(event.currentTarget.value)}
-                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-[var(--v2-text-text-base)] bg-[var(--v2-background-bg-layer-02)] rounded-md px-2 py-1.5 border border-[var(--v2-border-border-base)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--v2-border-border-focus)]"
                 />
               </Show>
               <Show when={entryKind() === "base-url-token"}>
@@ -440,7 +440,7 @@ export function ConnectionCard(props: {
                   value={baseUrl()}
                   disabled={model().formDisabled}
                   onInput={(event) => setBaseUrl(event.currentTarget.value)}
-                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-[var(--v2-text-text-base)] bg-[var(--v2-background-bg-layer-02)] rounded-md px-2 py-1.5 border border-[var(--v2-border-border-base)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--v2-border-border-focus)]"
                 />
               </Show>
               <Show when={entryKind() === "base-url-token" || entryKind() === "pasqal-token"}>
@@ -453,7 +453,7 @@ export function ConnectionCard(props: {
                   value={token()}
                   disabled={model().formDisabled}
                   onInput={(event) => setToken(event.currentTarget.value)}
-                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-[var(--v2-text-text-base)] bg-[var(--v2-background-bg-layer-02)] rounded-md px-2 py-1.5 border border-[var(--v2-border-border-base)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--v2-border-border-focus)]"
                 />
               </Show>
               <Show when={entryKind() === "pasqal-token"}>
@@ -467,7 +467,7 @@ export function ConnectionCard(props: {
                   value={projectId()}
                   disabled={model().formDisabled}
                   onInput={(event) => setProjectId(event.currentTarget.value)}
-                  class="text-12-regular text-text-base bg-surface-base rounded-md px-2 py-1.5 border border-border-weak-base"
+                  class="text-12-regular text-[var(--v2-text-text-base)] bg-[var(--v2-background-bg-layer-02)] rounded-md px-2 py-1.5 border border-[var(--v2-border-border-base)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--v2-border-border-focus)]"
                 />
               </Show>
               <Button

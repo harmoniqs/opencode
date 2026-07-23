@@ -190,10 +190,10 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
     "font-size": "12px",
     "font-weight": active ? "650" : "450",
     "text-align": "left",
-    border: active ? "1px solid var(--v2-icon-icon-accent)" : "1px solid var(--v2-border-border-base)",
-    "border-radius": "7px",
+    border: active ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
+    "border-radius": "var(--radius-md)",
     cursor: "pointer",
-    background: active ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
+    background: active ? "var(--accent-fill-soft)" : "transparent",
     color: active ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
   })
 
@@ -212,9 +212,9 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
           "max-width": "100%",
           "min-width": "0",
           border: hp()
-            ? "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 55%, var(--v2-border-border-base))"
+            ? "1px solid var(--accent-edge)"
             : "1px solid var(--v2-border-border-base)",
-          "border-radius": "7px",
+          "border-radius": "var(--radius-md)",
           background: "var(--v2-background-bg-layer-01)",
           color: "var(--v2-text-text-base)",
           padding: "4px 10px",
@@ -244,7 +244,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             width: "min(300px, 86vw)",
             background: "var(--v2-background-bg-base)",
             border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "10px",
+            "border-radius": "var(--radius-lg)",
             "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
             padding: "14px",
             display: "flex",
@@ -292,9 +292,9 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 // 2026-07-22: don't flip Piccolo off before the switch is real)
                 border:
                   hp() || computeOpen()
-                    ? "1px solid var(--v2-icon-icon-accent)"
+                    ? "1px solid var(--accent-edge)"
                     : "1px solid var(--v2-border-border-base)",
-                "border-radius": "7px",
+                "border-radius": "var(--radius-md)",
                 overflow: "hidden",
                 display: "flex",
                 "flex-direction": "column",
@@ -307,7 +307,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   gap: "0",
                   "font-size": "12px",
                   "font-weight": hp() ? "650" : "450",
-                  background: hp() ? "color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent)" : "transparent",
+                  background: hp() ? "var(--accent-fill-soft)" : "transparent",
                   color: hp() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
                 }}
               >
@@ -361,10 +361,10 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     "letter-spacing": "0.5px",
                     padding: "4px 7px",
                     "line-height": "1",
-                    "border-radius": "999px",
-                    border: "1px solid currentColor",
-                    background: "color-mix(in srgb, currentColor 10%, transparent)",
-                    color: "var(--v2-text-text-accent)",
+                    "border-radius": "var(--radius-full)",
+                    border: "none",
+                    background: "var(--accent)",
+                    color: "var(--accent-ink)",
                     "flex-shrink": "0",
                   }}
                 >

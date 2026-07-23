@@ -507,6 +507,12 @@ function HomeDesign() {
     const raw = dashboardRaw()
     return raw === undefined ? undefined : parseDashboardResponse(raw)
   })
+  // While the widget/dashboard registry is still loading we must render a
+  // skeleton, NOT the legacy hardcoded cards — otherwise the legacy cards flash
+  // on every reload before the widget grid mounts (Kate, 2026-07-23). The
+  // legacy fallback is reserved for a server that has genuinely *resolved*
+  // without widget routes.
+  const homeCardsLoading = createMemo(() => widgetsRaw.loading || dashboardRaw.loading)
   // Frame documents are server-served (own CSP header — srcdoc would inherit
   // the app CSP and kill the inline runtime). The registry hash rides the URL
   // so a widget edit busts the frame cache.
@@ -1136,6 +1142,7 @@ function HomeDesign() {
         </div>
         {/* Cards: full width across, sized to content so they never scroll */}
         <div class="relative z-[1] flex-none pt-1">
+          <Show when={!homeCardsLoading()} fallback={<HomeCardsSkeleton />}>
           <Show
             when={widgetInfos().length > 0 && dashboard()}
             fallback={
@@ -1183,6 +1190,7 @@ function HomeDesign() {
                 }
               />
             )}
+          </Show>
           </Show>
         </div>
         <AmicodeFooter />
@@ -1858,6 +1866,33 @@ function HomeSessionSkeleton(props: { label: string }) {
       <div class="flex min-w-0 flex-col gap-px" aria-hidden="true">
         <For each={[0, 1, 2, 3]}>{() => <div class="h-10 rounded-[6px] bg-v2-background-bg-deep opacity-70" />}</For>
       </div>
+    </div>
+  )
+}
+
+// Shown while the widget/dashboard registry loads, in place of the legacy
+// cards, so nothing flashes before the widget grid mounts. Neutral tokens only
+// (no accent) so it reads as "loading" not "content"; radius matches the cards.
+function HomeCardsSkeleton() {
+  return (
+    <div
+      class="grid min-w-0 gap-3"
+      style={{ "grid-template-columns": "repeat(auto-fill, minmax(220px, 1fr))", "min-height": "300px" }}
+      aria-hidden="true"
+    >
+      <For each={[0, 1, 2, 3, 4, 5]}>
+        {() => (
+          <div
+            class="rounded-[12px] motion-safe:animate-pulse"
+            style={{
+              height: "150px",
+              border: "1px solid var(--v2-border-border-muted)",
+              background: "var(--v2-background-bg-layer-01)",
+              opacity: "0.6",
+            }}
+          />
+        )}
+      </For>
     </div>
   )
 }

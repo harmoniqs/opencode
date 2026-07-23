@@ -1,5 +1,5 @@
 import { Show, type JSX } from "solid-js"
-import { MarkDetailed } from "@opencode-ai/ui/logo"
+import { Logo, MarkDetailed } from "@opencode-ai/ui/logo"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
 
 // amicode#chat-redesign (Kate): composer-as-hero, Kimi-style. Vertically
@@ -13,13 +13,12 @@ export function NewSessionDesignView(props: { children: JSX.Element; gettingStar
     <div data-component="session-new-design" class="relative size-full overflow-y-auto bg-v2-background-bg-base">
       <div class="min-h-full flex items-center justify-center px-6 py-16">
         <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
-          {/* amicode chat-redesign (Kate): mark only — no wordmark. Neutral +
-              very LOW-CONTRAST in both themes: the muted-icon grey nudged well
-              toward the background so the mark barely lifts off the surface. */}
-          <MarkDetailed
-            class="w-24 h-auto mb-6"
-            style={{ color: "color-mix(in srgb, var(--v2-icon-icon-muted) 45%, var(--v2-background-bg-base))" }}
-          />
+          {/* Kimi-style hero: the low-contrast mark + the AMICODE wordmark
+              (Logo), full-ink in the neutral text color. */}
+          {/* mark + wordmark share one ink (Kate 2026-07-23): the Logo wordmark
+              fills with var(--icon-base) in logo.tsx, so the mark matches it. */}
+          <MarkDetailed class="w-24 h-auto mb-4" style={{ color: "var(--icon-base)" }} />
+          <Logo class="w-52 max-w-full h-auto mb-8" />
           {/* chips sit directly below the mark, above the composer (Kate) */}
           <Show when={props.gettingStarted}>
             <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>

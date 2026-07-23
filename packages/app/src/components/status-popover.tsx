@@ -62,7 +62,7 @@ export function StatusPopover(props: { healthDot?: boolean }) {
           </Show>
         </div>
       }
-      class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
+      class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg"
       gutter={4}
       placement="bottom-end"
       shift={-168}
@@ -70,7 +70,7 @@ export function StatusPopover(props: { healthDot?: boolean }) {
       <Show when={shown()}>
         <Suspense
           fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
+            <div class="w-[360px] h-14 rounded-lg bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />
           }
         >
           <Body shown={shown} onClose={() => setShown(false)} />
@@ -161,7 +161,7 @@ function StatusPopoverBody(props: { shown: boolean; children: JSX.Element }) {
   return (
     <Show when={props.shown}>
       <Suspense
-        fallback={<div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />}
+        fallback={<div class="w-[360px] h-14 rounded-lg bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />}
       >
         {props.children}
       </Suspense>
@@ -182,7 +182,7 @@ function StatusPopoverView(props: { state: StatusPopoverState }) {
 
   const popoverProps = {
     class:
-      "[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl",
+      "[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg",
     gutter: 4,
     placement: "bottom-end" as const,
     shift: -168,
@@ -275,14 +275,14 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
           </span>
         </>
       }
-      class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
+      class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg"
       gutter={8}
       placement="bottom-end"
     >
       <Show when={shown()}>
         <Suspense
           fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
+            <div class="w-[360px] h-14 rounded-lg bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />
           }
         >
           <GlobalBody shown={shown} onClose={() => setShown(false)} onManageVaults={props.onManageVaults} />

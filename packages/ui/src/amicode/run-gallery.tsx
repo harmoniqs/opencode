@@ -53,7 +53,7 @@ export function AmicodeRunGallery(props: {
           "max-height": "calc(100vh - 48px)",
           display: "flex",
           "flex-direction": "column",
-          "border-radius": "14px",
+          "border-radius": "var(--radius-lg)",
           border: "1px solid var(--v2-border-border-base)",
           background: "var(--v2-background-bg-base)",
           overflow: "hidden",
@@ -114,7 +114,7 @@ export function AmicodeRunGallery(props: {
                   {/* the display IS the export: same SVG markup, scaled to fit */}
                   <div
                     style={{
-                      "border-radius": "10px",
+                      "border-radius": "var(--radius-lg)",
                       overflow: "hidden",
                       "line-height": "0",
                       border: "1px solid var(--v2-border-border-base)",
@@ -131,10 +131,10 @@ export function AmicodeRunGallery(props: {
                       disabled={busy() === card.runId}
                       onClick={() => void save(card)}
                       style={{
-                        background: "var(--v2-icon-icon-accent)",
-                        color: "var(--v2-background-bg-base, #000)",
+                        background: "var(--accent, #fff676)",
+                        color: "var(--accent-ink, #111214)",
                         border: "none",
-                        "border-radius": "6px",
+                        "border-radius": "var(--radius-md)",
                         padding: "5px 14px",
                         "font-size": "12px",
                         "font-weight": "600",

@@ -77,7 +77,7 @@ export function AmicodeSolverToggle() {
     "font-weight": active ? "650" : "450",
     border: "none",
     cursor: "pointer",
-    background: active ? "color-mix(in srgb, var(--v2-icon-icon-accent) 14%, transparent)" : "transparent",
+    background: active ? "var(--accent-fill-soft)" : "transparent",
     color: active ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
   })
   return (
@@ -100,8 +100,8 @@ export function AmicodeSolverToggle() {
       <div
         style={{
           display: "inline-flex",
-          border: mode() === "hp" ? "1px solid var(--v2-icon-icon-accent)" : "1px solid var(--v2-border-border-base)",
-          "border-radius": "8px",
+          border: mode() === "hp" ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
+          "border-radius": "var(--radius-md)",
           overflow: "hidden",
           transition: "border-color 0.15s ease",
         }}
@@ -123,9 +123,9 @@ export function AmicodeSolverToggle() {
               "font-weight": "750",
               "letter-spacing": "0.06em",
               padding: "1px 5px",
-              "border-radius": "4px",
-              background: "var(--v2-icon-icon-accent)",
-              color: "var(--v2-background-bg-base, #000)",
+              "border-radius": "var(--radius-sm)",
+              background: "var(--accent, #fff676)",
+              color: "var(--accent-ink, #111214)",
             }}
           >
             PRO
