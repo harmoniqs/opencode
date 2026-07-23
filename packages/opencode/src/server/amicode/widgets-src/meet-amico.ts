@@ -61,7 +61,7 @@ export default {
       )
     }).join('')
     el.innerHTML =
-      '<div data-card style="display:flex;flex-direction:column;min-width:0;height:100vh;border:1px solid var(--amc-border);border-radius:10px;background:var(--amc-layer);padding:var(--amc-pad);cursor:pointer">' +
+      '<div data-card style="display:flex;flex-direction:column;min-width:0;height:100vh;border:1px solid var(--amc-border);border-radius:12px;background:var(--amc-layer);padding:var(--amc-pad);cursor:pointer">' +
       '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amc-text-faint)">Meet Amico</div>' +
       '<div style="display:flex;gap:12px;align-items:center;margin-top:10px">' +
       FACE +

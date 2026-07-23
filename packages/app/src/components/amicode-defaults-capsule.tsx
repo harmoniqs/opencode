@@ -191,7 +191,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
     "font-weight": active ? "650" : "450",
     "text-align": "left",
     border: active ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
-    "border-radius": "7px",
+    "border-radius": "var(--radius-md)",
     cursor: "pointer",
     background: active ? "var(--accent-fill-soft)" : "transparent",
     color: active ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
@@ -214,7 +214,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
           border: hp()
             ? "1px solid var(--accent-edge)"
             : "1px solid var(--v2-border-border-base)",
-          "border-radius": "7px",
+          "border-radius": "var(--radius-md)",
           background: "var(--v2-background-bg-layer-01)",
           color: "var(--v2-text-text-base)",
           padding: "4px 10px",
@@ -244,7 +244,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             width: "min(300px, 86vw)",
             background: "var(--v2-background-bg-base)",
             border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "10px",
+            "border-radius": "var(--radius-lg)",
             "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
             padding: "14px",
             display: "flex",
@@ -294,7 +294,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   hp() || computeOpen()
                     ? "1px solid var(--accent-edge)"
                     : "1px solid var(--v2-border-border-base)",
-                "border-radius": "7px",
+                "border-radius": "var(--radius-md)",
                 overflow: "hidden",
                 display: "flex",
                 "flex-direction": "column",
@@ -361,7 +361,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     "letter-spacing": "0.5px",
                     padding: "4px 7px",
                     "line-height": "1",
-                    "border-radius": "999px",
+                    "border-radius": "var(--radius-full)",
                     border: "none",
                     background: "var(--accent)",
                     color: "var(--accent-ink)",

@@ -77,7 +77,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
                   picked() === option
                     ? "1px solid var(--v2-icon-icon-accent)"
                     : "1px solid var(--v2-border-border-strong)",
-                "border-radius": "6px",
+                "border-radius": "var(--radius-md)",
                 background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
                 padding: "3px 10px",

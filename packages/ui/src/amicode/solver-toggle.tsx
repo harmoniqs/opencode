@@ -101,7 +101,7 @@ export function AmicodeSolverToggle() {
         style={{
           display: "inline-flex",
           border: mode() === "hp" ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
-          "border-radius": "8px",
+          "border-radius": "var(--radius-md)",
           overflow: "hidden",
           transition: "border-color 0.15s ease",
         }}
@@ -123,7 +123,7 @@ export function AmicodeSolverToggle() {
               "font-weight": "750",
               "letter-spacing": "0.06em",
               padding: "1px 5px",
-              "border-radius": "4px",
+              "border-radius": "var(--radius-sm)",
               background: "var(--accent, #fff676)",
               color: "var(--accent-ink, #111214)",
             }}

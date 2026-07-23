@@ -15,7 +15,7 @@ const INPUT_STYLE = {
   "font-size": "11px",
   padding: "2px 6px",
   border: "1px solid var(--v2-border-border-base)",
-  "border-radius": "4px",
+  "border-radius": "var(--radius-sm)",
   background: "var(--v2-background-bg-base)",
   color: "var(--v2-text-text-base)",
 } as const
@@ -30,7 +30,7 @@ export function WidgetConfigForm(props: { fields: FormField[]; onChange: (key: s
         gap: "6px",
         padding: "8px 10px",
         border: "1px solid var(--v2-border-border-base)",
-        "border-radius": "8px",
+        "border-radius": "var(--radius-md)",
         background: "var(--v2-background-bg-layer-02)",
         "font-size": "11px",
         color: "var(--v2-text-text-muted)",

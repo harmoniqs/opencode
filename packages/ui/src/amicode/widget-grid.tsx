@@ -510,7 +510,7 @@ export function WidgetGrid(props: {
           style={{
             padding: "8px 10px",
             border: "1px dashed var(--v2-border-border-base)",
-            "border-radius": "8px",
+            "border-radius": "var(--radius-md)",
           }}
         >
           <span class="amc-wg-traylabel">add a widget</span>

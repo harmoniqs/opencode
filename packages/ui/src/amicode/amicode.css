@@ -126,7 +126,7 @@
   text-align: left;
   /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   padding: 5px 9px 5px 10px;
   font-size: 12.5px;
@@ -287,7 +287,7 @@
   text-transform: uppercase;
   font-weight: 600;
   padding: 3px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02);
   color: var(--v2-text-text-muted);
 }
@@ -299,7 +299,7 @@
 [data-component="amicode-entity-view"] .amc-ev-formula {
   margin: 8px 0;
   padding: 14px 16px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   border: 1px solid var(--v2-border-border-muted);
   overflow-x: auto;
@@ -344,7 +344,7 @@
   align-items: baseline;
   gap: 14px;
   padding: 7px 8px 7px 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: background 0.12s ease;
 }
 [data-component="amicode-entity-view"] .amc-field:hover { background: var(--v2-background-bg-layer-01); }
@@ -388,7 +388,7 @@
   color: var(--v2-text-text-muted);
   background: transparent;
   border: 1px solid var(--v2-border-border-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
   cursor: pointer;
   display: inline-flex;
@@ -449,7 +449,7 @@
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
   outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 [data-component="amicode-entity-view"] .amc-timeline {
   display: flex;
@@ -462,7 +462,7 @@
 [data-component="amicode-entity-view"] .amc-event {
   position: relative;
   padding: 9px 10px 9px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 [data-component="amicode-entity-view"] .amc-event::before {
   content: "";
@@ -494,7 +494,7 @@
   font-size: 10px;
   color: var(--v2-text-text-muted);
   background: var(--v2-background-bg-layer-02);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 1px 6px;
 }
 [data-component="amicode-entity-view"] .amc-event .src {
@@ -577,7 +577,7 @@
   color: var(--v2-text-text-base);
   background: transparent;
   border: 1px solid var(--v2-border-border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 3px 10px;
   cursor: pointer;
   flex-shrink: 0;
@@ -590,7 +590,7 @@
 
 [data-component="amicode-entity-view"] .amc-sk {
   height: 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02);
   position: relative;
   overflow: hidden;
@@ -624,7 +624,7 @@
 
 /* rail chip hover */
 [data-component="amicode-entity-rail"] [data-slot="amicode-rail-chip"] {
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
   margin: -1px -1px;
   transition: background 0.14s ease;
@@ -676,7 +676,7 @@
 }
 [data-component="amicode-system-view"] .amc-node {
   display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 6px 12px; border-radius: 8px;
+  padding: 6px 12px; border-radius: var(--radius-md);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-01);
 }
@@ -712,7 +712,7 @@
 [data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }
 [data-component="amicode-formulation-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
 [data-component="amicode-formulation-view"] .amc-badge {
-  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: var(--radius-full);
   border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
   font-size: 0.76rem;
 }
@@ -775,21 +775,21 @@
   outline-offset: 3px;
 }
 .amc-wg-scrim {
-  position: absolute; inset: 0; z-index: 1; border-radius: 10px; cursor: default;
+  position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-lg); cursor: default;
   background: color-mix(in srgb, var(--v2-background-bg-base) 44%, transparent);
 }
 .amc-wg-placeholder .amc-wg-empty { color: var(--v2-text-text-faint); font-weight: 500; margin-left: 4px; }
 .amc-wg-pill {
   position: absolute; top: 7px; right: 7px; z-index: 2;
   display: flex; align-items: center; gap: 1px; padding: 3px;
-  border-radius: 9px; background: var(--v2-background-bg-layer-01);
+  border-radius: var(--radius-lg); background: var(--v2-background-bg-layer-01);
   border: 1px solid var(--v2-border-border-base);
   box-shadow: 0 3px 12px color-mix(in srgb, var(--v2-background-bg-base) 70%, transparent);
 }
 .amc-wg-pill button {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 24px; height: 24px; padding: 0 5px;
-  border: none; background: transparent; border-radius: 6px;
+  border: none; background: transparent; border-radius: var(--radius-md);
   color: var(--v2-text-text-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
 .amc-wg-pill button:hover:not(:disabled) {
@@ -807,7 +807,7 @@
 }
 [data-component="amicode-widget-editbar"] b { color: var(--v2-text-text-base); font-weight: 600; }
 [data-component="amicode-widget-editbar"] .amc-wg-editdone {
-  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: 6px;
+  margin-left: auto; border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-base);
   font-size: 11px; padding: 3px 12px; cursor: pointer;
 }
@@ -852,11 +852,11 @@
 .amc-wg-traycard .amc-wg-framewrap { height: 100%; }
 .amc-wg-trayadd {
   position: absolute; inset: 0; display: flex; align-items: flex-end;
-  border: 0; border-radius: 10px; background: transparent;
+  border: 0; border-radius: var(--radius-lg); background: transparent;
   cursor: pointer; padding: 6px;
 }
 .amc-wg-trayadd span {
-  font-size: 11px; padding: 3px 11px; border-radius: 999px;
+  font-size: 11px; padding: 3px 11px; border-radius: var(--radius-full);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-02); color: var(--v2-text-text-muted);
 }
@@ -871,7 +871,7 @@
 .amc-wg-ghost {
   min-height: 140px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: var(--radius-lg);
   background: transparent; color: var(--v2-text-text-faint);
   font-size: 11px; cursor: pointer;
   transition: border-color 0.16s ease, color 0.16s ease;
@@ -903,10 +903,10 @@
 }
 [data-component="amicode-widget-preview"] .amc-wp-badge {
   font-size: 10px; color: var(--v2-text-text-muted);
-  border: 1px solid var(--v2-border-border-base); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-full); padding: 1px 7px;
 }
 [data-component="amicode-widget-preview"] .amc-wp-stage {
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--radius-lg); overflow: hidden;
   /* faint checker so a widget's own transparent areas read as "canvas" */
   background:
     repeating-linear-gradient(45deg,
@@ -966,7 +966,7 @@
     max-width: min(320px, 92cqw);
     padding: 12px;
     border: 1px solid var(--v2-border-border-base);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: var(--v2-background-bg-base);
     box-shadow: 0 14px 40px -18px rgba(0, 0, 0, 0.55);
   }
@@ -1000,7 +1000,7 @@
   justify-content: center;
   width: 26px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--v2-border-border-base);
   background: var(--v2-background-bg-layer-01);
   color: var(--v2-text-text-muted);
@@ -1051,7 +1051,7 @@
   text-align: left;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 9px;
   font-size: 12px;
   color: var(--v2-text-text-base);
@@ -1085,7 +1085,7 @@
  * Reduced motion kills the slide transitions. */
 .amc-wg-sortable { touch-action: none; min-width: 0; }
 .amc-wg-sortable.amc-wg-active { position: relative; z-index: 5; }
-.amc-wg-sortable:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 2px; border-radius: 10px; }
+.amc-wg-sortable:focus-visible { outline: 1px solid var(--v2-border-border-strong); outline-offset: 2px; border-radius: var(--radius-lg); }
 [data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-scrim { cursor: grab; }
 .amc-wg-sortable.amc-wg-active .amc-wg-scrim { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
