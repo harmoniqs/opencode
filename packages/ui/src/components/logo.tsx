@@ -1,4 +1,4 @@
-import { type ComponentProps } from "solid-js"
+import { type ComponentProps, type JSX } from "solid-js"
 
 // AMICODE branding: Mark/Splash render the Harmoniqs H-robot mark; Logo
 // renders the AMICODE wordmark. Component names, props, and data-component
@@ -61,14 +61,14 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 // files because a native tab icon has no live CSS context for currentColor.
 // Geometry mirrors amicode:packages/extension/media/amico.svg (viewBox
 // 0 0 3600 3600); keep in sync by hand if that mark changes.
-export const MarkDetailed = (props: { class?: string }) => {
+export const MarkDetailed = (props: { class?: string; style?: JSX.CSSProperties }) => {
   return (
     <svg
       data-component="logo-mark-detailed"
       classList={{ [props.class ?? ""]: !!props.class }}
       viewBox="0 0 3600 3600"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ color: "var(--icon-strong-base)" }}
+      style={{ color: "var(--icon-strong-base)", ...props.style }}
       fill="currentColor"
     >
       <path d="M2279.19,374.09v622.56h-958.38V374.09H202.07v2851.83h1118.74v-520.15h958.38v520.15h1118.74V374.09h-1118.74ZM3165.55,2523.71H478.91v-1338.38h2686.65v1338.38Z" />

@@ -1,19 +1,26 @@
 import { Show, type JSX } from "solid-js"
-import { Logo, MarkDetailed } from "@opencode-ai/ui/logo"
+import { MarkDetailed } from "@opencode-ai/ui/logo"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
 
-// amicode: new-session start screen, top→bottom — H-bot mark (hero), the AMICODE
-// wordmark, tagline + how-it-works + starter chips, then the composer. Sizing
-// mirrors the classic NewSessionView (Mark w-36 / Logo w-72); keeps the session
-// tabs and centered composer. The chips are the one-tap path to the next task.
-// The hero uses the DETAILED mark (144px, well above where the accents resolve).
+// amicode#chat-redesign (Kate): composer-as-hero, Kimi-style. Vertically
+// centered column — brand mark + wordmark (tight), then the composer as the
+// dominant element, then a quiet row of starter chips BELOW it. No tagline /
+// how-it-works block: the chips carry that story, everything else is air.
 export function NewSessionDesignView(props: { children: JSX.Element; gettingStarted?: JSX.Element }) {
+  // bg-base, not bg-deep — the deep tier read too dark/high-contrast in dark
+  // mode (Kate).
   return (
-    <div data-component="session-new-design" class="relative size-full overflow-y-auto bg-v2-background-bg-deep">
-      <div class="absolute inset-x-0 top-[12%] flex justify-center px-6 pb-24">
+    <div data-component="session-new-design" class="relative size-full overflow-y-auto bg-v2-background-bg-base">
+      <div class="min-h-full flex items-center justify-center px-6 py-16">
         <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
-          <MarkDetailed class="w-36 h-auto mb-4" />
-          <Logo class="w-72 max-w-full h-auto mb-6" />
+          {/* amicode chat-redesign (Kate): mark only — no wordmark. Neutral +
+              very LOW-CONTRAST in both themes: the muted-icon grey nudged well
+              toward the background so the mark barely lifts off the surface. */}
+          <MarkDetailed
+            class="w-24 h-auto mb-6"
+            style={{ color: "color-mix(in srgb, var(--v2-icon-icon-muted) 45%, var(--v2-background-bg-base))" }}
+          />
+          {/* chips sit directly below the mark, above the composer (Kate) */}
           <Show when={props.gettingStarted}>
             <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>
           </Show>

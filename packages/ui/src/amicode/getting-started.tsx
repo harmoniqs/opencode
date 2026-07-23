@@ -13,6 +13,12 @@ import { AmicodeTagline } from "./tagline"
 // The set spans the lifetime: onboard (first run routes any chip into the
 // overture) → design with memory/recommendations → warm-start from the pulse
 // bank → go fast with Veloce.
+// NOTE (Kate, chat-redesign): keep the FULL feature-diverse set — these are
+// designed to become suggestion data (per profile/activity/entitled score, see
+// the repertoire-chips TODO above); don't condense the static stand-in.
+// Labels are the full recommendation text — NOT hand-shortened. These become
+// server-generated suggestions (see the repertoire-chips TODO): the label will
+// BE the recommendation, so we honor it verbatim and let the row wrap.
 export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
     label: "Design a pulse — walk me through it",
@@ -41,6 +47,39 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
 
 // The three-beat arc of a pulse-design session, from setup to hardware.
 const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Execute and tune on hardware"]
+
+/** amicode chat-redesign (Kate): chips-only row for the composer-as-hero start
+ *  screen — no tagline, no byline, no steps. Quiet neutral pills (Kimi-style):
+ *  hairline border, pill radius, muted ink that lifts on hover. */
+export function AmicodeStarterChips(props: {
+  onStart: (prompt: string) => void
+  resumeName?: string
+  onResume?: () => void
+}) {
+  // The chips' OWN wrapping row (Kate: separate container from the folder
+  // picker) — centered, quiet pills. Class-based styling so hover works.
+  const pill =
+    "rounded-full border border-[var(--v2-border-border-base)] bg-transparent px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-01)]"
+  return (
+    <div
+      data-component="amicode-starter-chips"
+      class="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2"
+    >
+      <For each={AMICODE_STARTERS}>
+        {(starter) => (
+          <button type="button" data-slot="amicode-gs-starter" class={pill} onClick={() => props.onStart(starter.prompt)}>
+            {starter.label}
+          </button>
+        )}
+      </For>
+      <Show when={props.resumeName && props.onResume}>
+        <button type="button" data-slot="amicode-gs-resume" class={pill} onClick={() => props.onResume?.()}>
+          Resume {props.resumeName}
+        </button>
+      </Show>
+    </div>
+  )
+}
 
 export function AmicodeGettingStarted(props: {
   onStart: (prompt: string) => void

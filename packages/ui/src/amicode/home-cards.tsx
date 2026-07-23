@@ -245,7 +245,12 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         data-slot="amicode-meet-identity"
         style={{ display: "flex", gap: "12px", "align-items": "center", "margin-top": "10px" }}
       >
-        <MarkDetailed class="w-12 h-auto shrink-0" />
+        {/* neutral + very low-contrast in both themes (Kate) — muted grey
+            nudged well toward the background, matching the new-session hero. */}
+        <MarkDetailed
+          class="w-12 h-auto shrink-0"
+          style={{ color: "color-mix(in srgb, var(--v2-icon-icon-muted) 45%, var(--v2-background-bg-base))" }}
+        />
         <div style={{ "min-width": "0" }}>
           <div style={{ "font-size": "18px", "font-weight": "600", color: "var(--v2-text-text-base)" }}>Amico</div>
           <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--v2-text-text-muted)" }}>
