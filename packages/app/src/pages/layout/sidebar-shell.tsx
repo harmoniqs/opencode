@@ -56,7 +56,13 @@ export const SidebarContent = (props: {
     <div class="flex h-full w-full min-w-0 overflow-hidden">
       <div
         data-component="sidebar-rail"
-        class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
+        classList={{
+          "shrink-0 bg-background-base flex flex-col items-center overflow-hidden": true,
+          // Kimi-style labeled rail when the amicode nav is present; standalone
+          // opencode (no renderNav) keeps the original 64px icon rail.
+          "w-52": !props.mobile && !!props.renderNav,
+          "w-16": !!props.mobile || !props.renderNav,
+        }}
         onMouseMove={props.aimMove}
       >
         <div class="flex-1 min-h-0 w-full">

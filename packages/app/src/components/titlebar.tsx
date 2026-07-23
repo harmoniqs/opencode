@@ -1005,8 +1005,10 @@ function ChannelIndicator() {
   return (
     <>
       {["beta", "dev"].includes(import.meta.env.VITE_OPENCODE_CHANNEL) && (
-        <div class="bg-icon-interactive-base text-[#FFF] font-medium px-2 rounded-sm uppercase font-mono">
-          {import.meta.env.VITE_OPENCODE_CHANNEL.toUpperCase()}
+        // amicode: local/dev builds read as BETA to users (Kimi-style soft pill) —
+        // "DEV" is build plumbing, not a product state.
+        <div class="bg-v2-background-bg-accent/15 text-v2-text-text-accent font-medium px-2 py-0.5 rounded-full text-[11px] uppercase tracking-wide">
+          BETA
         </div>
       )}
     </>

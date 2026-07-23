@@ -2487,12 +2487,14 @@ export default function Layout(props: ParentProps) {
     navigateWithSidebarReset(href)
   }
 
+  // Kimi-style labeled rows on desktop (icon + word — no tooltip needed);
+  // mobile keeps the compact icon-only buttons (labels don't fit the bottom bar).
   const railNav = (mobile?: boolean) => (
     <For each={RAIL_SURFACES}>
       {(surface) => {
         const active = () => state.railSurface === surface.id && layout.sidebar.opened()
-        return (
-          <Tooltip placement={mobile ? "bottom" : "right"} value={surface.label}>
+        return mobile ? (
+          <Tooltip placement="bottom" value={surface.label}>
             <IconButton
               icon={surface.icon}
               variant={active() ? "primary" : "ghost"}
@@ -2502,6 +2504,21 @@ export default function Layout(props: ParentProps) {
               onClick={() => selectRailSurface(surface.id)}
             />
           </Tooltip>
+        ) : (
+          <button
+            type="button"
+            data-slot="rail-nav-row"
+            class="w-full flex items-center gap-2.5 h-9 px-3 rounded-[10px] text-13-regular font-medium transition-colors"
+            classList={{
+              "bg-v2-background-bg-layer-02 text-v2-text-text-base": active(),
+              "text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base": !active(),
+            }}
+            aria-pressed={active()}
+            onClick={() => selectRailSurface(surface.id)}
+          >
+            <Icon name={surface.icon} size="small" />
+            <span class="truncate">{surface.label}</span>
+          </button>
         )
       }}
     </For>
