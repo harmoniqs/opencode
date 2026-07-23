@@ -681,12 +681,6 @@ function HomeDesign() {
       document.removeEventListener("keydown", onKey)
     })
   })
-  const unseenTotal = createMemo(() => {
-    const conn = focusedServer()
-    if (!conn) return 0
-    return projects().reduce((n, p) => n + unseenCount(conn, p), 0)
-  })
-
   command.register("home", () => [
     {
       id: "home.sessions.search.focus",
@@ -900,26 +894,7 @@ function HomeDesign() {
                   }}
                 >
                   Projects
-                  {/* amicode#203: no project counter — only an unread badge when
-                  there are unseen sessions (accent ink); otherwise just the label. */}
-                  <Show when={unseenTotal() > 0}>
-                    <span
-                      style={{
-                        "font-size": "10px",
-                        "font-weight": "600",
-                        "letter-spacing": "0.5px",
-                        "border-radius": "999px",
-                        border: "1px solid currentColor",
-                        padding: "4px 7px",
-                        "line-height": "1",
-                        background: "color-mix(in srgb, currentColor 10%, transparent)",
-                        color: "var(--v2-text-text-accent)",
-                        "font-variant-numeric": "tabular-nums",
-                      }}
-                    >
-                      {unseenTotal()}
-                    </span>
-                  </Show>
+                  {/* amicode#203: no counter/badge on the entry — just the label. */}
                   <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
                     ▾
                   </span>

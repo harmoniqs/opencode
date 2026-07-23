@@ -1428,7 +1428,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     trigger: {
       action: "prompt-project",
       icon: "folder",
-      label: selectedProject() ? displayName(selectedProject()!) : language.t("session.new.project.new"),
+      // amicode#203 (Kate): don't show the project name in the chat — the folder
+      // icon + chevron keep the switcher reachable without naming the project.
+      label: "",
       class: "max-w-[203px]",
       style: control(),
       onPress: () => setPicker("projectOpen", true),
@@ -2081,7 +2083,9 @@ function ComposerPickerTrigger(props: ComponentProps<"button"> & { state: Compos
       <Show when={local.state.icon}>
         {(icon) => <Icon name={icon()} size="small" class="shrink-0 text-v2-icon-icon-muted" />}
       </Show>
-      <span class="min-w-0 truncate leading-5">{local.state.label}</span>
+      <Show when={local.state.label}>
+        <span class="min-w-0 truncate leading-5">{local.state.label}</span>
+      </Show>
       <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
     </button>
   )
