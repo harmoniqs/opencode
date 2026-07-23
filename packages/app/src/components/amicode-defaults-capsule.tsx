@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
+import { Show, batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
@@ -147,8 +147,11 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   }
   const openPopover = () => {
     if (open()) return
-    setOpen(true)
-    announceChromeDropdown("defaults")
+    // batch: announce + open flag must land atomically (press-twice bug).
+    batch(() => {
+      announceChromeDropdown("defaults")
+      setOpen(true)
+    })
     document.addEventListener("pointerdown", onDocPointer, true)
     document.addEventListener("keydown", onDocKey, true)
   }

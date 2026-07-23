@@ -3,7 +3,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { Popover } from "@opencode-ai/ui/popover"
-import { Suspense, createEffect, createMemo, createSignal, lazy, Show, type ComponentProps, type JSX } from "solid-js"
+import { Suspense, batch, createEffect, createMemo, createSignal, lazy, Show, type ComponentProps, type JSX } from "solid-js"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
@@ -229,9 +229,12 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
   const [shown, setShownRaw] = createSignal(false)
   // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
   const setShown = (next: boolean) => {
-    setShownRaw(next)
-    if (next) announceChromeDropdown("connections")
-    else clearChromeDropdown("connections")
+    // batch: announce + open flag must land atomically (press-twice bug).
+    batch(() => {
+      if (next) announceChromeDropdown("connections")
+      else clearChromeDropdown("connections")
+      setShownRaw(next)
+    })
   }
   createEffect(() => {
     if (chromeDropdownOpenId() !== "connections" && shown()) setShownRaw(false)

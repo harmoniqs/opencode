@@ -643,9 +643,14 @@ function HomeDesign() {
   // amicode#203: one chrome dropdown at a time — announce on open, close when
   // another announces.
   const setSessionsOpen = (next: boolean) => {
-    setSessionsOpenRaw(next)
-    if (next) announceChromeDropdown("projects")
-    else clearChromeDropdown("projects")
+    // batch: the announce and the open flag must land atomically — otherwise
+    // the guard effect runs between them and instantly re-closes (the
+    // press-twice bug).
+    batch(() => {
+      if (next) announceChromeDropdown("projects")
+      else clearChromeDropdown("projects")
+      setSessionsOpenRaw(next)
+    })
   }
   createEffect(() => {
     if (chromeDropdownOpenId() !== "projects" && sessionsOpen()) setSessionsOpenRaw(false)
