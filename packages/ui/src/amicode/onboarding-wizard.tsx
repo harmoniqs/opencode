@@ -190,8 +190,8 @@ export function AmicodeOnboardingWizard(props: {
       disabled={p.disabled}
       onClick={() => p.onClick()}
       style={{
-        background: "var(--v2-icon-icon-accent)",
-        color: "var(--v2-background-bg-base, #000)",
+        background: "var(--accent, #fff676)",
+        color: "var(--accent-ink, #111214)",
         border: "none",
         "border-radius": "10px",
         padding: "10px 22px",

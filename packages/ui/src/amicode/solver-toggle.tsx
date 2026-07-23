@@ -124,8 +124,8 @@ export function AmicodeSolverToggle() {
               "letter-spacing": "0.06em",
               padding: "1px 5px",
               "border-radius": "4px",
-              background: "var(--v2-icon-icon-accent)",
-              color: "var(--v2-background-bg-base, #000)",
+              background: "var(--accent, #fff676)",
+              color: "var(--accent-ink, #111214)",
             }}
           >
             PRO

@@ -293,8 +293,8 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           border: "none",
           "border-radius": "10px",
           cursor: "pointer",
-          background: "var(--v2-icon-icon-accent)",
-          color: "var(--v2-background-bg-base, #000)",
+          background: "var(--accent, #fff676)",
+          color: "var(--accent-ink, #111214)",
           "font-size": "15px",
           "font-weight": "650",
           "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
@@ -604,8 +604,8 @@ function AboutYouCard(props: {
                         height: "44px",
                         "border-radius": "8px",
                         flex: "none",
-                        background: "var(--v2-icon-icon-accent)",
-                        color: "var(--v2-background-bg-base, #000)",
+                        background: "var(--accent, #fff676)",
+                        color: "var(--accent-ink, #111214)",
                         "font-size": "15px",
                         "font-weight": "700",
                         "letter-spacing": "0.5px",
@@ -849,8 +849,8 @@ function AboutYouCard(props: {
                             disabled={saving() || resolvingLogo() > 0}
                             onClick={() => void save()}
                             style={{
-                              background: "var(--v2-icon-icon-accent)",
-                              color: "var(--v2-background-bg-base, #000)",
+                              background: "var(--accent, #fff676)",
+                              color: "var(--accent-ink, #111214)",
                               border: "none",
                               "border-radius": "6px",
                               padding: "4px 10px",

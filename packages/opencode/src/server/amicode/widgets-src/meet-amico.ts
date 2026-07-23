@@ -73,7 +73,7 @@ export default {
       '<div style="height:1px;background:var(--amc-border);margin:12px 0"></div>' +
       '<div style="font-size:11px;color:var(--amc-text-muted);margin-bottom:6px">I can help you</div>' +
       '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:12px">' + bullets + '</div>' +
-      '<button type="button" data-cta style="align-self:flex-start;display:inline-flex;align-items:center;gap:10px;margin-top:auto;padding:12px 22px;border:none;border-radius:10px;cursor:pointer;background:var(--amc-accent);color:var(--amc-bg);font-size:15px;font-weight:650">Open chat <span aria-hidden="true" style="font-size:16px;line-height:1">&#8599;</span></button>' +
+      '<button type="button" data-cta style="align-self:flex-start;display:inline-flex;align-items:center;gap:10px;margin-top:auto;padding:12px 22px;border:none;border-radius:10px;cursor:pointer;background:var(--amc-accent-fill);color:var(--amc-accent-ink);font-size:15px;font-weight:650">Open chat <span aria-hidden="true" style="font-size:16px;line-height:1">&#8599;</span></button>' +
       '</div>'
     on('[data-cta]', function (e) {
       e.stopPropagation()

@@ -131,8 +131,8 @@ export function AmicodeRunGallery(props: {
                       disabled={busy() === card.runId}
                       onClick={() => void save(card)}
                       style={{
-                        background: "var(--v2-icon-icon-accent)",
-                        color: "var(--v2-background-bg-base, #000)",
+                        background: "var(--accent, #fff676)",
+                        color: "var(--accent-ink, #111214)",
                         border: "none",
                         "border-radius": "6px",
                         padding: "5px 14px",

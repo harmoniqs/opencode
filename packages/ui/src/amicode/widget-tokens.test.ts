@@ -30,9 +30,11 @@ describe("resolveTokens", () => {
     const tokens = resolveTokens((name) => (name === "--v2-text-text-base" ? " #fff " : ""), "normal")
     expect(tokens["--amc-text"]).toBe("#fff")
     expect(tokens["--amc-bg"]).toBe("#0B0E15") // fallback
-    expect(tokens["--amc-accent"]).toBe("#F2C94C")
+    expect(tokens["--amc-accent"]).toBe("#FFF676")
+    expect(tokens["--amc-accent-fill"]).toBe("#FFF676")
+    expect(tokens["--amc-accent-ink"]).toBe("#111214")
     expect(tokens["--amc-font-mono"]).toContain("monospace")
-    expect(Object.keys(tokens)).toHaveLength(15) // 11 colors + 2 fonts + 2 pads
+    expect(Object.keys(tokens)).toHaveLength(17) // 13 colors + 2 fonts + 2 pads
   })
   test("padding tokens follow density", () => {
     expect(resolveTokens(() => "", "normal")["--amc-pad"]).toBe("14px 16px")
