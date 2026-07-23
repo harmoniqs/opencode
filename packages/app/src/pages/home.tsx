@@ -261,19 +261,6 @@ function HomeDesign() {
     return allRecords().filter((record) => matchesHomeSessionSearch(record, query))
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
-  // amicode#203 AC6: sessions nest under the SELECTED project — its recent
-  // sessions show; other projects stay collapsed until selected. Sessions in
-  // no registered project surface under "Other folders" (AC7, never dropped).
-  const registeredWorktrees = createMemo(() => new Set(projects().map((p) => p.worktree)))
-  const selectedProjectSessions = createMemo(() =>
-    state.selection.directory
-      ? records().filter((r) => r.project.worktree === state.selection.directory)
-      : [],
-  )
-  const orphanSessions = createMemo(() => {
-    const reg = registeredWorktrees()
-    return records().filter((r) => !reg.has(r.project.worktree))
-  })
   const tabs = useTabs()
 
   // amicode: home-card data. All read from the focused server's /amicode/* raw
@@ -953,31 +940,8 @@ function HomeDesign() {
                       padding: "14px",
                     }}
                   >
-                    <HomeProjectColumn
-                      compact
-                      projects={projects()}
-                      selected={state.selection}
-                      focusServer={focusServer}
-                      selectProject={selectProject}
-                      openNewSession={openProjectNewSession}
-                      chooseProject={(conn) => void chooseProject(conn)}
-                      newProject={(conn) => void newProject(conn)}
-                      editProject={editProject}
-                      closeProject={(conn, directory) => {
-                        const next = closeHomeProject(
-                          state.selection,
-                          ServerConnection.key(conn),
-                          global.createServerCtx(conn).projects,
-                          directory,
-                        )
-                        if (next) setSelection(next)
-                      }}
-                      clearNotifications={clearNotifications}
-                      unseenCount={unseenCount}
-                      openSettings={openSettings}
-                      language={language}
-                    />
-                    <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
+                    {/* amicode#203 (option b): Recent (resume-primary) on top,
+                        the project switcher below. */}
                     <section
                       class="isolate min-h-0 min-w-0 flex flex-col"
                       aria-label={language.t("sidebar.project.recentSessions")}
@@ -1012,7 +976,7 @@ function HomeDesign() {
                             fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                           >
                             <Show
-                              when={selectedProjectSessions().length > 0 || orphanSessions().length > 0}
+                              when={records().length > 0}
                               fallback={
                                 <div class="flex min-w-0 flex-col gap-4">
                                   <HomeSessionGroupHeader
@@ -1022,53 +986,58 @@ function HomeDesign() {
                                 </div>
                               }
                             >
-                              {/* amicode#203 AC6: the SELECTED project's recent
-                                  sessions, then any orphans under "Other folders".
-                                  Selecting a different project (list above) swaps
-                                  this list — non-selected projects' sessions stay
-                                  collapsed/hidden until their project is selected. */}
-                              <Show when={selectedProjectSessions().length > 0}>
-                                <div class="flex min-w-0 flex-col gap-4">
-                                  <HomeSessionGroupHeader
-                                    title={language.t("sidebar.project.recentSessions")}
-                                    onNewSession={newSessionProject() ? openNewSession : undefined}
-                                  />
-                                  <div class="flex min-w-0 flex-col gap-px">
-                                    <For each={selectedProjectSessions()}>
-                                      {(record) => (
-                                        <HomeSessionRow
-                                          record={record}
-                                          server={state.selection.server}
-                                          activeServer={state.selection.server === server.key}
-                                          openSession={openSession}
-                                        />
-                                      )}
-                                    </For>
-                                  </div>
+                              {/* amicode#203 (option b): Recent = recent sessions
+                                  across ALL projects, each labeled with its
+                                  project/folder (orphans included). Resume-primary;
+                                  the project switcher lives below. */}
+                              <div class="flex min-w-0 flex-col gap-4">
+                                <HomeSessionGroupHeader
+                                  title={language.t("sidebar.project.recentSessions")}
+                                  onNewSession={newSessionProject() ? openNewSession : undefined}
+                                />
+                                <div class="flex min-w-0 flex-col gap-px">
+                                  <For each={records()}>
+                                    {(record) => (
+                                      <HomeSessionRow
+                                        record={record}
+                                        server={state.selection.server}
+                                        activeServer={state.selection.server === server.key}
+                                        openSession={openSession}
+                                      />
+                                    )}
+                                  </For>
                                 </div>
-                              </Show>
-                              <Show when={orphanSessions().length > 0}>
-                                <div class="flex min-w-0 flex-col gap-4">
-                                  <HomeSessionGroupHeader title="Other folders" />
-                                  <div class="flex min-w-0 flex-col gap-px">
-                                    <For each={orphanSessions()}>
-                                      {(record) => (
-                                        <HomeSessionRow
-                                          record={record}
-                                          server={state.selection.server}
-                                          activeServer={state.selection.server === server.key}
-                                          openSession={openSession}
-                                        />
-                                      )}
-                                    </For>
-                                  </div>
-                                </div>
-                              </Show>
+                              </div>
                             </Show>
                           </Show>
                         </div>
                       </div>
                     </section>
+                    <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
+                    <HomeProjectColumn
+                      compact
+                      projects={projects()}
+                      selected={state.selection}
+                      focusServer={focusServer}
+                      selectProject={selectProject}
+                      openNewSession={openProjectNewSession}
+                      chooseProject={(conn) => void chooseProject(conn)}
+                      newProject={(conn) => void newProject(conn)}
+                      editProject={editProject}
+                      closeProject={(conn, directory) => {
+                        const next = closeHomeProject(
+                          state.selection,
+                          ServerConnection.key(conn),
+                          global.createServerCtx(conn).projects,
+                          directory,
+                        )
+                        if (next) setSelection(next)
+                      }}
+                      clearNotifications={clearNotifications}
+                      unseenCount={unseenCount}
+                      openSettings={openSettings}
+                      language={language}
+                    />
                   </div>
                 </Show>
               </div>
