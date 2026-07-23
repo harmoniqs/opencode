@@ -35,12 +35,12 @@
   --v2-background-bg-deep: #efeff1;
   --v2-background-bg-layer-01: #ffffff;
   --v2-background-bg-layer-02: #f1f1f3;
-  --v2-background-bg-accent: #2e62d9;
-  --v2-text-text-accent: #2e62d9;
-  --v2-text-text-accent-hover: #244fb3;
-  --v2-icon-icon-accent: #2e62d9;
-  --v2-icon-icon-accent-hover: #244fb3;
-  --v2-border-border-focus: #4979f2;
+  --v2-background-bg-accent: var(--amc-gold-600);
+  --v2-text-text-accent: var(--amc-gold-600);
+  --v2-text-text-accent-hover: var(--amc-gold-700);
+  --v2-icon-icon-accent: var(--amc-gold-600);
+  --v2-icon-icon-accent-hover: var(--amc-gold-700);
+  --v2-border-border-focus: var(--amc-gold-500);
   --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -8px rgb(0 0 0 / 0.10);
 }
 
@@ -50,12 +50,12 @@
   --v2-background-bg-deep: #0e0e11;
   --v2-background-bg-layer-01: #1a1a1f;
   --v2-background-bg-layer-02: #212127;
-  --v2-background-bg-accent: #4979f2;
-  --v2-text-text-accent: #6f97f5;
-  --v2-text-text-accent-hover: #8fadf8;
-  --v2-icon-icon-accent: #6f97f5;
-  --v2-icon-icon-accent-hover: #8fadf8;
-  --v2-border-border-focus: #4979f2;
+  --v2-background-bg-accent: var(--amc-gold-500);
+  --v2-text-text-accent: var(--amc-gold-400);
+  --v2-text-text-accent-hover: var(--amc-gold-300);
+  --v2-icon-icon-accent: var(--amc-gold-400);
+  --v2-icon-icon-accent-hover: var(--amc-gold-300);
+  --v2-border-border-focus: var(--amc-gold-500);
   --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
 }
 
@@ -101,12 +101,12 @@ textarea,
     --v2-background-bg-deep: #0e0e11;
     --v2-background-bg-layer-01: #1a1a1f;
     --v2-background-bg-layer-02: #212127;
-    --v2-background-bg-accent: #4979f2;
-    --v2-text-text-accent: #6f97f5;
-    --v2-text-text-accent-hover: #8fadf8;
-    --v2-icon-icon-accent: #6f97f5;
-    --v2-icon-icon-accent-hover: #8fadf8;
-    --v2-border-border-focus: #4979f2;
+    --v2-background-bg-accent: var(--amc-gold-500);
+    --v2-text-text-accent: var(--amc-gold-400);
+    --v2-text-text-accent-hover: var(--amc-gold-300);
+    --v2-icon-icon-accent: var(--amc-gold-400);
+    --v2-icon-icon-accent-hover: var(--amc-gold-300);
+    --v2-border-border-focus: var(--amc-gold-500);
     --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
   }
 }
