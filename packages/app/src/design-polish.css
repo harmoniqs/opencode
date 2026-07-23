@@ -31,44 +31,44 @@
 /* ── LIGHT: warm near-white, white cards, gold accent ── */
 :root,
 [data-color-scheme="light"] {
-  --v2-background-bg-base: #fafaf8;
-  --v2-background-bg-deep: #f2f1ee;
-  --v2-background-bg-layer-01: #f4f3f0;
-  --v2-background-bg-layer-02: #ecebe7;
-  --v2-background-bg-accent: var(--amc-gold-600);
-  --v2-text-text-accent: var(--amc-gold-600);
-  --v2-text-text-accent-hover: var(--amc-gold-700);
-  --v2-icon-icon-accent: var(--amc-gold-600);
-  --v2-icon-icon-accent-hover: var(--amc-gold-700);
-  --v2-border-border-focus: var(--amc-gold-500);
+  --v2-background-bg-base: #f7f7f8;
+  --v2-background-bg-deep: #efeff1;
+  --v2-background-bg-layer-01: #ffffff;
+  --v2-background-bg-layer-02: #f1f1f3;
+  --v2-background-bg-accent: #2e62d9;
+  --v2-text-text-accent: #2e62d9;
+  --v2-text-text-accent-hover: #244fb3;
+  --v2-icon-icon-accent: #2e62d9;
+  --v2-icon-icon-accent-hover: #244fb3;
+  --v2-border-border-focus: #4979f2;
   --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -8px rgb(0 0 0 / 0.10);
 }
 
 /* ── DARK: deep neutral layers, luminous gold accent ── */
 [data-color-scheme="dark"] {
-  --v2-background-bg-base: #0f1013;
-  --v2-background-bg-deep: #0a0b0d;
-  --v2-background-bg-layer-01: #16181d;
-  --v2-background-bg-layer-02: #1c1f25;
-  --v2-background-bg-accent: var(--amc-gold-500);
-  --v2-text-text-accent: var(--amc-gold-400);
-  --v2-text-text-accent-hover: var(--amc-gold-300);
-  --v2-icon-icon-accent: var(--amc-gold-400);
-  --v2-icon-icon-accent-hover: var(--amc-gold-300);
-  --v2-border-border-focus: var(--amc-gold-500);
+  --v2-background-bg-base: #131316;
+  --v2-background-bg-deep: #0e0e11;
+  --v2-background-bg-layer-01: #1a1a1f;
+  --v2-background-bg-layer-02: #212127;
+  --v2-background-bg-accent: #4979f2;
+  --v2-text-text-accent: #6f97f5;
+  --v2-text-text-accent-hover: #8fadf8;
+  --v2-icon-icon-accent: #6f97f5;
+  --v2-icon-icon-accent-hover: #8fadf8;
+  --v2-border-border-focus: #4979f2;
   --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
 }
 
 /* ── inline code: readable in BOTH schemes (meeting bug: cyan-on-light) ── */
 :not(pre) > code {
-  color: var(--amc-gold-600);
-  background: color-mix(in srgb, var(--amc-gold-500) 9%, transparent);
+  color: #3d4451;
+  background: rgba(20, 22, 28, 0.06);
   border-radius: 5px;
   padding: 0.08em 0.35em;
 }
 [data-color-scheme="dark"] :not(pre) > code {
-  color: var(--amc-gold-300);
-  background: color-mix(in srgb, var(--amc-gold-500) 14%, transparent);
+  color: #c7cad1;
+  background: rgba(255, 255, 255, 0.07);
 }
 
 /* ── motion: quick, quiet, consistent ── */
@@ -97,16 +97,16 @@ textarea,
    block above — same reason the v2 theme carries both paths) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
-    --v2-background-bg-base: #0f1013;
-    --v2-background-bg-deep: #0a0b0d;
-    --v2-background-bg-layer-01: #16181d;
-    --v2-background-bg-layer-02: #1c1f25;
-    --v2-background-bg-accent: var(--amc-gold-500);
-    --v2-text-text-accent: var(--amc-gold-400);
-    --v2-text-text-accent-hover: var(--amc-gold-300);
-    --v2-icon-icon-accent: var(--amc-gold-400);
-    --v2-icon-icon-accent-hover: var(--amc-gold-300);
-    --v2-border-border-focus: var(--amc-gold-500);
+    --v2-background-bg-base: #131316;
+    --v2-background-bg-deep: #0e0e11;
+    --v2-background-bg-layer-01: #1a1a1f;
+    --v2-background-bg-layer-02: #212127;
+    --v2-background-bg-accent: #4979f2;
+    --v2-text-text-accent: #6f97f5;
+    --v2-text-text-accent-hover: #8fadf8;
+    --v2-icon-icon-accent: #6f97f5;
+    --v2-icon-icon-accent-hover: #8fadf8;
+    --v2-border-border-focus: #4979f2;
     --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
   }
 }
