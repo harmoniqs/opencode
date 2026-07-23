@@ -2376,6 +2376,23 @@ export default function Layout(props: ParentProps) {
     window.parent.postMessage({ source: "amicode", kind: "save-file", filename, dataUrl }, "*")
   }
 
+  // Chats surface: flat, most-recent-first sessions across all tracked projects.
+  // Load lazily when the surface opens; render whatever the sync stores hold.
+  createEffect(() => {
+    if (state.railSurface !== "chats") return
+    for (const p of projects()) void serverSync.project.loadSessions(p.worktree)
+  })
+  const recentChats = createMemo(() => {
+    if (state.railSurface !== "chats") return []
+    const now = Date.now()
+    const seen = new Set<string>()
+    return projects()
+      .flatMap((p) => sortedRootSessions(serverSync.child(p.worktree, { bootstrap: false })[0], now))
+      .filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)))
+      .sort((a, b) => (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0))
+      .slice(0, 40)
+  })
+
   // Warm-start / new-chat-with-prompt from a Panel: navigate to the current (or
   // first) project's session route with ?prompt=, which the auto-draft seeds.
   const startChatWithPrompt = (prompt: string) => {
@@ -2522,8 +2539,21 @@ export default function Layout(props: ParentProps) {
           </Show>
 
           <Show when={panelProps.surface === "chats"}>
-            <div class="px-2 py-2 text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
-              {meta()?.label}
+            <div class="flex flex-col gap-0.5">
+              <For
+                each={recentChats()}
+                fallback={<div class="px-2 py-2 text-14-regular text-text-weak">No recent chats</div>}
+              >
+                {(session) => (
+                  <button
+                    type="button"
+                    class="w-full text-left px-2 py-1.5 rounded-md text-14-regular text-text-base hover:bg-background-stronger truncate"
+                    onClick={() => openFromRailPanel(`/${base64Encode(session.directory)}/session/${session.id}`)}
+                  >
+                    {session.title || language.t("command.session.new")}
+                  </button>
+                )}
+              </For>
             </div>
           </Show>
         </div>
