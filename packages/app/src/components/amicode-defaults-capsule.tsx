@@ -1,6 +1,7 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
+import { Show, batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
+import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import {
   hpAfterConnect,
   hpClickAction,
@@ -123,7 +124,15 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const close = () => {
     setOpen(false)
     setComputeOpen(false)
+    clearChromeDropdown("defaults")
   }
+  // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
+  createEffect(() => {
+    if (chromeDropdownOpenId() !== "defaults" && open()) {
+      setOpen(false)
+      setComputeOpen(false)
+    }
+  })
   const onDocPointer = (e: PointerEvent) => {
     if (root && !root.contains(e.target as Node)) {
       close()
@@ -138,7 +147,11 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   }
   const openPopover = () => {
     if (open()) return
-    setOpen(true)
+    // batch: announce + open flag must land atomically (press-twice bug).
+    batch(() => {
+      announceChromeDropdown("defaults")
+      setOpen(true)
+    })
     document.addEventListener("pointerdown", onDocPointer, true)
     document.addEventListener("keydown", onDocKey, true)
   }
@@ -189,7 +202,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
       <button
         type="button"
         data-slot="amicode-defaults-face"
-        title="Session defaults — model & solver"
+        title="Defaults — model & solver, apply everywhere"
         aria-expanded={open()}
         onClick={toggle}
         style={{
@@ -222,7 +235,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
         <div
           data-slot="amicode-defaults-pop"
           role="dialog"
-          aria-label="Session defaults"
+          aria-label="Defaults"
           style={{
             position: "absolute",
             right: "0",

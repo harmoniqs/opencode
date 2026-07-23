@@ -19,12 +19,12 @@ import { createStore } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
-import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { useTabs } from "@/context/tabs"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
-import { getProjectAvatarVariant, useLayout, type LocalProject } from "@/context/layout"
+import { useLayout, type LocalProject } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -35,14 +35,12 @@ import { useDirectoryPicker } from "@/components/directory-picker"
 import { DialogSelectServer, useServerManagementController } from "@/components/dialog-select-server"
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
 import { ServerConnection, useServer } from "@/context/server"
-import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import {
   closeHomeProject,
   displayName,
-  getProjectAvatarSource,
   homeProjectDirectories,
   homeProjectNavigation,
   type HomeProjectSelection,
@@ -50,8 +48,10 @@ import {
   sortedRootSessions,
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
-import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { sessionTitle } from "@/utils/session-title"
+import { showToast } from "@/utils/toast"
+import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
+import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
@@ -90,10 +90,14 @@ import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
   "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-[6px] bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none"
-const HOME_ROW_BASE = `${HOME_ROW_LAYOUT} border-0`
-const HOME_ROW = `${HOME_ROW_BASE} [font-weight:530] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover`
 const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
-const HOME_PROJECT_NAV_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base hover:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:bg-v2-background-bg-layer-02 data-[selected]:text-v2-text-text-base data-[selected]:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:hover:bg-v2-background-bg-layer-02 focus-visible:bg-v2-background-bg-layer-01 focus-visible:text-v2-text-text-base focus-visible:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)]`
+// amicode#203: session rows share the project row's rhythm (h-7, px-1.5, rounded)
+// but read as CHILDREN — lighter weight, muted until hover, and (when nested)
+// indented to align under the project name. A plain overlay hover, vs the
+// project row's bordered select, keeps the parent/child hierarchy legible.
+const HOME_SESSION_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base`
+// amicode#203 (Kate): no border on hover/selected — background-only treatment.
+const HOME_PROJECT_NAV_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base data-[selected]:bg-v2-background-bg-layer-02 data-[selected]:text-v2-text-text-base data-[selected]:hover:bg-v2-background-bg-layer-02 focus-visible:bg-v2-background-bg-layer-01 focus-visible:text-v2-text-text-base`
 const HOME_SECTION_LABEL = "text-v2-text-text-muted [font-weight:440]"
 
 type HomeSessionRecord = {
@@ -102,11 +106,6 @@ type HomeSessionRecord = {
   projectName: string
 }
 
-type HomeSessionGroup = {
-  id: "today" | "yesterday" | "older"
-  title: string
-  sessions: HomeSessionRecord[]
-}
 
 const HOME_SESSION_SEARCH_RESULTS_ID = "home-session-search-results"
 const HOME_SEARCH_RESULT_ROW =
@@ -122,7 +121,6 @@ function buildHomeSessionRecords(input: {
   sync: Pick<ReturnType<typeof useServerSync>, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
-  projectByID: () => Map<string, LocalProject>
 }) {
   return [
     ...new Map(
@@ -134,12 +132,31 @@ function buildHomeSessionRecords(input: {
   ]
     .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     .flatMap((session) => {
-      const project = projectForSession(session, input.projects(), input.projectByID())
-      if (!project) return []
+      // amicode#203: resolve by DIRECTORY, not projectID. opencode lumps every
+      // amicode directory under a single `global` project id, so id-based
+      // resolution (projectForSession's default) collapses all sessions onto one
+      // project. The dashboard's projects ARE directories, so an empty byID map
+      // forces projectForSession to match session.directory → project.worktree.
+      const project = projectForSession(session, input.projects(), new Map())
+      // amicode#203 AC7: a session whose directory matches no registered
+      // project is an ORPHAN — surfaced under its directory, never dropped
+      // (the old `return []` silently hid ghost sessions).
+      if (!project) {
+        const dir = session.directory
+        const base = dir.split("/").filter(Boolean).pop() ?? dir
+        return {
+          session,
+          project: { worktree: dir, expanded: false } as LocalProject,
+          projectName: base,
+        }
+      }
       return {
         session,
         project,
-        projectName: displayName(project),
+        // amicode#203: sessions in the extension's scaffold project show
+        // unlabeled (the scaffold is hidden from the switcher; its name never
+        // surfaces). Real projects keep their display name.
+        projectName: project.worktree === hiddenProjectWorktree() ? "" : displayName(project),
       }
     })
 }
@@ -210,6 +227,15 @@ function HomeDesign() {
   })
   const focusedSync = () => focusedServerCtx()?.sync ?? sync
   const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
+  // amicode#203: the project SWITCHER hides the extension's scaffold project
+  // (it's the server's cwd, not a user project) — but records()/projectDirectories
+  // still use the full `projects()`, so the sessions that land in the scaffold by
+  // default stay visible in Recent (labeled neutrally, see buildHomeSessionRecords).
+  // Only set in the amicode webview; standalone opencode is untouched.
+  const visibleProjects = createMemo(() => {
+    const hidden = hiddenProjectWorktree()
+    return hidden ? projects().filter((p) => p.worktree !== hidden) : projects()
+  })
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
     () =>
@@ -218,11 +244,11 @@ function HomeDesign() {
       projects()[0],
   )
   const directories = (project: LocalProject) => [project.worktree, ...(project.sandboxes ?? [])]
-  const projectDirectories = createMemo(() => {
-    const project = selectedProject()
-    if (!project) return projects().flatMap(directories)
-    return directories(project)
-  })
+  // amicode#203: the dashboard shows ONE flat "all sessions" list PLUS per-project
+  // lists, so it must load EVERY project's sessions regardless of selection.
+  // Scoping to the selected project (the old behavior) made the flat list flip
+  // empty/populated with selection and hid non-selected projects' sessions.
+  const projectDirectories = createMemo(() => projects().flatMap(directories))
   const search = createMemo(() => state.search.trim())
   const sessionLoad = useQuery(() => ({
     queryKey: ["home", "sessions", state.selection.server, ...projectDirectories()] as const,
@@ -236,15 +262,11 @@ function HomeDesign() {
     },
   }))
 
-  const projectByID = createMemo(
-    () => new Map(projects().flatMap((project) => (project.id ? [[project.id, project] as const] : []))),
-  )
   const allRecords = createMemo(() =>
     buildHomeSessionRecords({
       sync: focusedSync(),
       projectDirectories,
       projects,
-      projectByID,
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
@@ -254,7 +276,6 @@ function HomeDesign() {
     return allRecords().filter((record) => matchesHomeSessionSearch(record, query))
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
-  const groups = createMemo(() => groupSessions(records(), language))
   const tabs = useTabs()
 
   // amicode: home-card data. All read from the focused server's /amicode/* raw
@@ -377,7 +398,6 @@ function HomeDesign() {
     onCleanup(() => clearInterval(timer))
   })
 
-  const [sessionsExpanded, setSessionsExpanded] = createSignal(false)
   // Shared by the About-You card and the onboarding wizard: identity fields
   // ride query params on the raw POST route; refetch renders the saved state.
   async function saveProfileFields(fields: Record<string, string | undefined>) {
@@ -619,7 +639,22 @@ function HomeDesign() {
 
   // Chrome strip state (spec T3.3): sessions flyout. Grid editing is the
   // WidgetGrid's own affair now (uncontrolled — it renders its own customize).
-  const [sessionsOpen, setSessionsOpen] = createSignal(false)
+  const [sessionsOpen, setSessionsOpenRaw] = createSignal(false)
+  // amicode#203: one chrome dropdown at a time — announce on open, close when
+  // another announces.
+  const setSessionsOpen = (next: boolean) => {
+    // batch: the announce and the open flag must land atomically — otherwise
+    // the guard effect runs between them and instantly re-closes (the
+    // press-twice bug).
+    batch(() => {
+      if (next) announceChromeDropdown("projects")
+      else clearChromeDropdown("projects")
+      setSessionsOpenRaw(next)
+    })
+  }
+  createEffect(() => {
+    if (chromeDropdownOpenId() !== "projects" && sessionsOpen()) setSessionsOpenRaw(false)
+  })
   let flyoutRoot: HTMLDivElement | undefined
   createEffect(() => {
     if (!sessionsOpen()) return
@@ -663,13 +698,6 @@ function HomeDesign() {
       document.removeEventListener("keydown", onKey)
     })
   })
-  const totalSessions = createMemo(() => groups().reduce((n, g) => n + g.sessions.length, 0))
-  const unseenTotal = createMemo(() => {
-    const conn = focusedServer()
-    if (!conn) return 0
-    return projects().reduce((n, p) => n + unseenCount(conn, p), 0)
-  })
-
   command.register("home", () => [
     {
       id: "home.sessions.search.focus",
@@ -765,7 +793,10 @@ function HomeDesign() {
   }
 
   function openSession(session: Session) {
-    const project = projectForSession(session, projects(), projectByID())
+    // amicode#203: resolve by directory (empty byID) — projectID collapses to
+    // `global` across all amicode dirs, so id-resolution would open the wrong
+    // project's worktree. Navigation already uses session.directory.
+    const project = projectForSession(session, projects(), new Map())
     const conn = focusedServer()
     if (!conn) return
     const directory = project?.worktree ?? session.directory
@@ -787,6 +818,30 @@ function HomeDesign() {
       title: language.t("command.project.open"),
       multiple: true,
       onSelect: resolve,
+    })
+  }
+
+  // amicode#203: true project creation — the New-project dialog names + creates
+  // the directory (server does mkdir + best-effort git init), then we register
+  // it and open a first session. "Open existing folder instead…" falls back to
+  // chooseProject. git-absent is non-blocking (AC4): a toast, project still opens.
+  function newProject(conn: ServerConnection.Any) {
+    void import("@/components/dialog-new-project").then((x) => {
+      dialog.show(() => (
+        <x.DialogNewProject
+          server={conn}
+          onCreated={({ path, gitInitialized }) => {
+            openProjectNewSession(conn, path)
+            if (!gitInitialized)
+              showToast({
+                variant: "default",
+                title: "Project created",
+                description: "Change tracking is off — git wasn't found on your PATH.",
+              })
+          }}
+          onOpenExisting={() => chooseProject(conn)}
+        />
+      ))
     })
   }
 
@@ -858,25 +913,8 @@ function HomeDesign() {
                     cursor: "pointer",
                   }}
                 >
-                  Sessions
-                  {/* amicode pill spec (media/ui/atoms/pill.ts): round, currentColor
-                  border, 10% currentColor tint — accent ink only when unseen. */}
-                  <span
-                    style={{
-                      "font-size": "10px",
-                      "font-weight": "600",
-                      "letter-spacing": "0.5px",
-                      "border-radius": "999px",
-                      border: "1px solid currentColor",
-                      padding: "4px 7px",
-                      "line-height": "1",
-                      background: "color-mix(in srgb, currentColor 10%, transparent)",
-                      color: unseenTotal() > 0 ? "var(--v2-text-text-accent)" : "var(--v2-text-text-muted)",
-                      "font-variant-numeric": "tabular-nums",
-                    }}
-                  >
-                    {unseenTotal() > 0 ? unseenTotal() : totalSessions()}
-                  </span>
+                  Projects
+                  {/* amicode#203: no counter/badge on the entry — just the label. */}
                   <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
                     ▾
                   </span>
@@ -911,14 +949,17 @@ function HomeDesign() {
                       padding: "14px",
                     }}
                   >
+                    {/* amicode#203 (Kate): Projects section at the top, then the
+                        search + Recent-sessions list below. */}
                     <HomeProjectColumn
                       compact
-                      projects={projects()}
+                      projects={visibleProjects()}
                       selected={state.selection}
                       focusServer={focusServer}
                       selectProject={selectProject}
                       openNewSession={openProjectNewSession}
                       chooseProject={(conn) => void chooseProject(conn)}
+                      newProject={(conn) => void newProject(conn)}
                       editProject={editProject}
                       closeProject={(conn, directory) => {
                         const next = closeHomeProject(
@@ -931,6 +972,9 @@ function HomeDesign() {
                       }}
                       clearNotifications={clearNotifications}
                       unseenCount={unseenCount}
+                      sessionsFor={(worktree) => allRecords().filter((r) => r.project.worktree === worktree)}
+                      onOpenSession={openSession}
+                      activeServerKey={server.key}
                       openSettings={openSettings}
                       language={language}
                     />
@@ -968,83 +1012,55 @@ function HomeDesign() {
                             when={!sessionLoad.isLoading}
                             fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                           >
-                            <Show
-                              when={groups().length > 0}
-                              fallback={
-                                <div class="flex min-w-0 flex-col gap-4">
-                                  <HomeSessionGroupHeader
-                                    title={language.t("home.sessions.empty")}
-                                    onNewSession={newSessionProject() ? openNewSession : undefined}
+                            <div class="flex min-w-0 flex-col gap-1">
+                              {/* amicode#203 (Kate): header matches the PROJECTS
+                                  header — uppercase faint label + ghost icon button. */}
+                              <div class="flex h-7 min-w-0 items-center justify-between">
+                                <span
+                                  style={{
+                                    "font-size": "10px",
+                                    "font-weight": "700",
+                                    "letter-spacing": "0.08em",
+                                    "text-transform": "uppercase",
+                                    color: "var(--v2-text-text-faint)",
+                                  }}
+                                >
+                                  {language.t("sidebar.project.recentSessions")}
+                                </span>
+                                <Show when={newSessionProject()}>
+                                  <IconButtonV2
+                                    data-action="home-new-session"
+                                    variant="ghost-muted"
+                                    size="large"
+                                    class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                                    icon={<IconV2 name="edit" />}
+                                    onClick={openNewSession}
+                                    aria-label={language.t("command.session.new")}
                                   />
-                                </div>
-                              }
-                            >
-                              {(() => {
-                                // amicode: collapsed = the 3 most recent sessions across all
-                                // groups; "Show all (N)" expands. Pure derivation off the
-                                // existing groups() memo — no second data path to drift.
-                                const total = () => groups().reduce((n, g) => n + g.sessions.length, 0)
-                                const visible = () => {
-                                  if (sessionsExpanded() || total() <= 3) return groups()
-                                  let budget = 3
-                                  const out: typeof groups extends () => infer G ? G : never = [] as never
-                                  for (const g of groups()) {
-                                    if (budget <= 0) break
-                                    const take = g.sessions.slice(0, budget)
-                                    budget -= take.length
-                                    ;(out as { title: string; sessions: typeof g.sessions }[]).push({
-                                      ...g,
-                                      sessions: take,
-                                    })
-                                  }
-                                  return out as ReturnType<typeof groups>
+                                </Show>
+                              </div>
+                              <Show
+                                when={records().length > 0}
+                                fallback={
+                                  <div class="pl-1.5 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                                    {language.t("home.sessions.empty")}
+                                  </div>
                                 }
-                                return (
-                                  <>
-                                    <For each={visible()}>
-                                      {(group, index) => (
-                                        <div class="flex min-w-0 flex-col gap-4">
-                                          <HomeSessionGroupHeader
-                                            title={group.title}
-                                            onNewSession={
-                                              index() === 0 && newSessionProject() ? openNewSession : undefined
-                                            }
-                                          />
-                                          <div class="flex min-w-0 flex-col gap-px">
-                                            <For each={group.sessions}>
-                                              {(record) => (
-                                                <HomeSessionRow
-                                                  record={record}
-                                                  server={state.selection.server}
-                                                  activeServer={state.selection.server === server.key}
-                                                  openSession={openSession}
-                                                />
-                                              )}
-                                            </For>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </For>
-                                    <Show when={total() > 3}>
-                                      <button
-                                        type="button"
-                                        data-action="home-sessions-toggle"
-                                        class="self-start px-4 text-[12px]"
-                                        style={{
-                                          color: "var(--v2-text-text-muted)",
-                                          background: "none",
-                                          border: "none",
-                                          cursor: "pointer",
-                                        }}
-                                        onClick={() => setSessionsExpanded(!sessionsExpanded())}
-                                      >
-                                        {sessionsExpanded() ? "Show less" : `Show all (${total()})`}
-                                      </button>
-                                    </Show>
-                                  </>
-                                )
-                              })()}
-                            </Show>
+                              >
+                                <div class="flex min-w-0 flex-col gap-px">
+                                  <For each={records()}>
+                                    {(record) => (
+                                      <HomeSessionRow
+                                        record={record}
+                                        server={state.selection.server}
+                                        activeServer={state.selection.server === server.key}
+                                        openSession={openSession}
+                                      />
+                                    )}
+                                  </For>
+                                </div>
+                              </Show>
+                            </div>
                           </Show>
                         </div>
                       </div>
@@ -1175,10 +1191,15 @@ function HomeProjectColumn(props: {
   selectProject: (server: ServerConnection.Any, directory: string) => void
   openNewSession: (server: ServerConnection.Any, directory: string) => void
   chooseProject: (server: ServerConnection.Any) => void
+  newProject: (server: ServerConnection.Any) => void
   editProject: (server: ServerConnection.Any, project: LocalProject) => void
   closeProject: (server: ServerConnection.Any, directory: string) => void
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
+  // amicode#203: per-project dedicated session lists (flow through to HomeProjectList)
+  sessionsFor: (worktree: string) => HomeSessionRecord[]
+  onOpenSession: (session: Session) => void
+  activeServerKey: ServerConnection.Key
   openSettings: () => void
   language: ReturnType<typeof useLanguage>
 }) {
@@ -1246,7 +1267,7 @@ function HomeProjectColumn(props: {
             size="large"
             class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
             icon={<IconV2 name="folder-add-left" />}
-            onClick={() => props.chooseProject(global.servers.list()[0]!)}
+            onClick={() => props.newProject(global.servers.list()[0]!)}
             aria-label={props.language.t("home.project.add")}
           />
         </Show>
@@ -1270,6 +1291,7 @@ function HomeProjectColumn(props: {
                   controller={controller}
                   focusServer={props.focusServer}
                   chooseProject={props.chooseProject}
+                  newProject={props.newProject}
                   openEdit={(server) => dialog.show(() => <DialogServerV2 mode="edit" server={server} />)}
                   language={props.language}
                 />
@@ -1306,6 +1328,7 @@ function HomeServerRow(props: {
   controller: ReturnType<typeof useServerManagementController>
   focusServer: (server: ServerConnection.Any) => void
   chooseProject: (server: ServerConnection.Any) => void
+  newProject: (server: ServerConnection.Any) => void
   openEdit: (server: ServerConnection.Http) => void
   language: ReturnType<typeof useLanguage>
 }) {
@@ -1350,7 +1373,7 @@ function HomeServerRow(props: {
           size="small"
           icon={<IconV2 name="folder-add-left" />}
           aria-label={props.language.t("home.project.add")}
-          onClick={() => props.chooseProject(props.server)}
+          onClick={() => props.newProject(props.server)}
         />
       </div>
     </div>
@@ -1367,32 +1390,58 @@ function HomeProjectList(props: {
   closeProject: (server: ServerConnection.Any, directory: string) => void
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
+  // amicode#203: each project owns a dedicated session list, shown nested when
+  // the project is selected. Flat "all sessions" lives above this (the flyout).
+  sessionsFor: (worktree: string) => HomeSessionRecord[]
+  onOpenSession: (session: Session) => void
+  activeServerKey: ServerConnection.Key
   language: ReturnType<typeof useLanguage>
 }) {
-  // amicode: a single project is auto-focused, so its row under the brand
-  // block is pure clutter (a stray "A amicode"). The list only renders once
-  // there is an actual CHOICE; add-project stays in the header either way.
   return (
-    <Show when={props.projects.length > 1}>
+    <Show when={props.projects.length > 0}>
       <div class="flex min-w-0 flex-col gap-1">
         <For each={props.projects}>
-          {(project) => (
-            <HomeProjectRow
-              project={project}
-              server={props.server}
-              selected={
-                props.selected.server === ServerConnection.key(props.server) &&
-                props.selected.directory === project.worktree
-              }
-              unseenCount={props.unseenCount(props.server, project)}
-              selectProject={props.selectProject}
-              openNewSession={props.openNewSession}
-              editProject={props.editProject}
-              closeProject={props.closeProject}
-              clearNotifications={props.clearNotifications}
-              language={props.language}
-            />
-          )}
+          {(project) => {
+            const key = ServerConnection.key(props.server)
+            const rowSelected = () => props.selected.server === key && props.selected.directory === project.worktree
+            const sessions = () => props.sessionsFor(project.worktree)
+            return (
+              <div class="flex min-w-0 flex-col gap-px">
+                <HomeProjectRow
+                  project={project}
+                  server={props.server}
+                  selected={rowSelected()}
+                  unseenCount={props.unseenCount(props.server, project)}
+                  selectProject={props.selectProject}
+                  openNewSession={props.openNewSession}
+                  editProject={props.editProject}
+                  closeProject={props.closeProject}
+                  clearNotifications={props.clearNotifications}
+                  language={props.language}
+                />
+                {/* selected project expands to its dedicated sessions; others
+                    stay collapsed (Kate's model: one flat list above + per-project
+                    lists here). */}
+                <Show when={rowSelected() && sessions().length > 0}>
+                  {/* indent so session titles align under the project NAME (past
+                      the folder icon + gap), reading as children of the project. */}
+                  <div class="flex min-w-0 flex-col gap-px pl-7">
+                    <For each={sessions()}>
+                      {(record) => (
+                        <HomeSessionRow
+                          record={record}
+                          server={key}
+                          activeServer={key === props.activeServerKey}
+                          openSession={props.onOpenSession}
+                          hideLabel
+                        />
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            )
+          }}
         </For>
       </div>
     </Show>
@@ -1478,62 +1527,15 @@ function HomeProjectRow(props: {
   )
 }
 
-function HomeProjectAvatar(props: { project: LocalProject }) {
-  const name = createMemo(() => displayName(props.project))
+function HomeProjectAvatar(_props: { project: LocalProject }) {
+  // amicode#203 (Kate): a sleek folder glyph, not the first-letter avatar.
   return (
-    <ProjectAvatar
-      fallback={name()}
-      src={getProjectAvatarSource(props.project.id, props.project.icon)}
-      variant={getProjectAvatarVariant(props.project.icon?.color)}
-    />
-  )
-}
-
-function HomeSessionAvatar(props: { project: LocalProject; session: Session; activeServer: boolean }) {
-  const directory = () => props.session.directory
-  const sessionId = () => props.session.id
-  const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
-  // amicode: a quiet chevron for session rows (the brand mark everywhere was
-  // too much; the working-spinner was removed too — one wedged run left it
-  // spinning forever). Unread keeps its accent dot.
-  return (
-    <span
-      class="relative inline-flex size-5 shrink-0 items-center justify-center"
-      style={{ color: "var(--v2-icon-icon-muted)" }}
-    >
-      <IconV2 name="chevron-right" />
-      <Show when={state.unread()}>
-        <span
-          aria-hidden="true"
-          class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
-          style={{ background: "var(--v2-icon-icon-accent)" }}
-        />
-      </Show>
+    <span class="inline-flex size-5 shrink-0 items-center justify-center text-v2-icon-icon-muted">
+      <Icon name="folder" class="size-4" />
     </span>
   )
 }
 
-function HomeSessionLeading(props: {
-  project: LocalProject
-  session: Session
-  server: ServerConnection.Key
-  activeServer: boolean
-}) {
-  const tabs = useTabs()
-  const hasOpenTab = createMemo(() => sessionHasOpenTab(tabs.store, props.server, props.session))
-  return (
-    <div class="relative shrink-0">
-      <Show when={hasOpenTab()}>
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute top-1/2 h-[7px] w-[3px] -translate-y-1/2 rounded-[2px] bg-v2-background-bg-layer-04"
-          style={{ right: "calc(100% + 12px)" }}
-        />
-      </Show>
-      <HomeSessionAvatar project={props.project} session={props.session} activeServer={props.activeServer} />
-    </div>
-  )
-}
 
 function HomeSessionSearch(props: {
   value: string
@@ -1768,12 +1770,6 @@ function HomeSessionSearchResultRow(props: {
       onMouseEnter={() => props.onHighlight()}
       onClick={() => props.onSelect(props.record.session)}
     >
-      <HomeSessionLeading
-        project={props.record.project}
-        session={props.record.session}
-        server={props.server}
-        activeServer={props.activeServer}
-      />
       <div class="flex min-w-0 flex-1 items-center gap-1.5">
         <span
           class={`${HOME_SEARCH_RESULT_TITLE} ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
@@ -1788,57 +1784,32 @@ function HomeSessionSearchResultRow(props: {
   )
 }
 
-function HomeSessionGroupHeader(props: { title: string; onNewSession?: () => void }) {
-  const language = useLanguage()
-  return (
-    <div class="flex h-7 min-w-0 items-center justify-between pl-4 pr-2">
-      <div class={HOME_SECTION_LABEL}>{props.title}</div>
-      <Show when={props.onNewSession}>
-        {(onNewSession) => (
-          <ButtonV2
-            data-action="home-new-session"
-            variant="ghost-muted"
-            size="normal"
-            icon="edit"
-            class="h-7 px-2 [font-weight:530]"
-            onClick={onNewSession()}
-          >
-            {language.t("command.session.new")}
-          </ButtonV2>
-        )}
-      </Show>
-    </div>
-  )
-}
 
 function HomeSessionRow(props: {
   record: HomeSessionRecord
   server: ServerConnection.Key
   activeServer: boolean
   openSession: (session: Session) => void
+  /** nested under a project → the project name is redundant, so hide it */
+  hideLabel?: boolean
 }) {
   const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
+  const showLabel = () => !props.hideLabel && !!props.record.projectName
 
   return (
     <button
       type="button"
       data-component="home-session-row"
-      class={`${HOME_ROW} h-10 gap-2 px-6 py-3 pl-4`}
+      class={HOME_SESSION_ROW}
       onClick={() => props.openSession(props.record.session)}
     >
-      <HomeSessionLeading
-        project={props.record.project}
-        session={props.record.session}
-        server={props.server}
-        activeServer={props.activeServer}
-      />
       <span
-        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-base [font-weight:530] ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${showLabel() ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
       >
         {title()}
       </span>
-      <Show when={props.record.projectName}>
-        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-muted [font-weight:440]">
+      <Show when={showLabel()}>
+        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-faint [font-weight:440]">
           {props.record.projectName}
         </span>
       </Show>
@@ -1857,31 +1828,6 @@ function HomeSessionSkeleton(props: { label: string }) {
       </div>
     </div>
   )
-}
-
-function groupSessions(records: HomeSessionRecord[], language: ReturnType<typeof useLanguage>): HomeSessionGroup[] {
-  const now = DateTime.local()
-  const yesterday = now.minus({ days: 1 })
-  const todaySessions = records.filter((record) =>
-    DateTime.fromMillis(record.session.time.updated ?? record.session.time.created).hasSame(now, "day"),
-  )
-  const yesterdaySessions = records.filter((record) =>
-    DateTime.fromMillis(record.session.time.updated ?? record.session.time.created).hasSame(yesterday, "day"),
-  )
-  const olderSessions = records.filter((record) => {
-    const time = DateTime.fromMillis(record.session.time.updated ?? record.session.time.created)
-    return !time.hasSame(now, "day") && !time.hasSame(yesterday, "day")
-  })
-  const olderTitle =
-    todaySessions.length === 0 && yesterdaySessions.length === 0
-      ? language.t("sidebar.project.recentSessions")
-      : language.t("home.sessions.group.older")
-
-  return [
-    { id: "today" as const, title: language.t("home.sessions.group.today"), sessions: todaySessions },
-    { id: "yesterday" as const, title: language.t("home.sessions.group.yesterday"), sessions: yesterdaySessions },
-    { id: "older" as const, title: olderTitle, sessions: olderSessions },
-  ].filter((group) => group.sessions.length > 0)
 }
 
 function LegacyHome() {

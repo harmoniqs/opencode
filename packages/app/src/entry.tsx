@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/solid"
 import { render } from "solid-js/web"
 import { AppBaseProviders, AppInterface } from "@/app"
+import { adoptHiddenProject } from "@/utils/amicode-hidden-project"
 import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
@@ -152,8 +153,9 @@ const getDefaultUrl = () => {
 
 const clearAuthToken = () => {
   const params = new URLSearchParams(location.search)
-  if (!params.has("auth_token")) return
+  if (!params.has("auth_token") && !params.has("amicode_hide_project")) return
   params.delete("auth_token")
+  params.delete("amicode_hide_project")
   history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash)
 }
 
@@ -197,6 +199,7 @@ if (root instanceof HTMLElement) {
   // Amicode webview: route ⌘V/⌘C/⌘X for every editable through the
   // extension-host bridge (framed contexts only — self-gates unframed).
   installGlobalClipboardFallback(window)
+  adoptHiddenProject(location.search) // amicode#203: hide the extension's scaffold project
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {

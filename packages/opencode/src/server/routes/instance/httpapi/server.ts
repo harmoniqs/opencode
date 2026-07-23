@@ -66,6 +66,7 @@ import * as AmicodeWidgetFrame from "@/server/amicode/widget-frame-html"
 import * as AmicodeLibrary from "@/server/amicode/library"
 import * as AmicodeProfile from "@/server/amicode/profile"
 import * as AmicodeConnections from "@/server/amicode/connections"
+import * as AmicodeProject from "@/server/amicode/project"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -199,6 +200,15 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
       Effect.gen(function* () {
         const body = yield* Effect.orDie(request.text)
         const out = yield* Effect.promise(() => AmicodeVaults.attachVault(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+    // amicode#203: New-project creation — mkdir + best-effort git init. JSON
+    // body {name, parentDir}; never rejects (failures come back as ok:false).
+    yield* router.add("POST", "/amicode/project", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = AmicodeProject.createProject(body)
         return HttpServerResponse.text(out, { contentType: "application/json" })
       }),
     )

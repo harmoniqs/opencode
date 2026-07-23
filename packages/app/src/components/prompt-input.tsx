@@ -78,6 +78,7 @@ import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
 import { useDirectoryPicker } from "./directory-picker"
 import { showToast } from "@/utils/toast"
+import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { useQueries } from "@tanstack/solid-query"
 import { useQueryOptions } from "@/context/server-sync"
@@ -1370,7 +1371,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }))
 
   const newSession = () => props.variant === "new-session"
-  const projects = createMemo(() => layout.projects.list())
+  // amicode#203: hide the extension's scaffold project from the composer picker
+  // too (same filter as the dashboard). Only set in the amicode webview.
+  const projects = createMemo(() => {
+    const list = layout.projects.list()
+    const hidden = hiddenProjectWorktree()
+    return hidden ? list.filter((p) => p.worktree !== hidden) : list
+  })
   const projectForDirectory = (directory: string | undefined) => {
     if (!directory) return
     const key = pathKey(directory)
@@ -1428,7 +1435,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     trigger: {
       action: "prompt-project",
       icon: "folder",
-      label: selectedProject() ? displayName(selectedProject()!) : language.t("session.new.project.new"),
+      // amicode#203 (Kate): don't show the project name in the chat — the folder
+      // icon + chevron keep the switcher reachable without naming the project.
+      label: "",
       class: "max-w-[203px]",
       style: control(),
       onPress: () => setPicker("projectOpen", true),
@@ -2081,7 +2090,9 @@ function ComposerPickerTrigger(props: ComponentProps<"button"> & { state: Compos
       <Show when={local.state.icon}>
         {(icon) => <Icon name={icon()} size="small" class="shrink-0 text-v2-icon-icon-muted" />}
       </Show>
-      <span class="min-w-0 truncate leading-5">{local.state.label}</span>
+      <Show when={local.state.label}>
+        <span class="min-w-0 truncate leading-5">{local.state.label}</span>
+      </Show>
       <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
     </button>
   )

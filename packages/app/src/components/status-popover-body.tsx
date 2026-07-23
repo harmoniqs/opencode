@@ -742,14 +742,19 @@ const amicodeHeaders = (conn: ServerConnection.Any) => {
 
 // The two shared tab triggers/contents — rendered inside each mount's own
 // <Tabs> so Kobalte's tabs context resolves normally.
-function AmicodeStatusTabTriggers(props: { state: AmicodeStatusTabsState }) {
+function AmicodeStatusTabTriggers(props: { state: AmicodeStatusTabsState; includeVaults?: boolean }) {
   const language = useLanguage()
   return (
     <>
-      <Tabs.Trigger value="vaults" data-slot="tab" class="text-12-regular">
-        {props.state.vaultsCount() > 0 ? `${props.state.vaultsCount()} ` : ""}
-        {language.t("status.popover.tab.vaults")}
-      </Tabs.Trigger>
+      {/* amicode#202: vaults moved to the native Armonia sidebar; the global
+          home-chrome mount passes includeVaults={false}. The session-view mount
+          keeps its vaults tab (default true). */}
+      <Show when={props.includeVaults ?? true}>
+        <Tabs.Trigger value="vaults" data-slot="tab" class="text-12-regular">
+          {props.state.vaultsCount() > 0 ? `${props.state.vaultsCount()} ` : ""}
+          {language.t("status.popover.tab.vaults")}
+        </Tabs.Trigger>
+      </Show>
       <Tabs.Trigger value="connections" data-slot="tab" class="text-12-regular">
         {props.state.connectionsCount() > 0 ? `${props.state.connectionsCount()} ` : ""}
         {language.t("status.popover.tab.connections")}
@@ -758,29 +763,40 @@ function AmicodeStatusTabTriggers(props: { state: AmicodeStatusTabsState }) {
   )
 }
 
-function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState }) {
+function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState; includeVaults?: boolean }) {
   const language = useLanguage()
   return (
     <>
-      <Tabs.Content value="vaults">
-        <div class="flex flex-col px-2 pb-2">
-          <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
-            <AmicodeVaultsTab
-              view={props.state.vaultsView()}
-              emptyLabel={language.t("dialog.vaults.empty")}
-              retryLabel={language.t("dialog.vaults.retry")}
-              onRetry={props.state.refetchVaults}
-            />
-            <Button variant="secondary" class="mt-3 self-start h-8 px-3 py-1.5" onClick={props.state.onManageVaults}>
-              {language.t("status.popover.action.manageVaults")}
-            </Button>
+      <Show when={props.includeVaults ?? true}>
+        <Tabs.Content value="vaults">
+          <div class="flex flex-col px-2 pb-2">
+            <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+              <AmicodeVaultsTab
+                view={props.state.vaultsView()}
+                emptyLabel={language.t("dialog.vaults.empty")}
+                retryLabel={language.t("dialog.vaults.retry")}
+                onRetry={props.state.refetchVaults}
+              />
+              <Button variant="secondary" class="mt-3 self-start h-8 px-3 py-1.5" onClick={props.state.onManageVaults}>
+                {language.t("status.popover.action.manageVaults")}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Tabs.Content>
+        </Tabs.Content>
+      </Show>
 
       <Tabs.Content value="connections">
-        <div class="flex flex-col px-2 pb-2">
-          <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+        {/* amicode#203 (Kate): the header-less global mount uses a single flat
+            14px padding (matching the other chrome dropdowns) instead of the
+            tabbed mount's inset card (px-2 pb-2 + p-3 raised box). */}
+        <div
+          class={
+            (props.includeVaults ?? true)
+              ? "flex flex-col px-2 pb-2"
+              : "flex flex-col p-3.5"
+          }
+        >
+          <div class={(props.includeVaults ?? true) ? "flex flex-col p-3 bg-background-base rounded-sm min-h-14" : "flex flex-col min-h-14"}>
             <AmicodeConnectionsTab
               view={props.state.connectionsView()}
               labels={props.state.connectionsLabels()}
@@ -829,10 +845,9 @@ export function StatusPopoverGlobalBody(props: {
         defaultValue={GLOBAL_STATUS_DEFAULT_TAB}
         variant="alt"
       >
-        <Tabs.List data-slot="tablist" class="bg-transparent border-b-0 px-4 pt-2 pb-0 gap-4 h-10">
-          <AmicodeStatusTabTriggers state={amicodeTabs} />
-        </Tabs.List>
-        <AmicodeStatusTabContents state={amicodeTabs} />
+        {/* amicode#203 (Kate): no tab-header — Connections is the only surface
+            here now (vaults moved to the sidebar), so the label is redundant. */}
+        <AmicodeStatusTabContents state={amicodeTabs} includeVaults={false} />
       </Tabs>
     </div>
   )
