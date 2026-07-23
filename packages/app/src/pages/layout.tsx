@@ -18,6 +18,7 @@ import { useLayout, LocalProject } from "@/context/layout"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
+import { amicodeGet } from "@/utils/amicode-fetch"
 import { decode64 } from "@/utils/base64"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -2338,6 +2339,35 @@ export default function Layout(props: ParentProps) {
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
 
+  // Chat-first shell (ADR 0001): re-homed widget DATA for the rail surfaces.
+  // Fetched from the active server's /amicode/* routes, lazily — the source
+  // returns undefined (no fetch) unless that surface is the open one.
+  const railConn = () => server.current
+  const [pulseRaw] = createResource(
+    () => (state.railSurface === "pulse" ? state.railSurface : undefined),
+    () => amicodeGet(railConn(), "/amicode/profile").catch(() => undefined),
+  )
+  const bankedCount = createMemo(() => {
+    const raw = pulseRaw() as { stats?: { banked?: number } } | undefined
+    return typeof raw?.stats?.banked === "number" ? raw.stats.banked : undefined
+  })
+  const [libraryRaw] = createResource(
+    () => (state.railSurface === "library" ? state.railSurface : undefined),
+    () => amicodeGet(railConn(), "/amicode/library").catch(() => undefined),
+  )
+  const libraryPapers = createMemo(() => {
+    const raw = libraryRaw() as { ok?: boolean; papers?: { name?: string }[] } | undefined
+    return raw?.ok === true && Array.isArray(raw.papers) ? raw.papers : []
+  })
+
+  // Warm-start / new-chat-with-prompt from a Panel: navigate to the current (or
+  // first) project's session route with ?prompt=, which the auto-draft seeds.
+  const startChatWithPrompt = (prompt: string) => {
+    const dir = currentProject()?.worktree ?? projects()[0]?.worktree
+    if (!dir) return
+    openFromRailPanel(`/${base64Encode(dir)}/session?prompt=${encodeURIComponent(prompt)}`)
+  }
+
   // Chat-first shell (ADR 0001): open a rail surface's Panel beside the chat,
   // one at a time. Re-clicking the active surface (while open) closes it. Reuses
   // the existing sidebar open/offset/resize machinery — opening a surface just
@@ -2404,17 +2434,7 @@ export default function Layout(props: ParentProps) {
           />
         </div>
         <div class="flex-1 min-h-0 overflow-y-auto px-2 py-2">
-          <Show
-            when={panelProps.surface === "projects"}
-            fallback={
-              <div
-                class="px-2 py-2 text-14-regular text-text-weak"
-                style={{ "line-height": "var(--line-height-normal)" }}
-              >
-                {meta()?.label}
-              </div>
-            }
-          >
+          <Show when={panelProps.surface === "projects"}>
             <div class="flex flex-col gap-0.5">
               <For
                 each={projects()}
@@ -2430,6 +2450,42 @@ export default function Layout(props: ParentProps) {
                   </button>
                 )}
               </For>
+            </div>
+          </Show>
+
+          <Show when={panelProps.surface === "pulse"}>
+            <div class="flex flex-col gap-3 px-1 py-1">
+              <div class="text-14-regular text-text-base">
+                {bankedCount() === undefined
+                  ? "…"
+                  : `${bankedCount()} banked pulse${bankedCount() === 1 ? "" : "s"}`}
+              </div>
+              <button
+                type="button"
+                class="w-full text-left px-3 py-2 rounded-md text-14-medium text-text-strong bg-background-stronger hover:bg-background-hover"
+                onClick={() => startChatWithPrompt("warm-start a new solve from my pulse bank")}
+              >
+                Warm-start a solve
+              </button>
+            </div>
+          </Show>
+
+          <Show when={panelProps.surface === "library"}>
+            <div class="flex flex-col gap-0.5">
+              <For
+                each={libraryPapers()}
+                fallback={<div class="px-2 py-2 text-14-regular text-text-weak">No papers yet</div>}
+              >
+                {(paper) => (
+                  <div class="px-2 py-1.5 text-14-regular text-text-base truncate">{paper.name ?? "Untitled"}</div>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={panelProps.surface === "chats" || panelProps.surface === "gallery"}>
+            <div class="px-2 py-2 text-14-regular text-text-weak" style={{ "line-height": "var(--line-height-normal)" }}>
+              {meta()?.label}
             </div>
           </Show>
         </div>
