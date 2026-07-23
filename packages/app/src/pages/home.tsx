@@ -147,7 +147,10 @@ function buildHomeSessionRecords(input: {
       return {
         session,
         project,
-        projectName: displayName(project),
+        // amicode#203: sessions in the extension's scaffold project show
+        // unlabeled (the scaffold is hidden from the switcher; its name never
+        // surfaces). Real projects keep their display name.
+        projectName: project.worktree === hiddenProjectWorktree() ? "" : displayName(project),
       }
     })
 }
@@ -217,13 +220,15 @@ function HomeDesign() {
     return global.createServerCtx(conn)
   })
   const focusedSync = () => focusedServerCtx()?.sync ?? sync
-  const projects = createMemo(() => {
-    const list = focusedServerCtx()?.projects.list() ?? layout.projects.list()
-    // amicode#203: hide the extension's internal scaffold project (it's the
-    // server's cwd, not a user project). Only set in the amicode webview, so
-    // standalone opencode — where the cwd IS the user's project — is untouched.
+  const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
+  // amicode#203: the project SWITCHER hides the extension's scaffold project
+  // (it's the server's cwd, not a user project) — but records()/projectDirectories
+  // still use the full `projects()`, so the sessions that land in the scaffold by
+  // default stay visible in Recent (labeled neutrally, see buildHomeSessionRecords).
+  // Only set in the amicode webview; standalone opencode is untouched.
+  const visibleProjects = createMemo(() => {
     const hidden = hiddenProjectWorktree()
-    return hidden ? list.filter((p) => p.worktree !== hidden) : list
+    return hidden ? projects().filter((p) => p.worktree !== hidden) : projects()
   })
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
@@ -1025,7 +1030,7 @@ function HomeDesign() {
                     <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
                     <HomeProjectColumn
                       compact
-                      projects={projects()}
+                      projects={visibleProjects()}
                       selected={state.selection}
                       focusServer={focusServer}
                       selectProject={selectProject}
@@ -1044,6 +1049,9 @@ function HomeDesign() {
                       }}
                       clearNotifications={clearNotifications}
                       unseenCount={unseenCount}
+                      sessionsFor={(worktree) => records().filter((r) => r.project.worktree === worktree)}
+                      onOpenSession={openSession}
+                      activeServerKey={server.key}
                       openSettings={openSettings}
                       language={language}
                     />
@@ -1178,6 +1186,10 @@ function HomeProjectColumn(props: {
   closeProject: (server: ServerConnection.Any, directory: string) => void
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
+  // amicode#203: per-project dedicated session lists (flow through to HomeProjectList)
+  sessionsFor: (worktree: string) => HomeSessionRecord[]
+  onOpenSession: (session: Session) => void
+  activeServerKey: ServerConnection.Key
   openSettings: () => void
   language: ReturnType<typeof useLanguage>
 }) {
@@ -1368,32 +1380,55 @@ function HomeProjectList(props: {
   closeProject: (server: ServerConnection.Any, directory: string) => void
   clearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   unseenCount: (server: ServerConnection.Any, project: LocalProject) => number
+  // amicode#203: each project owns a dedicated session list, shown nested when
+  // the project is selected. Flat "all sessions" lives above this (the flyout).
+  sessionsFor: (worktree: string) => HomeSessionRecord[]
+  onOpenSession: (session: Session) => void
+  activeServerKey: ServerConnection.Key
   language: ReturnType<typeof useLanguage>
 }) {
-  // amicode: a single project is auto-focused, so its row under the brand
-  // block is pure clutter (a stray "A amicode"). The list only renders once
-  // there is an actual CHOICE; add-project stays in the header either way.
   return (
-    <Show when={props.projects.length > 1}>
+    <Show when={props.projects.length > 0}>
       <div class="flex min-w-0 flex-col gap-1">
         <For each={props.projects}>
-          {(project) => (
-            <HomeProjectRow
-              project={project}
-              server={props.server}
-              selected={
-                props.selected.server === ServerConnection.key(props.server) &&
-                props.selected.directory === project.worktree
-              }
-              unseenCount={props.unseenCount(props.server, project)}
-              selectProject={props.selectProject}
-              openNewSession={props.openNewSession}
-              editProject={props.editProject}
-              closeProject={props.closeProject}
-              clearNotifications={props.clearNotifications}
-              language={props.language}
-            />
-          )}
+          {(project) => {
+            const key = ServerConnection.key(props.server)
+            const rowSelected = () => props.selected.server === key && props.selected.directory === project.worktree
+            const sessions = () => props.sessionsFor(project.worktree)
+            return (
+              <div class="flex min-w-0 flex-col gap-px">
+                <HomeProjectRow
+                  project={project}
+                  server={props.server}
+                  selected={rowSelected()}
+                  unseenCount={props.unseenCount(props.server, project)}
+                  selectProject={props.selectProject}
+                  openNewSession={props.openNewSession}
+                  editProject={props.editProject}
+                  closeProject={props.closeProject}
+                  clearNotifications={props.clearNotifications}
+                  language={props.language}
+                />
+                {/* selected project expands to its dedicated sessions; others
+                    stay collapsed (Kate's model: one flat list above + per-project
+                    lists here). */}
+                <Show when={rowSelected() && sessions().length > 0}>
+                  <div class="flex min-w-0 flex-col gap-px pl-5">
+                    <For each={sessions()}>
+                      {(record) => (
+                        <HomeSessionRow
+                          record={record}
+                          server={key}
+                          activeServer={key === props.activeServerKey}
+                          openSession={props.onOpenSession}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            )
+          }}
         </For>
       </div>
     </Show>
