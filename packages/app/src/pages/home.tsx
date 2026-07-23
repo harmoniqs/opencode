@@ -53,6 +53,7 @@ import {
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
+import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
@@ -216,7 +217,14 @@ function HomeDesign() {
     return global.createServerCtx(conn)
   })
   const focusedSync = () => focusedServerCtx()?.sync ?? sync
-  const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
+  const projects = createMemo(() => {
+    const list = focusedServerCtx()?.projects.list() ?? layout.projects.list()
+    // amicode#203: hide the extension's internal scaffold project (it's the
+    // server's cwd, not a user project). Only set in the amicode webview, so
+    // standalone opencode — where the cwd IS the user's project — is untouched.
+    const hidden = hiddenProjectWorktree()
+    return hidden ? list.filter((p) => p.worktree !== hidden) : list
+  })
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
     () =>
