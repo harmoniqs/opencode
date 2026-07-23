@@ -51,6 +51,66 @@ export function gitInitNeedsNotice(result: { ok: boolean }): boolean {
   return !result.ok
 }
 
+export type TrackedProject = { worktree: string; expanded: boolean }
+export type AmicodeProjectEntry = { slug: string; path: string }
+export type AmicodeProjectsView =
+  | { ok: true; parentDir: string; projects: AmicodeProjectEntry[] }
+  | { ok: false }
+
+/** Parse the GET /amicode/projects body defensively — an unexpected shape is a
+ *  not-ok view the caller treats as "don't reconcile" (never a throw). */
+export function parseAmicodeProjects(raw: unknown): AmicodeProjectsView {
+  if (typeof raw !== "object" || raw === null) return { ok: false }
+  const body = raw as Record<string, unknown>
+  if (body.ok !== true || typeof body.parentDir !== "string" || !Array.isArray(body.projects)) return { ok: false }
+  const projects: AmicodeProjectEntry[] = []
+  for (const p of body.projects) {
+    if (typeof p !== "object" || p === null) continue
+    const e = p as Record<string, unknown>
+    if (typeof e.slug === "string" && typeof e.path === "string") projects.push({ slug: e.slug, path: e.path })
+  }
+  return { ok: true, parentDir: body.parentDir, projects }
+}
+
+/** True when `child` is `parent` itself or nested beneath it (string prefix on
+ *  path segments — the worktrees and parent are both server-absolute paths). */
+export function isUnder(child: string, parent: string): boolean {
+  if (!parent) return false
+  const p = parent.endsWith("/") ? parent.slice(0, -1) : parent
+  return child === p || child.startsWith(p + "/")
+}
+
+/** amicode: fold the AmicodeProjects folders on disk into the tracked list so a
+ *  project surfaces the moment its folder exists — even if it was never opened.
+ *  This is what fixes the "created a folder, it's invisible, yet its name is
+ *  'already taken'" desync: the collision check keys off these same folders, so
+ *  now anything that can collide is also something the user can see and open.
+ *
+ *  Purely ADDITIVE by design — it never removes a tracked project. Membership
+ *  and switcher-visibility are separate concerns here (see visibleProjects in
+ *  home.tsx): sessions that landed in a non-project dir must stay reachable in
+ *  "Recent" via the full list, so hiding the extension scaffold / a standalone
+ *  cwd from the switcher is a display filter, NOT a store mutation. Existing
+ *  order and per-project `expanded` state are preserved; new folders append in
+ *  the given (sorted) order. */
+export function reconcileProjectList(input: {
+  tracked: TrackedProject[]
+  amicodeDirs: string[]
+}): TrackedProject[] {
+  const seen = new Set(input.tracked.map((p) => p.worktree))
+  const appended = input.amicodeDirs
+    .filter((dir) => !seen.has(dir))
+    .map((dir) => ({ worktree: dir, expanded: false }))
+  return [...input.tracked, ...appended]
+}
+
+/** Whether two tracked lists are identical (worktree + expanded, in order) — the
+ *  reconcile effect uses this to avoid a redundant store write (and any churn). */
+export function sameProjectList(a: TrackedProject[], b: TrackedProject[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((p, i) => p.worktree === b[i]!.worktree && p.expanded === b[i]!.expanded)
+}
+
 export type ProjectGroup<P, S> = { project: P; sessions: S[] }
 export type OrphanGroup<S> = { directory: string; sessions: S[] }
 

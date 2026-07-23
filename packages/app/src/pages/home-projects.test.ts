@@ -3,8 +3,12 @@ import {
   classifyCreateError,
   gitInitNeedsNotice,
   groupSessionsByProject,
+  isUnder,
+  parseAmicodeProjects,
   projectNameToSlug,
+  reconcileProjectList,
   resolveCreationTarget,
+  sameProjectList,
 } from "./home-projects"
 
 describe("projectNameToSlug", () => {
@@ -99,5 +103,119 @@ describe("groupSessionsByProject", () => {
     expect(projectGroups).toHaveLength(1)
     expect(projectGroups[0].sessions).toEqual([])
     expect(orphans).toEqual([])
+  })
+})
+
+describe("parseAmicodeProjects", () => {
+  test("parses a well-formed body and drops malformed entries", () => {
+    expect(
+      parseAmicodeProjects({
+        ok: true,
+        parentDir: "/home/kate/AmicodeProjects",
+        projects: [
+          { slug: "kate-test", path: "/home/kate/AmicodeProjects/kate-test" },
+          { slug: 123, path: "/x" }, // bad slug type → dropped
+          null, // not an object → dropped
+          { slug: "kate-test-2", path: "/home/kate/AmicodeProjects/kate-test-2" },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      parentDir: "/home/kate/AmicodeProjects",
+      projects: [
+        { slug: "kate-test", path: "/home/kate/AmicodeProjects/kate-test" },
+        { slug: "kate-test-2", path: "/home/kate/AmicodeProjects/kate-test-2" },
+      ],
+    })
+  })
+  test("unexpected shapes are not-ok (caller then skips reconcile)", () => {
+    expect(parseAmicodeProjects(undefined)).toEqual({ ok: false })
+    expect(parseAmicodeProjects("nope")).toEqual({ ok: false })
+    expect(parseAmicodeProjects({ ok: false })).toEqual({ ok: false })
+    expect(parseAmicodeProjects({ ok: true, parentDir: "/p" })).toEqual({ ok: false })
+  })
+})
+
+describe("isUnder", () => {
+  test("matches the parent itself and nested paths, on segment boundaries", () => {
+    expect(isUnder("/home/kate/AmicodeProjects", "/home/kate/AmicodeProjects")).toBe(true)
+    expect(isUnder("/home/kate/AmicodeProjects/kate-test", "/home/kate/AmicodeProjects")).toBe(true)
+    expect(isUnder("/home/kate/AmicodeProjects/kate-test", "/home/kate/AmicodeProjects/")).toBe(true)
+    // sibling that shares a prefix but not a segment boundary is NOT under
+    expect(isUnder("/home/kate/AmicodeProjects-old/x", "/home/kate/AmicodeProjects")).toBe(false)
+    expect(isUnder("/somewhere/else/opencode", "/home/kate/AmicodeProjects")).toBe(false)
+    expect(isUnder("/x", "")).toBe(false)
+  })
+})
+
+describe("reconcileProjectList (additive — surfaces on-disk folders, never removes)", () => {
+  const PARENT = "/home/kate/AmicodeProjects"
+  const dir = (slug: string) => `${PARENT}/${slug}`
+
+  test("surfaces every on-disk folder even when nothing was tracked (the invisible-folder fix)", () => {
+    const next = reconcileProjectList({
+      tracked: [],
+      amicodeDirs: [dir("kate-test"), dir("kate-test-2"), dir("kate-test-3")],
+    })
+    expect(next).toEqual([
+      { worktree: dir("kate-test"), expanded: false },
+      { worktree: dir("kate-test-2"), expanded: false },
+      { worktree: dir("kate-test-3"), expanded: false },
+    ])
+  })
+
+  test("preserves order + expanded of tracked projects and appends only new folders after them", () => {
+    const next = reconcileProjectList({
+      tracked: [
+        { worktree: dir("kate-test-3"), expanded: true },
+        { worktree: dir("kate-test"), expanded: false },
+      ],
+      amicodeDirs: [dir("kate-test"), dir("kate-test-2"), dir("kate-test-3")],
+    })
+    expect(next).toEqual([
+      { worktree: dir("kate-test-3"), expanded: true }, // kept, expanded preserved
+      { worktree: dir("kate-test"), expanded: false }, // kept
+      { worktree: dir("kate-test-2"), expanded: false }, // newly surfaced, appended
+    ])
+  })
+
+  test("never removes a tracked entry — a standalone cwd / external open is left intact", () => {
+    // Hiding the server cwd or the extension scaffold from the SWITCHER is a
+    // display concern (visibleProjects); the store keeps them so their sessions
+    // stay reachable in Recent.
+    const CWD = "/Users/kate/dev/opencode"
+    const EXTERNAL = "/Users/kate/dev/some-repo"
+    const next = reconcileProjectList({
+      tracked: [
+        { worktree: CWD, expanded: true },
+        { worktree: EXTERNAL, expanded: false },
+        { worktree: dir("kate-test"), expanded: false },
+      ],
+      amicodeDirs: [dir("kate-test")],
+    })
+    expect(next.map((p) => p.worktree)).toEqual([CWD, EXTERNAL, dir("kate-test")])
+  })
+
+  test("is idempotent at the fixpoint (re-running does not churn)", () => {
+    const input = {
+      tracked: [
+        { worktree: dir("kate-test"), expanded: false },
+        { worktree: dir("kate-test-2"), expanded: false },
+      ],
+      amicodeDirs: [dir("kate-test"), dir("kate-test-2")],
+    }
+    const once = reconcileProjectList(input)
+    const twice = reconcileProjectList({ ...input, tracked: once })
+    expect(sameProjectList(once, twice)).toBe(true)
+  })
+})
+
+describe("sameProjectList", () => {
+  test("compares worktree + expanded in order", () => {
+    const a = [{ worktree: "/a", expanded: true }, { worktree: "/b", expanded: false }]
+    expect(sameProjectList(a, [{ worktree: "/a", expanded: true }, { worktree: "/b", expanded: false }])).toBe(true)
+    expect(sameProjectList(a, [{ worktree: "/a", expanded: false }, { worktree: "/b", expanded: false }])).toBe(false)
+    expect(sameProjectList(a, [{ worktree: "/b", expanded: false }, { worktree: "/a", expanded: true }])).toBe(false)
+    expect(sameProjectList(a, [{ worktree: "/a", expanded: true }])).toBe(false)
   })
 })

@@ -74,6 +74,12 @@ export function createServerProjects<T extends ServerProjectState>(input: {
   const current = () => input.store.projects[input.scope()] ?? []
   return {
     list: current,
+    /** Set the whole tracked list for the current scope. Used by the amicode
+     *  reconcile pass (home.tsx) to make the list mirror ~/AmicodeProjects in one
+     *  atomic write, preserving deterministic order (open() would prepend). */
+    replace(next: StoredProject[]) {
+      setStore("projects", input.scope(), next)
+    },
     open(directory: string) {
       const scope = input.scope()
       if (current().some((project) => project.worktree === directory)) return

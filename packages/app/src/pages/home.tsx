@@ -13,6 +13,7 @@ import {
   Show,
   Switch,
   createSignal,
+  untrack,
 } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createStore } from "solid-js/store"
@@ -48,6 +49,7 @@ import {
   sortedRootSessions,
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
+import { isUnder, parseAmicodeProjects, reconcileProjectList, sameProjectList } from "@/pages/home-projects"
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
@@ -227,6 +229,25 @@ function HomeDesign() {
   })
   const focusedSync = () => focusedServerCtx()?.sync ?? sync
   const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
+  // amicode: the Projects list mirrors ~/AmicodeProjects on disk (folder-first).
+  // Fetch the folders the server sees (keyed by active server) and fold them into
+  // the tracked list so every created folder surfaces — even one that was never
+  // opened — fixing the "created but invisible, yet name already taken" desync.
+  const [amicodeProjectsRaw] = createResource(
+    () => state.selection.server,
+    () => amicodeGet(focusedServer(), "/amicode/projects").catch(() => undefined),
+  )
+  const amicodeProjects = createMemo(() => parseAmicodeProjects(amicodeProjectsRaw()))
+  createEffect(() => {
+    const conn = focusedServer()
+    const view = amicodeProjects()
+    if (!conn || !view.ok) return
+    const ctx = global.createServerCtx(conn)
+    // untrack the store read so writing it back doesn't re-trigger this effect.
+    const tracked = untrack(() => ctx.projects.list().map((p) => ({ worktree: p.worktree, expanded: p.expanded })))
+    const next = reconcileProjectList({ tracked, amicodeDirs: view.projects.map((p) => p.path) })
+    if (!sameProjectList(tracked, next)) ctx.projects.replace(next)
+  })
   // amicode#203: the project SWITCHER hides the extension's scaffold project
   // (it's the server's cwd, not a user project) — but records()/projectDirectories
   // still use the full `projects()`, so the sessions that land in the scaffold by
@@ -234,7 +255,18 @@ function HomeDesign() {
   // Only set in the amicode webview; standalone opencode is untouched.
   const visibleProjects = createMemo(() => {
     const hidden = hiddenProjectWorktree()
-    return hidden ? projects().filter((p) => p.worktree !== hidden) : projects()
+    // amicode: in standalone/dev there's no scaffold param, but the server's own
+    // cwd (e.g. the opencode repo) still registered as a project. Once real
+    // AmicodeProjects folders exist, hide that cwd from the SWITCHER too — unless
+    // the cwd IS an AmicodeProjects folder. Folders the user explicitly opened
+    // elsewhere are left alone. Sessions in the hidden dirs stay reachable in
+    // Recent (records use the full projects() list).
+    const amc = amicodeProjects()
+    const cwd = focusedSync().data.path.directory
+    const hideCwd =
+      cwd && amc.ok && amc.projects.length > 0 && !isUnder(cwd, amc.parentDir) ? cwd : undefined
+    if (!hidden && !hideCwd) return projects()
+    return projects().filter((p) => p.worktree !== hidden && p.worktree !== hideCwd)
   })
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
