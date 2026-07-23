@@ -89,9 +89,12 @@ import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
   "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-[6px] bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none"
-const HOME_ROW_BASE = `${HOME_ROW_LAYOUT} border-0`
-const HOME_ROW = `${HOME_ROW_BASE} [font-weight:530] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover`
 const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+// amicode#203: session rows share the project row's rhythm (h-7, px-1.5, rounded)
+// but read as CHILDREN — lighter weight, muted until hover, and (when nested)
+// indented to align under the project name. A plain overlay hover, vs the
+// project row's bordered select, keeps the parent/child hierarchy legible.
+const HOME_SESSION_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base`
 const HOME_PROJECT_NAV_ROW = `${HOME_ROW_LAYOUT} h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base hover:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:bg-v2-background-bg-layer-02 data-[selected]:text-v2-text-text-base data-[selected]:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)] data-[selected]:hover:bg-v2-background-bg-layer-02 focus-visible:bg-v2-background-bg-layer-01 focus-visible:text-v2-text-text-base focus-visible:[box-shadow:inset_0_0_0_0.5px_var(--v2-border-border-muted)]`
 const HOME_SECTION_LABEL = "text-v2-text-text-muted [font-weight:440]"
 
@@ -1388,7 +1391,9 @@ function HomeProjectList(props: {
                     stay collapsed (Kate's model: one flat list above + per-project
                     lists here). */}
                 <Show when={rowSelected() && sessions().length > 0}>
-                  <div class="flex min-w-0 flex-col gap-px pl-5">
+                  {/* indent so session titles align under the project NAME (past
+                      the folder icon + gap), reading as children of the project. */}
+                  <div class="flex min-w-0 flex-col gap-px pl-7">
                     <For each={sessions()}>
                       {(record) => (
                         <HomeSessionRow
@@ -1396,6 +1401,7 @@ function HomeProjectList(props: {
                           server={key}
                           activeServer={key === props.activeServerKey}
                           openSession={props.onOpenSession}
+                          hideLabel
                         />
                       )}
                     </For>
@@ -1774,24 +1780,26 @@ function HomeSessionRow(props: {
   server: ServerConnection.Key
   activeServer: boolean
   openSession: (session: Session) => void
+  /** nested under a project → the project name is redundant, so hide it */
+  hideLabel?: boolean
 }) {
   const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
+  const showLabel = () => !props.hideLabel && !!props.record.projectName
 
   return (
     <button
       type="button"
       data-component="home-session-row"
-      class={`${HOME_ROW} h-10 gap-2 px-6 py-3 pl-4`}
+      class={HOME_SESSION_ROW}
       onClick={() => props.openSession(props.record.session)}
     >
-      {/* amicode#203 (Kate): no leading icon/indicator on session rows for now. */}
       <span
-        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-base [font-weight:530] ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${showLabel() ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
       >
         {title()}
       </span>
-      <Show when={props.record.projectName}>
-        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-muted [font-weight:440]">
+      <Show when={showLabel()}>
+        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-faint [font-weight:440]">
           {props.record.projectName}
         </span>
       </Show>
