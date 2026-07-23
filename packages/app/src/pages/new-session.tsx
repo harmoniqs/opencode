@@ -1,7 +1,8 @@
-import { createEffect, createMemo, createResource, onMount, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, onMount, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSearchParams } from "@solidjs/router"
 import { NewSessionDesignView } from "@/components/session"
+import { parseProfileResponse } from "@opencode-ai/ui/amicode-home-cards"
 import { useComments } from "@/context/comments"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
@@ -51,6 +52,32 @@ export default function NewSessionPage() {
     return [...open].sort((a, b) => (b.recorded ?? "").localeCompare(a.recorded ?? ""))[0]
   })
 
+  // First-run setup nudge (ADR 0001): non-gating. Shown on the landing when the
+  // researcher profile is still the default/unset, until they dismiss it. The
+  // action is conversational — onboarding rides the chat (the overture interview)
+  // rather than a modal wizard. Per-step (vault/Julia/connection) progress needs
+  // an extension→app bridge and is deferred.
+  const [profileRaw] = createResource(() => amicodeGet(server.current, "/amicode/profile").catch(() => undefined))
+  const [nudgeDismissed, setNudgeDismissed] = createSignal(
+    typeof localStorage !== "undefined" && localStorage.getItem("amicode.setupNudgeDismissed") === "1",
+  )
+  const needsSetup = createMemo(() => {
+    const raw = profileRaw()
+    if (raw === undefined) return false
+    const view = parseProfileResponse(raw)
+    if (!view.ok) return false
+    return !view.you.affiliation || view.you.name === "Practitioner"
+  })
+  const showSetupNudge = () => needsSetup() && !nudgeDismissed()
+  const dismissNudge = () => {
+    setNudgeDismissed(true)
+    try {
+      localStorage.setItem("amicode.setupNudgeDismissed", "1")
+    } catch {
+      /* private mode / no storage — nudge simply reappears next launch */
+    }
+  }
+
   const [store, setStore] = createStore({
     worktree: "main",
   })
@@ -86,14 +113,42 @@ export default function NewSessionPage() {
                 // Chips persist while typing (Kate: no jump). They disappear on
                 // submit, when this page navigates to the real session — so no
                 // dirty()-gated fade that yanks the layout mid-keystroke.
-                <AmicodeStarterChips
-                  onStart={startPrompt}
-                  resumeName={resumeProblem()?.name}
-                  onResume={() => {
-                    const name = resumeProblem()?.name
-                    if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
-                  }}
-                />
+                <>
+                  <Show when={showSetupNudge()}>
+                    <div class="w-full flex justify-center mb-4">
+                      <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-background-stronger text-13-regular">
+                        <span class="text-text-base">Finish setting up Amico — profile, backend, and vault.</span>
+                        <button
+                          type="button"
+                          class="text-text-strong font-medium hover:underline"
+                          onClick={() =>
+                            startPrompt(
+                              "Help me finish setting up Amico: my researcher profile, a backend connection, and a vault.",
+                            )
+                          }
+                        >
+                          Start setup
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Dismiss setup nudge"
+                          class="text-text-weak hover:text-text-base"
+                          onClick={dismissNudge}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  </Show>
+                  <AmicodeStarterChips
+                    onStart={startPrompt}
+                    resumeName={resumeProblem()?.name}
+                    onResume={() => {
+                      const name = resumeProblem()?.name
+                      if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
+                    }}
+                  />
+                </>
               }
             >
               <SessionComposerRegion
