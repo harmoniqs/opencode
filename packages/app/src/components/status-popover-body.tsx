@@ -205,7 +205,7 @@ function ServerStatusPopoverView(props: { state: ServerStatusState }) {
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={props.state.ariaLabel}
-        class="tabs bg-background-strong rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
         data-component="tabs"
         data-active="servers"
         defaultValue="servers"
@@ -337,7 +337,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={language.t("status.popover.ariaLabel")}
-        class="tabs bg-background-strong rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
         data-component="tabs"
         data-active={settings.general.newLayoutDesigns() ? "mcp" : "servers"}
         defaultValue={settings.general.newLayoutDesigns() ? "mcp" : "servers"}
@@ -839,7 +839,7 @@ export function StatusPopoverGlobalBody(props: {
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
       <Tabs
         aria-label={language.t("status.popover.ariaLabel")}
-        class="tabs bg-background-strong rounded-xl overflow-hidden"
+        class="tabs bg-[var(--v2-background-bg-base)] rounded-xl overflow-hidden"
         data-component="tabs"
         data-active={GLOBAL_STATUS_DEFAULT_TAB}
         defaultValue={GLOBAL_STATUS_DEFAULT_TAB}

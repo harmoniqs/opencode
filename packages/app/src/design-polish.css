@@ -102,16 +102,17 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
   border: var(--border-width) solid var(--v2-border-border-base);
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
-[data-component="session-new-composer"] { min-height: 116px !important; }
+[data-component="session-new-composer"] { min-height: 88px !important; }
 [data-component="session-new-composer"]:focus-within,
 [data-component="session-composer"]:focus-within {
   border-color: var(--v2-border-border-strong);
 }
 
-/* send: a confident round button in the brand accent, near-black ink
-   (yellow-button ink is ALWAYS near-black — never the near-white page bg) */
+/* send: a control button in the brand accent, near-black ink (yellow-button
+   ink is ALWAYS near-black). Radius = --radius-md, matching the other footer
+   controls (+, pickers) — NOT a circle (Kate 2026-07-23: follow the radius scale). */
 [data-action="prompt-submit"] {
-  border-radius: var(--radius-full) !important;
+  border-radius: var(--radius-md) !important;
   background: var(--accent) !important;
   color: var(--accent-ink) !important;
   transition: transform 0.16s ease, filter 0.16s ease;

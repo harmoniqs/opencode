@@ -70,7 +70,7 @@ export function StatusPopover(props: { healthDot?: boolean }) {
       <Show when={shown()}>
         <Suspense
           fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
+            <div class="w-[360px] h-14 rounded-xl bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />
           }
         >
           <Body shown={shown} onClose={() => setShown(false)} />
@@ -161,7 +161,7 @@ function StatusPopoverBody(props: { shown: boolean; children: JSX.Element }) {
   return (
     <Show when={props.shown}>
       <Suspense
-        fallback={<div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />}
+        fallback={<div class="w-[360px] h-14 rounded-xl bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />}
       >
         {props.children}
       </Suspense>
@@ -282,7 +282,7 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
       <Show when={shown()}>
         <Suspense
           fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
+            <div class="w-[360px] h-14 rounded-xl bg-[var(--v2-background-bg-base)] shadow-[var(--shadow-lg-border-base)]" />
           }
         >
           <GlobalBody shown={shown} onClose={() => setShown(false)} onManageVaults={props.onManageVaults} />

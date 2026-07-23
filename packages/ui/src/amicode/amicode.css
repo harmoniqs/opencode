@@ -151,7 +151,7 @@
   transform: translateY(0.5px);
 }
 [data-component="amicode-card"]:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 [data-component="amicode-card"][data-state="error"] {
@@ -405,7 +405,7 @@
   background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-edit:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 1px;
   opacity: 1;
 }
@@ -447,7 +447,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
-  outline: 2px solid var(--v2-icon-icon-accent);
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -584,7 +584,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
 [data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 1px;
 }
 
@@ -638,7 +638,7 @@
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
 [data-component="amicode-run-window"] button:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus, var(--v2-icon-icon-accent));
+  outline: 2px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 
