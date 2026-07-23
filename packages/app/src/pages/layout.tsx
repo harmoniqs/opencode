@@ -2686,10 +2686,6 @@ export default function Layout(props: ParentProps) {
         <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
           {autoselecting() ?? ""}
           <Titlebar update={titlebarUpdate} />
-          {/* Session defaults: model + solver mode + Company Compute (solver API key / URL). */}
-          <div class="shrink-0 flex items-center justify-end px-3 py-1.5 border-b border-border-weaker-base">
-            <AmicodeDefaultsCapsule compute={computeControl} />
-          </div>
           <div class="flex-1 min-h-0 min-w-0 flex">
             {/* Chat-first shell rail (ADR 0001), mounted in the flag-on (v2) design. */}
             <nav
@@ -2700,7 +2696,8 @@ export default function Layout(props: ParentProps) {
               {railNav(false)}
               <div class="flex-1 min-h-0" />
               {liveSolveIndicator(false)}
-              {/* Account zone: Connections (Company Compute solver key + Pasqal + vaults). */}
+              {/* Account zone: solver/model defaults (+ Company Compute key/URL), Connections (Pasqal). */}
+              <AmicodeDefaultsCapsule compute={computeControl} compact />
               <GlobalConnectionsPopover compact onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
               <Tooltip placement="right" value={language.t("sidebar.settings")}>
                 <IconButton

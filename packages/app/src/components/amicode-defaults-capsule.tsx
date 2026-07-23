@@ -1,4 +1,5 @@
 import { Show, batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
+import { Icon } from "@opencode-ai/ui/icon"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
@@ -66,7 +67,7 @@ export function requestComputeConnect() {
 }
 const CONNECT_REQUEST_TTL_MS = 15_000
 
-export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl }) {
+export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl; compact?: boolean }) {
   const models = useModels()
   const [open, setOpen] = createSignal(false)
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
@@ -203,33 +204,66 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
         type="button"
         data-slot="amicode-defaults-face"
         title="Defaults — model & solver, apply everywhere"
+        aria-label={props.compact ? "Model & solver defaults" : undefined}
         aria-expanded={open()}
         onClick={toggle}
-        style={{
-          display: "inline-flex",
-          "align-items": "center",
-          gap: "7px",
-          "max-width": "100%",
-          "min-width": "0",
-          border: hp()
-            ? "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 55%, var(--v2-border-border-base))"
-            : "1px solid var(--v2-border-border-base)",
-          "border-radius": "7px",
-          background: "var(--v2-background-bg-layer-01)",
-          color: "var(--v2-text-text-base)",
-          padding: "4px 10px",
-          "font-size": "12px",
-          "font-weight": "600",
-          cursor: "pointer",
-          transition: "border-color 0.15s ease",
-        }}
+        style={
+          props.compact
+            ? {
+                display: "inline-flex",
+                "align-items": "center",
+                "justify-content": "center",
+                width: "36px",
+                height: "36px",
+                "border-radius": "8px",
+                border: hp()
+                  ? "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 55%, var(--v2-border-border-base))"
+                  : "1px solid transparent",
+                background: "transparent",
+                color: "var(--v2-text-text-base)",
+                cursor: "pointer",
+                transition: "border-color 0.15s ease",
+              }
+            : {
+                display: "inline-flex",
+                "align-items": "center",
+                gap: "7px",
+                "max-width": "100%",
+                "min-width": "0",
+                border: hp()
+                  ? "1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 55%, var(--v2-border-border-base))"
+                  : "1px solid var(--v2-border-border-base)",
+                "border-radius": "7px",
+                background: "var(--v2-background-bg-layer-01)",
+                color: "var(--v2-text-text-base)",
+                padding: "4px 10px",
+                "font-size": "12px",
+                "font-weight": "600",
+                cursor: "pointer",
+                transition: "border-color 0.15s ease",
+              }
+        }
       >
-        <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap", "min-width": "0" }}>
-          {modelName()} · {hp() ? "Piccolissimo+Altissimo" : "Piccolo"}
-        </span>
-        <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)", "flex-shrink": "0" }}>
-          ▾
-        </span>
+        <Show
+          when={props.compact}
+          fallback={
+            <>
+              <span
+                style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap", "min-width": "0" }}
+              >
+                {modelName()} · {hp() ? "Piccolissimo+Altissimo" : "Piccolo"}
+              </span>
+              <span
+                aria-hidden="true"
+                style={{ "font-size": "9px", color: "var(--v2-text-text-muted)", "flex-shrink": "0" }}
+              >
+                ▾
+              </span>
+            </>
+          }
+        >
+          <Icon name="sliders" />
+        </Show>
       </button>
       <Show when={open()}>
         <div
@@ -238,8 +272,9 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
           aria-label="Defaults"
           style={{
             position: "absolute",
-            right: "0",
-            top: "calc(100% + 8px)",
+            ...(props.compact
+              ? { left: "calc(100% + 8px)", bottom: "0" }
+              : { right: "0", top: "calc(100% + 8px)" }),
             "z-index": "40",
             width: "min(300px, 86vw)",
             background: "var(--v2-background-bg-base)",
