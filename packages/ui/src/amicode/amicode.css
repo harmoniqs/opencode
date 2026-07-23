@@ -617,7 +617,7 @@
 [data-component="amicode-run-window"] {
   /* Rail-free and tint-free: neutral hairline + surface across the AMICO family. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
 }
@@ -769,7 +769,7 @@
    The scrim also intercepts pointer events so the widget beneath can't be
    clicked while arranging. ------------------------------------------------- */
 [data-component="amicode-widget-cell"] { position: relative; }
-.amc-wg-framewrap { position: relative; border-radius: 10px; transition: outline-color 0.16s ease; }
+.amc-wg-framewrap { position: relative; border-radius: var(--radius-lg); transition: outline-color 0.16s ease; }
 [data-component="amicode-widget-cell"][data-editing="true"] .amc-wg-framewrap {
   outline: 1px dashed var(--v2-border-border-base);
   outline-offset: 3px;
@@ -800,7 +800,7 @@
 
 [data-component="amicode-widget-editbar"] {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  padding: 8px 12px; border-radius: 9px;
+  padding: 8px 12px; border-radius: var(--radius-lg);
   border: 1px solid var(--accent-edge);
   background: var(--accent-fill-soft);
   font-size: 11px; color: var(--v2-text-text-muted);
@@ -815,9 +815,9 @@
 
 .amc-wg-placeholder {
   display: flex; align-items: center; min-height: 68px;
-  border: 1px dashed var(--v2-border-border-base); border-radius: 10px;
+  border: 1px dashed var(--v2-border-border-base); border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
-  padding: 10px 12px; font-size: 11px; color: var(--v2-text-text-faint);
+  padding: 12px 12px; font-size: 11px; color: var(--v2-text-text-faint);
 }
 
 [data-component="amicode-widget-tray"] { display: flex; flex-direction: column; gap: 8px; }
@@ -888,8 +888,8 @@
 /* ---- In-chat widget preview (Stage 2 chat authoring) --------------------- */
 [data-component="amicode-widget-preview"] {
   display: flex; flex-direction: column; gap: 8px;
-  border: 1px solid var(--v2-border-border-base); border-radius: 12px;
-  background: var(--v2-background-bg-layer-01); padding: 10px 12px; max-width: 100%;
+  border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-lg);
+  background: var(--v2-background-bg-layer-01); padding: 12px 12px; max-width: 100%;
 }
 [data-component="amicode-widget-preview"] .amc-wp-head {
   display: flex; align-items: baseline; gap: 8px; min-width: 0;
@@ -925,7 +925,7 @@
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin {
   border: 1px solid var(--accent-edge);
-  border-radius: 7px; background: var(--accent-fill-soft);
+  border-radius: var(--radius-md); background: var(--accent-fill-soft);
   color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
@@ -1040,7 +1040,7 @@
   padding: 5px;
   background: var(--v2-background-bg-base);
   border: 1px solid var(--v2-border-border-base);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.55);
 }
 .amc-wg-menu button {
