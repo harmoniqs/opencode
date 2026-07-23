@@ -362,9 +362,9 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     padding: "4px 7px",
                     "line-height": "1",
                     "border-radius": "999px",
-                    border: "1px solid currentColor",
-                    background: "color-mix(in srgb, currentColor 10%, transparent)",
-                    color: "var(--v2-text-text-accent)",
+                    border: "none",
+                    background: "var(--accent)",
+                    color: "var(--accent-ink)",
                     "flex-shrink": "0",
                   }}
                 >

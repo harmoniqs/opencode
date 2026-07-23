@@ -1512,7 +1512,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               data-component={newSession() ? "session-new-composer" : "session-composer"}
               onSubmit={handleSubmit}
               classList={{
-                "group/prompt-input min-h-[96px] w-full rounded-xl bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]": true,
+                "group/prompt-input min-h-[96px] w-full rounded-lg bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]": true,
                 // Start-screen composer floats on the near-white page (bg-base is
                 // #fff, brighter than the #fcfcfc page) with only the raised
                 // shadow's 0.5px ring to hold its edge (~1.35:1). Give it a real
@@ -1867,7 +1867,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           </DockShellForm>
           <Show when={store.mode === "normal" || store.mode === "shell"}>
             <DockTray attach="top">
-              <div class="px-1.75 pt-5.5 pb-2 flex items-center gap-2 min-w-0">
+              <div class="px-2 pt-5 pb-2 flex items-center gap-2 min-w-0">
                 <div class="flex items-center gap-1.5 min-w-0 flex-1 relative">
                   <div
                     class="h-7 flex items-center gap-1.5 min-w-0 absolute inset-0"

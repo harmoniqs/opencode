@@ -1075,7 +1075,7 @@ function LibraryCard(props: {
             fileInput?.click()
           }}
           style={{
-            border: "1px solid var(--v2-icon-icon-accent)",
+            border: "1px solid var(--v2-border-border-base)",
             "border-radius": "6px",
             background: "var(--v2-background-bg-layer-02)",
             color: "var(--v2-text-text-base)",

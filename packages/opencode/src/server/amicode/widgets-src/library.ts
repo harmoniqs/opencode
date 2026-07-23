@@ -32,7 +32,7 @@ export default {
         (lib.count > 0 ? lib.count + ' paper' + (lib.count === 1 ? '' : 's') + ' \\u00b7 latest: ' + esc(lib.latestName || '') : 'upload papers \\u2014 Amico learns your work') +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:auto;align-items:center">' +
-        '<button type="button" data-upload ' + (busy ? 'disabled' : '') + ' style="font-size:11px;padding:3px 10px;border:1px solid var(--amc-accent);border-radius:6px;background:var(--amc-layer2);color:var(--amc-text);cursor:pointer">' + (busy ? 'Uploading\\u2026' : 'Upload PDF') + '</button>' +
+        '<button type="button" data-upload ' + (busy ? 'disabled' : '') + ' style="font-size:11px;padding:3px 10px;border:1px solid var(--amc-border);border-radius:6px;background:var(--amc-layer2);color:var(--amc-text);cursor:pointer">' + (busy ? 'Uploading\\u2026' : 'Upload PDF') + '</button>' +
         (lib.latestPath ? '<span data-discuss style="font-size:11px;color:var(--amc-accent);cursor:pointer">Discuss latest &#8594;</span>' : '') +
         '</div>' +
         '<input data-file type="file" accept=".pdf,application/pdf" style="display:none">' +
