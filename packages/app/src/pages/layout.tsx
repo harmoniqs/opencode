@@ -2691,7 +2691,7 @@ export default function Layout(props: ParentProps) {
             <nav
               aria-label={language.t("sidebar.nav.projectsAndSessions")}
               data-component="chat-first-rail"
-              class="w-16 shrink-0 flex flex-col items-center gap-2 px-3 py-3 border-r border-border-weaker-base overflow-y-auto no-scrollbar"
+              class="w-16 shrink-0 flex flex-col items-center gap-2 px-3 py-3 border-r border-border-weaker-base overflow-visible"
             >
               {railNav(false)}
               <div class="flex-1 min-h-0" />
