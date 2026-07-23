@@ -1,0 +1,163 @@
+/* UNLAYERED on purpose: the v2 theme (v2/styles/tailwind.css) is imported
+   unlayered, and unlayered CSS beats every @layer — so this skin must be
+   unlayered too, and imported AFTER the v2 theme in index.css. */
+
+/* ============================================================
+   AMICODE DESIGN LANGUAGE vNEXT ("kimi pass", rchari/design-polish)
+   One coherent skin over the v2 semantic tokens — the modern AI-workspace
+   look (clean layered neutrals, ONE confident accent, generous radius, soft
+   elevation, humanist UI type, subtle motion) while keeping Amico's gold
+   brand. Overrides ONLY semantic tokens + a few high-visibility surfaces;
+   loaded in layer(components) after the v2 theme, so these win.
+   ============================================================ */
+
+/* ── brand accent primitives (gold, contrast-corrected per scheme) ── */
+:root {
+  --amc-gold-050: #fdf8ec;
+  --amc-gold-100: #f8edcd;
+  --amc-gold-300: #eccd7e;
+  --amc-gold-400: #e2b959;
+  --amc-gold-500: #c99a2e;  /* dark-scheme accent */
+  --amc-gold-600: #9a7414;  /* light-scheme accent (AA on white) */
+  --amc-gold-700: #7c5c0d;
+  /* UI type: Inter is bundled by the app (index.css @font-face) */
+  --font-family-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* softer, larger card geometry */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+/* ── LIGHT: warm near-white, white cards, gold accent ── */
+:root,
+[data-color-scheme="light"] {
+  --v2-background-bg-base: #f7f7f8;
+  --v2-background-bg-deep: #efeff1;
+  --v2-background-bg-layer-01: #ffffff;
+  --v2-background-bg-layer-02: #f1f1f3;
+  --v2-background-bg-accent: var(--amc-gold-600);
+  --v2-text-text-accent: var(--amc-gold-600);
+  --v2-text-text-accent-hover: var(--amc-gold-700);
+  --v2-icon-icon-accent: var(--amc-gold-600);
+  --v2-icon-icon-accent-hover: var(--amc-gold-700);
+  --v2-border-border-focus: var(--amc-gold-500);
+  --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -8px rgb(0 0 0 / 0.10);
+}
+
+/* ── DARK: deep neutral layers, luminous gold accent ── */
+[data-color-scheme="dark"] {
+  --v2-background-bg-base: #131316;
+  --v2-background-bg-deep: #0e0e11;
+  --v2-background-bg-layer-01: #1a1a1f;
+  --v2-background-bg-layer-02: #212127;
+  --v2-background-bg-accent: var(--amc-gold-500);
+  --v2-text-text-accent: var(--amc-gold-400);
+  --v2-text-text-accent-hover: var(--amc-gold-300);
+  --v2-icon-icon-accent: var(--amc-gold-400);
+  --v2-icon-icon-accent-hover: var(--amc-gold-300);
+  --v2-border-border-focus: var(--amc-gold-500);
+  --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
+}
+
+/* ── inline code: readable in BOTH schemes (meeting bug: cyan-on-light) ── */
+:not(pre) > code {
+  color: #3d4451;
+  background: rgba(20, 22, 28, 0.06);
+  border-radius: 5px;
+  padding: 0.08em 0.35em;
+}
+[data-color-scheme="dark"] :not(pre) > code {
+  color: #c7cad1;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ── motion: quick, quiet, consistent ── */
+button,
+[role="button"],
+a,
+input,
+textarea,
+[data-slot="card"],
+.amc-mark {
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* system-dark before the app stamps data-color-scheme (mirror of the dark
+   block above — same reason the v2 theme carries both paths) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --v2-background-bg-base: #131316;
+    --v2-background-bg-deep: #0e0e11;
+    --v2-background-bg-layer-01: #1a1a1f;
+    --v2-background-bg-layer-02: #212127;
+    --v2-background-bg-accent: var(--amc-gold-500);
+    --v2-text-text-accent: var(--amc-gold-400);
+    --v2-text-text-accent-hover: var(--amc-gold-300);
+    --v2-icon-icon-accent: var(--amc-gold-400);
+    --v2-icon-icon-accent-hover: var(--amc-gold-300);
+    --v2-border-border-focus: var(--amc-gold-500);
+    --v2-elevation-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* ============================================================
+   SMOOTH PASS (rchari/shell-smooth) — Kimi-inspired softening on
+   Kate's chat-first shell. Levers: quieter borders app-wide, a big
+   soft composer card, circular send, rounder rail interactions.
+   ============================================================ */
+
+/* 1 · borders carry most of the "terminal" feel — soften globally */
+:root, [data-color-scheme="light"] {
+  --v2-border-border-muted: rgba(20, 22, 28, 0.055);
+  --v2-border-border-base: rgba(20, 22, 28, 0.08);
+}
+[data-color-scheme="dark"] {
+  --v2-border-border-muted: rgba(255, 255, 255, 0.05);
+  --v2-border-border-base: rgba(255, 255, 255, 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --v2-border-border-muted: rgba(255, 255, 255, 0.05);
+    --v2-border-border-base: rgba(255, 255, 255, 0.07);
+  }
+}
+
+/* 2 · the composer: Kimi's centerpiece — big radius, raised layer,
+      soft edge that firms up on focus */
+[data-component="session-new-composer"],
+[data-component="session-composer"] {
+  border-radius: 22px !important;
+  background: var(--v2-background-bg-layer-01) !important;
+  border: 1px solid var(--v2-border-border-base);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+[data-component="session-new-composer"] { min-height: 116px !important; }
+[data-component="session-new-composer"]:focus-within,
+[data-component="session-composer"]:focus-within {
+  border-color: var(--v2-border-border-strong);
+  box-shadow: var(--v2-elevation-raised);
+}
+
+/* 3 · send: a confident round button in the brand accent */
+[data-action="prompt-submit"] {
+  border-radius: 999px !important;
+  background: var(--v2-background-bg-accent) !important;
+  color: var(--v2-background-bg-base) !important;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+[data-action="prompt-submit"]:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* 4 · the rail: rounder, calmer — hovers glow instead of boxing */
+[data-component="sidebar-rail"] button { border-radius: 12px; }
+[data-component="sidebar-rail"] [class*="border-b"] { border-color: var(--v2-border-border-muted); }
