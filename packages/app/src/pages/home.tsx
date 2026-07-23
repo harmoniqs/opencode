@@ -173,8 +173,53 @@ export default function Home() {
   const settings = useSettings()
   return (
     <Show when={settings.general.newLayoutDesigns()} fallback={<LegacyHome />}>
-      <HomeDesign />
+      <ChatFirstLanding />
     </Show>
+  )
+}
+
+// Chat-first landing (ADR 0001): the root `/` is a fresh new chat, not the
+// dashboard. Resolve a working directory — last-touched project, else any
+// tracked project, else the server's own cwd — then hand off to the existing
+// `/:dir/session` auto-draft, which promotes to the composer-as-hero. Renders a
+// spinner only for the brief moment before the directory resolves.
+function ChatFirstLanding() {
+  const server = useServer()
+  const global = useGlobal()
+  const sync = useServerSync()
+  const layout = useLayout()
+  const navigate = useNavigate()
+
+  const landingDirectory = createMemo(() => {
+    const conn = server.current
+    if (!conn) return undefined
+    const ctx = global.createServerCtx(conn)
+    const projects = ctx.projects.list()
+    const last = projects.find((p) => p.worktree === ctx.projects.last())?.worktree
+    const resolved = last ?? projects[0]?.worktree ?? layout.projects.list()[0]?.worktree
+    if (resolved) return resolved
+    // No tracked project (fresh install against a bare `opencode serve`): fall
+    // back to the server's own working directory ("" until GET /path loads).
+    return (ctx.sync ?? sync).data.path.directory || undefined
+  })
+
+  let navigated = false
+  createEffect(() => {
+    if (navigated) return
+    const conn = server.current
+    const dir = landingDirectory()
+    if (!conn || !dir) return
+    navigated = true
+    const ctx = global.createServerCtx(conn)
+    ctx.projects.open(dir)
+    ctx.projects.touch(dir)
+    navigate(`/${base64Encode(dir)}/session`, { replace: true })
+  })
+
+  return (
+    <div class="flex h-full w-full items-center justify-center">
+      <AmicoSpinner />
+    </div>
   )
 }
 
