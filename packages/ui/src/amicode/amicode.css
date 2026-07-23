@@ -128,7 +128,7 @@
   border: 1px solid var(--v2-border-border-base);
   border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
-  padding: 5px 9px 5px 10px;
+  padding: 4px 8px;
   font-size: 12.5px;
   line-height: 17px;
   color: var(--v2-text-text-base);
@@ -298,7 +298,7 @@
 
 [data-component="amicode-entity-view"] .amc-ev-formula {
   margin: 8px 0;
-  padding: 14px 16px;
+  padding: 16px 16px;
   border-radius: var(--radius-lg);
   background: var(--v2-background-bg-layer-01);
   border: 1px solid var(--v2-border-border-muted);
@@ -343,7 +343,7 @@
   grid-template-columns: 160px 1fr auto;
   align-items: baseline;
   gap: 14px;
-  padding: 7px 8px 7px 4px;
+  padding: 8px 8px 8px 4px;
   border-radius: var(--radius-md);
   transition: background 0.12s ease;
 }
@@ -461,7 +461,7 @@
 }
 [data-component="amicode-entity-view"] .amc-event {
   position: relative;
-  padding: 9px 10px 9px 20px;
+  padding: 8px 8px 8px 20px;
   border-radius: var(--radius-md);
 }
 [data-component="amicode-entity-view"] .amc-event::before {
@@ -529,7 +529,7 @@
   align-items: center;
   gap: 9px;
   margin-top: 18px;
-  padding: 12px 4px 6px;
+  padding: 12px 4px 8px;
   border-top: 1px solid var(--v2-border-border-muted);
   font-size: 12px;
   color: var(--v2-text-text-muted);
