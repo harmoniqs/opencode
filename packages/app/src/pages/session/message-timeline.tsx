@@ -20,8 +20,12 @@ import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { AmicodeEntityView, entityLabel, parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
-import { AmicodeProblemSwitcher, parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
+import {
+  AmicodeEntityView,
+  entityLabel,
+  parseProblemResponse,
+  parseRunStatusResponse,
+} from "@opencode-ai/ui/amicode-entity-view"
 import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
@@ -71,7 +75,7 @@ import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
 import { useServer } from "@/context/server"
 import { usePrompt } from "@/context/prompt"
-import { startPrompt, draftPrompt } from "@/utils/start-prompt"
+import { draftPrompt } from "@/utils/start-prompt"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { parseDashboardResponse, type DashboardState } from "@opencode-ai/ui/amicode-widget-grid"
 import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
@@ -315,17 +319,7 @@ export function MessageTimeline(props: {
   // in dialog.show's onClose so a reopen refetches.
   const server = useServer()
   const prompt = usePrompt()
-  const [switcherOpen, setSwitcherOpen] = createSignal(false)
   const [entityViewOpen, setEntityViewOpen] = createSignal(false)
-  const [problemsRaw, { refetch: refetchProblems }] = createResource(
-    () => (switcherOpen() ? 1 : undefined),
-    () => amicodeGet(server.current, "/amicode/problems"),
-  )
-  const problemsView = createMemo(() => {
-    if (problemsRaw.error) return parseProblemsResponse({ ok: false, error: language.t("amicode.fetchFailed") })
-    const raw = problemsRaw.latest
-    return raw === undefined ? undefined : parseProblemsResponse(raw)
-  })
   const [problemRaw, { refetch: refetchProblem }] = createResource(
     () => (entityViewOpen() ? 1 : undefined),
     () => amicodeGet(server.current, "/amicode/problem"),
@@ -335,6 +329,14 @@ export function MessageTimeline(props: {
     const raw = problemRaw.latest
     return raw === undefined ? undefined : parseProblemResponse(raw)
   })
+  // Run verdict data for the entity view: /amicode/run-status is fetched
+  // whenever a dialog opens (cheap, server-cached ~1s); only the Run dialog
+  // reads it. Same endpoint the rail's run chip polls.
+  const [runStatusRaw] = createResource(
+    () => (entityViewOpen() ? 1 : undefined),
+    () => amicodeGet(server.current, "/amicode/run-status"),
+  )
+  const entityRunStatus = createMemo(() => parseRunStatusResponse(runStatusRaw.latest))
   const openEntityView = (kind: string, seq?: number) => {
     setEntityViewOpen(true)
     dialog.show(
@@ -347,6 +349,7 @@ export function MessageTimeline(props: {
             <AmicodeEntityView
               view={problemView()}
               kind={kind}
+              runStatus={entityRunStatus()}
               anchorSeq={seq}
               onDraftPrompt={(text) => {
                 dialog.close()
@@ -360,29 +363,6 @@ export function MessageTimeline(props: {
         </Dialog>
       ),
       () => setEntityViewOpen(false),
-    )
-  }
-  const openSwitcher = () => {
-    setSwitcherOpen(true)
-    dialog.show(
-      () => (
-        <Dialog title={language.t("amicode.problems.title")} fit>
-          <div style={{ width: "100%", "max-height": "68vh", "overflow-y": "auto" }}>
-            <AmicodeProblemSwitcher
-              view={problemsView()}
-              onStartPrompt={(text) => {
-                dialog.close()
-                startPrompt(prompt, text)
-              }}
-              onRetry={() => void refetchProblems()}
-              retryLabel={language.t("amicode.retry")}
-              openLabel={language.t("amicode.problems.open")}
-              newLabel={language.t("amicode.problems.new")}
-            />
-          </div>
-        </Dialog>
-      ),
-      () => setSwitcherOpen(false),
     )
   }
 
@@ -1767,7 +1747,6 @@ export function MessageTimeline(props: {
                 },
               }}
               onOpenEntity={openEntityView}
-              onOpenSwitcher={openSwitcher}
               onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
               retryLabel={language.t("amicode.retry")}
               unavailableLabel={language.t("amicode.unavailable")}

@@ -51,7 +51,6 @@ export function AmicodeEntityRail(props: {
   // callbacks + pin). Optional so hosts that can't render widgets omit it.
   widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
-  onOpenSwitcher: () => void
   onAsk?: (text: string) => void
   // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
   // to the host (postAmicode → amicode.openInspector) and passes it only when
@@ -69,7 +68,6 @@ export function AmicodeEntityRail(props: {
   }
   const disposeUiBridge = registerAmicodeUiBridge({
     openEntity: (kind, seq) => props.onOpenEntity(kind, seq),
-    openSwitcher: () => props.onOpenSwitcher(),
     fetchRunSeries: props.fetchRunSeries,
     widgetHost: props.widgetHost,
   })
@@ -196,25 +194,21 @@ export function AmicodeEntityRail(props: {
             </span>
           }
         >
+          {/* Active-problem name is a plain label now — the Problems list was
+              dropped (ring-2 redesign); switching problems is a chat action
+              (amicode_problem), not a UI picker. */}
           <Show when={problemName()}>
             {(name) => (
-              <button
-                type="button"
+              <span
                 data-slot="amicode-rail-problem"
                 style={{
                   "font-weight": "600",
                   color: "var(--v2-text-text-base)",
-                  background: "none",
-                  border: "none",
-                  padding: "0",
-                  "font-size": "inherit",
-                  cursor: "pointer",
                   "flex-shrink": "0",
                 }}
-                onClick={() => props.onOpenSwitcher()}
               >
-                {name()} ▾
-              </button>
+                {name()}
+              </span>
             )}
           </Show>
           <For each={chips()}>

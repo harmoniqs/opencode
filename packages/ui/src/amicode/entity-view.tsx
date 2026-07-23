@@ -1,9 +1,24 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
 import { AmicoMark } from "./spinner"
 import { receiptParts } from "./receipt"
-import { type ProblemView, editPromptText, entityRows, fieldGroup, formatTs, historyRows, humanizeKey } from "./problem"
+import {
+  type ProblemView,
+  type RunStatusView,
+  calibrationVerdict,
+  deviceVerdict,
+  editPromptText,
+  entityRows,
+  fieldGroup,
+  formatTs,
+  historyRows,
+  humanizeKey,
+  runVerdict,
+} from "./problem"
 import { SystemComposite } from "./system-view"
 import { FormulationView } from "./formulation-view"
+import { RunVerdictView } from "./run-view"
+import { DeviceView } from "./device-view"
+import { CalibrationView } from "./calibration-view"
 
 // AMICODE ring-2 entity view (spec B): dialog BODY opened from a rail chip or
 // diff receipt — current fields (pretty table + per-field "Edit in chat"
@@ -48,9 +63,15 @@ function eventPieces(
     )
 }
 
+// Kinds with a hand-designed verdict/hero renderer. For these, the raw field
+// table collapses behind "Show all fields"; kinds without a hero show fields
+// inline (else the dialog would be empty).
+const HERO_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
+
 export function AmicodeEntityView(props: {
   view: ProblemView | undefined // undefined → loading skeleton
   kind: string
+  runStatus?: RunStatusView[] // live run-status (for the Run verdict); ignored otherwise
   anchorSeq?: number
   onDraftPrompt: (text: string) => void
   onRetry: () => void
@@ -115,11 +136,32 @@ export function AmicodeEntityView(props: {
     const lastPart = latest ? `last changed ${formatTs(latest)}` : ""
     return [setPart, lastPart, `${n} updates`].filter(Boolean).join(" · ")
   })
-  const runTier = createMemo(() => {
-    if (props.kind !== "run" || !props.view) return undefined
-    const refs = props.view.runs
-    return refs.length > 0 ? (refs[refs.length - 1].tier ?? "vetted") : undefined
+  const verdict = createMemo(() =>
+    props.kind === "run" && props.view ? runVerdict(props.runStatus ?? [], props.view.runs) : null,
+  )
+  const deviceV = createMemo(() => (props.kind === "device_session" ? deviceVerdict(entity()) : null))
+  const calibV = createMemo(() => (props.kind === "calibration" ? calibrationVerdict(entity(), Date.now()) : null))
+  // A hero renders only when the kind has one AND it has content to show
+  // (run/device/calibration return null when there's nothing worth surfacing,
+  // so the raw field table takes over instead of showing an empty hero).
+  const hasHero = createMemo(() => {
+    switch (props.kind) {
+      case "system":
+      case "formulation":
+        return true
+      case "run":
+        return verdict() !== null
+      case "device_session":
+        return deviceV() !== null
+      case "calibration":
+        return calibV() !== null
+      default:
+        return false
+    }
   })
+  // Raw fields collapse behind a disclosure when a hero leads; open by default
+  // when there is no hero, or when opened from a specific diff (jump-to-change).
+  const [showFields, setShowFields] = createSignal(!HERO_KINDS.has(props.kind) || props.anchorSeq !== undefined)
 
   return (
     <div class="flex flex-col" data-component="amicode-entity-view" data-kind={props.kind}>
@@ -147,17 +189,12 @@ export function AmicodeEntityView(props: {
               </div>
             }
           >
-            <Show when={runTier() || latestTs()}>
-              <div class="amc-ev-meta">
-                <Show when={runTier()}>
-                  {(tier) => (
-                    <span class="amc-tier" data-slot="amicode-entity-tier" data-tier={tier()}>
-                      {tier() === "free" ? "free · unvetted" : tier()}
-                    </span>
-                  )}
-                </Show>
-                <Show when={latestTs()}>{(ts) => <span>Updated {formatTs(ts())}</span>}</Show>
-              </div>
+            <Show when={latestTs()}>
+              {(ts) => (
+                <div class="amc-ev-meta">
+                  <span>Updated {formatTs(ts())}</span>
+                </div>
+              )}
             </Show>
 
             <Show when={props.kind === "system"}>
@@ -166,47 +203,60 @@ export function AmicodeEntityView(props: {
             <Show when={props.kind === "formulation"}>
               <FormulationView entity={entity()} />
             </Show>
+            <Show when={props.kind === "run" && verdict()}>{(v) => <RunVerdictView verdict={v()} />}</Show>
+            <Show when={props.kind === "device_session" && deviceV()}>{(v) => <DeviceView verdict={v()} />}</Show>
+            <Show when={props.kind === "calibration" && calibV()}>{(v) => <CalibrationView verdict={v()} />}</Show>
 
-            <Show
-              when={props.kind !== "system" && props.kind !== "formulation" && fieldRows().length > 0}
-              fallback={
-                props.kind === "system" || props.kind === "formulation" ? null : (
-                  <div class="amc-ev-empty">No fields recorded yet.</div>
-                )
-              }
-            >
-              <div class="amc-ev-sec">Details</div>
-              <div class="flex flex-col" data-slot="amicode-entity-fields">
-                <For each={fieldRows()}>
-                  {(row) => (
-                    <>
-                      <Show when={row.showGroupHeader}>
-                        <div class="amc-ev-group">{row.groupLabel}</div>
-                      </Show>
-                      <div class="amc-field">
-                        <span class="amc-fk">
-                          <span class="name">{row.name}</span>
-                          <span class="raw">{row.key}</span>
-                        </span>
-                        <span class="amc-fv" classList={{ changed: isChanged(row.key) }}>
-                          {row.value}
-                        </span>
-                        <button
-                          type="button"
-                          class="amc-edit"
-                          data-slot="amicode-entity-edit"
-                          title={props.editLabel}
-                          aria-label={`${props.editLabel}: ${row.name}`}
-                          onClick={() => props.onDraftPrompt(editPromptText(props.kind, row.key, row.value))}
-                        >
-                          <span aria-hidden="true">✎</span>
-                          <span class="amc-edit-label">{props.editLabel}</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </For>
-              </div>
+            <Show when={!hasHero() && fieldRows().length === 0}>
+              <div class="amc-ev-empty">No fields recorded yet.</div>
+            </Show>
+
+            <Show when={fieldRows().length > 0}>
+              <Show when={hasHero()}>
+                <button
+                  type="button"
+                  class="amc-ev-fields-toggle"
+                  data-slot="amicode-entity-fields-toggle"
+                  aria-expanded={showFields()}
+                  onClick={() => setShowFields((value) => !value)}
+                >
+                  {showFields() ? "Hide fields" : "Show all fields"}
+                </button>
+              </Show>
+              <Show when={showFields() || !hasHero()}>
+                <div class="amc-ev-sec">Details</div>
+                <div class="flex flex-col" data-slot="amicode-entity-fields">
+                  <For each={fieldRows()}>
+                    {(row) => (
+                      <>
+                        <Show when={row.showGroupHeader}>
+                          <div class="amc-ev-group">{row.groupLabel}</div>
+                        </Show>
+                        <div class="amc-field">
+                          <span class="amc-fk">
+                            <span class="name">{row.name}</span>
+                            <span class="raw">{row.key}</span>
+                          </span>
+                          <span class="amc-fv" classList={{ changed: isChanged(row.key) }}>
+                            {row.value}
+                          </span>
+                          <button
+                            type="button"
+                            class="amc-edit"
+                            data-slot="amicode-entity-edit"
+                            title={props.editLabel}
+                            aria-label={`${props.editLabel}: ${row.name}`}
+                            onClick={() => props.onDraftPrompt(editPromptText(props.kind, row.key, row.value))}
+                          >
+                            <span aria-hidden="true">✎</span>
+                            <span class="amc-edit-label">{props.editLabel}</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </For>
+                </div>
+              </Show>
             </Show>
 
             <Show when={history().length > 0}>

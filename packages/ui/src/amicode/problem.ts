@@ -274,6 +274,118 @@ export function runChipText(statuses: RunStatusView[]): string | undefined {
   return "failed"
 }
 
+// --- run verdict (ring-2 Run dialog hero) ------------------------------------
+
+export type RunVerdict = {
+  /** formatted fidelity F, or null when the status carries no usable number */
+  fidelity: string | null
+  status: RunStatusView["status"] | "recorded"
+  iteration: number | null
+  tier: string | null
+}
+
+/** Verdict for the latest run of the active problem — fidelity + status +
+ *  iteration + tier — the fact the Run dialog used to omit while the inline
+ *  chip showed it. Prefers the live run-status entry matching the latest run
+ *  ref, falls back to the last status, then to a bare "recorded" when only a
+ *  run ref exists. Null when there are no runs at all (→ no hero). Fidelity
+ *  conventions mirror runChipText: finished = raw F, solving = 1 - f. */
+export function runVerdict(statuses: RunStatusView[], runs: RunRefView[]): RunVerdict | null {
+  const latestRef = runs.length > 0 ? runs[runs.length - 1] : undefined
+  const tier = latestRef ? (latestRef.tier ?? "vetted") : null
+  let status: RunStatusView | undefined
+  if (latestRef) status = statuses.find((s) => s.runId === latestRef.runId)
+  if (!status && statuses.length > 0) status = statuses[statuses.length - 1]
+  if (!status) return latestRef ? { fidelity: null, status: "recorded", iteration: null, tier } : null
+  let fidelity: string | null = null
+  if (status.status === "solving") {
+    if (status.fidelity !== null && status.fidelity >= 0 && status.fidelity <= 1)
+      fidelity = formatFidelity(1 - status.fidelity)
+  } else if (status.fidelity !== null) {
+    fidelity = formatFidelity(status.fidelity)
+  }
+  return { fidelity, status: status.status, iteration: status.iteration, tier }
+}
+
+// --- device verdict (ring-2 Device dialog hero) ------------------------------
+// device_session has no dedicated schema yet (real entities carry only
+// pulse_ref/run_dir/note). This reads the PROPOSED v2 fields (connection /
+// provider / ready / queue) when present and always surfaces the real pulse/run
+// linkage — design-leads-schema-follows. Returns null only for an empty entity.
+
+export type DeviceVerdict = {
+  connection: "online" | "offline" | "maintenance" | null
+  provider: string | null
+  ready: boolean | null
+  queue: string | null
+  pulseRef: string | null
+  runDir: string | null
+  note: string | null
+}
+
+export function deviceVerdict(entity: Record<string, unknown>): DeviceVerdict | null {
+  if (!entity || Object.keys(entity).length === 0) return null
+  let connection: DeviceVerdict["connection"] = null
+  const statusStr = str(entity.status)
+  if (statusStr === "online" || statusStr === "offline" || statusStr === "maintenance") connection = statusStr
+  else if (typeof entity.online === "boolean") connection = entity.online ? "online" : "offline"
+  const provider = str(entity.provider) ?? null
+  const ready = typeof entity.ready === "boolean" ? entity.ready : null
+  const queue =
+    str(entity.queue) ?? (typeof entity.queue === "number" ? `${entity.queue} in queue` : null)
+  const pulseRef = str(entity.pulse_ref) ?? null
+  const runDir = str(entity.run_dir) ?? null
+  const note = str(entity.note) ?? str(entity.notes) ?? null
+  if (connection === null && !provider && ready === null && !queue && !pulseRef && !runDir && !note) return null
+  return { connection, provider, ready, queue, pulseRef, runDir, note }
+}
+
+// --- calibration verdict (ring-2 Calibration dialog hero) --------------------
+// No calibration entity or schema exists in Phase 0 (amico-catalog: `calibrated`
+// lands later). This reads the PROPOSED fields (a timestamp + source) and
+// derives a freshness verdict; nowMs is injected for testability. Returns null
+// when there is no timestamp and no source → the dialog falls back to the raw
+// field table.
+
+export type CalibrationVerdict = {
+  freshness: "fresh" | "stale" | null
+  ageLabel: string | null
+  source: string | null
+  calibratedAt: string | null
+}
+
+/** Proposed heuristic until real calibration validity windows exist: ≤12h fresh. */
+const CALIB_FRESH_MS = 12 * 60 * 60 * 1000
+
+function relAge(ms: number): string {
+  const sec = Math.max(0, Math.round(ms / 1000))
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 48) return `${hr}h ago`
+  return `${Math.round(hr / 24)}d ago`
+}
+
+export function calibrationVerdict(entity: Record<string, unknown>, nowMs: number): CalibrationVerdict | null {
+  if (!entity || Object.keys(entity).length === 0) return null
+  const calibratedAt =
+    str(entity.calibrated) ?? str(entity.calibrated_at) ?? str(entity.recorded) ?? str(entity.timestamp) ?? null
+  const source = str(entity.source) ?? str(entity.device) ?? str(entity.provider) ?? str(entity.lab) ?? null
+  let freshness: CalibrationVerdict["freshness"] = null
+  let ageLabel: string | null = null
+  if (calibratedAt) {
+    const ms = Date.parse(calibratedAt)
+    if (Number.isFinite(ms)) {
+      const age = nowMs - ms
+      freshness = age <= CALIB_FRESH_MS ? "fresh" : "stale"
+      ageLabel = relAge(age)
+    }
+  }
+  if (freshness === null && !source && !calibratedAt) return null
+  return { freshness, ageLabel, source, calibratedAt }
+}
+
 // --- rail state --------------------------------------------------------------
 
 export function railState(current: ProblemView | undefined, lastGood: ProblemView | undefined): RailState {
