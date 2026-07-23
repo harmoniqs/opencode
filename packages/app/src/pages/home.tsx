@@ -51,6 +51,7 @@ import {
 import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
+import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
@@ -638,7 +639,17 @@ function HomeDesign() {
 
   // Chrome strip state (spec T3.3): sessions flyout. Grid editing is the
   // WidgetGrid's own affair now (uncontrolled — it renders its own customize).
-  const [sessionsOpen, setSessionsOpen] = createSignal(false)
+  const [sessionsOpen, setSessionsOpenRaw] = createSignal(false)
+  // amicode#203: one chrome dropdown at a time — announce on open, close when
+  // another announces.
+  const setSessionsOpen = (next: boolean) => {
+    setSessionsOpenRaw(next)
+    if (next) announceChromeDropdown("projects")
+    else clearChromeDropdown("projects")
+  }
+  createEffect(() => {
+    if (chromeDropdownOpenId() !== "projects" && sessionsOpen()) setSessionsOpenRaw(false)
+  })
   let flyoutRoot: HTMLDivElement | undefined
   createEffect(() => {
     if (!sessionsOpen()) return

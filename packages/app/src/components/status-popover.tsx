@@ -3,7 +3,8 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { Popover } from "@opencode-ai/ui/popover"
-import { Suspense, createMemo, createSignal, lazy, Show, type ComponentProps, type JSX } from "solid-js"
+import { Suspense, createEffect, createMemo, createSignal, lazy, Show, type ComponentProps, type JSX } from "solid-js"
+import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
 import { useSync } from "@/context/sync"
@@ -225,7 +226,16 @@ function StatusPopoverView(props: { state: StatusPopoverState }) {
 // same module the session-header popover lazy-loads.
 export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) {
   const language = useLanguage()
-  const [shown, setShown] = createSignal(false)
+  const [shown, setShownRaw] = createSignal(false)
+  // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
+  const setShown = (next: boolean) => {
+    setShownRaw(next)
+    if (next) announceChromeDropdown("connections")
+    else clearChromeDropdown("connections")
+  }
+  createEffect(() => {
+    if (chromeDropdownOpenId() !== "connections" && shown()) setShownRaw(false)
+  })
 
   return (
     <Popover

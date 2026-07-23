@@ -1,6 +1,7 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useModels } from "@/context/models"
 import { AmicodeDefaultModel } from "./amicode-default-model"
+import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import {
   hpAfterConnect,
   hpClickAction,
@@ -123,7 +124,15 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const close = () => {
     setOpen(false)
     setComputeOpen(false)
+    clearChromeDropdown("defaults")
   }
+  // amicode#203: one chrome dropdown at a time (see chrome-dropdown.ts).
+  createEffect(() => {
+    if (chromeDropdownOpenId() !== "defaults" && open()) {
+      setOpen(false)
+      setComputeOpen(false)
+    }
+  })
   const onDocPointer = (e: PointerEvent) => {
     if (root && !root.contains(e.target as Node)) {
       close()
@@ -139,6 +148,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const openPopover = () => {
     if (open()) return
     setOpen(true)
+    announceChromeDropdown("defaults")
     document.addEventListener("pointerdown", onDocPointer, true)
     document.addEventListener("keydown", onDocKey, true)
   }

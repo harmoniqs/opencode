@@ -786,8 +786,17 @@ function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState; includ
       </Show>
 
       <Tabs.Content value="connections">
-        <div class="flex flex-col px-2 pb-2">
-          <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+        {/* amicode#203 (Kate): the header-less global mount uses a single flat
+            14px padding (matching the other chrome dropdowns) instead of the
+            tabbed mount's inset card (px-2 pb-2 + p-3 raised box). */}
+        <div
+          class={
+            (props.includeVaults ?? true)
+              ? "flex flex-col px-2 pb-2"
+              : "flex flex-col p-3.5"
+          }
+        >
+          <div class={(props.includeVaults ?? true) ? "flex flex-col p-3 bg-background-base rounded-sm min-h-14" : "flex flex-col min-h-14"}>
             <AmicodeConnectionsTab
               view={props.state.connectionsView()}
               labels={props.state.connectionsLabels()}
