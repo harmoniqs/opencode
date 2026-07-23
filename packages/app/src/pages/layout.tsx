@@ -2440,20 +2440,34 @@ export default function Layout(props: ParentProps) {
   })
   const liveSolveIndicator = (mobile?: boolean) => (
     <Show when={solvingRun()}>
-      {(run) => (
-        <Tooltip
-          placement={mobile ? "bottom" : "right"}
-          value={`Solving${run().count > 1 ? ` — ${run().count} runs` : ""}${run().iteration !== null ? ` · iteration ${run().iteration}` : ""}`}
-        >
-          <IconButton
-            icon="status"
-            variant="primary"
-            size="large"
-            aria-label="Show the running solve"
+      {(run) =>
+        mobile ? (
+          <Tooltip
+            placement="bottom"
+            value={`Solving${run().count > 1 ? ` — ${run().count} runs` : ""}${run().iteration !== null ? ` · iteration ${run().iteration}` : ""}`}
+          >
+            <IconButton
+              icon="status"
+              variant="primary"
+              size="large"
+              aria-label="Show the running solve"
+              onClick={() => startChatWithPrompt("show me the running solve")}
+            />
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            data-slot="rail-nav-row"
+            class="w-full flex items-center gap-2.5 h-9 px-3 rounded-[10px] text-13-regular font-medium text-v2-text-text-accent bg-v2-background-bg-layer-01 hover:bg-v2-background-bg-layer-02 transition-colors"
             onClick={() => startChatWithPrompt("show me the running solve")}
-          />
-        </Tooltip>
-      )}
+          >
+            <Icon name="status" size="small" />
+            <span class="truncate">
+              {`Solving${run().count > 1 ? ` · ${run().count} runs` : ""}${run().iteration !== null ? ` · iter ${run().iteration}` : ""}`}
+            </span>
+          </button>
+        )
+      }
     </Show>
   )
 
@@ -2705,26 +2719,28 @@ export default function Layout(props: ParentProps) {
           <Titlebar update={titlebarUpdate} />
           <div class="flex-1 min-h-0 min-w-0 flex">
             {/* Chat-first shell rail (ADR 0001), mounted in the flag-on (v2) design. */}
+            {/* Kimi-style labeled rail: wide enough for icon + word rows; the
+                account zone uses the full (non-compact) variants Kate built. */}
             <nav
               aria-label={language.t("sidebar.nav.projectsAndSessions")}
               data-component="chat-first-rail"
-              class="w-16 shrink-0 flex flex-col items-center gap-2 px-3 py-3 border-r border-border-weaker-base overflow-visible"
+              class="w-52 shrink-0 flex flex-col items-stretch gap-1.5 px-3 py-3 border-r border-border-weaker-base overflow-visible"
             >
               {railNav(false)}
               <div class="flex-1 min-h-0" />
               {liveSolveIndicator(false)}
               {/* Account zone: solver/model defaults (+ Company Compute key/URL), Connections (Pasqal). */}
-              <AmicodeDefaultsCapsule compute={computeControl} compact />
-              <GlobalConnectionsPopover compact onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
-              <Tooltip placement="right" value={language.t("sidebar.settings")}>
-                <IconButton
-                  icon="settings-gear"
-                  variant="ghost"
-                  size="large"
-                  aria-label={language.t("sidebar.settings")}
-                  onClick={openSettings}
-                />
-              </Tooltip>
+              <AmicodeDefaultsCapsule compute={computeControl} />
+              <GlobalConnectionsPopover onManageVaults={() => startChatWithPrompt("Help me manage my vaults.")} />
+              <button
+                type="button"
+                data-slot="rail-nav-row"
+                class="w-full flex items-center gap-2.5 h-9 px-3 rounded-[10px] text-13-regular font-medium text-v2-text-text-muted hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base transition-colors"
+                onClick={openSettings}
+              >
+                <Icon name="settings-gear" size="small" />
+                <span class="truncate">{language.t("sidebar.settings")}</span>
+              </button>
             </nav>
             <Show when={state.railSurface}>
               {(surface) => <RailSurfacePanel surface={surface()} />}
