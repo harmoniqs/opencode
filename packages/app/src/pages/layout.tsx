@@ -2641,11 +2641,35 @@ export default function Layout(props: ParentProps) {
         <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
           {autoselecting() ?? ""}
           <Titlebar update={titlebarUpdate} />
-          <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
-            <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
-              {props.children}
+          <div class="flex-1 min-h-0 min-w-0 flex">
+            {/* Chat-first shell rail (ADR 0001), mounted in the flag-on (v2) design. */}
+            <nav
+              aria-label={language.t("sidebar.nav.projectsAndSessions")}
+              data-component="chat-first-rail"
+              class="w-16 shrink-0 flex flex-col items-center gap-2 px-3 py-3 border-r border-border-weaker-base overflow-y-auto no-scrollbar"
+            >
+              {railNav(false)}
+              <div class="flex-1 min-h-0" />
+              {liveSolveIndicator(false)}
+              <Tooltip placement="right" value={language.t("sidebar.settings")}>
+                <IconButton
+                  icon="settings-gear"
+                  variant="ghost"
+                  size="large"
+                  aria-label={language.t("sidebar.settings")}
+                  onClick={openSettings}
+                />
+              </Tooltip>
+            </nav>
+            <Show when={state.railSurface}>
+              {(surface) => <RailSurfacePanel surface={surface()} />}
             </Show>
-          </main>
+            <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
+              <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
+                {props.children}
+              </Show>
+            </main>
+          </div>
           {import.meta.env.DEV && <DebugBar />}
           <ToastRegion v2={newDesign()} />
         </div>
