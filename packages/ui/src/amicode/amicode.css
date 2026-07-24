@@ -126,7 +126,8 @@
   text-align: left;
   /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: var(--radius-lg);
+  /* medium corners suit a short single-line pill; --radius-lg over-rounds it (Kate 2026-07-24) */
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-01);
   padding: 4px 8px;
   font-size: 12.5px;

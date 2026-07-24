@@ -2,20 +2,15 @@ import { For, Show, createMemo } from "solid-js"
 import katex from "katex"
 import { systemProjection } from "./problem"
 import { formatSci } from "./facets"
-import {
-  systemSchematicModel,
-  systemTableModel,
-  systemHamiltonianLatex,
-  systemIdentityLine,
-  type SchematicModel,
-} from "./system-render"
+import { systemTableModel, systemHamiltonianLatex, systemIdentityLine } from "./system-render"
 
 // AMICODE System hero (spec §6.1) — PHYSICS-FORWARD (Kate 2026-07-23): lead with
 // the Hamiltonian, then a labeled physics spec (frequency, anharmonicity, drive
 // bound, decay, + any recorded params). Missing canonical params read "not set"
 // so an under-specified model is visible at a glance rather than silently thin.
-// Multi-component systems keep the schematic + table (they read structure
-// better). Thin — logic in the pure systemProjection / system-render models.
+// Multi-component systems show the component/coupling table (it scales; the
+// node/edge schematic was removed — Kate 2026-07-24). Thin — logic in the pure
+// systemProjection / system-render models.
 
 // Unitless params get a math symbol; unit-suffixed keys (chi_kHz, K_c_Hz, N_fock)
 // keep their name so the unit isn't lost.
@@ -35,9 +30,6 @@ const paramsText = (params: Record<string, number>): string =>
     .map(([k, v]) => `${PARAM_SYMBOL[k] ?? k} ${formatSci(v)}`)
     .join(" · ")
 
-const edgeLabel = (schem: SchematicModel, a: string, b: string): string | undefined =>
-  schem.edges.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a))?.label
-
 // Canonical single-qubit physics keys, consumed by the physics spec; anything
 // left over is appended as its own row so nothing recorded is lost.
 const CANON_KEYS = new Set(["omega", "frequency", "f01", "delta", "alpha", "anharmonicity", "drive_max", "T1", "t1", "T2", "t2"])
@@ -45,7 +37,6 @@ type PhysRow = { label: string; sym?: string; value: string; set: boolean }
 
 export function SystemComposite(props: { entity: Record<string, unknown> }) {
   const proj = createMemo(() => systemProjection(props.entity))
-  const schem = createMemo(() => systemSchematicModel(proj()))
   const table = createMemo(() => systemTableModel(proj()))
   const hamiltonian = createMemo(() => {
     const latex = systemHamiltonianLatex(proj())
@@ -103,66 +94,29 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
       <Show
         when={single()}
         fallback={
-          <>
-            <div class="amc-schematic" data-slot="amicode-system-schematic">
-              <For each={schem().nodes}>
-                {(node, i) => (
-                  <>
-                    <Show when={i() > 0}>
-                      <span class="amc-edge">
-                        <span class="amc-edge-line" aria-hidden="true">
-                          ─
-                        </span>
-                        <Show when={edgeLabel(schem(), schem().nodes[i() - 1].id, node.id)}>
-                          {(label) => <span class="amc-edge-label">{label()}</span>}
-                        </Show>
-                      </span>
-                    </Show>
-                    <span class="amc-node">
-                      <span class="amc-node-id">{node.id}</span>
-                      <Show when={node.levels !== undefined}>
-                        <span class="amc-node-lvl">{node.levels} lvl</span>
-                      </Show>
-                    </span>
-                  </>
-                )}
-              </For>
-            </div>
-            <Show when={schem().looseCouplings.length > 0}>
-              <div class="amc-loose">
-                <For each={schem().looseCouplings}>
-                  {(c) => (
-                    <span class="amc-loose-item">
-                      ⇢ {c.between.join("↔")} {c.kind}
-                    </span>
-                  )}
-                </For>
-              </div>
-            </Show>
-            <div class="amc-systbl" data-slot="amicode-system-table">
-              <For each={table().components}>
-                {(c) => (
-                  <div class="amc-systbl-row">
-                    <span class="amc-c-id">{c.id}</span>
-                    <span class="amc-c-role">{c.role}</span>
-                    <Show when={c.levels !== undefined}>
-                      <span class="amc-c-lvl">{c.levels} lvl</span>
-                    </Show>
-                    <span class="amc-c-params">{paramsText(c.params)}</span>
-                  </div>
-                )}
-              </For>
-              <For each={table().couplings}>
-                {(cp) => (
-                  <div class="amc-systbl-row amc-coupling">
-                    <span class="amc-c-id">{cp.between.join(" ↔ ")}</span>
-                    <span class="amc-c-role">{cp.kind}</span>
-                    <span class="amc-c-params">{paramsText(cp.params)}</span>
-                  </div>
-                )}
-              </For>
-            </div>
-          </>
+          <div class="amc-systbl" data-slot="amicode-system-table">
+            <For each={table().components}>
+              {(c) => (
+                <div class="amc-systbl-row">
+                  <span class="amc-c-id">{c.id}</span>
+                  <span class="amc-c-role">{c.role}</span>
+                  <Show when={c.levels !== undefined}>
+                    <span class="amc-c-lvl">{c.levels} lvl</span>
+                  </Show>
+                  <span class="amc-c-params">{paramsText(c.params)}</span>
+                </div>
+              )}
+            </For>
+            <For each={table().couplings}>
+              {(cp) => (
+                <div class="amc-systbl-row amc-coupling">
+                  <span class="amc-c-id">{cp.between.join(" ↔ ")}</span>
+                  <span class="amc-c-role">{cp.kind}</span>
+                  <span class="amc-c-params">{paramsText(cp.params)}</span>
+                </div>
+              )}
+            </For>
+          </div>
         }
       >
         <div class="amc-sys-physics" data-slot="amicode-system-physics">

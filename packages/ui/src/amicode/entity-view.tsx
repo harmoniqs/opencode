@@ -1,5 +1,4 @@
 import { For, Show, createMemo } from "solid-js"
-import { AmicoMark } from "./spinner"
 import {
   type ProblemView,
   type RunStatusView,
@@ -200,12 +199,6 @@ export function AmicodeEntityView(props: {
               </div>
             </Show>
 
-            <div class="amc-ev-foot">
-              <AmicoMark />
-              <span>
-                Read-only. <b>Changes are made by asking AMICO in chat</b> — ✎ drafts the message for you.
-              </span>
-            </div>
           </Show>
         )}
       </Show>
