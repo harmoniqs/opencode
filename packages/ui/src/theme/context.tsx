@@ -172,8 +172,20 @@ function cacheThemeVariants(theme: DesktopTheme, themeId: string) {
 
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
-  init: (props: { defaultTheme?: string; onThemeApplied?: (theme: DesktopTheme, mode: "light" | "dark") => void }) => {
-    const themeId = normalize(read(STORAGE_KEYS.THEME_ID) ?? props.defaultTheme) ?? "oc-2"
+  init: (props: {
+    defaultTheme?: string
+    // amicode: when set, the theme is hard-pinned to this id — stored/cross-tab
+    // values are ignored and normalized away, so a stale localStorage theme can't
+    // strand a user now that the in-UI theme picker is gone.
+    lockThemeId?: string
+    onThemeApplied?: (theme: DesktopTheme, mode: "light" | "dark") => void
+  }) => {
+    const locked = props.lockThemeId ? (normalize(props.lockThemeId) ?? undefined) : undefined
+    if (locked) {
+      write(STORAGE_KEYS.THEME_ID, locked)
+      clear()
+    }
+    const themeId = locked ?? normalize(read(STORAGE_KEYS.THEME_ID) ?? props.defaultTheme) ?? "oc-2"
     const colorScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "system"
     const mode = colorScheme === "system" ? getSystemMode() : colorScheme
     const [store, setStore] = createStore({
@@ -228,7 +240,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const loadThemes = () => Promise.all(themeIDs().map(load)).then(() => store.themes)
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEYS.THEME_ID && e.newValue) {
+      if (!locked && e.key === STORAGE_KEYS.THEME_ID && e.newValue) {
         const next = normalize(e.newValue)
         if (!next) return
         if (next !== "oc-2" && !knownThemes().has(next) && !store.themes[next]) return
@@ -259,7 +271,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       makeEventListener(mediaQuery, "change", onMedia)
 
       const rawTheme = read(STORAGE_KEYS.THEME_ID)
-      const savedTheme = normalize(rawTheme ?? props.defaultTheme) ?? "oc-2"
+      const savedTheme = locked ?? normalize(rawTheme ?? props.defaultTheme) ?? "oc-2"
       const savedScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "system"
       if (rawTheme && rawTheme !== savedTheme) {
         write(STORAGE_KEYS.THEME_ID, savedTheme)
@@ -281,6 +293,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const setTheme = (id: string) => {
+      if (locked) return
       const next = normalize(id)
       if (!next) {
         console.warn(`Theme "${id}" not found`)
