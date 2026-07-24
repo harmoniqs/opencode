@@ -29,6 +29,7 @@ const CONSTRAINT_LABEL: Record<string, string> = {
   ddu_bound: "accel bound (ddu)",
   dt_bounds: "Δt bounds",
   final_fidelity: "final fidelity",
+  leakage: "leakage suppression",
   calibration_pin: "calibration pin",
 }
 
@@ -44,17 +45,27 @@ const termText = (t: FormulationTerm): string => {
 
 export function FormulationView(props: { entity: Record<string, unknown> }) {
   const proj = createMemo(() => formulationProjection(props.entity))
-  const badges = createMemo(() => modeBadges(proj() as unknown as Record<string, unknown>))
+  // Leakage is surfaced as a constraint row below, so drop it from the mode bar
+  // to avoid showing the same thing twice.
+  const badges = createMemo(() =>
+    modeBadges(proj() as unknown as Record<string, unknown>).filter((b) => b.label !== "leakage"),
+  )
   const primaryHtml = createMemo(() => {
     const latex = OBJECTIVE_LATEX[proj().primaryKey]
     return latex ? katex.renderToString(latex, { throwOnError: false }) : undefined
   })
-  // Synthesized (display-only) final_fidelity constraint row for min_time.
+  // Surface EVERY constraint (Kate 2026-07-23): the recorded constraints, PLUS
+  // the two the projection lifts out of the raw list — final_fidelity (was
+  // shown only for min-time; now all time modes) and leakage (was demoted to a
+  // mode flag). Guarded so a structured constraint of the same kind isn't dupes.
   const constraintRows = createMemo(() => {
     const p = proj()
     const rows = [...p.constraints]
-    if (p.time_mode === "min_time" && typeof p.derivedFinalFidelity === "number")
-      rows.push({ kind: "final_fidelity", params: { threshold: p.derivedFinalFidelity } })
+    const ff = p.time_params?.final_fidelity ?? p.derivedFinalFidelity
+    if (typeof ff === "number" && !rows.some((r) => r.kind === "final_fidelity"))
+      rows.push({ kind: "final_fidelity", params: {}, label: `final fidelity ≥ ${ff}` })
+    if (p.leakage && !rows.some((r) => r.kind === "leakage"))
+      rows.push({ kind: "leakage", params: {}, label: "leakage suppression" })
     return rows
   })
 

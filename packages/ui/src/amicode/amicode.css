@@ -1246,3 +1246,37 @@
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+
+/* ---- System physics spec (physics-forward System hero) --------------------- */
+[data-component="amicode-system-view"] .amc-sys-physics {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+[data-component="amicode-system-view"] .amc-phys-row {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: baseline;
+  gap: 14px;
+  padding: 6px 4px;
+  font-size: 13px;
+}
+[data-component="amicode-system-view"] .amc-phys-row + .amc-phys-row {
+  border-top: 1px solid var(--v2-border-border-muted);
+}
+[data-component="amicode-system-view"] .amc-phys-key {
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-system-view"] .amc-phys-sym {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-faint);
+}
+[data-component="amicode-system-view"] .amc-phys-val {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-base);
+  font-variant-numeric: tabular-nums;
+}
+[data-component="amicode-system-view"] .amc-phys-row.is-unset .amc-phys-val {
+  color: var(--v2-text-text-faint);
+  font-style: italic;
+}
