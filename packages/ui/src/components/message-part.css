@@ -979,10 +979,18 @@
       background-color: var(--background-base);
     }
 
+    /* selected → the amicode design-system light yellow (soft fill + accent
+       edge), matching the single-accent state pattern. */
     &[data-picked="true"] {
-      background-color: var(--surface-interactive-weak);
-      border-color: transparent;
-      box-shadow: var(--shadow-xs-border-hover);
+      background-color: var(--accent-fill-soft);
+      border-color: var(--accent-edge);
+      box-shadow: none;
+    }
+
+    /* keyboard/current accent → yellow, not the default blue focus ring */
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
     }
 
     &:disabled {
@@ -1028,22 +1036,25 @@
       opacity: 0;
     }
 
+    /* picked radio/checkbox → yellow fill with near-black ink (black-on-yellow,
+       per the design system), not the default blue interactive color. */
     &[data-picked="true"] {
-      border-color: var(--icon-interactive-base);
+      border-color: var(--accent);
 
       [data-component="icon"] {
         opacity: 1;
-        color: var(--icon-invert-base);
+        color: var(--accent-ink);
       }
 
       &[data-type="checkbox"] {
-        background-color: var(--icon-interactive-base);
+        background-color: var(--accent);
       }
 
       &[data-type="radio"] {
-        background-color: var(--icon-interactive-base);
+        background-color: var(--accent);
         [data-slot="question-option-radio-dot"] {
           opacity: 1;
+          background-color: var(--accent-ink);
         }
       }
     }
