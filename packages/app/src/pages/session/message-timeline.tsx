@@ -1747,6 +1747,8 @@ export function MessageTimeline(props: {
                 },
               }}
               onOpenEntity={openEntityView}
+              onDraftPrompt={(text) => draftPrompt(prompt, text)}
+              editLabel={language.t("amicode.editInChat")}
               onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
               retryLabel={language.t("amicode.retry")}
               unavailableLabel={language.t("amicode.unavailable")}
