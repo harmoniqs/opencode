@@ -1,12 +1,9 @@
-import { Component, Show, createMemo, createResource, onMount } from "solid-js"
+import { Component, Show, createMemo, createResource } from "solid-js"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon } from "@opencode-ai/ui/icon"
 import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
-import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
@@ -14,21 +11,9 @@ import { usePlatform, type DisplayBackend } from "@/context/platform"
 import { useServerSync } from "@/context/server-sync"
 import { useServerSDK } from "@/context/server-sdk"
 import { useUpdaterAction } from "../updater-action"
-import {
-  monoDefault,
-  monoFontFamily,
-  monoInput,
-  sansDefault,
-  sansFontFamily,
-  sansInput,
-  terminalDefault,
-  terminalFontFamily,
-  terminalInput,
-  useSettings,
-} from "@/context/settings"
+import { useSettings } from "@/context/settings"
 import { decode64 } from "@/utils/base64"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
-import { Link } from "../link"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
 import "./settings-v2.css"
@@ -37,11 +22,6 @@ let demoSoundState = {
   cleanup: undefined as (() => void) | undefined,
   timeout: undefined as NodeJS.Timeout | undefined,
   run: 0,
-}
-
-type ThemeOption = {
-  id: string
-  name: string
 }
 
 type ShellOption = {
@@ -84,11 +64,9 @@ const playDemoSound = (id: string | undefined) => {
 }
 
 export const SettingsGeneralV2: Component = () => {
-  const theme = useTheme()
   const language = useLanguage()
   const permission = usePermission()
   const platform = usePlatform()
-  const dialog = useDialog()
   const params = useParams()
   const settings = useSettings()
 
@@ -122,8 +100,6 @@ export const SettingsGeneralV2: Component = () => {
   }
   const desktop = createMemo(() => platform.platform === "desktop")
 
-  const themeOptions = createMemo<ThemeOption[]>(() => theme.ids().map((id) => ({ id, name: theme.name(id) })))
-
   const serverSync = useServerSync()
   const serverSdk = useServerSDK()
 
@@ -147,10 +123,6 @@ export const SettingsGeneralV2: Component = () => {
     () => Promise.resolve(platform.getPinchZoomEnabled?.() ?? false).catch(() => false),
     { initialValue: false },
   )
-
-  onMount(() => {
-    void theme.loadThemes()
-  })
 
   const autoOption = { id: "auto", value: "", label: language.t("settings.general.row.shell.autoDefault") }
   const currentShell = createMemo(() => serverSync.data.config.shell ?? "")
@@ -201,12 +173,6 @@ export const SettingsGeneralV2: Component = () => {
     void update.catch(() => setPinchZoom(!checked))
   }
 
-  const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [
-    { value: "system", label: language.t("theme.scheme.system") },
-    { value: "light", label: language.t("theme.scheme.light") },
-    { value: "dark", label: language.t("theme.scheme.dark") },
-  ])
-
   const languageOptions = createMemo(() =>
     language.locales.map((locale) => ({
       value: locale,
@@ -216,9 +182,6 @@ export const SettingsGeneralV2: Component = () => {
 
   const noneSound = { id: "none", label: "sound.option.none" } as const
   const soundOptions = [noneSound, ...SOUND_OPTIONS]
-  const mono = () => monoInput(settings.appearance.font())
-  const sans = () => sansInput(settings.appearance.uiFont())
-  const terminal = () => terminalInput(settings.appearance.terminalFont())
 
   const soundSelectProps = (
     enabled: () => boolean,
@@ -344,24 +307,6 @@ export const SettingsGeneralV2: Component = () => {
             />
           </div>
         </SettingsRowV2>
-
-        <SettingsRowV2
-          title={language.t("settings.general.row.newLayoutDesigns.title")}
-          description={language.t("settings.general.row.newLayoutDesigns.description")}
-        >
-          <div data-action="settings-new-layout-designs">
-            <Switch
-              checked={settings.general.newLayoutDesigns()}
-              onChange={(checked) => {
-                settings.general.setNewLayoutDesigns(checked)
-                if (checked) return
-                void import("@/components/dialog-settings").then((module) => {
-                  dialog.show(() => <module.DialogSettings />)
-                })
-              }}
-            />
-          </div>
-        </SettingsRowV2>
       </SettingsListV2>
     </div>
   )
@@ -439,134 +384,6 @@ export const SettingsGeneralV2: Component = () => {
             <Switch
               checked={settings.general.showCustomAgents()}
               onChange={(checked) => settings.general.setShowCustomAgents(checked)}
-            />
-          </div>
-        </SettingsRowV2>
-      </SettingsListV2>
-    </div>
-  )
-
-  const AppearanceSection = () => (
-    <div class="settings-v2-section">
-      <h3 class="settings-v2-section-title">{language.t("settings.general.section.appearance")}</h3>
-
-      <SettingsListV2>
-        <SettingsRowV2
-          title={language.t("settings.general.row.colorScheme.title")}
-          description={language.t("settings.general.row.colorScheme.description")}
-        >
-          <SelectV2
-            appearance="inline"
-            data-action="settings-color-scheme"
-            options={colorSchemeOptions()}
-            current={colorSchemeOptions().find((o) => o.value === theme.colorScheme())}
-            placement="bottom-end"
-            gutter={6}
-            value={(o) => o.value}
-            label={(o) => o.label}
-            onSelect={(option) => option && theme.setColorScheme(option.value)}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewColorScheme(option.value)
-              return () => theme.cancelPreview()
-            }}
-          />
-        </SettingsRowV2>
-
-        <SettingsRowV2
-          title={language.t("settings.general.row.theme.title")}
-          description={
-            <>
-              {language.t("settings.general.row.theme.description")}{" "}
-              <Link class="settings-v2-link" href="https://opencode.ai/docs/themes/">
-                {language.t("common.learnMore")}
-              </Link>
-            </>
-          }
-        >
-          <SelectV2
-            appearance="inline"
-            data-action="settings-theme"
-            options={themeOptions()}
-            current={themeOptions().find((o) => o.id === theme.themeId())}
-            placement="bottom-end"
-            gutter={6}
-            value={(o) => o.id}
-            label={(o) => o.name}
-            onSelect={(option) => {
-              if (!option) return
-              theme.setTheme(option.id)
-            }}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewTheme(option.id)
-              return () => theme.cancelPreview()
-            }}
-          />
-        </SettingsRowV2>
-
-        <SettingsRowV2
-          title={language.t("settings.general.row.uiFont.title")}
-          description={language.t("settings.general.row.uiFont.description")}
-        >
-          <div class="w-full sm:w-[220px]">
-            <TextInputV2
-              data-action="settings-ui-font"
-              type="text"
-              appearance="base"
-              value={sans()}
-              onInput={(event) => settings.appearance.setUIFont(event.currentTarget.value)}
-              placeholder={sansDefault}
-              spellcheck={false}
-              autocorrect="off"
-              autocomplete="off"
-              autocapitalize="off"
-              aria-label={language.t("settings.general.row.uiFont.title")}
-              style={{ "font-family": sansFontFamily(settings.appearance.uiFont()) }}
-            />
-          </div>
-        </SettingsRowV2>
-
-        <SettingsRowV2
-          title={language.t("settings.general.row.font.title")}
-          description={language.t("settings.general.row.font.description")}
-        >
-          <div class="w-full sm:w-[220px]">
-            <TextInputV2
-              data-action="settings-code-font"
-              type="text"
-              appearance="base"
-              value={mono()}
-              onInput={(event) => settings.appearance.setFont(event.currentTarget.value)}
-              placeholder={monoDefault}
-              spellcheck={false}
-              autocorrect="off"
-              autocomplete="off"
-              autocapitalize="off"
-              aria-label={language.t("settings.general.row.font.title")}
-              style={{ "font-family": monoFontFamily(settings.appearance.font()) }}
-            />
-          </div>
-        </SettingsRowV2>
-
-        <SettingsRowV2
-          title={language.t("settings.general.row.terminalFont.title")}
-          description={language.t("settings.general.row.terminalFont.description")}
-        >
-          <div class="w-full sm:w-[220px]">
-            <TextInputV2
-              data-action="settings-terminal-font"
-              type="text"
-              appearance="base"
-              value={terminal()}
-              onInput={(event) => settings.appearance.setTerminalFont(event.currentTarget.value)}
-              placeholder={terminalDefault}
-              spellcheck={false}
-              autocorrect="off"
-              autocomplete="off"
-              autocapitalize="off"
-              aria-label={language.t("settings.general.row.terminalFont.title")}
-              style={{ "font-family": terminalFontFamily(settings.appearance.terminalFont()) }}
             />
           </div>
         </SettingsRowV2>
@@ -756,8 +573,6 @@ export const SettingsGeneralV2: Component = () => {
 
       <div class="settings-v2-tab-body">
         <GeneralSection />
-
-        <AppearanceSection />
 
         <NotificationsSection />
 

@@ -270,6 +270,7 @@ export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
     <MetaProvider>
       <Font />
       <ThemeProvider
+        lockThemeId="oc-2"
         onThemeApplied={(_, mode) => {
           void window.api?.setTitlebar?.({ mode })
         }}
