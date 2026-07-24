@@ -1147,6 +1147,38 @@
   }
 }
 
+/* One contained component (Kate 2026-07-24): the DockTray (footer) used to be a
+   SEPARATE surface sitting BEHIND the shell (its own bg + border, z-index 0),
+   pulled up so it peeked out below — reading as a second card sliding off the
+   first. Unify: the dock-prompt itself becomes the single card (one surface, one
+   1px ring, one radius, clipped), and the shell + tray flatten into sections of
+   it, with the footer a plain bottom action bar under a hairline divider. */
+[data-component="dock-prompt"][data-kind="question"] {
+  background-color: var(--v2-background-bg-layer-02);
+  box-shadow: 0 0 0 1px var(--border-weak-base);
+  border-radius: 10px;
+  overflow: clip;
+}
+[data-component="dock-prompt"][data-kind="question"] [data-dock-surface="shell"] {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+  z-index: auto;
+}
+[data-component="dock-prompt"][data-kind="question"] [data-dock-surface="tray"] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin-top: 0;
+  z-index: auto;
+}
+[data-component="dock-prompt"][data-kind="question"] [data-slot="question-footer"] {
+  margin-top: 0;
+  padding: 10px;
+  border-top: 1px solid var(--border-weak-base);
+}
+
 [data-component="question-answers"] {
   display: flex;
   flex-direction: column;
