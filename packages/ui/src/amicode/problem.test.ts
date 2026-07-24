@@ -7,6 +7,9 @@ import {
   formatTs,
   mergeChips,
   runChipText,
+  runVerdict,
+  deviceVerdict,
+  calibrationVerdict,
   railState,
   entityRows,
   historyRows,
@@ -231,5 +234,76 @@ describe("composite system display derivations (spec-20260709)", () => {
     expect(() => compositeChip({} as any)).not.toThrow()
     expect(() => compositeSystemRows({ components: "nope" } as any)).not.toThrow()
     expect(() => systemProjection(null as any)).not.toThrow()
+  })
+})
+
+describe("runVerdict (ring-2 Run hero)", () => {
+  test("finished run → fidelity + status + iters + tier", () => {
+    const v = runVerdict(
+      [{ runId: "r1", status: "finished", fidelity: 0.9982, iteration: 312 }],
+      [{ runId: "r1", tier: "free" }],
+    )
+    expect(v).toEqual({ fidelity: "0.9982", status: "finished", iteration: 312, tier: "free" })
+  })
+  test("solving run renders F = 1 - f and defaults tier to vetted", () => {
+    const v = runVerdict([{ runId: "r1", status: "solving", fidelity: 0.032, iteration: 12 }], [{ runId: "r1" }])
+    expect(v).toMatchObject({ fidelity: "0.968", status: "solving", tier: "vetted" })
+  })
+  test("no runs → null (no hero)", () => {
+    expect(runVerdict([], [])).toBeNull()
+  })
+  test("run ref but no live status → 'recorded' with tier, no fidelity", () => {
+    expect(runVerdict([], [{ runId: "r1", tier: "free" }])).toEqual({
+      fidelity: null,
+      status: "recorded",
+      iteration: null,
+      tier: "free",
+    })
+  })
+  test("matches the LATEST run ref by id; failed carries no F", () => {
+    const statuses = [
+      { runId: "r1", status: "finished", fidelity: 0.9, iteration: 100 },
+      { runId: "r2", status: "failed", fidelity: null, iteration: null },
+    ] as const
+    const v = runVerdict([...statuses], [{ runId: "r1" }, { runId: "r2" }])
+    expect(v).toMatchObject({ status: "failed", fidelity: null, tier: "vetted" })
+  })
+})
+
+describe("deviceVerdict (ring-2 Device hero)", () => {
+  test("empty entity → null", () => {
+    expect(deviceVerdict({})).toBeNull()
+  })
+  test("real device_session surfaces pulse/run/note linkage, no connection", () => {
+    const v = deviceVerdict({ pulse_ref: "/a/b/pulse.jld2", run_dir: "/runs/r1", note: "hi" })
+    expect(v).toMatchObject({ connection: null, pulseRef: "/a/b/pulse.jld2", runDir: "/runs/r1", note: "hi" })
+  })
+  test("proposed v2 fields → connection + provider + ready", () => {
+    const v = deviceVerdict({ status: "online", provider: "QuEra Aquila", ready: true })
+    expect(v).toMatchObject({ connection: "online", provider: "QuEra Aquila", ready: true })
+  })
+  test("boolean online:false maps to offline", () => {
+    expect(deviceVerdict({ online: false })).toMatchObject({ connection: "offline" })
+  })
+})
+
+describe("calibrationVerdict (ring-2 Calibration hero)", () => {
+  const NOW = Date.parse("2026-07-23T12:00:00Z")
+  test("empty entity → null", () => {
+    expect(calibrationVerdict({}, NOW)).toBeNull()
+  })
+  test("no timestamp and no source → null (falls back to raw fields)", () => {
+    expect(calibrationVerdict({ foo: 1 }, NOW)).toBeNull()
+  })
+  test("recent calibration → fresh; old → stale, with relative age", () => {
+    const fresh = calibrationVerdict({ calibrated: "2026-07-23T09:00:00Z", source: "QuEra" }, NOW)
+    expect(fresh).toMatchObject({ freshness: "fresh", source: "QuEra" })
+    expect(fresh?.ageLabel).toBe("3h ago")
+    const stale = calibrationVerdict({ calibrated: "2026-07-20T12:00:00Z" }, NOW)
+    expect(stale).toMatchObject({ freshness: "stale" })
+    expect(stale?.ageLabel).toBe("3d ago")
+  })
+  test("source only (no timestamp) → freshness null but still a verdict", () => {
+    expect(calibrationVerdict({ source: "lab-A" }, NOW)).toMatchObject({ freshness: null, source: "lab-A" })
   })
 })

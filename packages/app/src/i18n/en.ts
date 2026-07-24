@@ -233,8 +233,8 @@ export const dict = {
   "common.attachment": "attachment",
 
   "prompt.placeholder.shell": "Enter shell command... {{example}}",
-  "prompt.placeholder.normal": 'Ask anything... "{{example}}"',
-  "prompt.placeholder.simple": "Ask anything...",
+  "prompt.placeholder.normal": 'Ask Amico anything... "{{example}}"',
+  "prompt.placeholder.simple": "Ask Amico anything...",
   "prompt.placeholder.summarizeComments": "Summarize comments…",
   "prompt.placeholder.summarizeComment": "Summarize comment…",
   "prompt.mode.shell": "Shell",
@@ -729,9 +729,6 @@ export const dict = {
   "amicode.unavailable": "status unavailable",
   "amicode.fetchFailed": "Could not reach the server for problem status",
   "amicode.editInChat": "Edit in chat",
-  "amicode.problems.title": "AMICO · Problems",
-  "amicode.problems.open": "Open",
-  "amicode.problems.new": "New problem",
 
   "session.share.popover.title": "Publish on web",
   "session.share.popover.description.shared":

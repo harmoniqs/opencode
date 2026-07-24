@@ -126,7 +126,8 @@
   text-align: left;
   /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
   border: 1px solid var(--v2-border-border-base);
-  border-radius: var(--radius-lg);
+  /* medium corners suit a short single-line pill; --radius-lg over-rounds it (Kate 2026-07-24) */
+  border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-01);
   padding: 4px 8px;
   font-size: 12.5px;
@@ -151,7 +152,7 @@
   transform: translateY(0.5px);
 }
 [data-component="amicode-card"]:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 [data-component="amicode-card"][data-state="error"] {
@@ -405,7 +406,7 @@
   background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-edit:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
   opacity: 1;
 }
@@ -447,7 +448,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -584,7 +585,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
 [data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
 }
 
@@ -610,9 +611,8 @@
 }
 
 /* ============================================================
-   SHARED CARD SURFACES — rail, ask, run window
+   SHARED CARD SURFACES — ask, run window
    ============================================================ */
-[data-component="amicode-entity-rail"],
 [data-component="amicode-ask-card"],
 [data-component="amicode-run-window"] {
   /* Rail-free and tint-free: neutral hairline + surface across the AMICO family. */
@@ -622,23 +622,87 @@
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
 }
 
-/* rail chip hover */
-[data-component="amicode-entity-rail"] [data-slot="amicode-rail-chip"] {
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
-  margin: -1px -1px;
-  transition: background 0.14s ease;
+/* The entity rail is NOT a card (Kate 2026-07-24): no box, no problem name — it
+   attaches directly under the session-title header (the rail mounts inside that
+   sticky header, which owns the side inset + bottom padding). Just the pills. */
+[data-component="amicode-entity-rail"] {
+  display: flex;
+  margin-top: -6px;
+  font-size: var(--font-size-xs);
+  line-height: 16px;
 }
-[data-component="amicode-entity-rail"] button[data-slot="amicode-rail-chip"]:hover {
+[data-component="amicode-entity-rail"] .amc-rail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* In-transcript entity view (Kate 2026-07-24): the receipt renders the full
+   verdict-first entity view inline where it was recorded — no click, no modal —
+   for the CURRENT instance of a kind. Same neutral card surface as the AMICO
+   family, medium radius, roomy padding; the entity-view root is a bare flex
+   column, so the surface lives here. Wide content scrolls inside, never the page. */
+[data-component="amicode-entity-inline"] {
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md);
+  background: var(--v2-background-bg-layer-01);
+  padding: var(--space-4);
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* The card owns the inset (16px); the entity-view's own dialog padding would
+   double it inline, so zero it here (the modal keeps its padding). */
+[data-component="amicode-entity-inline"] [data-component="amicode-entity-view"] {
+  padding: 0;
+}
+
+/* Rail entity chips (Kate 2026-07-24): STATIC label only — no value, no chevron
+   or + icon. A recorded (clickable) chip carries the soft-yellow fill as its
+   affordance and opens the current version; a not-yet-recorded chip is inert
+   with a dotted border. Focus ring comes from the shared rail button rule below. */
+[data-component="amicode-entity-rail"] .amc-rail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 2px 11px;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-full);
+  background: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-base);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+}
+/* entity glyph — inherits the chip ink via currentColor (neutral, never a yellow
+   foreground on light); sized just under the label so the text still leads. */
+[data-component="amicode-entity-rail"] .amc-rail-chip [data-component="icon"],
+[data-component="amicode-entity-rail"] .amc-rail-chip [data-slot="icon-svg"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+[data-component="amicode-entity-rail"] button.amc-rail-chip:hover {
+  border-color: var(--v2-border-border-strong);
   background: var(--v2-background-bg-layer-02);
 }
-[data-component="amicode-entity-rail"] [data-slot="amicode-rail-problem"]:hover {
-  color: var(--v2-text-text-accent) !important;
+/* not recorded yet → inert, dotted border, no fill */
+[data-component="amicode-entity-rail"] .amc-rail-chip.is-empty {
+  border: 1px dotted var(--v2-border-border-base);
+  background: none;
+  color: var(--v2-text-text-faint);
+  font-weight: 500;
+  cursor: default;
 }
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
 [data-component="amicode-run-window"] button:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 
@@ -1090,4 +1154,193 @@
 .amc-wg-sortable.amc-wg-active .amc-wg-scrim { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   .amc-wg-sortable { transition: none !important; }
+}
+
+/* ---- Ring-2 verdict heroes (Run / Device / Calibration) --------------------
+ * Verdict-first redesign: each of these dialogs now leads with the one fact you
+ * opened it to learn, and the raw field table drops behind "Show all fields".
+ * Shared pill/meta/kv atoms live under all three component scopes; tones map to
+ * the v2 semantic state tokens (ok=success, warn=warning, critical=danger). */
+
+[data-component="amicode-run-view"],
+[data-component="amicode-device-view"],
+[data-component="amicode-calibration-view"] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 4px 2px;
+}
+
+/* Run: big fidelity + status badge */
+[data-component="amicode-run-view"] .amc-run-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+[data-component="amicode-run-view"] .amc-run-fid {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-text-text-base);
+  line-height: 1.1;
+}
+[data-component="amicode-run-view"] .amc-run-fk { color: var(--v2-text-text-faint); font-weight: 500; }
+[data-component="amicode-run-view"] .amc-run-status {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--v2-background-bg-layer-02);
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-run-view"] .amc-run-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--v2-text-text-muted);
+}
+
+/* verdict tones (shared across run status + device/calibration pills) */
+[data-component="amicode-run-view"] .amc-run-status[data-tone="ok"],
+[data-component="amicode-device-view"] .amc-vpill[data-tone="ok"],
+[data-component="amicode-calibration-view"] .amc-vpill[data-tone="ok"] {
+  background: var(--v2-state-bg-success);
+  color: var(--v2-state-fg-success);
+}
+[data-component="amicode-run-view"] .amc-run-status[data-tone="warn"],
+[data-component="amicode-device-view"] .amc-vpill[data-tone="warn"],
+[data-component="amicode-calibration-view"] .amc-vpill[data-tone="warn"] {
+  background: var(--v2-state-bg-warning);
+  color: var(--v2-state-fg-warning);
+}
+[data-component="amicode-run-view"] .amc-run-status[data-tone="critical"],
+[data-component="amicode-device-view"] .amc-vpill[data-tone="critical"] {
+  background: var(--v2-state-bg-danger);
+  color: var(--v2-state-fg-danger);
+}
+[data-component="amicode-run-view"] .amc-run-status[data-tone="active"] {
+  /* solving/in-flight → the PR#52 accent state fill (yellow warmth + neutral
+     ink), never a yellow foreground on a light surface. */
+  background: var(--accent-fill-soft);
+  color: var(--v2-text-text-base);
+}
+
+/* Device + Calibration shared pills / meta / key-value rows */
+[data-component="amicode-device-view"] .amc-verdict-pills,
+[data-component="amicode-calibration-view"] .amc-verdict-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+[data-component="amicode-device-view"] .amc-vpill,
+[data-component="amicode-calibration-view"] .amc-vpill {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--v2-background-bg-layer-02);
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-device-view"] .amc-vmeta,
+[data-component="amicode-calibration-view"] .amc-vmeta {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-device-view"] .amc-device-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-component="amicode-device-view"] .amc-device-link,
+[data-component="amicode-calibration-view"] .amc-calib-source {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+}
+[data-component="amicode-device-view"] .amc-vk,
+[data-component="amicode-calibration-view"] .amc-vk {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-faint);
+  min-width: 3rem;
+}
+[data-component="amicode-device-view"] .amc-vv,
+[data-component="amicode-calibration-view"] .amc-vv {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-base);
+  overflow-wrap: anywhere;
+}
+[data-component="amicode-device-view"] .amc-device-note {
+  font-size: 12px;
+  color: var(--v2-text-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* "Show all fields" toggle — mirrors the history toggle, as a standalone row */
+[data-component="amicode-entity-view"] .amc-ev-fields-toggle {
+  align-self: flex-start;
+  margin: 16px 4px 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--v2-text-text-accent);
+  cursor: pointer;
+}
+[data-component="amicode-entity-view"] .amc-ev-fields-toggle:hover { text-decoration: underline; }
+[data-component="amicode-entity-view"] .amc-ev-fields-toggle:focus-visible {
+  outline: 1px solid var(--v2-icon-icon-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- System physics spec (physics-forward System hero) --------------------- */
+[data-component="amicode-system-view"] .amc-sys-physics {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+[data-component="amicode-system-view"] .amc-phys-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 4px;
+  font-size: 13px;
+}
+[data-component="amicode-system-view"] .amc-phys-row + .amc-phys-row {
+  border-top: 1px solid var(--v2-border-border-muted);
+}
+[data-component="amicode-system-view"] .amc-phys-key {
+  color: var(--v2-text-text-muted);
+}
+[data-component="amicode-system-view"] .amc-phys-sym {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-faint);
+}
+[data-component="amicode-system-view"] .amc-phys-val {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-base);
+  font-variant-numeric: tabular-nums;
+}
+[data-component="amicode-system-view"] .amc-phys-row.is-unset .amc-phys-val {
+  color: var(--v2-text-text-faint);
+  font-style: italic;
 }

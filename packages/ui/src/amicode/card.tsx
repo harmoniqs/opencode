@@ -6,7 +6,15 @@ import { parseDiffSentinel, receiptParts } from "./receipt"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
 import { compositeChip, chipText } from "./problem"
 import { AmicoMark } from "./spinner"
-import { openAmicodeEntity } from "./ui-bridge"
+import {
+  openAmicodeEntity,
+  amicodeProblemView,
+  amicodeRunStatus,
+  amicodeDraftPrompt,
+  amicodeRefetchProblem,
+  amicodeEntityLabels,
+} from "./ui-bridge"
+import { AmicodeEntityView } from "./entity-view"
 import { RunWindow } from "./run-window"
 import { parseWidgetSentinel } from "./widget-preview"
 import { WidgetPreviewCard } from "./widget-preview-card"
@@ -230,6 +238,32 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
   )
 }
 
+// In-transcript entity view (Kate 2026-07-24): the receipt renders the full
+// verdict-first entity view inline — no click, no modal. Data comes from the
+// rail via the ui bridge (undefined until the rail mounts, exactly like the run
+// window). EVERY entity kind surfaces inline; a run with a live run_dir still
+// prefers the richer RunWindow (matched earlier in the Switch), so a run only
+// reaches the inline path as its verdict when there's no live window.
+const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
+
+function InlineEntityView(props: { kind: string; seq?: number }) {
+  const labels = createMemo(() => amicodeEntityLabels())
+  return (
+    <div data-component="amicode-entity-inline" data-amicode-entity-current={props.kind}>
+      <AmicodeEntityView
+        view={amicodeProblemView()}
+        kind={props.kind}
+        runStatus={amicodeRunStatus()}
+        anchorSeq={props.seq}
+        onDraftPrompt={(text) => amicodeDraftPrompt(text)}
+        onRetry={() => amicodeRefetchProblem()}
+        retryLabel={labels().retry}
+        editLabel={labels().edit}
+      />
+    </div>
+  )
+}
+
 export function AmicodeToolCard(props: {
   tool: string
   status?: string
@@ -243,6 +277,20 @@ export function AmicodeToolCard(props: {
   const authored = createMemo(() =>
     props.tool === "amicode_author_widget" ? parseWidgetSentinel(props.output) : undefined,
   )
+  // Any entity receipt surfaces its full view inline. We gate only on having a
+  // problem view (the rail is mounted) — NOT on seq or on entities[kind]: a
+  // record+update lands as two events but one receipt, and the view can lag a
+  // beat, so tighter gates hid the view entirely. The entity view renders
+  // whatever the live view holds for that kind. Runs with a live run_dir never
+  // reach here (RunWindow matches first); other runs show their verdict.
+  const inlineEntity = createMemo(() => {
+    if (props.status !== "completed") return undefined
+    const sentinel = parseDiffSentinel(props.output)
+    if (!sentinel || !INLINE_KINDS.has(sentinel.entity)) return undefined
+    const view = amicodeProblemView()
+    if (!view) return undefined
+    return { kind: sentinel.entity, seq: sentinel.seq }
+  })
 
   return (
     <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
@@ -251,6 +299,7 @@ export function AmicodeToolCard(props: {
       </Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
       <Match when={authored()}>{(preview) => <WidgetPreviewCard preview={preview()} />}</Match>
+      <Match when={inlineEntity()}>{(e) => <InlineEntityView kind={e().kind} seq={e().seq} />}</Match>
     </Switch>
   )
 }

@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
-import { AmicoMark } from "./spinner"
+import { Icon } from "../components/icon"
 import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
   type ProblemView,
@@ -10,7 +10,6 @@ import {
   parseProblemResponse,
   parseRunStatusResponse,
   railState,
-  runChipText,
 } from "./problem"
 
 // AMICODE problem-header rail (spec B). One compact sticky row per session
@@ -41,6 +40,24 @@ interface RailPart {
 
 const RUN_POLL_MS = 2500
 
+// One line-icon per entity kind (glyphs live in the shared family — icon.tsx).
+function chipIcon(kind: string) {
+  switch (kind) {
+    case "system":
+      return "target"
+    case "formulation":
+      return "sliders"
+    case "run":
+      return "archive"
+    case "pulse":
+      return "activity"
+    case "device_session":
+      return "status"
+    default:
+      return "dot-grid"
+  }
+}
+
 export function AmicodeEntityRail(props: {
   messages: readonly { id: string; role?: string }[]
   partsFor: (messageID: string) => readonly RailPart[] | undefined
@@ -51,7 +68,6 @@ export function AmicodeEntityRail(props: {
   // callbacks + pin). Optional so hosts that can't render widgets omit it.
   widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
-  onOpenSwitcher: () => void
   onAsk?: (text: string) => void
   // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
   // to the host (postAmicode → amicode.openInspector) and passes it only when
@@ -59,6 +75,10 @@ export function AmicodeEntityRail(props: {
   onInspectRun?: () => void
   retryLabel: string
   unavailableLabel: string
+  // Inline entity views: the composer draft target for the ✎ affordance and the
+  // edit label — the rail forwards both to the ui bridge for the in-chat view.
+  onDraftPrompt?: (text: string) => void
+  editLabel?: string
 }) {
   if (props.onAsk) {
     const dispose = registerAmicodeAskBridge({
@@ -67,13 +87,9 @@ export function AmicodeEntityRail(props: {
     })
     onCleanup(dispose)
   }
-  const disposeUiBridge = registerAmicodeUiBridge({
-    openEntity: (kind, seq) => props.onOpenEntity(kind, seq),
-    openSwitcher: () => props.onOpenSwitcher(),
-    fetchRunSeries: props.fetchRunSeries,
-    widgetHost: props.widgetHost,
-  })
-  onCleanup(disposeUiBridge)
+  // The ui bridge (openEntity + the in-transcript entity-view transport) is
+  // registered below, once the live problem view, run statuses, and refetch it
+  // exposes are all in scope.
 
   // Session gate + refetch key: completed amicode parts bump the counter → refetch.
   const amicodeParts = createMemo(() => {
@@ -132,16 +148,27 @@ export function AmicodeEntityRail(props: {
   })
   onCleanup(stopPolling)
 
+  // Register the ui bridge now that current()/runStatuses()/refetch exist. The
+  // rail chips still open the current-version modal via openEntity; the added
+  // transport lets the in-transcript receipt cards render the full entity view
+  // inline (Kate 2026-07-24) without a second fetch path.
+  const disposeUiBridge = registerAmicodeUiBridge({
+    openEntity: (kind, seq) => props.onOpenEntity(kind, seq),
+    fetchRunSeries: props.fetchRunSeries,
+    widgetHost: props.widgetHost,
+    problemView: () => current(),
+    runStatus: () => runStatuses(),
+    draftPrompt: props.onDraftPrompt,
+    refetchProblem: () => void refetch(),
+    retryLabel: props.retryLabel,
+    editLabel: props.editLabel,
+  })
+  onCleanup(disposeUiBridge)
+
   const chips = createMemo(() => {
     const snapshot = state()
     if (snapshot.kind !== "ready") return []
     return mergeChips(snapshot.view.entities, snapshot.view.scoreStages)
-  })
-  const runText = createMemo(() => runChipText(runStatuses()))
-  const problemName = createMemo(() => {
-    const snapshot = state()
-    if (snapshot.kind !== "ready") return undefined
-    return snapshot.view.name ?? snapshot.view.slug
   })
   // Whether there is a run to inspect — gates the "Inspect Run" button so it
   // appears alongside the live run chip, not before any solve has started.
@@ -152,31 +179,12 @@ export function AmicodeEntityRail(props: {
 
   return (
     <Show when={amicodeParts().any > 0}>
-      <div
-        data-component="amicode-entity-rail"
-        style={{
-          display: "flex",
-          "flex-wrap": "wrap",
-          "align-items": "center",
-          gap: "6px 10px",
-          "min-width": "0",
-          "max-height": "76px",
-          "overflow-y": "auto",
-          padding: "6px 10px",
-          "font-size": "11px",
-          "line-height": "16px",
-          "white-space": "nowrap",
-        }}
-      >
-        <span class="amc-sig">
-          <AmicoMark />
-          <span class="amc-wordmark">AMICO</span>
-        </span>
+      <div data-component="amicode-entity-rail">
         <Show
           when={state().kind !== "unavailable"}
           fallback={
-            <span style={{ color: "var(--v2-text-text-muted)", display: "inline-flex", gap: "6px" }}>
-              {props.unavailableLabel}
+            <div class="amc-rail-chips">
+              <span style={{ color: "var(--v2-text-text-muted)" }}>{props.unavailableLabel}</span>
               <button
                 type="button"
                 data-slot="amicode-rail-retry"
@@ -193,106 +201,70 @@ export function AmicodeEntityRail(props: {
               >
                 {props.retryLabel}
               </button>
-            </span>
+            </div>
           }
         >
-          <Show when={problemName()}>
-            {(name) => (
-              <button
-                type="button"
-                data-slot="amicode-rail-problem"
-                style={{
-                  "font-weight": "600",
-                  color: "var(--v2-text-text-base)",
-                  background: "none",
-                  border: "none",
-                  padding: "0",
-                  "font-size": "inherit",
-                  cursor: "pointer",
-                  "flex-shrink": "0",
-                }}
-                onClick={() => props.onOpenSwitcher()}
-              >
-                {name()} ▾
-              </button>
-            )}
-          </Show>
-          <For each={chips()}>
-            {(chip) => (
-              <Show
-                when={!chip.pending}
-                fallback={
-                  <span
+          {/* Static entity chips (Kate 2026-07-24): label ONLY — no value, no
+              chevron / + icon. A recorded (clickable) chip carries the soft-yellow
+              fill as its affordance and opens its current version; a not-yet-
+              recorded chip is inert with a dotted border. The problem name sits in
+              the bottom-right corner as a thin, low-contrast watermark. */}
+          <div class="amc-rail-chips">
+            <For each={chips()}>
+              {(chip) => (
+                <Show
+                  when={!chip.pending}
+                  fallback={
+                    <span
+                      class="amc-rail-chip is-empty"
+                      data-slot="amicode-rail-chip"
+                      data-stage={chip.kind}
+                      data-pending="true"
+                    >
+                      <Icon name={chipIcon(chip.kind)} size="small" />
+                      {chip.label}
+                    </span>
+                  }
+                >
+                  <button
+                    type="button"
+                    class="amc-rail-chip"
                     data-slot="amicode-rail-chip"
                     data-stage={chip.kind}
-                    data-pending="true"
-                    style={{
-                      display: "inline-flex",
-                      "align-items": "baseline",
-                      gap: "4px",
-                      "flex-shrink": "0",
-                      color: "var(--v2-text-text-faint)",
-                    }}
+                    aria-label={`Open current ${chip.label}`}
+                    onClick={() => props.onOpenEntity(chip.kind)}
                   >
-                    <span style={{ "font-weight": "600" }}>{chip.label}</span>
-                    <span>—</span>
-                  </span>
-                }
+                    <Icon name={chipIcon(chip.kind)} size="small" />
+                    {chip.label}
+                  </button>
+                </Show>
+              )}
+            </For>
+            <Show when={props.onInspectRun && hasRun()}>
+              <button
+                type="button"
+                data-slot="amicode-rail-inspect"
+                style={{
+                  display: "inline-flex",
+                  "align-items": "center",
+                  "flex-shrink": "0",
+                  gap: "4px",
+                  border: "1px solid var(--v2-border-border-base)",
+                  "border-radius": "var(--radius-md)",
+                  background: "none",
+                  color: "var(--v2-text-text-accent)",
+                  padding: "1px 8px",
+                  font: "inherit",
+                  "font-weight": "600",
+                  cursor: "pointer",
+                }}
+                title="Open the Run Inspector panel"
+                onClick={() => props.onInspectRun?.()}
               >
-                <button
-                  type="button"
-                  data-slot="amicode-rail-chip"
-                  data-stage={chip.kind}
-                  style={{
-                    display: "inline-flex",
-                    "align-items": "baseline",
-                    gap: "4px",
-                    "flex-shrink": "0",
-                    background: "none",
-                    border: "none",
-                    padding: "0",
-                    font: "inherit",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => props.onOpenEntity(chip.kind)}
-                >
-                  <span style={{ color: "var(--v2-text-text-muted)", "font-weight": "600" }}>{chip.label}</span>
-                  <span
-                    style={{
-                      color: "var(--v2-text-text-base)",
-                      "font-family": "var(--font-family-mono, ui-monospace, monospace)",
-                    }}
-                  >
-                    {chip.kind === "run" ? (runText() ?? chip.text ?? "recorded") : (chip.text ?? "recorded ✓")}
-                  </span>
-                </button>
-              </Show>
-            )}
-          </For>
-          <Show when={props.onInspectRun && hasRun()}>
-            <button
-              type="button"
-              data-slot="amicode-rail-inspect"
-              style={{
-                display: "inline-flex",
-                "align-items": "center",
-                "flex-shrink": "0",
-                gap: "4px",
-                border: "1px solid var(--v2-border-border-base)",
-                "border-radius": "var(--radius-sm)",
-                background: "none",
-                color: "var(--v2-text-text-accent)",
-                padding: "1px 8px",
-                font: "inherit",
-                "font-weight": "600",
-                cursor: "pointer",
-              }}
-              title="Open the Run Inspector panel"
-              onClick={() => props.onInspectRun?.()}
-            >
-              Inspect Run
-            </button>
-          </Show>
+                Inspect Run
+              </button>
+            </Show>
+          </div>
         </Show>
       </div>
     </Show>
