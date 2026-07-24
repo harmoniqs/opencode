@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
+import { Icon } from "../components/icon"
 import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
   type ProblemView,
@@ -38,6 +39,24 @@ interface RailPart {
 }
 
 const RUN_POLL_MS = 2500
+
+// One line-icon per entity kind (glyphs live in the shared family — icon.tsx).
+function chipIcon(kind: string) {
+  switch (kind) {
+    case "system":
+      return "target"
+    case "formulation":
+      return "sliders"
+    case "run":
+      return "archive"
+    case "pulse":
+      return "activity"
+    case "device_session":
+      return "status"
+    default:
+      return "dot-grid"
+  }
+}
 
 export function AmicodeEntityRail(props: {
   messages: readonly { id: string; role?: string }[]
@@ -151,11 +170,6 @@ export function AmicodeEntityRail(props: {
     if (snapshot.kind !== "ready") return []
     return mergeChips(snapshot.view.entities, snapshot.view.scoreStages)
   })
-  const problemName = createMemo(() => {
-    const snapshot = state()
-    if (snapshot.kind !== "ready") return undefined
-    return snapshot.view.name ?? snapshot.view.slug
-  })
   // Whether there is a run to inspect — gates the "Inspect Run" button so it
   // appears alongside the live run chip, not before any solve has started.
   const hasRun = createMemo(() => {
@@ -207,6 +221,7 @@ export function AmicodeEntityRail(props: {
                       data-stage={chip.kind}
                       data-pending="true"
                     >
+                      <Icon name={chipIcon(chip.kind)} size="small" />
                       {chip.label}
                     </span>
                   }
@@ -219,6 +234,7 @@ export function AmicodeEntityRail(props: {
                     aria-label={`Open current ${chip.label}`}
                     onClick={() => props.onOpenEntity(chip.kind)}
                   >
+                    <Icon name={chipIcon(chip.kind)} size="small" />
                     {chip.label}
                   </button>
                 </Show>
@@ -247,15 +263,6 @@ export function AmicodeEntityRail(props: {
               >
                 Inspect Run
               </button>
-            </Show>
-            {/* Problem name rides the same row as the chips, pushed to the far
-                right (margin-left:auto) — a thin, low-contrast watermark. */}
-            <Show when={problemName()}>
-              {(name) => (
-                <div class="amc-rail-problem-name" data-slot="amicode-rail-problem">
-                  {name()}
-                </div>
-              )}
             </Show>
           </div>
         </Show>

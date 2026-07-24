@@ -7,7 +7,6 @@ import {
   editPromptText,
   entityRows,
   fieldGroup,
-  formatTs,
   historyRows,
   humanizeKey,
   runVerdict,
@@ -89,7 +88,6 @@ export function AmicodeEntityView(props: {
       }
     })
   })
-  const latestTs = createMemo(() => history()[0]?.ts)
   const verdict = createMemo(() =>
     props.kind === "run" && props.view ? runVerdict(props.runStatus ?? [], props.view.runs) : null,
   )
@@ -139,14 +137,6 @@ export function AmicodeEntityView(props: {
               </div>
             }
           >
-            <Show when={latestTs()}>
-              {(ts) => (
-                <div class="amc-ev-meta">
-                  <span>Updated {formatTs(ts())}</span>
-                </div>
-              )}
-            </Show>
-
             <Show when={props.kind === "system"}>
               <SystemComposite entity={entity()} />
             </Show>

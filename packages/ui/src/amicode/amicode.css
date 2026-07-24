@@ -152,7 +152,7 @@
   transform: translateY(0.5px);
 }
 [data-component="amicode-card"]:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 [data-component="amicode-card"][data-state="error"] {
@@ -406,7 +406,7 @@
   background: var(--accent-fill-soft);
 }
 [data-component="amicode-entity-view"] .amc-edit:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
   opacity: 1;
 }
@@ -448,7 +448,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:hover { text-decoration: underline; }
 [data-component="amicode-entity-view"] .amc-ev-hist-toggle:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -585,7 +585,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
 [data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
 }
 
@@ -622,21 +622,13 @@
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
 }
 
-/* The entity rail is a compact strip, not a card (Kate 2026-07-24): neutral
-   hairline surface, squarer (medium radius) and flat. Column layout — a wrapping
-   row of entity chips, with the problem name tucked into the bottom-right corner
-   as a thin, low-contrast watermark (the AMICO mark/wordmark was removed). */
+/* The entity rail is NOT a card (Kate 2026-07-24): no box, no problem name — it
+   attaches directly under the session-title header (the rail mounts inside that
+   sticky header, which owns the side inset + bottom padding). Just the pills. */
 [data-component="amicode-entity-rail"] {
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: var(--radius-md);
-  background: var(--v2-background-bg-layer-01);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 5px 10px;
-  max-height: 96px;
-  overflow-y: auto;
-  font-size: 11px;
+  margin-top: -6px;
+  font-size: var(--font-size-xs);
   line-height: 16px;
 }
 [data-component="amicode-entity-rail"] .amc-rail-chips {
@@ -645,16 +637,6 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-}
-/* problem name — same row as the chips, pushed to the far right; thin + faint */
-[data-component="amicode-entity-rail"] .amc-rail-problem-name {
-  margin-left: auto;
-  padding-left: 8px;
-  white-space: nowrap;
-  font-weight: 300;
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  color: var(--v2-text-text-faint);
 }
 
 /* In-transcript entity view (Kate 2026-07-24): the receipt renders the full
@@ -666,9 +648,14 @@
   border: 1px solid var(--v2-border-border-base);
   border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-01);
-  padding: var(--space-3);
+  padding: var(--space-4);
   max-width: 100%;
   overflow-x: auto;
+}
+/* The card owns the inset (16px); the entity-view's own dialog padding would
+   double it inline, so zero it here (the modal keeps its padding). */
+[data-component="amicode-entity-inline"] [data-component="amicode-entity-view"] {
+  padding: 0;
 }
 
 /* Rail entity chips (Kate 2026-07-24): STATIC label only — no value, no chevron
@@ -678,11 +665,12 @@
 [data-component="amicode-entity-rail"] .amc-rail-chip {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 2px 11px;
-  border: 1px solid var(--accent-edge);
+  border: 1px solid var(--v2-border-border-base);
   border-radius: var(--radius-full);
-  background: var(--accent-fill-soft);
+  background: var(--v2-background-bg-layer-01);
   color: var(--v2-text-text-base);
   font: inherit;
   font-weight: 600;
@@ -691,8 +679,17 @@
     background 0.14s ease,
     border-color 0.14s ease;
 }
+/* entity glyph — inherits the chip ink via currentColor (neutral, never a yellow
+   foreground on light); sized just under the label so the text still leads. */
+[data-component="amicode-entity-rail"] .amc-rail-chip [data-component="icon"],
+[data-component="amicode-entity-rail"] .amc-rail-chip [data-slot="icon-svg"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
 [data-component="amicode-entity-rail"] button.amc-rail-chip:hover {
   border-color: var(--v2-border-border-strong);
+  background: var(--v2-background-bg-layer-02);
 }
 /* not recorded yet → inert, dotted border, no fill */
 [data-component="amicode-entity-rail"] .amc-rail-chip.is-empty {
@@ -702,13 +699,10 @@
   font-weight: 500;
   cursor: default;
 }
-[data-component="amicode-entity-rail"] [data-slot="amicode-rail-problem"]:hover {
-  color: var(--v2-text-text-accent) !important;
-}
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
 [data-component="amicode-run-window"] button:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
+  outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 2px;
 }
 
@@ -1312,7 +1306,7 @@
 }
 [data-component="amicode-entity-view"] .amc-ev-fields-toggle:hover { text-decoration: underline; }
 [data-component="amicode-entity-view"] .amc-ev-fields-toggle:focus-visible {
-  outline: 2px solid var(--v2-icon-icon-accent);
+  outline: 1px solid var(--v2-icon-icon-accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -1325,10 +1319,10 @@
 }
 [data-component="amicode-system-view"] .amc-phys-row {
   display: grid;
-  grid-template-columns: 10rem 1fr;
+  grid-template-columns: 8rem 1fr;
   align-items: baseline;
-  gap: 14px;
-  padding: 6px 4px;
+  gap: var(--space-3);
+  padding: var(--space-1) 4px;
   font-size: 13px;
 }
 [data-component="amicode-system-view"] .amc-phys-row + .amc-phys-row {
