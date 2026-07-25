@@ -270,6 +270,53 @@ describe("hostile input", () => {
   })
 })
 
+describe("background mount (derived session stream)", () => {
+  // the chat-wide atmosphere drives the engine with the session's derived
+  // event stream (brain-events): completed turns arrive as replay touches +
+  // a silent chart, the busy turn arrives live. Pin the mount contract:
+  // touches light nodes (data-true), a replay-only first flush restores the
+  // atlas quietly — claims land with nothing queued, no traveling pulse.
+  const replayedTurn = [
+    { label: "solve.jl", type: "package", consider: false, replay: true },
+    { label: "notes.md", type: "note", consider: false, replay: true },
+    { label: "saveat", type: "resource", consider: true, replay: true },
+  ]
+
+  test("feeding a derived stream grows the claimed-node count — touches light nodes", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    const before = engine.stats()
+    for (const t of replayedTurn) engine.touch(t)
+    const after = engine.stats()
+    expect(after.claimed).toBe(before.claimed + 2) // commits claim; the consider scouts
+    expect(after.cur).toBe("live-notes") // the cursor walked the turn in order (extension stripped)
+  })
+
+  test("a replay-only first flush restores prior turns quietly — no live pulse travel", () => {
+    // full motion on purpose: a LIVE commit would queue and travel; a replay
+    // commit must land instantly with nothing queued, even with motion on
+    const { engine } = makeEngine({ reduceMotion: false })
+    for (const t of replayedTurn) engine.touch(t)
+    engine.chart("optimize an X gate", true) // silent restore, not a ceremony
+    const s = engine.stats()
+    expect(s.claimed).toBe(2)
+    expect(s.queued).toBe(0) // nothing waiting on the pump
+    expect(s.atlas).toBe(1) // the plate restored without a tick ever running
+  })
+
+  test("a theme swap mid-session preserves the restored atlas (lossless repaint)", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    for (const t of replayedTurn) engine.touch(t)
+    engine.chart("optimize an X gate", true)
+    const before = engine.stats()
+    engine.setTheme("light")
+    engine.setTheme("dark")
+    const after = engine.stats()
+    expect(after.claimed).toBe(before.claimed)
+    expect(after.atlas).toBe(before.atlas)
+    expect(after.cur).toBe(before.cur)
+  })
+})
+
 describe("animated pipeline (manual clock)", () => {
   // full motion: reduceMotion off, clock driven by hand — a commit is a pulse
   // that must physically travel the skeleton before its node claims

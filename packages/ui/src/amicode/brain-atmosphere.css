@@ -1,0 +1,19 @@
+/* AMICODE brain atmosphere — full-bleed background layer, geometry only.
+   The layer fills its `position: relative isolate` pane, never intercepts
+   the pointer, and stacks beneath the pane's content via the host-side
+   negative z-index. Color lives in the engine's own in-module palettes
+   (brain-engine.ts PALETTES) — a data-color-scheme flip reaches the canvas
+   through the component's MutationObserver → setTheme, so no tokens here. */
+
+[data-component="brain-atmosphere"] {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+[data-component="brain-atmosphere"] canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
