@@ -32,7 +32,8 @@
     "test": "bun test src --only-failures",
     "dev": "vite",
     "generate:tailwind": "bun run script/tailwind.ts",
-    "generate:v2-oc2": "bun run script/build-oc2-v2-overrides.ts"
+    "generate:v2-oc2": "bun run script/build-oc2-v2-overrides.ts",
+    "generate:glass": "bun run script/generate-glass.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
