@@ -172,15 +172,21 @@ describe("theme", () => {
 })
 
 describe("lifecycle", () => {
-  test("pause stops the frame loop; resume restarts it", () => {
+  test("pause is a hard stop — hidden means ZERO draws; resume restores drawing", () => {
+    // the host's visibilitychange/IntersectionObserver wiring (#59) drives
+    // this pause()/resume() primitive; the engine-side guarantee is that a
+    // paused engine draws nothing at all, however hard it is ticked
     const { engine, ctx } = makeEngine()
     engine.tick(16)
     const n = ctx.calls.length
+    const drawn = ctx.calls.filter((c) => c.method === "clearRect").length
     engine.pause()
-    engine.tick(1000)
-    expect(ctx.calls.length).toBe(n) // folded away — no frames burned
+    for (let t = 200; t <= 2000; t += 150) engine.tick(t) // well past every rest window
+    expect(ctx.calls.length).toBe(n) // no context call of any kind while hidden
+    expect(ctx.calls.filter((c) => c.method === "clearRect").length).toBe(drawn) // zero draws
     engine.resume()
-    engine.tick(1016)
+    engine.tick(2016)
+    expect(ctx.calls.filter((c) => c.method === "clearRect").length).toBe(drawn + 1) // drawing restored
     expect(ctx.calls.length).toBeGreaterThan(n)
   })
 
@@ -458,6 +464,39 @@ describe("heartbeat cadence (shared draw-gate)", () => {
     expect(restDraws).toBeGreaterThanOrEqual(6)
     expect(restDraws).toBeLessThanOrEqual(9)
     expect(engine.stats().claimed).toBe(1) // the commit landed
+  })
+})
+
+describe("reduced-motion hard-pause", () => {
+  // the accessibility terminal (ADR 0002): with reduced motion set there is
+  // no idle breathing and no continuous loop at rest — the engine draws one
+  // bounded burst around events (the nudge window, rebased onto the frame
+  // clock), then goes still until the next touch. This terminal is DISTINCT
+  // from any frame-time perf ease (slice #63) — no budget is consulted.
+  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
+    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+  }
+  const clears = (ctx: ReturnType<typeof recordingCtx>) => ctx.calls.filter((c) => c.method === "clearRect").length
+
+  test("after the boot burst elapses with nothing in flight, ticks produce no draws", () => {
+    const { engine, ctx } = makeEngine() // reduceMotion: true
+    drive(engine, 16, 3100) // the boot burst window (~3s), rest cadence inside it
+    const burst = clears(ctx)
+    expect(burst).toBeGreaterThan(0) // the burst painted
+    drive(engine, 3216, 6000) // long past the window: still — zero draws, ticks are no-ops
+    expect(clears(ctx)).toBe(burst)
+  })
+
+  test("a touch re-arms one bounded burst that draws, then settles back to still", () => {
+    const { engine, ctx } = makeEngine()
+    drive(engine, 16, 4000) // exhaust the boot burst, reach the still state
+    const still = clears(ctx)
+    engine.touch({ label: "wake.md", replay: true })
+    drive(engine, 4016, 5000) // inside the re-armed window (4016 + ~3s)
+    const burst = clears(ctx)
+    expect(burst).toBeGreaterThan(still) // the event woke a bounded burst
+    drive(engine, 7100, 9000) // the window has elapsed, nothing in flight
+    expect(clears(ctx)).toBe(burst) // still again — no continuous loop ever
   })
 })
 

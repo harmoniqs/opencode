@@ -247,6 +247,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   let motionQuery: MediaQueryList | null = null
   const onMotionChange = (e: MediaQueryListEvent) => {
     reduceMotion = e.matches
+    if (e.matches) unfurl = 1 // never animate the unfurl under reduced motion
+    nudge() // one bounded repaint burst either way (both fns bind later in this closure; events fire after construction)
   }
   if (opts.reduceMotion === undefined && typeof matchMedia !== "undefined") {
     motionQuery = matchMedia("(prefers-reduced-motion: reduce)")
@@ -607,6 +609,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   function liveTouch(msg: BrainTouchEvent) {
     const label = String(msg.label || "").trim()
     if (!label) return
+    nudge() // every real event earns a bounded reduced-motion burst
     if (msg.replay) {
       // a prior turn's step: restore it to the atlas instantly and quietly —
       // the session's whole thought-path persists across turns
@@ -737,21 +740,50 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
      advances on drawn frames (dt cap 50ms), so ambient scintillation slows
      with the frame rate — the port source's shipped behavior. */
   const REST_FRAME_MS = 125 // ~8fps breathing at rest
+  const NUDGE_MS = 3000 // reduced motion: draw this long around an event, then still
   let halted = false
   let destroyed = false
   let rafId = 0
+  let rafScheduled = false
   let unfurl = reduceMotion ? 1 : 0
   let active = false // the host's session-busy signal
   let lastRender = -Infinity // first tick always paints
+  let nudgeUntil = -Infinity // reduced-motion burst deadline, in the FRAME timebase
+  let nudgePending = false // deadline armed, awaiting the next tick's clock to rebase
   const inFlight = () => pulses.length > 0 || live.queue.length > 0 || live.pumping || dueQueue.length > 0
   function requestRender() {
     lastRender = -Infinity // beat the rest throttle: the next tick must paint
   }
+  function scheduleFrame() {
+    if (halted || destroyed || !animate || typeof requestAnimationFrame === "undefined") return
+    if (rafScheduled) return
+    rafScheduled = true
+    rafId = requestAnimationFrame((nowMs) => {
+      rafScheduled = false
+      tick(nowMs)
+    })
+  }
+  function nudge() {
+    // an event happened: arm one bounded reduced-motion burst. The deadline is
+    // rebased onto the NEXT tick's nowMs — the manual/rAF frame clock — never
+    // performance.now(), so the headless drive() clock crosses it deterministically
+    nudgePending = true
+    scheduleFrame() // re-arm the chain if the reduced-motion terminal ended it
+  }
   function tick(nowMs: number) {
     if (halted || !ctx) return
     if (!Number.isFinite(nowMs)) return // a NaN timestamp would poison clock.beat permanently
+    if (nudgePending) {
+      nudgePending = false
+      nudgeUntil = nowMs + NUDGE_MS
+    }
+    // reduced-motion hard terminal (ADR 0002): once the post-event burst
+    // window elapses with nothing in flight, ticks draw NOTHING and the
+    // animation-frame chain below ends — no continuous loop at rest. This is
+    // the accessibility terminal; it consults no frame-time budget (slice #63).
+    const still = reduceMotion && nowMs > nudgeUntil && !inFlight()
     const fullTempo = active || inFlight() || unfurl < 1
-    if (fullTempo || nowMs - lastRender >= REST_FRAME_MS) {
+    if (!still && (fullTempo || nowMs - lastRender >= REST_FRAME_MS)) {
       lastRender = nowMs
       try {
         drawFrame(nowMs)
@@ -766,7 +798,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // re-check halted: a dueQueue callback may have paused us mid-frame — and
     // track the id so pause() can cancel an already-scheduled frame (otherwise
     // pause→resume inside one frame breeds parallel rAF chains)
-    if (!halted && animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+    if (!halted && !still) scheduleFrame()
   }
   function drawFrame(nowMs: number) {
     if (!ctx) return
@@ -978,10 +1010,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     }
   }
 
-  // waking — the thought begins here
+  // waking — the thought begins here; the wake is itself a nudged event, so a
+  // reduced-motion boot paints one bounded burst and then rests still
   core.flash = 1
   core.ringT = clock.beat
-  if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+  nudge()
 
   return {
     touch: (ev) => {
@@ -989,6 +1022,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     },
     chart: (title, replay) => {
       if (destroyed) return
+      nudge()
       live.pendingChart = { title: String(title || ""), replay: !!replay }
       maybeChart()
       requestRender()
@@ -1003,6 +1037,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       // the whole frame, so no steering (that was the close-up strip's need)
       const n = findLiveNode(String(label || ""))
       if (n) {
+        nudge()
         n.ringT = clock.beat
         n.consider = Math.max(n.consider, 0.9)
         n.labelA = 1
@@ -1022,7 +1057,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     },
     tick,
     pause: () => {
-      halted = true // folded away — stop burning frames
+      halted = true // folded away / hidden — the hard pause: no ticks draw, no frame stays scheduled
+      rafScheduled = false
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
     },
     resume: () => {
@@ -1030,11 +1066,12 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       halted = false
       clock.lastMs = 0 // dt is capped, so the gap doesn't lurch the clock
       requestRender() // unfolding must repaint now, not wait out the rest window
-      if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+      nudge() // under reduced motion: one bounded repaint burst, then still again
     },
     destroy: () => {
       destroyed = true
       halted = true
+      rafScheduled = false
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
       ro?.disconnect()
       motionQuery?.removeEventListener("change", onMotionChange)
