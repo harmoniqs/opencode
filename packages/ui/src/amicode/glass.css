@@ -8,115 +8,127 @@
    system's own data-theme + data-color-scheme attributes. */
 
 :root {
-  --glass-blur: 18px;
+  --glass-blur: 8px;
 }
 
 html[data-theme="oc-2"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(248, 248, 248, 0.05);
-  --glass-dense-bg: rgba(248, 248, 248, 0.99);
+  --glass-dense-bg: rgba(248, 248, 248, 0.05);
   --glass-standard-bg-fallback: rgba(248, 248, 248, 0.95);
-  --glass-dense-bg-fallback: rgba(248, 248, 248, 0.99);
+  --glass-dense-bg-fallback: rgba(248, 248, 248, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="oc-2"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(28, 28, 28, 0.65);
-  --glass-dense-bg: rgba(28, 28, 28, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.04);
+  --glass-dense-bg: rgba(255, 255, 255, 0.04);
   --glass-standard-bg-fallback: rgba(28, 28, 28, 0.95);
-  --glass-dense-bg-fallback: rgba(28, 28, 28, 1);
+  --glass-dense-bg-fallback: rgba(28, 28, 28, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="amoled"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(227, 227, 227, 0);
-  --glass-dense-bg: rgba(227, 227, 227, 0.99);
+  --glass-dense-bg: rgba(227, 227, 227, 0);
   --glass-standard-bg-fallback: rgba(227, 227, 227, 0.95);
-  --glass-dense-bg-fallback: rgba(227, 227, 227, 0.99);
+  --glass-dense-bg-fallback: rgba(227, 227, 227, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="amoled"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(17, 17, 17, 0.57);
-  --glass-dense-bg: rgba(17, 17, 17, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(17, 17, 17, 0.95);
-  --glass-dense-bg-fallback: rgba(17, 17, 17, 1);
+  --glass-dense-bg-fallback: rgba(17, 17, 17, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="aura"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(234, 231, 243, 0.03);
-  --glass-dense-bg: rgba(234, 231, 243, 0.99);
+  --glass-dense-bg: rgba(234, 231, 243, 0.03);
   --glass-standard-bg-fallback: rgba(234, 231, 243, 0.95);
-  --glass-dense-bg-fallback: rgba(234, 231, 243, 0.99);
+  --glass-dense-bg-fallback: rgba(234, 231, 243, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="aura"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(26, 25, 30, 0.6);
-  --glass-dense-bg: rgba(26, 25, 30, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(26, 25, 30, 0.95);
-  --glass-dense-bg-fallback: rgba(26, 25, 30, 1);
+  --glass-dense-bg-fallback: rgba(26, 25, 30, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="ayu"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(243, 242, 237, 0.31);
-  --glass-dense-bg: rgba(243, 242, 237, 1);
+  --glass-dense-bg: rgba(243, 242, 237, 0.31);
   --glass-standard-bg-fallback: rgba(243, 242, 237, 0.95);
-  --glass-dense-bg-fallback: rgba(243, 242, 237, 1);
+  --glass-dense-bg-fallback: rgba(243, 242, 237, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="ayu"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(19, 23, 29, 0.6);
-  --glass-dense-bg: rgba(19, 23, 29, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(19, 23, 29, 0.95);
-  --glass-dense-bg-fallback: rgba(19, 23, 29, 1);
+  --glass-dense-bg-fallback: rgba(19, 23, 29, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="carbonfox"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(225, 225, 225, 0);
-  --glass-dense-bg: rgba(225, 225, 225, 0.99);
+  --glass-dense-bg: rgba(225, 225, 225, 0);
   --glass-standard-bg-fallback: rgba(225, 225, 225, 0.95);
-  --glass-dense-bg-fallback: rgba(225, 225, 225, 0.99);
+  --glass-dense-bg-fallback: rgba(225, 225, 225, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="carbonfox"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(47, 48, 48, 0.66);
-  --glass-dense-bg: rgba(47, 48, 48, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(47, 48, 48, 0.95);
-  --glass-dense-bg-fallback: rgba(47, 48, 48, 1);
+  --glass-dense-bg-fallback: rgba(47, 48, 48, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="catppuccin"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(237, 221, 219, 0.29);
-  --glass-dense-bg: rgba(237, 221, 219, 0.99);
+  --glass-dense-bg: rgba(237, 221, 219, 0.29);
   --glass-standard-bg-fallback: rgba(237, 221, 219, 0.95);
-  --glass-dense-bg-fallback: rgba(237, 221, 219, 0.99);
+  --glass-dense-bg-fallback: rgba(237, 221, 219, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="catppuccin"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(27, 28, 43, 0.61);
-  --glass-dense-bg: rgba(27, 28, 43, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(27, 28, 43, 0.95);
-  --glass-dense-bg-fallback: rgba(27, 28, 43, 1);
+  --glass-dense-bg-fallback: rgba(27, 28, 43, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="catppuccin-frappe"][data-color-scheme="light"] {
@@ -126,15 +138,17 @@ html[data-theme="catppuccin-frappe"][data-color-scheme="light"] {
   --glass-dense-bg-fallback: rgba(222, 223, 228, 1);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="catppuccin-frappe"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(38, 42, 59, 0.65);
-  --glass-dense-bg: rgba(38, 42, 59, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(38, 42, 59, 0.95);
-  --glass-dense-bg-fallback: rgba(38, 42, 59, 1);
+  --glass-dense-bg-fallback: rgba(38, 42, 59, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="catppuccin-macchiato"][data-color-scheme="light"] {
@@ -144,537 +158,597 @@ html[data-theme="catppuccin-macchiato"][data-color-scheme="light"] {
   --glass-dense-bg-fallback: rgba(220, 220, 226, 1);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="catppuccin-macchiato"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(31, 33, 51, 0.63);
-  --glass-dense-bg: rgba(31, 33, 51, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(31, 33, 51, 0.95);
-  --glass-dense-bg-fallback: rgba(31, 33, 51, 1);
+  --glass-dense-bg-fallback: rgba(31, 33, 51, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="cobalt2"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(242, 243, 244, 0.07);
-  --glass-dense-bg: rgba(242, 243, 244, 0.99);
+  --glass-dense-bg: rgba(242, 243, 244, 0.07);
   --glass-standard-bg-fallback: rgba(242, 243, 244, 0.95);
-  --glass-dense-bg-fallback: rgba(242, 243, 244, 0.99);
+  --glass-dense-bg-fallback: rgba(242, 243, 244, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="cobalt2"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(20, 46, 63, 0.64);
-  --glass-dense-bg: rgba(20, 46, 63, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(20, 46, 63, 0.95);
-  --glass-dense-bg-fallback: rgba(20, 46, 63, 1);
+  --glass-dense-bg-fallback: rgba(20, 46, 63, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="cursor"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(238, 238, 238, 0);
-  --glass-dense-bg: rgba(238, 238, 238, 0.99);
+  --glass-dense-bg: rgba(238, 238, 238, 0);
   --glass-standard-bg-fallback: rgba(238, 238, 238, 0.95);
-  --glass-dense-bg-fallback: rgba(238, 238, 238, 0.99);
+  --glass-dense-bg-fallback: rgba(238, 238, 238, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="cursor"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(28, 28, 28, 0.61);
-  --glass-dense-bg: rgba(28, 28, 28, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(28, 28, 28, 0.95);
-  --glass-dense-bg-fallback: rgba(28, 28, 28, 1);
+  --glass-dense-bg-fallback: rgba(28, 28, 28, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="dracula"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(236, 236, 233, 0);
-  --glass-dense-bg: rgba(236, 236, 233, 0.99);
+  --glass-dense-bg: rgba(236, 236, 233, 0);
   --glass-standard-bg-fallback: rgba(236, 236, 233, 0.95);
-  --glass-dense-bg-fallback: rgba(236, 236, 233, 0.99);
+  --glass-dense-bg-fallback: rgba(236, 236, 233, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="dracula"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(30, 31, 39, 0.61);
-  --glass-dense-bg: rgba(30, 31, 39, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(30, 31, 39, 0.95);
-  --glass-dense-bg-fallback: rgba(30, 31, 39, 1);
+  --glass-dense-bg-fallback: rgba(30, 31, 39, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="everforest"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(244, 240, 225, 0.43);
-  --glass-dense-bg: rgba(244, 240, 225, 0.98);
+  --glass-dense-bg: rgba(244, 240, 225, 0.43);
   --glass-standard-bg-fallback: rgba(244, 240, 225, 0.95);
-  --glass-dense-bg-fallback: rgba(244, 240, 225, 0.98);
+  --glass-dense-bg-fallback: rgba(244, 240, 225, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="everforest"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(36, 42, 46, 0.65);
-  --glass-dense-bg: rgba(36, 42, 46, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(36, 42, 46, 0.95);
-  --glass-dense-bg-fallback: rgba(36, 42, 46, 1);
+  --glass-dense-bg-fallback: rgba(36, 42, 46, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="flexoki"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(241, 238, 230, 0);
-  --glass-dense-bg: rgba(241, 238, 230, 1);
+  --glass-dense-bg: rgba(241, 238, 230, 0);
   --glass-standard-bg-fallback: rgba(241, 238, 230, 0.95);
-  --glass-dense-bg-fallback: rgba(241, 238, 230, 1);
+  --glass-dense-bg-fallback: rgba(241, 238, 230, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="flexoki"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(22, 21, 20, 0.6);
-  --glass-dense-bg: rgba(22, 21, 20, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(22, 21, 20, 0.95);
-  --glass-dense-bg-fallback: rgba(22, 21, 20, 1);
+  --glass-dense-bg-fallback: rgba(22, 21, 20, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="github"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(242, 243, 243, 0.02);
-  --glass-dense-bg: rgba(242, 243, 243, 0.99);
+  --glass-dense-bg: rgba(242, 243, 243, 0.02);
   --glass-standard-bg-fallback: rgba(242, 243, 243, 0.95);
-  --glass-dense-bg-fallback: rgba(242, 243, 243, 0.99);
+  --glass-dense-bg-fallback: rgba(242, 243, 243, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="github"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(18, 21, 27, 0.59);
-  --glass-dense-bg: rgba(18, 21, 27, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(18, 21, 27, 0.95);
-  --glass-dense-bg-fallback: rgba(18, 21, 27, 1);
+  --glass-dense-bg-fallback: rgba(18, 21, 27, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="gruvbox"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(241, 234, 206, 0.1);
-  --glass-dense-bg: rgba(241, 234, 206, 0.99);
+  --glass-dense-bg: rgba(241, 234, 206, 0.1);
   --glass-standard-bg-fallback: rgba(241, 234, 206, 0.95);
-  --glass-dense-bg-fallback: rgba(241, 234, 206, 0.99);
+  --glass-dense-bg-fallback: rgba(241, 234, 206, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="gruvbox"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(38, 37, 34, 0.64);
-  --glass-dense-bg: rgba(38, 37, 34, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(38, 37, 34, 0.95);
-  --glass-dense-bg-fallback: rgba(38, 37, 34, 1);
+  --glass-dense-bg-fallback: rgba(38, 37, 34, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="kanagawa"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(235, 227, 217, 0.2);
-  --glass-dense-bg: rgba(235, 227, 217, 0.98);
+  --glass-dense-bg: rgba(235, 227, 217, 0.2);
   --glass-standard-bg-fallback: rgba(235, 227, 217, 0.95);
-  --glass-dense-bg-fallback: rgba(235, 227, 217, 0.98);
+  --glass-dense-bg-fallback: rgba(235, 227, 217, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="kanagawa"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(29, 29, 34, 0.62);
-  --glass-dense-bg: rgba(29, 29, 34, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(29, 29, 34, 0.95);
-  --glass-dense-bg-fallback: rgba(29, 29, 34, 1);
+  --glass-dense-bg-fallback: rgba(29, 29, 34, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="lucent-orng"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(241, 234, 230, 0);
-  --glass-dense-bg: rgba(241, 234, 230, 0.99);
+  --glass-dense-bg: rgba(241, 234, 230, 0);
   --glass-standard-bg-fallback: rgba(241, 234, 230, 0.95);
-  --glass-dense-bg-fallback: rgba(241, 234, 230, 0.99);
+  --glass-dense-bg-fallback: rgba(241, 234, 230, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="lucent-orng"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(40, 27, 23, 0.61);
-  --glass-dense-bg: rgba(40, 27, 23, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(40, 27, 23, 0.95);
-  --glass-dense-bg-fallback: rgba(40, 27, 23, 1);
+  --glass-dense-bg-fallback: rgba(40, 27, 23, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="material"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(238, 238, 239, 0.06);
-  --glass-dense-bg: rgba(238, 238, 239, 0.99);
+  --glass-dense-bg: rgba(238, 238, 239, 0.06);
   --glass-standard-bg-fallback: rgba(238, 238, 239, 0.95);
-  --glass-dense-bg-fallback: rgba(238, 238, 239, 0.99);
+  --glass-dense-bg-fallback: rgba(238, 238, 239, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="material"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(33, 45, 49, 0.65);
-  --glass-dense-bg: rgba(33, 45, 49, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(33, 45, 49, 0.95);
-  --glass-dense-bg-fallback: rgba(33, 45, 49, 1);
+  --glass-dense-bg-fallback: rgba(33, 45, 49, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="matrix"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(228, 234, 225, 0.04);
-  --glass-dense-bg: rgba(228, 234, 225, 0.99);
+  --glass-dense-bg: rgba(228, 234, 225, 0.04);
   --glass-standard-bg-fallback: rgba(228, 234, 225, 0.95);
-  --glass-dense-bg-fallback: rgba(228, 234, 225, 0.99);
+  --glass-dense-bg-fallback: rgba(228, 234, 225, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="matrix"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(10, 23, 13, 0.59);
-  --glass-dense-bg: rgba(10, 23, 13, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(10, 23, 13, 0.95);
-  --glass-dense-bg-fallback: rgba(10, 23, 13, 1);
+  --glass-dense-bg-fallback: rgba(10, 23, 13, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="mercury"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(243, 243, 244, 0.09);
-  --glass-dense-bg: rgba(243, 243, 244, 0.99);
+  --glass-dense-bg: rgba(243, 243, 244, 0.09);
   --glass-standard-bg-fallback: rgba(243, 243, 244, 0.95);
-  --glass-dense-bg-fallback: rgba(243, 243, 244, 0.99);
+  --glass-dense-bg-fallback: rgba(243, 243, 244, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="mercury"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(25, 25, 34, 0.6);
-  --glass-dense-bg: rgba(25, 25, 34, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(25, 25, 34, 0.95);
-  --glass-dense-bg-fallback: rgba(25, 25, 34, 1);
+  --glass-dense-bg-fallback: rgba(25, 25, 34, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="monokai"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(241, 237, 226, 0);
-  --glass-dense-bg: rgba(241, 237, 226, 0.99);
+  --glass-dense-bg: rgba(241, 237, 226, 0);
   --glass-standard-bg-fallback: rgba(241, 237, 226, 0.95);
-  --glass-dense-bg-fallback: rgba(241, 237, 226, 0.99);
+  --glass-dense-bg-fallback: rgba(241, 237, 226, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="monokai"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(37, 38, 33, 0.63);
-  --glass-dense-bg: rgba(37, 38, 33, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(37, 38, 33, 0.95);
-  --glass-dense-bg-fallback: rgba(37, 38, 33, 1);
+  --glass-dense-bg-fallback: rgba(37, 38, 33, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="nightowl"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(231, 231, 232, 0.16);
-  --glass-dense-bg: rgba(231, 231, 232, 1);
+  --glass-dense-bg: rgba(231, 231, 232, 0.16);
   --glass-standard-bg-fallback: rgba(231, 231, 232, 0.95);
-  --glass-dense-bg-fallback: rgba(231, 231, 232, 1);
+  --glass-dense-bg-fallback: rgba(231, 231, 232, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="nightowl"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(15, 24, 35, 0.59);
-  --glass-dense-bg: rgba(15, 24, 35, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(15, 24, 35, 0.95);
-  --glass-dense-bg-fallback: rgba(15, 24, 35, 1);
+  --glass-dense-bg-fallback: rgba(15, 24, 35, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="nord"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(227, 230, 235, 0.08);
-  --glass-dense-bg: rgba(227, 230, 235, 0.99);
+  --glass-dense-bg: rgba(227, 230, 235, 0.08);
   --glass-standard-bg-fallback: rgba(227, 230, 235, 0.95);
-  --glass-dense-bg-fallback: rgba(227, 230, 235, 0.99);
+  --glass-dense-bg-fallback: rgba(227, 230, 235, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="nord"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(38, 43, 54, 0.65);
-  --glass-dense-bg: rgba(38, 43, 54, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(38, 43, 54, 0.95);
-  --glass-dense-bg-fallback: rgba(38, 43, 54, 1);
+  --glass-dense-bg-fallback: rgba(38, 43, 54, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="one-dark"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(239, 239, 239, 0.11);
-  --glass-dense-bg: rgba(239, 239, 239, 0.99);
+  --glass-dense-bg: rgba(239, 239, 239, 0.11);
   --glass-standard-bg-fallback: rgba(239, 239, 239, 0.95);
-  --glass-dense-bg-fallback: rgba(239, 239, 239, 0.99);
+  --glass-dense-bg-fallback: rgba(239, 239, 239, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="one-dark"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(32, 35, 42, 0.64);
-  --glass-dense-bg: rgba(32, 35, 42, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(32, 35, 42, 0.95);
-  --glass-dense-bg-fallback: rgba(32, 35, 42, 1);
+  --glass-dense-bg-fallback: rgba(32, 35, 42, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="onedarkpro"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(234, 235, 238, 0.06);
-  --glass-dense-bg: rgba(234, 235, 238, 0.99);
+  --glass-dense-bg: rgba(234, 235, 238, 0.06);
   --glass-standard-bg-fallback: rgba(234, 235, 238, 0.95);
-  --glass-dense-bg-fallback: rgba(234, 235, 238, 0.99);
+  --glass-dense-bg-fallback: rgba(234, 235, 238, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="onedarkpro"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(25, 29, 37, 0.62);
-  --glass-dense-bg: rgba(25, 29, 37, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(25, 29, 37, 0.95);
-  --glass-dense-bg-fallback: rgba(25, 29, 37, 1);
+  --glass-dense-bg-fallback: rgba(25, 29, 37, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="opencode"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(242, 242, 242, 0);
-  --glass-dense-bg: rgba(242, 242, 242, 1);
+  --glass-dense-bg: rgba(242, 242, 242, 0);
   --glass-standard-bg-fallback: rgba(242, 242, 242, 0.95);
-  --glass-dense-bg-fallback: rgba(242, 242, 242, 1);
+  --glass-dense-bg-fallback: rgba(242, 242, 242, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="opencode"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(20, 20, 20, 0.58);
-  --glass-dense-bg: rgba(20, 20, 20, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(20, 20, 20, 0.95);
-  --glass-dense-bg-fallback: rgba(20, 20, 20, 1);
+  --glass-dense-bg-fallback: rgba(20, 20, 20, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="orng"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(242, 242, 242, 0);
-  --glass-dense-bg: rgba(242, 242, 242, 1);
+  --glass-dense-bg: rgba(242, 242, 242, 0);
   --glass-standard-bg-fallback: rgba(242, 242, 242, 0.95);
-  --glass-dense-bg-fallback: rgba(242, 242, 242, 1);
+  --glass-dense-bg-fallback: rgba(242, 242, 242, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="orng"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(20, 20, 20, 0.58);
-  --glass-dense-bg: rgba(20, 20, 20, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(20, 20, 20, 0.95);
-  --glass-dense-bg-fallback: rgba(20, 20, 20, 1);
+  --glass-dense-bg-fallback: rgba(20, 20, 20, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="osaka-jade"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(235, 234, 216, 0);
-  --glass-dense-bg: rgba(235, 234, 216, 0.99);
+  --glass-dense-bg: rgba(235, 234, 216, 0);
   --glass-standard-bg-fallback: rgba(235, 234, 216, 0.95);
-  --glass-dense-bg-fallback: rgba(235, 234, 216, 0.99);
+  --glass-dense-bg-fallback: rgba(235, 234, 216, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="osaka-jade"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(18, 28, 21, 0.61);
-  --glass-dense-bg: rgba(18, 28, 21, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(18, 28, 21, 0.95);
-  --glass-dense-bg-fallback: rgba(18, 28, 21, 1);
+  --glass-dense-bg-fallback: rgba(18, 28, 21, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="palenight"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(238, 238, 239, 0.05);
-  --glass-dense-bg: rgba(238, 238, 239, 0.99);
+  --glass-dense-bg: rgba(238, 238, 239, 0.05);
   --glass-standard-bg-fallback: rgba(238, 238, 239, 0.95);
-  --glass-dense-bg-fallback: rgba(238, 238, 239, 0.99);
+  --glass-dense-bg-fallback: rgba(238, 238, 239, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="palenight"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(31, 35, 52, 0.64);
-  --glass-dense-bg: rgba(31, 35, 52, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.08);
+  --glass-dense-bg: rgba(255, 255, 255, 0.08);
   --glass-standard-bg-fallback: rgba(31, 35, 52, 0.95);
-  --glass-dense-bg-fallback: rgba(31, 35, 52, 1);
+  --glass-dense-bg-fallback: rgba(31, 35, 52, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="rosepine"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(242, 235, 232, 0.3);
-  --glass-dense-bg: rgba(242, 235, 232, 0.98);
+  --glass-dense-bg: rgba(242, 235, 232, 0.3);
   --glass-standard-bg-fallback: rgba(242, 235, 232, 0.95);
-  --glass-dense-bg-fallback: rgba(242, 235, 232, 0.98);
+  --glass-dense-bg-fallback: rgba(242, 235, 232, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="rosepine"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(26, 24, 36, 0.6);
-  --glass-dense-bg: rgba(26, 24, 36, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(26, 24, 36, 0.95);
-  --glass-dense-bg-fallback: rgba(26, 24, 36, 1);
+  --glass-dense-bg-fallback: rgba(26, 24, 36, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="shadesofpurple"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(237, 228, 244, 0.07);
-  --glass-dense-bg: rgba(237, 228, 244, 1);
+  --glass-dense-bg: rgba(237, 228, 244, 0.07);
   --glass-standard-bg-fallback: rgba(237, 228, 244, 0.95);
-  --glass-dense-bg-fallback: rgba(237, 228, 244, 1);
+  --glass-dense-bg-fallback: rgba(237, 228, 244, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="shadesofpurple"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(29, 20, 44, 0.59);
-  --glass-dense-bg: rgba(29, 20, 44, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(29, 20, 44, 0.95);
-  --glass-dense-bg-fallback: rgba(29, 20, 44, 1);
+  --glass-dense-bg-fallback: rgba(29, 20, 44, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="solarized"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(243, 240, 225, 0.46);
-  --glass-dense-bg: rgba(243, 240, 225, 0.98);
+  --glass-dense-bg: rgba(243, 240, 225, 0.46);
   --glass-standard-bg-fallback: rgba(243, 240, 225, 0.95);
-  --glass-dense-bg-fallback: rgba(243, 240, 225, 0.98);
+  --glass-dense-bg-fallback: rgba(243, 240, 225, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="solarized"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(10, 33, 40, 0.62);
-  --glass-dense-bg: rgba(10, 33, 40, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.08);
+  --glass-dense-bg: rgba(255, 255, 255, 0.08);
   --glass-standard-bg-fallback: rgba(10, 33, 40, 0.95);
-  --glass-dense-bg-fallback: rgba(10, 33, 40, 1);
+  --glass-dense-bg-fallback: rgba(10, 33, 40, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="synthwave84"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(238, 237, 238, 0.01);
-  --glass-dense-bg: rgba(238, 237, 238, 0.99);
+  --glass-dense-bg: rgba(238, 237, 238, 0.01);
   --glass-standard-bg-fallback: rgba(238, 237, 238, 0.95);
-  --glass-dense-bg-fallback: rgba(238, 237, 238, 0.99);
+  --glass-dense-bg-fallback: rgba(238, 237, 238, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="synthwave84"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(36, 33, 48, 0.62);
-  --glass-dense-bg: rgba(36, 33, 48, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(36, 33, 48, 0.95);
-  --glass-dense-bg-fallback: rgba(36, 33, 48, 1);
+  --glass-dense-bg-fallback: rgba(36, 33, 48, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="tokyonight"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(218, 219, 225, 0.08);
-  --glass-dense-bg: rgba(218, 219, 225, 0.99);
+  --glass-dense-bg: rgba(218, 219, 225, 0.08);
   --glass-standard-bg-fallback: rgba(218, 219, 225, 0.95);
-  --glass-dense-bg-fallback: rgba(218, 219, 225, 0.99);
+  --glass-dense-bg-fallback: rgba(218, 219, 225, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="tokyonight"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(25, 26, 37, 0.61);
-  --glass-dense-bg: rgba(25, 26, 37, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.09);
+  --glass-dense-bg: rgba(255, 255, 255, 0.09);
   --glass-standard-bg-fallback: rgba(25, 26, 37, 0.95);
-  --glass-dense-bg-fallback: rgba(25, 26, 37, 1);
+  --glass-dense-bg-fallback: rgba(25, 26, 37, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="vercel"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(241, 241, 241, 0);
-  --glass-dense-bg: rgba(241, 241, 241, 0.99);
+  --glass-dense-bg: rgba(241, 241, 241, 0);
   --glass-standard-bg-fallback: rgba(241, 241, 241, 0.95);
-  --glass-dense-bg-fallback: rgba(241, 241, 241, 0.99);
+  --glass-dense-bg-fallback: rgba(241, 241, 241, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="vercel"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(15, 15, 15, 0.57);
-  --glass-dense-bg: rgba(15, 15, 15, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(15, 15, 15, 0.95);
-  --glass-dense-bg-fallback: rgba(15, 15, 15, 1);
+  --glass-dense-bg-fallback: rgba(15, 15, 15, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="vesper"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(228, 228, 228, 0);
-  --glass-dense-bg: rgba(228, 228, 228, 0.99);
+  --glass-dense-bg: rgba(228, 228, 228, 0);
   --glass-standard-bg-fallback: rgba(228, 228, 228, 0.95);
-  --glass-dense-bg-fallback: rgba(228, 228, 228, 0.99);
+  --glass-dense-bg-fallback: rgba(228, 228, 228, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="vesper"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(24, 24, 24, 0.59);
-  --glass-dense-bg: rgba(24, 24, 24, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(24, 24, 24, 0.95);
-  --glass-dense-bg-fallback: rgba(24, 24, 24, 1);
+  --glass-dense-bg-fallback: rgba(24, 24, 24, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 html[data-theme="zenburn"][data-color-scheme="light"] {
   --glass-standard-bg: rgba(244, 244, 233, 0.13);
-  --glass-dense-bg: rgba(244, 244, 233, 1);
+  --glass-dense-bg: rgba(244, 244, 233, 0.13);
   --glass-standard-bg-fallback: rgba(244, 244, 233, 0.95);
-  --glass-dense-bg-fallback: rgba(244, 244, 233, 1);
+  --glass-dense-bg-fallback: rgba(244, 244, 233, 0.95);
   --glass-edge: rgba(0, 0, 0, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --glass-brightness: 1;
 }
 
 html[data-theme="zenburn"][data-color-scheme="dark"] {
-  --glass-standard-bg: rgba(50, 50, 49, 0.68);
-  --glass-dense-bg: rgba(50, 50, 49, 1);
+  --glass-standard-bg: rgba(255, 255, 255, 0.1);
+  --glass-dense-bg: rgba(255, 255, 255, 0.1);
   --glass-standard-bg-fallback: rgba(50, 50, 49, 0.95);
-  --glass-dense-bg-fallback: rgba(50, 50, 49, 1);
+  --glass-dense-bg-fallback: rgba(50, 50, 49, 0.95);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --glass-brightness: 0.4;
 }
 
 /* Tier utility surfaces — apply to a positioned element over the Brain.
@@ -682,16 +756,16 @@ html[data-theme="zenburn"][data-color-scheme="dark"] {
    opts in within this slice; without a data-glass attribute nothing changes. */
 [data-glass="standard"] {
   background: var(--glass-standard-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--glass-shadow);
 }
 [data-glass="dense"] {
   background: var(--glass-dense-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--glass-shadow);

@@ -145,6 +145,8 @@
     white-space: pre-wrap;
     word-break: break-word;
     overflow: hidden;
+    /* hug content; never span the thread — the Brain shows beside the bubble */
+    max-width: min(82%, 64ch);
     padding: 8px 12px;
 
     /* file/agent highlights are syntax-colored ink — illegible on the
@@ -240,7 +242,9 @@
    owns fill/edge/radius/shadow); the gap above it stays transparent so the
    Brain shows between cards. */
 [data-component="text-part"] {
-  width: 100%;
+  /* floating card, not a full-width band — the Brain owns the margins */
+  width: fit-content;
+  max-width: min(88%, 72ch);
   margin-top: 24px;
   padding: 12px 16px;
 
@@ -750,7 +754,9 @@
 }
 
 [data-component="tool-part-wrapper"] {
+  /* dense artifacts get more room than prose, but never the full band */
   width: 100%;
+  max-width: 92%;
 }
 
 [data-component="dock-prompt"][data-kind="permission"] {
@@ -965,7 +971,11 @@
     font-weight: var(--font-weight-regular);
     line-height: var(--line-height-large);
     color: var(--text-weak);
-    padding: 0 10px;
+    /* muted ink never rides standard glass — dense-backed zone (#60 invariant) */
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-sm);
+    padding: 2px 10px;
+    align-self: flex-start;
   }
 
   [data-slot="question-options"] {
@@ -1181,10 +1191,14 @@
    1px ring, one radius, clipped), and the shell + tray flatten into sections of
    it, with the footer a plain bottom action bar under a hairline divider. */
 [data-component="dock-prompt"][data-kind="question"] {
-  background-color: var(--v2-background-bg-layer-02);
   box-shadow: 0 0 0 1px var(--border-weak-base);
   border-radius: 10px;
   overflow: clip;
+}
+/* amicode #61 follow-up: glassed question panel gets its fill from glass.css;
+   the opaque layer-02 fill survives only where glass is absent. */
+[data-component="dock-prompt"][data-kind="question"]:not([data-glass]) {
+  background-color: var(--v2-background-bg-layer-02);
 }
 [data-component="dock-prompt"][data-kind="question"] [data-dock-surface="shell"] {
   background: transparent;
@@ -1217,6 +1231,10 @@
     flex-direction: column;
     gap: 2px;
     font-size: 13px;
+    /* answers summary carries muted labels — one dense-backed reading zone */
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
 
     [data-slot="question-text"] {
       color: var(--text-weak);

@@ -16,12 +16,15 @@ import { PALETTES } from "./brain-engine"
 import {
   CONTRAST,
   GLASS_BLUR_PX,
+  GLASS_BRIGHTNESS,
+  GLASS_FROST_MAX,
   collectMarks,
   composite,
   contrast,
   deriveGlassTiers,
   generateGlassCss,
   parseColor,
+  type Rgb,
 } from "./glass-tokens"
 
 type Mode = "light" | "dark"
@@ -39,8 +42,15 @@ function frame(mode: Mode): string {
   return PALETTES[mode].thought
 }
 
+/** The worst-case backdrop the shipped filter actually produces: the raw
+    reference frame scaled by the modeled brightness() term for the mode. */
+function effectiveBackdrop(mode: Mode): Rgb {
+  const raw = parseColor(frame(mode), resolvedTokens(mode))!.rgb
+  return raw.map((c) => Math.round(c * GLASS_BRIGHTNESS[mode])) as Rgb
+}
+
 function derive(mode: Mode) {
-  return deriveGlassTiers(resolvedTokens(mode), frame(mode))
+  return deriveGlassTiers(resolvedTokens(mode), frame(mode), GLASS_BRIGHTNESS[mode], GLASS_FROST_MAX[mode])
 }
 
 describe("glass standard tier — body text over the reference frame", () => {
@@ -49,7 +59,7 @@ describe("glass standard tier — body text over the reference frame", () => {
       const tokens = resolvedTokens(mode)
       const glass = derive(mode)
       const body = parseColor(tokens["text-strong"], tokens)!
-      const backdrop = parseColor(frame(mode), tokens)!
+      const backdrop = { rgb: effectiveBackdrop(mode) } // frame × modeled brightness()
       const surface = composite(glass.standard.tint, glass.standard.alpha, backdrop.rgb)
       const ratio = contrast(body.rgb, surface)
       // AA floor for body text
@@ -63,65 +73,43 @@ describe("glass standard tier — body text over the reference frame", () => {
   }
 })
 
-describe("glass dense tier — graphical marks (WCAG 1.4.11) over the reference frame", () => {
+describe("glass single tier — the marks law is WAIVED (design decision, Kate 2026-07-25)", () => {
   for (const mode of MODES) {
-    test(`oc-2 ${mode}: every mark holds 3:1 where native does, and never drifts >0.2 below native`, () => {
-      const tokens = resolvedTokens(mode)
+    test(`oc-2 ${mode}: dense equals standard — one tint, one alpha, one recipe`, () => {
       const glass = derive(mode)
-      const backdrop = parseColor(frame(mode), tokens)!
-      const base = glass.dense.tint // the theme's own base surface (native rendering)
-      const denseSurface = composite(glass.dense.tint, glass.dense.alpha, backdrop.rgb)
-
-      const marks = collectMarks(tokens)
-      // the set is real: syntax tokens ∪ diff add/delete fills ∪ run-plot strokes
-      expect(marks.length).toBeGreaterThan(10)
-      const sources = marks.map((m) => m.source)
-      expect(sources).toContain("syntax-string")
-      expect(sources).toContain("surface-diff-add-base")
-      expect(sources).toContain("surface-diff-delete-base")
-      expect(sources).toContain("v2-icon-icon-accent") // the run-plot series stroke
-
-      for (const mark of marks) {
-        const native = contrast(composite(mark.rgb, mark.alpha, base), base)
-        const over = contrast(composite(mark.rgb, mark.alpha, denseSurface), denseSurface)
-        if (native >= CONTRAST.markFloor) {
-          expect(over).toBeGreaterThanOrEqual(CONTRAST.markFloor)
-        }
-        // the dense tint never degrades a mark relative to native rendering
-        expect(over).toBeGreaterThanOrEqual(native - CONTRAST.markDrift)
-      }
+      expect(glass.dense.tint).toEqual(glass.standard.tint)
+      expect(glass.dense.alpha).toBe(glass.standard.alpha)
     })
-  }
-})
 
-describe("glass dense tier — code/diff text over the reference frame", () => {
-  for (const mode of MODES) {
-    test(`oc-2 ${mode}: text-strong over dense tint clears AA with margin`, () => {
+    test(`oc-2 ${mode}: code/diff text (text-strong) still clears AA with margin on the single tier`, () => {
       const glass = derive(mode)
       expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(4.5)
       expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(CONTRAST.bodyTarget)
     })
-
-    test(`oc-2 ${mode}: dense is strictly more opaque than standard`, () => {
-      const glass = derive(mode)
-      expect(glass.dense.alpha).toBeGreaterThan(glass.standard.alpha)
-    })
   }
+
+  test("the mark set is still measurable (the waiver is a choice, not a blind spot)", () => {
+    // Colored marks (syntax, diff fills, plot strokes) are NO LONGER certified
+    // over the Brain — WCAG 1.4.11 floor + no-drift were deliberately waived
+    // with the single-tier decision. collectMarks stays so the trade can be
+    // re-measured if the decision is ever revisited.
+    const marks = collectMarks(resolvedTokens("dark"))
+    expect(marks.length).toBeGreaterThan(10)
+  })
 })
 
-describe("glass known invariant — muted grey rides dense, never standard", () => {
+describe("glass known limit — muted grey is not certified anywhere (accepted with single-tier)", () => {
   for (const mode of MODES) {
-    test(`oc-2 ${mode}: text-base is NOT certified on standard (and IS legible on dense)`, () => {
+    test(`oc-2 ${mode}: text-base does not clear AA on the single tier — recorded, not certified`, () => {
       const tokens = resolvedTokens(mode)
       const glass = derive(mode)
       const muted = parseColor(tokens["text-base"], tokens)!
-      const backdrop = parseColor(frame(mode), tokens)!
-      const onStandard = contrast(muted.rgb, composite(glass.standard.tint, glass.standard.alpha, backdrop.rgb))
-      const onDense = contrast(muted.rgb, composite(glass.dense.tint, glass.dense.alpha, backdrop.rgb))
-      // the standard tint is bounded below by the BODY floor only — muted grey
-      // does not clear AA there; floating it on standard is a bug, not a tweak.
-      expect(onStandard).toBeLessThan(4.5)
-      expect(onDense).toBeGreaterThanOrEqual(4.5)
+      const backdrop = { rgb: effectiveBackdrop(mode) } // frame × modeled brightness()
+      const onGlass = contrast(muted.rgb, composite(glass.standard.tint, glass.standard.alpha, backdrop.rgb))
+      // With the dense tier gone there is no certified home for muted ink over
+      // the Brain. This records the accepted limit so it can't silently rot
+      // into a claimed guarantee.
+      expect(onGlass).toBeLessThan(4.5)
     })
   }
 })
@@ -158,9 +146,12 @@ describe("glass keying — a pure function of the resolved chat theme", () => {
       expect(css).toContain(scope)
       const block = css.match(new RegExp(`${escapeRe(scope)} \\{([^}]*)\\}`))![1]!
       const glass = derive(mode)
-      const [r, g, b] = glass.standard.tint
-      expect(block).toContain(`--glass-standard-bg: rgba(${r}, ${g}, ${b}, ${glass.standard.alpha})`)
-      expect(block).toContain(`--glass-dense-bg: rgba(${r}, ${g}, ${b}, ${glass.dense.alpha})`)
+      // standard and dense carry their own tints (dark standard = white frost;
+      // dense = the theme surface) — assert each against its own rgb
+      const [sr, sg, sb] = glass.standard.tint
+      const [dr, dg, db] = glass.dense.tint
+      expect(block).toContain(`--glass-standard-bg: rgba(${sr}, ${sg}, ${sb}, ${glass.standard.alpha})`)
+      expect(block).toContain(`--glass-dense-bg: rgba(${dr}, ${dg}, ${db}, ${glass.dense.alpha})`)
     }
   })
 

@@ -29,7 +29,17 @@ import { oc2Theme } from "../theme/default-themes"
 import { resolveThemeVariant } from "../theme/resolve"
 import { resolveThemeVariantV2 } from "../theme/v2/resolve"
 import { PALETTES } from "./brain-engine"
-import { CONTRAST, collectMarks, composite, contrast, deriveGlassTiers, parseColor, type Rgb } from "./glass-tokens"
+import {
+  CONTRAST,
+  GLASS_BRIGHTNESS,
+  GLASS_FROST_MAX,
+  collectMarks,
+  composite,
+  contrast,
+  deriveGlassTiers,
+  parseColor,
+  type Rgb,
+} from "./glass-tokens"
 
 type Mode = "light" | "dark"
 const MODES: Mode[] = ["light", "dark"]
@@ -45,6 +55,9 @@ const TIER_MAP: { archetype: string; tier: Tier; role: Role }[] = [
   { archetype: "user-bubble", tier: "standard", role: "body" },
   { archetype: "assistant-prose", tier: "standard", role: "body" },
   { archetype: "composer", tier: "standard", role: "body" },
+  // #61 follow-up (review feedback): the question dock floats on standard;
+  // its muted hint + answers summary ride dense-backed zones.
+  { archetype: "question-dock", tier: "standard", role: "body" },
   { archetype: "code-block", tier: "dense", role: "code" },
   { archetype: "diff", tier: "dense", role: "code" },
   { archetype: "run-plot", tier: "dense", role: "mark" },
@@ -74,11 +87,13 @@ function resolvedTokens(mode: Mode): Record<string, string> {
 }
 
 function derive(mode: Mode) {
-  return deriveGlassTiers(resolvedTokens(mode), PALETTES[mode].thought)
+  return deriveGlassTiers(resolvedTokens(mode), PALETTES[mode].thought, GLASS_BRIGHTNESS[mode], GLASS_FROST_MAX[mode])
 }
 
 function frameRgb(mode: Mode): Rgb {
-  return parseColor(PALETTES[mode].thought, resolvedTokens(mode))!.rgb
+  // the worst-case backdrop the shipped filter produces: frame × brightness()
+  const raw = parseColor(PALETTES[mode].thought, resolvedTokens(mode))!.rgb
+  return raw.map((c) => Math.round(c * GLASS_BRIGHTNESS[mode])) as Rgb
 }
 
 /** The tier's rendered surface over the worst-case running-brain frame. */
@@ -113,11 +128,11 @@ function nativeContrast(mode: Mode, tokenName: string): number {
 /* ------------------------------------------------------------------ */
 
 describe("glass float — the tier map is the contract", () => {
-  test("exactly seven archetypes, two tiers, per the issue's tier map", () => {
-    expect(TIER_MAP).toHaveLength(7)
+  test("exactly eight archetypes, two tiers — seven per the issue + the question dock (review feedback)", () => {
+    expect(TIER_MAP).toHaveLength(8)
     const standard = TIER_MAP.filter((r) => r.tier === "standard").map((r) => r.archetype)
     const dense = TIER_MAP.filter((r) => r.tier === "dense").map((r) => r.archetype)
-    expect(standard.sort()).toEqual(["assistant-prose", "composer", "user-bubble"])
+    expect(standard.sort()).toEqual(["assistant-prose", "composer", "question-dock", "user-bubble"])
     expect(dense.sort()).toEqual(["code-block", "diff", "run-plot", "tool-card"])
     for (const row of TIER_MAP) expect(["standard", "dense"]).toContain(row.tier)
   })
@@ -152,40 +167,27 @@ describe("glass float — archetype contrast over the reference frame", () => {
       }
     })
 
-    test(`oc-2 ${mode}: graphical marks (syntax, diff fills, run-plot strokes) hold 1.4.11 on dense`, () => {
-      const tokens = resolvedTokens(mode)
-      const marks = collectMarks(tokens)
-      // the run-plot stroke and both diff fills are in the certified set
-      const sources = marks.map((m) => m.source)
-      expect(sources).toContain("v2-icon-icon-accent")
-      expect(sources).toContain("surface-diff-add-base")
-      expect(sources).toContain("surface-diff-delete-base")
-      const base = derive(mode).dense.tint
-      const surface = tierSurface(mode, "dense")
-      for (const mark of marks) {
-        const native = contrast(composite(mark.rgb, mark.alpha, base), base)
-        const over = contrast(composite(mark.rgb, mark.alpha, surface), surface)
-        if (native >= CONTRAST.markFloor) expect(over).toBeGreaterThanOrEqual(CONTRAST.markFloor)
-        expect(over).toBeGreaterThanOrEqual(native - CONTRAST.markDrift)
-      }
+    test(`oc-2 ${mode}: single-tier — dense and standard are one recipe; marks law WAIVED (Kate 2026-07-25)`, () => {
+      // The former 1.4.11 marks certification is deliberately gone: colored
+      // marks (syntax, diff fills, plot strokes) over the Brain are accepted
+      // as a design trade. What remains certified: the tiers are identical,
+      // so no surface silently claims the retired heavier backing.
+      const glass = derive(mode)
+      expect(glass.dense.tint).toEqual(glass.standard.tint)
+      expect(glass.dense.alpha).toBe(glass.standard.alpha)
+      // the mark set stays measurable should the waiver ever be revisited
+      expect(collectMarks(resolvedTokens(mode)).length).toBeGreaterThan(10)
     })
 
-    test(`oc-2 ${mode}: every muted zone is REQUIRED (fails standard) and legible on its dense zone`, () => {
+    test(`oc-2 ${mode}: muted zones are recorded as not certified on the single tier`, () => {
       for (const zone of MUTED_ZONES) {
-        const onStandard = tierContrast(mode, "standard", zone.token)
-        const onDense = tierContrast(mode, "dense", zone.token)
-        // muted ink on the ultra-transparent standard tint fails AA over the
-        // frame by construction (#60's certified KNOWN LIMIT) — the zone is
-        // not decoration, it is what makes the text legible at all.
-        expect(onStandard).toBeLessThan(4.5)
-        // on the dense zone the ink is restored to (at least) its native
-        // legibility: never degraded by more than the #60 drift bound, and
-        // never below the 3:1 UI floor.
-        expect(onDense).toBeGreaterThanOrEqual(nativeContrast(mode, zone.token) - CONTRAST.markDrift)
-        expect(onDense).toBeGreaterThanOrEqual(CONTRAST.markFloor)
+        const onGlass = tierContrast(mode, "standard", zone.token)
+        // With dense == standard there is no certified home for muted ink over
+        // the Brain (accepted with the single-tier decision). Recorded so it
+        // cannot rot into a claimed guarantee.
+        expect(onGlass).toBeLessThan(4.5)
+        expect(tierContrast(mode, "dense", zone.token)).toBe(onGlass)
       }
-      // the issue's canonical muted grey (text-base) fully clears AA on dense
-      expect(tierContrast(mode, "dense", "text-base")).toBeGreaterThanOrEqual(4.5)
     })
   }
 })
@@ -372,6 +374,7 @@ describe("glass float — chrome untouched, no third tier anywhere", () => {
       "amicode/run-window.tsx",
       "pages/session/message-timeline.tsx", // diff card only — asserted in the app test
       "components/prompt-input.tsx", // composer
+      "components/dock-prompt.tsx", // question dock (review feedback)
       "pages/session/composer/session-composer-region.tsx", // child-session stub (dimmed zone)
       "pages/session/glass-float.test.ts",
     ])

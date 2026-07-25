@@ -2,17 +2,23 @@
 //
 // The Brain becomes the Chat's full-bleed background (ADR 0002), so every
 // component sits on translucent Glass over a moving, sometimes bright-yellow
-// graph. Legibility is guaranteed BY CONSTRUCTION: exactly TWO tiers —
-//   - standard : prose, bubbles, composer — guarantees body text (text-strong)
-//                at WCAG AA with a safety margin;
-//   - dense    : code, diffs, run-plots, tool-cards — more opaque; guarantees
-//                code/diff text at AA AND graphical marks at 3:1 (WCAG 1.4.11),
-//                never degrading a mark by more than 0.2 vs native rendering.
+// graph. ONE recipe everywhere (single-tier glass — design decision, Kate
+// 2026-07-25): a single blur + a single per-mode tint whose opacity is
+// derived so body text (text-strong) clears WCAG AA with a safety margin.
+// The `dense` hook is still emitted for markup compat but carries the SAME
+// values as `standard`. The former marks law (WCAG 1.4.11 floor + no-drift
+// for syntax/diff/plot colors on a heavier dense tier) is deliberately
+// WAIVED — colored marks over the Brain are accepted as a design trade.
 //
-// The tint carries ALL contrast; blur is ONE high shared constant (calm,
-// cheap) and is never a term in the derivation or the test. Each tint's
-// opacity is DERIVED, not eyeballed: a pure function of the resolved chat
-// theme's tokens plus that mode's REFERENCE FRAME — the worst-case feature
+// Contrast comes from TWO modeled terms: the tint overlay and a deterministic
+// backdrop brightness() (dark mode only) that darkens the Brain's bloom
+// multiplicatively — structure stays visible where an overlay would paint it
+// out. Blur is ONE shared constant (calm, cheap) and is never a term in the
+// derivation or the test: blur depends on the neighborhood, brightness does
+// not, which is exactly why brightness may be modeled and blur may not. Each
+// tint's opacity is DERIVED, not eyeballed: a pure function of the resolved
+// chat theme's tokens plus that mode's brightness-scaled REFERENCE FRAME —
+// the worst-case feature
 // the Brain engine actually paints (dark: peak-bloom thought #fff676; light:
 // the darkest solid feature #8f8000, read from the engine's PALETTES — the
 // light Brain never paints #fff676, and deriving against it there would ship
@@ -22,10 +28,10 @@
 // surface + a hairline edge — light hairline on dark, dark hairline on light.
 // Yellow is never the glass fill and never ink; #fff676 stays the Brain's.
 //
-// KNOWN LIMIT (constraint, not bug): the standard tint is bounded below by
-// the contrast floor, so muted/secondary grey (text-base) does NOT clear AA
-// on standard — it rides the dense tier or a locally-dimmed zone. The test
-// asserts this invariant so it stays honest.
+// KNOWN LIMIT (accepted with the single-tier decision): muted/secondary grey
+// (text-base) does NOT clear AA on the single glass tier — with the dense
+// tier gone there is no certified home for muted ink over the Brain. The
+// test records this honestly rather than certifying it.
 //
 // Run `bun run generate:glass` to re-derive and re-emit glass.css; the drift
 // test keeps the committed CSS byte-identical to this module's output.
@@ -51,8 +57,31 @@ export const CONTRAST = {
   fallbackAlphaMin: 0.95,
 } as const
 
-/** ONE high constant blur shared by both tiers — calm only, never contrast. */
-export const GLASS_BLUR_PX = 18
+/** ONE constant blur shared by both tiers — calm only, never contrast. */
+export const GLASS_BLUR_PX = 8
+
+/** Deterministic backdrop darkening per mode — a modeled contrast term.
+    brightness(b) multiplies each sRGB channel of everything behind the card,
+    so the worst-case backdrop is the reference frame × b: blur can only mix
+    neighborhood values, never exceed that bound. Dark mode darkens the bloom
+    (structure survives where a heavier tint would paint it out); light mode
+    needs none. NEVER touched by the perf governor or any runtime code. */
+export const GLASS_BRIGHTNESS: Record<"light" | "dark", number> = {
+  dark: 0.4,
+  light: 1,
+}
+
+/** Dark-mode FROST: the standard card is a faint WHITE veil over the darkened
+    backdrop — it lifts the card slightly lighter than the ground (the classic
+    glass cue) instead of painting it blacker. The derivation picks the LARGEST
+    frost alpha (≤ this cap) that still clears the body-text target over the
+    brightness-scaled reference frame, so the guarantee direction flips from
+    "at least this much tint" to "at most this much frost". Light mode: 0 —
+    its surface tint is already the frost. */
+export const GLASS_FROST_MAX: Record<"light" | "dark", number> = {
+  dark: 0.1,
+  light: 0,
+}
 
 /* ---------- color parsing (resolved theme tokens are strings) ---------- */
 
@@ -130,6 +159,8 @@ export interface GlassTierDerivation {
 export interface GlassDerivation {
   /** the mode's reference frame (opaque worst-case Brain feature) */
   frame: Rgb
+  /** the theme's opaque base surface — fallback fills ride this, never frost */
+  surface: Rgb
   standard: GlassTierDerivation
   dense: GlassTierDerivation
 }
@@ -186,13 +217,16 @@ function sweepAlpha(ok: (alpha: number) => boolean): number {
 
 /**
  * Derive the two glass tiers for one resolved theme mode over that mode's
- * reference frame. PURE function of (resolved tokens, frame) — no blur
- * argument by design: blur is never allowed to buy back transparency.
+ * reference frame. PURE function of (resolved tokens, frame, brightness) — no
+ * blur argument by design: blur is never allowed to buy back transparency.
+ * `brightness` models the backdrop-filter brightness() term (deterministic,
+ * so it may honestly buy transparency where blur may not); defaults to 1.
  */
-export function deriveGlassTiers(tokens: Record<string, string>, referenceFrame: string): GlassDerivation {
+export function deriveGlassTiers(tokens: Record<string, string>, referenceFrame: string, brightness = 1, frostMax = 0): GlassDerivation {
   const frameColor = parseColor(referenceFrame, tokens)
   if (!frameColor) throw new Error(`glass: unparseable reference frame ${referenceFrame}`)
-  const frame = frameColor.rgb
+  // worst-case backdrop AFTER the modeled brightness() — frame × b per channel
+  const frame = frameColor.rgb.map((c) => Math.round(c * brightness)) as Rgb
   const ground = parseColor(tokens["background-base"], tokens)?.rgb ?? frame
   const surface = parseColor(tokens["surface-base"], tokens)
   if (!surface) throw new Error("glass: theme has no resolvable surface-base")
@@ -203,34 +237,46 @@ export function deriveGlassTiers(tokens: Record<string, string>, referenceFrame:
 
   const bodyOver = (alpha: number) => contrast(bodyRgb, composite(tint, alpha, frame))
 
-  // standard: least alpha where body text hits the target ratio
-  const standardAlpha = sweepAlpha((a) => bodyOver(a) >= CONTRAST.bodyTarget)
-
-  // dense: least alpha where code/diff text hits the target AND every
-  // graphical mark (i) keeps the 1.4.11 floor wherever it clears it natively
-  // and (ii) converges to within `markDrift` of its native (base-surface)
-  // contrast — the dense tint never degrades a mark vs native rendering.
-  const marks = collectMarks(tokens).map((mark) => ({
-    ...mark,
-    native: contrast(flatten(mark, tint), tint),
-  }))
-  const marksOk = (alpha: number) => {
-    const surfaceOver = composite(tint, alpha, frame)
-    return marks.every((mark) => {
-      const over = contrast(flatten(mark, surfaceOver), surfaceOver)
-      if (mark.native >= CONTRAST.markFloor && over < CONTRAST.markFloor) return false
-      return over >= mark.native - CONTRAST.markDrift
-    })
+  // standard tier — two regimes:
+  //  frost (dark): a faint WHITE veil; more frost RAISES the backdrop toward
+  //    the light ink, so pick the LARGEST alpha ≤ frostMax still clearing the
+  //    target (alpha 0 always clears it — brightness() guarantees that).
+  //  surface (light): the theme surface tint; more tint helps, so pick the
+  //    LEAST alpha that clears the target (the original sweep).
+  const FROST: Rgb = [255, 255, 255]
+  const frostOver = (alpha: number) => contrast(flatten(body, composite(FROST, alpha, frame)), composite(FROST, alpha, frame))
+  let standardTint = tint
+  let standardAlpha: number
+  if (frostMax > 0) {
+    standardTint = FROST
+    standardAlpha = 0
+    for (let a = frostMax; a >= 0; a = Math.round((a - 0.01) * 100) / 100) {
+      if (frostOver(a) >= CONTRAST.bodyTarget) {
+        standardAlpha = a
+        break
+      }
+    }
+  } else {
+    standardAlpha = sweepAlpha((a) => bodyOver(a) >= CONTRAST.bodyTarget)
   }
-  const denseAlpha = Math.max(
-    standardAlpha,
-    sweepAlpha((a) => bodyOver(a) >= CONTRAST.bodyTarget && marksOk(a)),
-  )
+
+  // SINGLE-TIER GLASS (design decision, Kate 2026-07-25): the marks law
+  // (WCAG 1.4.11 floor + no-drift-vs-native for syntax/diff/plot colors) is
+  // deliberately WAIVED — colored marks over the Brain are accepted as-is.
+  // One recipe everywhere: the "dense" tier is emitted for markup compat but
+  // carries the SAME tint and alpha as standard. Body-text AA (with margin)
+  // over the brightness-scaled reference frame remains the derived guarantee.
+  const single = {
+    tint: standardTint,
+    alpha: standardAlpha,
+    bodyContrast: frostMax > 0 ? frostOver(standardAlpha) : bodyOver(standardAlpha),
+  }
 
   return {
     frame,
-    standard: { tint, alpha: standardAlpha, bodyContrast: bodyOver(standardAlpha) },
-    dense: { tint, alpha: denseAlpha, bodyContrast: bodyOver(denseAlpha) },
+    surface: tint,
+    standard: single,
+    dense: single,
   }
 }
 
@@ -257,10 +303,13 @@ function themeModeBlock(themeId: string, mode: "light" | "dark", glass: GlassDer
     `html[data-theme="${themeId}"][data-color-scheme="${mode}"] {`,
     `  --glass-standard-bg: ${rgba(glass.standard.tint, glass.standard.alpha)};`,
     `  --glass-dense-bg: ${rgba(glass.dense.tint, glass.dense.alpha)};`,
-    `  --glass-standard-bg-fallback: ${rgba(glass.standard.tint, fallbackAlpha(glass.standard.alpha))};`,
-    `  --glass-dense-bg-fallback: ${rgba(glass.dense.tint, fallbackAlpha(glass.dense.alpha))};`,
+    // fallbacks ride the theme SURFACE (never the frost — a near-opaque white
+    // veil on a dark theme would strand light ink on a light card)
+    `  --glass-standard-bg-fallback: ${rgba(glass.surface, fallbackAlpha(glass.standard.alpha))};`,
+    `  --glass-dense-bg-fallback: ${rgba(glass.surface, fallbackAlpha(glass.dense.alpha))};`,
     `  --glass-edge: ${chrome.edge};`,
     `  --glass-shadow: ${chrome.shadow};`,
+    `  --glass-brightness: ${GLASS_BRIGHTNESS[mode]};`,
     `}`,
   ].join("\n")
 }
@@ -286,7 +335,9 @@ export function generateGlassCss(): string {
         ...resolveThemeVariant(theme[mode], isDark),
         ...resolveThemeVariantV2(theme[mode], isDark),
       }
-      blocks.push(themeModeBlock(themeId, mode, deriveGlassTiers(tokens, PALETTES[mode].thought)))
+      blocks.push(
+        themeModeBlock(themeId, mode, deriveGlassTiers(tokens, PALETTES[mode].thought, GLASS_BRIGHTNESS[mode], GLASS_FROST_MAX[mode])),
+      )
     }
   }
 
@@ -310,16 +361,16 @@ ${blocks.join("\n\n")}
    opts in within this slice; without a data-glass attribute nothing changes. */
 [data-glass="standard"] {
   background: var(--glass-standard-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--glass-shadow);
 }
 [data-glass="dense"] {
   background: var(--glass-dense-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--glass-shadow);
