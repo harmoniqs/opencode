@@ -1,11 +1,13 @@
 /* ================================================================
    amico is thinking — the shape of a thought (native engine)
 
-   A charted fugue over the real vault graph, rendered on a canvas that
-   lives IN the host document. This is the live-embed half of the retired
-   /brain.html iframe prototype, ported to a framework-free module so the
-   chat's brain atmosphere can drive it with direct calls instead of a
-   postMessage bridge.
+   A charted fugue over the session's real thought-graph, rendered on a
+   canvas that lives IN the host document. This is the live-embed half of
+   the retired /brain.html iframe prototype, ported to a framework-free
+   module so the chat's brain atmosphere can drive it with direct calls
+   instead of a postMessage bridge. Since ADR 0002 it boots a SPARSE SEED
+   (the amico core alone) and grows only from real touches, breathing with
+   the session via an adaptive heartbeat.
 
    Why native (2026-07-20): the iframe boundary broke this animation three
    independent ways — document requests can't carry server auth (armed
@@ -26,8 +28,6 @@
                  embed is monochrome + brand yellow; glow budget: pulse +
                  active node only.
    ================================================================ */
-
-import { BRAIN_DATA } from "./brain-data"
 
 export type BrainScheme = "dark" | "light"
 
@@ -359,148 +359,15 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     return null
   }
 
-  for (const n of BRAIN_DATA.nodes) addNode(n)
-  addNode({ id: "amico", label: "amico", type: "core" })
-  for (const n of BRAIN_DATA.nodes) if (n.type === "agent") addEdge("amico", n.id, "dispatch")
-  if (byId.has("using-amico")) addEdge("amico", "using-amico", "dispatch")
-  for (const e of BRAIN_DATA.edges) addEdge(e.s, e.t, e.kind)
-  // a thought may connect notes the vault has not linked yet: consecutive trace
-  // steps without a vault edge get a dashed "thought edge", invisible until used
-  for (const tr of BRAIN_DATA.traces) {
-    let prev = "amico"
-    for (const st of tr.steps) {
-      if (!byId.has(st.node)) continue
-      const hasPath = bfs(prev, st.node, 4)
-      if (!hasPath) addEdge(prev, st.node, "thought")
-      prev = st.node
-    }
-  }
-
-  /* size classes — atlas magnitudes, quantized, never continuous */
-  for (const n of nodes) {
-    n.half = n.type === "core" ? 8 : n.cat === "agents" ? 6.5 : n.deg > 9 ? 6 : n.deg > 5 ? 5 : n.deg > 2 ? 4 : 3
-  }
-
-  /* ---------- layout: cluster-anchored force settle, then frozen ----------
-     The strip is a wide frame: lay the graph out natively wide (wide anchor
-     ellipse + anisotropic gravity) so distances stay isotropic — a warped
-     projection reads as squashed, a wide LAYOUT reads as a landscape. */
-  const CLUSTER_ANGLE: Record<string, number> = {
-    knowledge: -Math.PI / 2,
-    skills: Math.PI * 0.05,
-    results: Math.PI / 2,
-    code: Math.PI * 0.95,
-    agents: 0,
-    core: 0,
-  }
-  function repel() {
-    for (let a = 0; a < nodes.length; a++) {
-      for (let b = a + 1; b < nodes.length; b++) {
-        const A = nodes[a],
-          B = nodes[b]
-        let dx = A.x - B.x,
-          dy = A.y - B.y
-        let d2 = dx * dx + dy * dy
-        if (d2 < 1) {
-          d2 = 1
-          dx = Math.sin(a * 7 + b)
-          dy = Math.cos(a - b * 3)
-        }
-        const f = 1900 / d2
-        const d = Math.sqrt(d2)
-        A.fx += (dx / d) * f
-        A.fy += (dy / d) * f
-        B.fx -= (dx / d) * f
-        B.fy -= (dy / d) * f
-      }
-    }
-    for (const e of edges) {
-      const dx = e.t.x - e.s.x,
-        dy = e.t.y - e.s.y
-      const d = Math.max(Math.sqrt(dx * dx + dy * dy), 0.01)
-      const rest = e.kind === "dispatch" ? 95 : 70
-      const f = (d - rest) * 0.015 * (e.ghost ? 0.25 : 1)
-      e.s.fx += (dx / d) * f * d * 0.02
-      e.s.fy += (dy / d) * f * d * 0.02
-      e.t.fx -= (dx / d) * f * d * 0.02
-      e.t.fy -= (dy / d) * f * d * 0.02
-    }
-  }
-  function settle() {
-    const AX = 2.3
-    const AY = 0.75
-    const R = 340
-    let i = 0
-    for (const n of nodes) {
-      const ang = CLUSTER_ANGLE[n.cat] + Math.sin(i * 12.9898) * 0.55
-      const rad = n.cat === "agents" ? 90 + (i % 5) * 18 : n.type === "core" ? 0 : R * (0.55 + ((i * 0.618) % 0.45))
-      n.x = Math.cos(ang) * rad * AX + Math.sin(i * 78.233) * 40
-      n.y = Math.sin(ang) * rad * AY + Math.cos(i * 37.719) * 40
-      i++
-    }
-    const core = byId.get("amico")!
-    core.x = 0
-    core.y = 0
-    for (let it = 0; it < 380; it++) {
-      for (const n of nodes) {
-        n.fx = 0
-        n.fy = 0
-      }
-      repel()
-      for (const n of nodes) {
-        const ang = CLUSTER_ANGLE[n.cat]
-        const ax = n.type === "core" ? 0 : Math.cos(ang) * (n.cat === "agents" ? 100 : 300) * AX
-        const ay = n.type === "core" ? 0 : Math.sin(ang) * (n.cat === "agents" ? 100 : 300) * AY
-        n.fx += (ax - n.x) * 0.004
-        n.fy += (ay - n.y) * 0.004
-        n.fx += -n.x * 0.0008
-        n.fy += -n.y * 0.0034
-        if (n.type !== "core") {
-          n.x += Math.max(-6, Math.min(6, n.fx))
-          n.y += Math.max(-6, Math.min(6, n.fy))
-        }
-      }
-    }
-    // stretch-then-relax: pull the settled layout wide, then let springs
-    // restore natural local distances inside a vertically-contained envelope
-    // — locally isotropic structure, globally wide silhouette
-    for (const n of nodes) if (n.type !== "core") n.x *= 3.1
-    for (let it = 0; it < 150; it++) {
-      for (const n of nodes) {
-        n.fx = 0
-        n.fy = 0
-      }
-      repel()
-      for (const n of nodes) {
-        n.fx += -n.x * 0.0004 // gentle horizontal containment
-        n.fy += -n.y * 0.009 // firm vertical envelope
-        if (n.type !== "core") {
-          n.x += Math.max(-6, Math.min(6, n.fx))
-          n.y += Math.max(-6, Math.min(6, n.fy))
-        }
-      }
-    }
-    // normalize into a unit box we can fit to any viewport; the amico core IS
-    // the center of the world — everything references it
-    let minX = 1e9,
-      maxX = -1e9,
-      minY = 1e9,
-      maxY = -1e9
-    for (const n of nodes) {
-      minX = Math.min(minX, n.x)
-      maxX = Math.max(maxX, n.x)
-      minY = Math.min(minY, n.y)
-      maxY = Math.max(maxY, n.y)
-    }
-    const span = Math.max(maxX - minX, maxY - minY)
-    const cx = core.x,
-      cy = core.y
-    for (const n of nodes) {
-      n.x = (n.x - cx) / span
-      n.y = (n.y - cy) / span
-    }
-  }
-  settle()
+  /* ---------- sparse seed (ADR 0002) ----------
+     Boot is the amico core alone — no vault skeleton, no demo traces, no
+     force-settled atlas layout (the rejected "breathing skeleton"). The core
+     IS the center of the world at (0,0); the graph grows ONLY from the
+     session's real touches (liveNode grafts beside the current position),
+     and every byte of state lives in this closure — nothing persists across
+     engines, sessions, or any store. */
+  const core = addNode({ id: "amico", label: "amico", type: "core" })
+  core.half = 8
 
   /* ---------- canvas & camera ---------- */
   let W = 0,
@@ -529,7 +396,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     ro.observe(canvas)
   }
 
-  const cam = { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1 }
+  /* fixed viewport-anchored camera (ADR 0002): a constant, core-centered zoom.
+     No per-frame fit-to-farthest and no close-up follow — auto-zoom-to-fit
+     visually SHRINKS growth instead of densifying it. Growth fills the frame;
+     the recency-bounded, near-source graft population keeps nodes in view. */
+  const cam = { x: 0, y: 0, k: 1 }
   function nx(n: BNode) {
     return (n.x * worldScale - cam.x) * cam.k + W / 2
   }
@@ -600,11 +471,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   }
 
   /* ---------- live thought: the host streams the REAL session ----------
-     Reads and skill invocations COMMIT — a pulse travels the skeleton and the
+     Reads and skill invocations COMMIT — a pulse travels the graph and the
      node claims its color. Searches/globs CONSIDER — a scout flash that may
-     leak back to dark. Labels matching skeleton nodes light the real graph;
-     unknown files graft new nodes beside the current position over dashed
-     thought-edges. */
+     leak back to dark. Every label grafts a node beside the current position
+     over a dashed thought-edge (or resolves to its existing graft): the
+     sparse seed grows only from these touches. */
   const live = {
     cur: "amico",
     queue: [] as BNode[],
@@ -612,7 +483,6 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     recent: new Map<string, number>(),
     sinceChart: [] as BNode[],
     pendingChart: null as { title: string; replay: boolean } | null,
-    glance: null as { id: string; until: number } | null,
   }
   function maybeChart() {
     // charts wait for the queue to drain so a plate never misses its own
@@ -843,7 +713,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     if (clock.beat > nextGhost) {
       nextGhost = clock.beat + 4 + Math.random() * 4
       const e = edges[(Math.random() * edges.length) | 0]
-      if (!e.ghost) firePulse(e, e.s, "ghost", 1.5, null)
+      if (e && !e.ghost) firePulse(e, e.s, "ghost", 1.5, null) // sparse seed: there may be no edges yet
     }
   }
 
@@ -895,39 +765,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     if (unfurl < 1) unfurl = Math.min(unfurl + dt / 1400, 1)
     const uf = 1 - Math.pow(1 - unfurl, 3)
 
-    // camera
-    if (H < 120) {
-      // condensed = a CLOSE-UP on where amico is (never a miniature map);
-      // glances steer the eye since most nodes live outside this window
-      const glanced = live.glance && live.glance.until > clock.beat ? byId.get(live.glance.id) : null
-      const cur = glanced || byId.get(live.cur)
-      if (cur) {
-        cam.tx = cur.x * worldScale
-        cam.ty = cur.y * worldScale
-        cam.tk = Math.min(8, Math.max(1.05, 320 / worldScale))
-      }
-    } else {
-      // expanded = the WHOLE network with the AMICO CORE dead center (the
-      // core is the world origin); zoom fits the farthest node from it so
-      // nothing clips. Recomputed per frame so grafts never fall outside.
-      let hw = 0.01,
-        hh = 0.01
-      for (const n of nodes) {
-        const ax = Math.abs(n.x),
-          ay = Math.abs(n.y)
-        if (ax > hw) hw = ax
-        if (ay > hh) hh = ay
-      }
-      cam.tx = 0
-      cam.ty = 0
-      cam.tk = Math.min((W - 28) / (2 * hw * worldScale), (H - 14) / (2 * hh * worldScale))
-    }
-    // a hover glance deserves a brisk look, not a two-second pan
-    const camEase = live.glance && live.glance.until > clock.beat ? 0.14 : 0.035
-    cam.x += (cam.tx - cam.x) * camEase
-    cam.y += (cam.ty - cam.y) * camEase
-    cam.k += (cam.tk - cam.k) * camEase
-
+    // camera: fixed — constant zoom, amico core dead center (see cam above)
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
     ctx.clearRect(0, 0, W, H) // transparent ground — the host surface shows through
 
@@ -1128,7 +966,6 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   }
 
   // waking — the thought begins here
-  const core = byId.get("amico")!
   core.flash = 1
   core.ringT = clock.beat
   if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
@@ -1149,15 +986,13 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     },
     highlight: (label) => {
       if (destroyed) return
-      // a glance from the log: ring the node AND turn the camera to look at
-      // it — in the collapsed close-up most nodes are outside the window, so
-      // an unsteered ring is invisible
+      // a glance from the log: ring the node — the background camera holds
+      // the whole frame, so no steering (that was the close-up strip's need)
       const n = findLiveNode(String(label || ""))
       if (n) {
         n.ringT = clock.beat
         n.consider = Math.max(n.consider, 0.9)
         n.labelA = 1
-        live.glance = { id: n.id, until: clock.beat + 3.5 }
         requestRender()
       }
     },

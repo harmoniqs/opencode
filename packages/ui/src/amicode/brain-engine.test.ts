@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import { createBrainEngine, type BrainEngineOptions } from "./brain-engine"
-import { BRAIN_DATA } from "./brain-data"
 
 /* The engine must run headless: bun test has no DOM, no rAF, no matchMedia.
    That is the point — the old /brain.html iframe could only be exercised by
@@ -58,15 +57,17 @@ function makeEngine(opts: Partial<BrainEngineOptions> = {}) {
 }
 
 describe("boot", () => {
-  test("builds the full skeleton graph headless, centered on the amico core", () => {
+  test("boots the sparse seed: the amico core alone, nothing preloaded", () => {
+    // ADR 0002 rejects the "breathing skeleton atlas" — the at-rest seed is
+    // the core, and the graph grows only from the session's real touches
     const { engine } = makeEngine()
     const s = engine.stats()
-    // every vault-sample node plus the core; edges include the dispatch spokes
-    expect(s.nodes).toBe(BRAIN_DATA.nodes.length + 1)
-    expect(s.edges).toBeGreaterThan(BRAIN_DATA.edges.length)
+    expect(s.nodes).toBe(1)
+    expect(s.edges).toBe(0)
     expect(s.cur).toBe("amico")
     expect(s.claimed).toBe(0)
     expect(s.atlas).toBe(0)
+    expect(s.queued).toBe(0)
   })
 
   test("wears the requested scheme from frame zero — no wrong-theme first frame", () => {
@@ -95,12 +96,13 @@ describe("boot", () => {
 })
 
 describe("live thought", () => {
-  test("a replay commit claims the node instantly and moves the cursor", () => {
+  test("a replay commit grafts, claims instantly, and moves the cursor", () => {
     const { engine } = makeEngine()
     engine.touch({ label: "solve", replay: true })
     const s = engine.stats()
+    expect(s.nodes).toBe(2) // core + the graft — nothing else exists to light
     expect(s.claimed).toBe(1)
-    expect(s.cur).toBe("solve")
+    expect(s.cur).toBe("live-solve")
   })
 
   test("a consider touch is a scout flash — it never claims", () => {
@@ -111,14 +113,19 @@ describe("live thought", () => {
     expect(s.cur).toBe("amico")
   })
 
-  test("an unknown label grafts a new node over a thought edge", () => {
+  test("every commit label grafts one node over one edge; re-touches add nothing", () => {
+    // the sparse seed grows ONLY from activity: N distinct commits ⇒ exactly
+    // N grafts (plus the core) and N claims — no node exists unproduced by a touch
     const { engine } = makeEngine()
-    const before = engine.stats()
-    engine.touch({ label: "scratch/wip-notes.md", replay: true })
-    const after = engine.stats()
-    expect(after.nodes).toBe(before.nodes + 1)
-    expect(after.edges).toBe(before.edges + 1)
-    expect(after.claimed).toBe(1)
+    const labels = ["scratch/wip-notes.md", "solve.jl", "docs/plan.md", "config.toml", "deep/nested/file.jl"]
+    for (const l of labels) engine.touch({ label: l, replay: true })
+    const s = engine.stats()
+    expect(s.nodes).toBe(1 + labels.length)
+    expect(s.edges).toBe(labels.length) // one thought edge per graft, near the current position
+    expect(s.claimed).toBe(labels.length)
+    for (const l of labels) engine.touch({ label: l, replay: true }) // an already-grafted label adds no node
+    expect(engine.stats().nodes).toBe(1 + labels.length)
+    expect(engine.stats().edges).toBe(labels.length)
   })
 
   test("a live commit claims through the reduced-motion pump", () => {
@@ -127,7 +134,7 @@ describe("live thought", () => {
     // reduced motion: no traveling pulses — the claim lands synchronously
     const s = engine.stats()
     expect(s.claimed).toBe(1)
-    expect(s.cur).toBe("setup")
+    expect(s.cur).toBe("live-setup")
   })
 
   test("charting two commits since the last plate yields one constellation", () => {
@@ -250,7 +257,7 @@ describe("hostile input", () => {
     const ctx = recordingCtx()
     let arcs = 0
     ctx.arc = (..._args: unknown[]) => {
-      if (++arcs > 4) throw new Error("boom")
+      if (++arcs > 2) throw new Error("boom") // the sparse first frame draws few arcs — trip early
     }
     const canvas = stubCanvas(ctx)
     const engine = createBrainEngine(canvas, {
@@ -314,6 +321,41 @@ describe("background mount (derived session stream)", () => {
     expect(after.claimed).toBe(before.claimed)
     expect(after.atlas).toBe(before.atlas)
     expect(after.cur).toBe(before.cur)
+  })
+})
+
+describe("sparse seed & isolation", () => {
+  test("two independently created engines share no state; a fresh engine always boots the seed", () => {
+    // one engine per session, no cross-session persistence: no module-scope
+    // graph, no persistent store — every byte lives in the engine closure
+    const a = makeEngine()
+    a.engine.touch({ label: "alpha.md", replay: true })
+    a.engine.touch({ label: "beta.md", replay: true })
+    const b = makeEngine()
+    expect(b.engine.stats().nodes).toBe(1) // boots sparse despite a's prior activity
+    expect(b.engine.stats().claimed).toBe(0)
+    expect(b.engine.stats().cur).toBe("amico")
+    b.engine.touch({ label: "gamma.md", replay: true })
+    expect(a.engine.stats().nodes).toBe(3) // b's touch is invisible to a
+    expect(b.engine.stats().nodes).toBe(2) // and a's history never leaked into b
+  })
+
+  test("the camera scale holds fixed while the graph grows — densify in place, no zoom-out", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    const drive = (fromMs: number, toMs: number) => {
+      for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+    }
+    drive(0, 500)
+    engine.touch({ label: "seed-a.md", replay: true })
+    engine.touch({ label: "seed-b.md", replay: true })
+    drive(516, 1000)
+    const small = engine.stats().scale
+    expect(Number.isFinite(small)).toBe(true)
+    expect(small).toBeGreaterThan(0)
+    // grow a few hundred grafts (replay considers: synchronous, star-shaped)
+    for (let i = 0; i < 290; i++) engine.touch({ label: `grow/probe-${i}.md`, replay: true, consider: true })
+    drive(1016, 2000) // any per-frame fit-to-farthest would ease the zoom out here
+    expect(engine.stats().scale).toBeCloseTo(small, 6)
   })
 })
 
@@ -403,12 +445,12 @@ describe("animated pipeline (manual clock)", () => {
   test("a live commit claims only after its pulse arrives", () => {
     const { engine } = makeEngine({ reduceMotion: false })
     engine.tick(0)
-    engine.touch({ label: "setup" }) // amico → experimenter → setup, one beat per hop
+    engine.touch({ label: "setup" }) // grafts beside the core; one beat over the thought edge
     expect(engine.stats().claimed).toBe(0) // departure is not arrival
-    drive(engine, 16, 4000) // allegro q=126: plenty of beats for both hops
+    drive(engine, 16, 4000) // allegro q=126: plenty of beats for the hop
     const s = engine.stats()
     expect(s.claimed).toBeGreaterThanOrEqual(1)
-    expect(s.cur).toBe("setup")
+    expect(s.cur).toBe("live-setup")
   })
 
   test("a chart waits for the pump to drain, then plates every commit", () => {
