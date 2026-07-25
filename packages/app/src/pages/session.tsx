@@ -22,6 +22,7 @@ import { debounce } from "@solid-primitives/scheduled"
 import { useLocal } from "@/context/local"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
+import { BrainAtmosphere } from "@opencode-ai/ui/brain-atmosphere"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Select } from "@opencode-ai/ui/select"
 import { Tabs } from "@opencode-ai/ui/tabs"
@@ -54,6 +55,7 @@ import {
   shouldFocusTerminalOnKeyDown,
   shouldShowFileTree,
 } from "@/pages/session/helpers"
+import { createBrainEvents } from "@/pages/session/brain-events"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
@@ -205,6 +207,10 @@ export default function Page() {
   const location = useLocation()
   const { params, sessionKey, workspaceKey, tabs, view } = useSessionLayout()
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
+
+  // amicode: the chat-wide Brain background's live feed — the active
+  // session's derived event stream, empty on the landing (ADR 0002)
+  const brain = createBrainEvents(() => params.id)
 
   createEffect(() => {
     if (!prompt.ready()) return
@@ -1774,11 +1780,19 @@ export default function Page() {
         >
           <div
             classList={{
-              "flex-1 min-h-0 flex flex-col bg-background-stronger": true,
+              // relative isolate: own stacking context so the brain layer
+              // (-z-10) sits above this card's surface but beneath all content
+              "relative isolate flex-1 min-h-0 flex flex-col bg-background-stronger": true,
               "rounded-[10px] overflow-hidden": settings.general.newLayoutDesigns(),
               "shadow-[var(--v2-elevation-raised)]": settings.general.newLayoutDesigns() && !!params.id,
             }}
           >
+            {/* amicode: ONE full-bleed Brain per Chat window, behind timeline +
+                landing + composer; keyed on the active session so a tab swap
+                remounts to that session's atlas (one engine alive at a time) */}
+            <Show when={params.id ?? "landing"} keyed>
+              {(_key) => <BrainAtmosphere class="-z-10" events={brain.events()} />}
+            </Show>
             <div class="flex-1 min-h-0 overflow-hidden">
               <Switch>
                 <Match when={params.id && mobileChanges()}>

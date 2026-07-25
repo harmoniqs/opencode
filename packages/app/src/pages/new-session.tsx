@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createResource, onMount, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSearchParams } from "@solidjs/router"
+import { BrainAtmosphere } from "@opencode-ai/ui/brain-atmosphere"
 import { NewSessionDesignView } from "@/components/session"
 import { useComments } from "@/context/comments"
 import { usePrompt } from "@/context/prompt"
@@ -80,7 +81,12 @@ export default function NewSessionPage() {
     <div class="relative size-full overflow-hidden flex flex-col">
       <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
         <div class="@container relative flex flex-col min-h-0 h-full bg-background-stronger flex-1">
-          <div class="flex-1 min-h-0 overflow-hidden rounded-[10px]">
+          {/* relative isolate: own stacking context so the brain layer (-z-10)
+              sits above this card's surface but beneath the draft content */}
+          <div class="relative isolate flex-1 min-h-0 overflow-hidden rounded-[10px]">
+            {/* amicode: the draft page's Brain background — a fresh session has
+                no events yet, so the sparse seed breathes empty (ADR 0002) */}
+            <BrainAtmosphere class="-z-10" />
             <NewSessionDesignView
               gettingStarted={
                 // Chips persist while typing (Kate: no jump). They disappear on
