@@ -43,7 +43,9 @@ construction — not by eye:**
 - **Tint** — contrast comes entirely from a tint whose **opacity is pinned to clear the WCAG-AA
   floor (with a small safety margin, not exactly at the floor) over a fixed reference frame** —
   a synthetic Brain at peak bloom in which the sampled backdrop is the brightest palette value
-  (`#fff676`). Blur smooths the backdrop but does not darken it; a card over a bright-yellow
+  **the Brain actually paints in that theme** (peak `#fff676` on dark; peak `#8f8000` on light —
+  the light-mode Brain never paints `#fff676`, so validating against it there would derive a
+  near-transparent tint that silently fails over the real light frame). Blur smooths the backdrop but does not darken it; a card over a bright-yellow
   cluster is still on bright yellow until the tint pulls the composite toward the ink. The tint
   set is **keyed to the chat's own theme** — the chat runs a theme independent of the app shell
   (default oc-2) — so a chat-theme change re-keys the Glass and re-validates contrast. **Two
