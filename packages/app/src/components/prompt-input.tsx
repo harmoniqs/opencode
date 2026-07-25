@@ -1510,16 +1510,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           <div class="flex flex-col gap-3">
             <DockShellForm
               data-component={newSession() ? "session-new-composer" : "session-composer"}
+              // amicode #61: the composer floats on the STANDARD glass tier over
+              // the Brain (ADR 0002) — the tier token owns fill/edge/radius/
+              // shadow, so the old opaque layer-01 fill, raised shadow and
+              // hairline are gone (a utilities-layer class would override it).
+              data-glass="standard"
               onSubmit={handleSubmit}
               classList={{
-                "group/prompt-input min-h-[96px] w-full rounded-lg bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-raised)]": true,
-                // Start-screen composer floats on the near-white page (bg-base is
-                // #fff, brighter than the #fcfcfc page) with only the raised
-                // shadow's 0.5px ring to hold its edge (~1.35:1). Give it a real
-                // hairline so it reads. Scoped to newSession() — the in-session
-                // composer sits over message content and doesn't need it. Off
-                // while dragging so the dashed drop affordance below still wins.
-                "border border-[var(--v2-border-border-strong)]": newSession() && store.draggingType === null,
+                "group/prompt-input min-h-[96px] w-full": true,
+                // dashed drop affordance still wins over the glass edge while dragging
                 "border-icon-info-active border-dashed": store.draggingType !== null,
                 [props.class ?? ""]: !!props.class,
               }}
@@ -1604,7 +1603,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   </div>
                 </div>
               </div>
-              <div class="flex h-11 items-center px-2">
+              {/* amicode #61: the footer's muted picker/control text rides a
+                  dense-backed zone (slice #60's token) — muted ink on the
+                  standard tint fails AA over the reference frame. */}
+              <div class="mx-1 mb-1 flex h-11 items-center rounded-md bg-[var(--glass-dense-bg)] px-2">
                 <div class="flex min-w-0 flex-1 items-center gap-0">
                   {fileAttachmentInput()}
                   <TooltipKeybind

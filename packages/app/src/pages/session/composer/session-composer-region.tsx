@@ -146,7 +146,9 @@ export function SessionComposerRegion(props: {
       data-component="session-prompt-dock"
       classList={{
         "w-full flex flex-col justify-center items-center pointer-events-none": true,
-        "shrink-0 pb-3 bg-background-stronger": props.placement !== "inline",
+        // amicode #61: the dock band stays transparent — an opaque fill here
+        // would tile the Brain away behind the floating composer (ADR 0002)
+        "shrink-0 pb-3": props.placement !== "inline",
       }}
     >
       <div
@@ -279,7 +281,11 @@ export function SessionComposerRegion(props: {
               >
                 <div
                   ref={props.inputRef}
-                  class="w-full rounded-[12px] border border-border-weak-base bg-background-base p-3 text-16-regular text-text-weak"
+                  // amicode #61: this read-only stub is muted-role text, so it
+                  // rides the DENSE tier (the ADR's locally-dimmed zone) — the
+                  // tier token owns fill/edge/radius, no opaque page fill.
+                  data-glass="dense"
+                  class="w-full p-3 text-16-regular text-text-weak"
                 >
                   <span>{language.t("session.child.promptDisabled")} </span>
                   <Show when={parentID()}>

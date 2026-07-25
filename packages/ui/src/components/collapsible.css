@@ -13,6 +13,13 @@
     gap: var(--tool-content-gap);
   }
 
+  /* amicode #61: the tool card floats on the DENSE glass tier — the tier
+     token (glass.css) owns fill/edge/radius/shadow; only on-grid breathing
+     room is added here so content clears the card edge. */
+  &.tool-collapsible[data-glass="dense"] {
+    padding: 4px 12px;
+  }
+
   [data-slot="collapsible-trigger"] {
     width: 100%;
     display: flex;
@@ -100,10 +107,15 @@
     /* } */
   }
 
-  &[data-variant="ghost"] {
+  /* amicode #61: the ghost reset outranks the glass tier selector on
+     specificity, so scope it to non-glass roots — a glass tool card keeps
+     the tier token's fill/edge while its trigger stays ghost inside. */
+  &[data-variant="ghost"]:not([data-glass]) {
     background-color: transparent;
     border: none;
+  }
 
+  &[data-variant="ghost"] {
     > [data-slot="collapsible-trigger"] {
       background-color: transparent;
       border: none;

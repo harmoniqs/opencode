@@ -137,22 +137,32 @@
     margin-top: 8px;
   }
 
+  /* amicode #61: the bubble is a STANDARD glass card — fill/edge/radius/shadow
+     come from the [data-glass="standard"] tier token (glass.css); the old
+     opaque --surface-base fill is gone so the Brain reads through the frost. */
   [data-slot="user-message-text"] {
     display: inline-block;
     white-space: pre-wrap;
     word-break: break-word;
     overflow: hidden;
-    background: var(--surface-base);
-    border: 1px solid var(--border-weak-base);
     padding: 8px 12px;
-    border-radius: var(--radius-lg);
 
+    /* file/agent highlights are syntax-colored ink — illegible on the
+       ultra-transparent standard tint (light derives to ~1.3:1 over the
+       reference frame). They ride dense-backed chips: slice #60's dense
+       token, never a new tint literal. */
     [data-highlight="file"] {
       color: var(--syntax-property);
+      background: var(--glass-dense-bg);
+      border-radius: var(--radius-xs);
+      padding: 0 4px;
     }
 
     [data-highlight="agent"] {
       color: var(--syntax-type);
+      background: var(--glass-dense-bg);
+      border-radius: var(--radius-xs);
+      padding: 0 4px;
     }
 
     max-width: 100%;
@@ -187,14 +197,21 @@
     white-space: nowrap;
   }
 
+  /* amicode #61: the muted meta (model · time) never composites against the
+     bare Brain or the standard tint — it rides a dense-backed inline zone
+     (slice #60's token). flex 0 1 auto keeps the zone hugging its text while
+     preserving ellipsis truncation. */
   [data-slot="user-message-meta-wrap"] {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     overflow: hidden;
     gap: 0;
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
   }
 
   [data-slot="user-message-meta-tail"] {
@@ -219,9 +236,13 @@
   }
 }
 
+/* amicode #61: assistant prose floats as a STANDARD glass card (tier token
+   owns fill/edge/radius/shadow); the gap above it stays transparent so the
+   Brain shows between cards. */
 [data-component="text-part"] {
   width: 100%;
   margin-top: 24px;
+  padding: 12px 16px;
 
   [data-slot="text-part-body"] {
     margin-top: 0;
@@ -245,8 +266,14 @@
     }
   }
 
+  /* amicode #61: the muted copy/timestamp meta inside the prose card rides a
+     dense-backed inline zone — slice #60's dense token, no new tint. Muted
+     grey on the standard tint fails AA by construction (#60 invariant). */
   [data-slot="text-part-meta"] {
     user-select: none;
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
   }
 
   [data-slot="text-part-copy-wrapper"][data-interrupted] {

@@ -151,6 +151,23 @@
     position: relative;
   }
 
+  /* amicode #61: the code block is a DENSE glass card — the tier token owns
+     the surface, so shiki's inlined theme fill and hairline defer to it, and
+     the pre's flow margins move onto the card (no empty glass inside it). */
+  [data-component="markdown-code"][data-glass="dense"] {
+    margin-top: 12px;
+    margin-bottom: 32px;
+
+    pre {
+      margin: 0;
+    }
+
+    .shiki {
+      background-color: transparent !important; /* overrides shiki's inline theme surface */
+      border: none; /* the tier token carries the card edge */
+    }
+  }
+
   [data-slot="markdown-copy-button"] {
     position: absolute;
     top: 4px;
@@ -281,4 +298,13 @@
 [data-component="markdown"] a.external-link:hover > code {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* amicode #61: muted blockquote ink inside a STANDARD glass card rides a
+   dense-backed zone (slice #60's token) — muted grey on the standard tint
+   fails AA over the reference frame by construction. */
+[data-glass="standard"] [data-component="markdown"] blockquote {
+  background: var(--glass-dense-bg);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
 }
