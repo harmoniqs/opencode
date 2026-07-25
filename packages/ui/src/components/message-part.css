@@ -1000,7 +1000,9 @@
     align-items: flex-start;
     gap: 12px;
     padding: 8px 8px 8px 10px;
-    background-color: var(--surface-raised-stronger-non-alpha);
+    /* glass sweep (#56): dense-zone tile inside the glassed card — the frost
+       shows through; states use the design-system fill, never an opaque layer */
+    background-color: var(--glass-dense-bg);
     border: 1px solid var(--border-weak-base);
     border-radius: 6px;
     box-shadow: none;
@@ -1013,7 +1015,7 @@
       box-shadow 0.15s ease;
 
     &:hover:not([data-picked="true"]) {
-      background-color: var(--background-base);
+      background-color: var(--accent-fill-soft);
     }
 
     /* selected → the amicode design-system light yellow (soft fill + accent
@@ -1189,32 +1191,35 @@
    pulled up so it peeked out below — reading as a second card sliding off the
    first. Unify: the dock-prompt itself becomes the single card (one surface, one
    1px ring, one radius, clipped), and the shell + tray flatten into sections of
-   it, with the footer a plain bottom action bar under a hairline divider. */
-[data-component="dock-prompt"][data-kind="question"] {
+   it, with the footer a plain bottom action bar under a hairline divider.
+   Glass sweep (#56): generalized to EVERY dock-prompt kind — the permission
+   dock rides the same unified glass card as the question dock. */
+[data-component="dock-prompt"] {
   box-shadow: 0 0 0 1px var(--border-weak-base);
   border-radius: 10px;
   overflow: clip;
 }
-/* amicode #61 follow-up: glassed question panel gets its fill from glass.css;
-   the opaque layer-02 fill survives only where glass is absent. */
-[data-component="dock-prompt"][data-kind="question"]:not([data-glass]) {
+/* glassed prompt panels get their fill from glass.css; the opaque layer-02
+   fill survives only where glass is absent. */
+[data-component="dock-prompt"]:not([data-glass]) {
   background-color: var(--v2-background-bg-layer-02);
 }
-[data-component="dock-prompt"][data-kind="question"] [data-dock-surface="shell"] {
+[data-component="dock-prompt"] [data-dock-surface="shell"] {
   background: transparent;
   box-shadow: none;
   border-radius: 0;
   overflow: visible;
   z-index: auto;
 }
-[data-component="dock-prompt"][data-kind="question"] [data-dock-surface="tray"] {
+[data-component="dock-prompt"] [data-dock-surface="tray"] {
   background: transparent;
   border: 0;
   border-radius: 0;
   margin-top: 0;
   z-index: auto;
 }
-[data-component="dock-prompt"][data-kind="question"] [data-slot="question-footer"] {
+[data-component="dock-prompt"][data-kind] [data-slot="question-footer"],
+[data-component="dock-prompt"][data-kind] [data-slot="permission-footer"] {
   margin-top: 0;
   padding: 10px;
   border-top: 1px solid var(--border-weak-base);

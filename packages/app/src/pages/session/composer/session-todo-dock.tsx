@@ -94,6 +94,9 @@ export function SessionTodoDock(props: {
   return (
     <DockTray
       data-component="session-todo-dock"
+      // glass sweep (#56): the todo tray floats on standard glass over the
+      // Brain — the opaque --background-base tray fill loses to the hook.
+      data-glass="standard"
       style={{
         "overflow-x": "visible",
         "overflow-y": "hidden",
@@ -248,7 +251,9 @@ function TodoList(props: { todos: Todo[] }) {
       <div
         class="pointer-events-none absolute top-0 left-0 right-0 h-4 transition-opacity duration-150"
         style={{
-          background: "linear-gradient(to bottom, var(--background-base), transparent)",
+          // glass sweep (#56): the scroll fade rides the glass tint, not the
+          // opaque page ground, so the tray's frost stays readable
+          background: "linear-gradient(to bottom, var(--glass-standard-bg), transparent)",
           opacity: store.stuck ? 1 : 0,
         }}
       />
