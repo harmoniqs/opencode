@@ -124,28 +124,30 @@
   max-width: 100%;
   min-width: 0;
   text-align: left;
-  /* Rail-free and tint-free: neutral hairline + surface, no gold accent. */
-  border: 1px solid var(--v2-border-border-base);
-  /* medium corners suit a short single-line pill; --radius-lg over-rounds it (Kate 2026-07-24) */
-  border-radius: var(--radius-md);
-  background: var(--v2-background-bg-layer-01);
+  /* glass sweep (#56): fill/edge/shadow come from the data-glass hook
+     (glass.css) — the receipt chip floats on the single glass recipe. */
   padding: 4px 8px;
   font-size: 12.5px;
   line-height: 17px;
   color: var(--v2-text-text-base);
-  box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
     box-shadow 0.16s ease,
     transform 0.12s ease;
 }
+/* medium corners suit a short single-line pill; --radius-lg over-rounds it
+   (Kate 2026-07-24). Double-attribute selector so it beats the glass hook. */
+[data-component="amicode-card"][data-glass] {
+  border-radius: var(--radius-md);
+}
 [data-component="amicode-card"][data-clickable="true"] {
   cursor: pointer;
 }
 [data-component="amicode-card"][data-clickable="true"]:hover {
-  background: var(--v2-background-bg-layer-02);
-  border-color: var(--v2-border-border-strong);
+  /* glass-consistent hover: the design-system state fill, never an opaque layer */
+  background: var(--accent-fill-soft);
+  border-color: var(--accent-edge);
   box-shadow: var(--v2-elevation-raised, 0 1px 2px rgba(0, 0, 0, 0.25));
 }
 [data-component="amicode-card"][data-clickable="true"]:active {
@@ -156,8 +158,9 @@
   outline-offset: 2px;
 }
 [data-component="amicode-card"][data-state="error"] {
-  border-color: color-mix(in srgb, var(--v2-state-fg-danger) 38%, var(--v2-border-border-base));
-  background: color-mix(in srgb, var(--v2-state-fg-danger) 6%, var(--v2-background-bg-layer-01));
+  /* semantic danger rides as a TINT over the glass, not an opaque surface */
+  border-color: color-mix(in srgb, var(--v2-state-fg-danger) 38%, var(--glass-edge));
+  background: color-mix(in srgb, var(--v2-state-fg-danger) 10%, var(--glass-standard-bg));
 }
 [data-component="amicode-card"][data-state="error"] .amc-mark,
 [data-component="amicode-card"][data-state="error"] .amc-wordmark {
@@ -289,7 +292,7 @@
   font-weight: 600;
   padding: 3px 7px;
   border-radius: var(--radius-md);
-  background: var(--v2-background-bg-layer-02);
+  background: var(--glass-dense-bg);
   color: var(--v2-text-text-muted);
 }
 [data-component="amicode-entity-view"] .amc-tier[data-tier="free"] {
@@ -301,7 +304,7 @@
   margin: 8px 0;
   padding: 16px 16px;
   border-radius: var(--radius-lg);
-  background: var(--v2-background-bg-layer-01);
+  background: var(--glass-dense-bg);
   border: 1px solid var(--v2-border-border-muted);
   overflow-x: auto;
 }
@@ -344,7 +347,7 @@
   border-radius: var(--radius-md);
   transition: background 0.12s ease;
 }
-[data-component="amicode-entity-view"] .amc-field:hover { background: var(--v2-background-bg-layer-01); }
+[data-component="amicode-entity-view"] .amc-field:hover { background: var(--glass-dense-bg); }
 [data-component="amicode-entity-view"] .amc-field .amc-fk { min-width: 0; }
 /* match the shared entity row: an uppercase micro-label, wire key as faint sub */
 [data-component="amicode-entity-view"] .amc-field .amc-fk .name {
@@ -492,7 +495,7 @@
   font-family: var(--font-family-mono, ui-monospace, monospace);
   font-size: 10px;
   color: var(--v2-text-text-muted);
-  background: var(--v2-background-bg-layer-02);
+  background: var(--glass-dense-bg);
   border-radius: var(--radius-sm);
   padding: 1px 6px;
 }
@@ -575,7 +578,7 @@
   cursor: pointer;
   flex-shrink: 0;
 }
-[data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--v2-background-bg-layer-02); }
+[data-component="amicode-entity-view"] .amc-ev-retry:hover { background: var(--accent-fill-soft); }
 [data-component="amicode-entity-view"] .amc-ev-retry:focus-visible {
   outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
@@ -584,7 +587,7 @@
 [data-component="amicode-entity-view"] .amc-sk {
   height: 14px;
   border-radius: var(--radius-md);
-  background: var(--v2-background-bg-layer-02);
+  background: var(--glass-dense-bg);
   position: relative;
   overflow: hidden;
   margin: 12px 0;
@@ -605,14 +608,9 @@
 /* ============================================================
    SHARED CARD SURFACES — ask, run window
    ============================================================ */
-[data-component="amicode-ask-card"],
-[data-component="amicode-run-window"] {
-  /* Rail-free and tint-free: neutral hairline + surface across the AMICO family. */
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: var(--radius-lg);
-  background: var(--v2-background-bg-layer-01);
-  box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
-}
+/* glass sweep (#56): the ask card and the run window carry the data-glass hook
+   in their markup — fill/edge/radius/shadow come from glass.css, so the old
+   opaque layer-01 surface rule is gone (it survived only by import order). */
 
 /* The entity rail is NOT a card (Kate 2026-07-24): no box, no problem name — it
    attaches directly under the session-title header (the rail mounts inside that
@@ -637,12 +635,14 @@
    family, medium radius, roomy padding; the entity-view root is a bare flex
    column, so the surface lives here. Wide content scrolls inside, never the page. */
 [data-component="amicode-entity-inline"] {
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: var(--radius-md);
-  background: var(--v2-background-bg-layer-01);
+  /* glass sweep (#56): surface comes from the data-glass hook (glass.css) */
   padding: var(--space-4);
   max-width: 100%;
   overflow-x: auto;
+}
+/* medium radius is the deliberate inline-entity geometry — beat the hook */
+[data-component="amicode-entity-inline"][data-glass] {
+  border-radius: var(--radius-md);
 }
 /* The card owns the inset (16px); the entity-view's own dialog padding would
    double it inline, so zero it here (the modal keeps its padding). */
@@ -662,7 +662,9 @@
   padding: 2px 11px;
   border: 1px solid var(--v2-border-border-base);
   border-radius: var(--radius-full);
-  background: var(--v2-background-bg-layer-01);
+  /* glass sweep (#56): dense-zone chip fill (the #60 token) — the pills sit in
+     the sticky header directly over the Brain, never an opaque layer */
+  background: var(--glass-dense-bg);
   color: var(--v2-text-text-base);
   font: inherit;
   font-weight: 600;
@@ -680,8 +682,8 @@
   flex-shrink: 0;
 }
 [data-component="amicode-entity-rail"] button.amc-rail-chip:hover {
-  border-color: var(--v2-border-border-strong);
-  background: var(--v2-background-bg-layer-02);
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 /* not recorded yet → inert, dotted border, no fill */
 [data-component="amicode-entity-rail"] .amc-rail-chip.is-empty {
@@ -698,25 +700,36 @@
   outline-offset: 2px;
 }
 
-/* ask-card option hover */
+/* ask-card options — glass sweep (#56): fills live HERE (not inline styles),
+   so states need no !important and never snap back to an opaque layer. */
+[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"] {
+  border: 1px solid var(--v2-border-border-strong);
+  background: var(--glass-dense-bg);
+}
+[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"][data-picked="true"] {
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
+}
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled) {
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):hover {
-  border-color: var(--accent-edge) !important;
-  background: var(--v2-background-bg-layer-03) !important;
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):active {
   transform: translateY(0.5px);
 }
 
-/* run window: subtle hover to signal it opens the Run entity */
+/* run window: subtle hover to signal it opens the Run entity — glass-consistent
+   state fill, never an opaque layer (the old layer-02 hover snapped the card
+   from glass to opaque; the base fill survived only by import order). */
 [data-component="amicode-run-window"] {
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 [data-component="amicode-run-window"]:hover {
-  border-color: var(--v2-border-border-strong);
-  background: var(--v2-background-bg-layer-02);
+  border-color: var(--accent-edge);
+  background: var(--accent-fill-soft);
 }
 
 /* ---- System hero (spec §6.1): identity + schematic + table + Hamiltonian ---- */
@@ -739,7 +752,7 @@
 [data-component="amicode-entity-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
 [data-component="amicode-entity-view"] .amc-badge {
   display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: var(--radius-full);
-  border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
+  border: 1px solid var(--v2-border-border-base); background: var(--glass-dense-bg);
   color: var(--v2-text-text-base); font-size: 0.76rem; line-height: 1.35;
 }
 [data-component="amicode-entity-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
@@ -928,9 +941,10 @@
 
 /* ---- In-chat widget preview (Stage 2 chat authoring) --------------------- */
 [data-component="amicode-widget-preview"] {
+  /* glass sweep (#56): shell surface comes from the data-glass hook; the
+     iframe stage below stays opaque by nature. */
   display: flex; flex-direction: column; gap: 8px;
-  border: 1px solid var(--v2-border-border-base); border-radius: var(--radius-lg);
-  background: var(--v2-background-bg-layer-01); padding: 12px 12px; max-width: 100%;
+  padding: 12px 12px; max-width: 100%;
 }
 [data-component="amicode-widget-preview"] .amc-wp-head {
   display: flex; align-items: baseline; gap: 8px; min-width: 0;
@@ -1171,7 +1185,7 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: var(--v2-background-bg-layer-02);
+  background: var(--glass-dense-bg);
   color: var(--v2-text-text-muted);
 }
 /* verdict tones (shared across run status + device/calibration pills) */
@@ -1216,7 +1230,7 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: var(--v2-background-bg-layer-02);
+  background: var(--glass-dense-bg);
   color: var(--v2-text-text-muted);
 }
 [data-component="amicode-device-view"] .amc-vmeta,

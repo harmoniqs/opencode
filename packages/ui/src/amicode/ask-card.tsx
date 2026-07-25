@@ -39,6 +39,7 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
   return (
     <div
       data-component="amicode-ask-card"
+      data-glass="standard" // glass sweep (#56): the question card floats on the single glass recipe
       style={{
         display: "flex",
         "flex-direction": "column",
@@ -67,18 +68,16 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
               data-picked={picked() === option ? "true" : undefined}
               disabled={!active()}
               onClick={() => submit(option)}
+              // glass sweep (#56): border/background live in amicode.css (base /
+              // picked / hover states over the glass) — inline fills here would
+              // force !important overrides and snap back to opaque layers.
               style={{
                 display: "flex",
                 "flex-direction": "column",
                 "align-items": "flex-start",
                 gap: "2px",
                 "text-align": "left",
-                border:
-                  picked() === option
-                    ? "1px solid var(--v2-icon-icon-accent)"
-                    : "1px solid var(--v2-border-border-strong)",
                 "border-radius": "var(--radius-md)",
-                background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
                 padding: "3px 10px",
                 "font-size": "12px",

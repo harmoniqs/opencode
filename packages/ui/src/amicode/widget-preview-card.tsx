@@ -53,7 +53,9 @@ export function WidgetPreviewCard(props: { preview: WidgetPreview }) {
     ]
 
   return (
-    <div data-component="amicode-widget-preview" data-size={props.preview.size}>
+    {/* glass sweep (#56): the shell floats on standard glass; the iframe stage
+        inside stays opaque by nature. */}
+    <div data-component="amicode-widget-preview" data-glass="standard" data-size={props.preview.size}>
       <div class="amc-wp-head">
         <span class="amc-wp-eyebrow">Widget preview</span>
         <span class="amc-wp-name">{props.preview.name}</span>

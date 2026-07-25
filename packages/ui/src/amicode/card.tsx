@@ -212,7 +212,13 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
     <Show
       when={clickable()}
       fallback={
-        <div data-component="amicode-card" data-tool={props.tool} data-state={state()} data-clickable="false">
+        <div
+          data-component="amicode-card"
+          data-glass="standard" // glass sweep (#56): every receipt chip floats on the single glass recipe
+          data-tool={props.tool}
+          data-state={state()}
+          data-clickable="false"
+        >
           <Sig />
           <span class="amc-rule" aria-hidden="true" />
           <Body />
@@ -223,6 +229,7 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
       <button
         type="button"
         data-component="amicode-card"
+        data-glass="standard" // glass sweep (#56): every receipt chip floats on the single glass recipe
         data-tool={props.tool}
         data-state={state()}
         data-clickable="true"
@@ -249,7 +256,8 @@ const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", 
 function InlineEntityView(props: { kind: string; seq?: number }) {
   const labels = createMemo(() => amicodeEntityLabels())
   return (
-    <div data-component="amicode-entity-inline" data-amicode-entity-current={props.kind}>
+    {/* glass sweep (#56): the inline entity card floats on standard glass */}
+    <div data-component="amicode-entity-inline" data-glass="standard" data-amicode-entity-current={props.kind}>
       <AmicodeEntityView
         view={amicodeProblemView()}
         kind={props.kind}
