@@ -108,7 +108,10 @@ type Palette = {
   accent: string
   cat: Record<string, string>
 }
-const PALETTES: Record<BrainScheme, Palette> = {
+/** Exported as the glass tiers' reference-frame source (#60): the worst-case
+    backdrop the Brain actually paints per scheme is `thought` — peak bloom
+    #fff676 on dark, the derived-dark #8f8000 on light. Data seam only. */
+export const PALETTES: Record<BrainScheme, Palette> = {
   dark: {
     fg: "#d6d6d2",
     edgeRest: "rgba(255, 255, 255, 0.13)",
