@@ -457,9 +457,10 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     node.flash = 1
     node.ringT = clock.beat
     node.labelA = 1
-    node.touchedAt = clock.beat
     node.uses++
     node.refractUntil = clock.beat + 2
+    // recency (touchedAt) is stamped by liveNode, in touch order — the beat
+    // clock stalls at rest, so it cannot order a recency window
   }
   function conduct(node: BNode) {
     // pass-through: signal conducts, node does not claim
@@ -543,21 +544,29 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     return byId.get(norm) || byId.get(id) || nodes.find((x) => x.label.toLowerCase() === norm)
   }
   // marathon sessions: every unique file AND every unique search pattern
-  // grafts a node + edge, and the render loop is O(nodes+edges) per frame.
-  // The iframe used to reset this on every theme-flip reload; the native
-  // engine persists, so cap the graft population — evict the oldest graft
-  // that is not charted, not pending a plate, and not where amico stands.
+  // grafts a node + edge, and the render loop is O(nodes+edges) per frame —
+  // so the TOTAL population is hard-capped at core + GRAFT_CAP (ADR 0002).
+  // When a new graft would exceed it, evict the least-recently-touched node
+  // that is not where amico stands and not referenced by an in-flight pulse.
+  // NO path exempts a node from the recency window — replay, charting, atlas
+  // keep: recency always wins, so an arbitrarily long touch stream can never
+  // grow the node set or the per-frame draw count without limit.
   const GRAFT_CAP = 300
+  let touchStamp = 0 // monotonic recency, advanced by liveNode on every touch
   function evictGraft() {
-    let count = 0
+    if (nodes.length < 1 + GRAFT_CAP) return // total population: core + cap
+    const pulseRefs = new Set<string>()
+    for (const p of pulses) {
+      pulseRefs.add(p.e.s.id)
+      pulseRefs.add(p.e.t.id)
+    }
     let oldest: BNode | null = null
     for (const n of nodes) {
-      if (!n.id.startsWith("live-")) continue
-      count++
-      if (n.atlasKeep || n.id === live.cur || live.sinceChart.includes(n) || live.queue.includes(n)) continue
+      if (n.type === "core") continue
+      if (n.id === live.cur || pulseRefs.has(n.id)) continue
       if (!oldest || n.touchedAt < oldest.touchedAt) oldest = n
     }
-    if (count < GRAFT_CAP || !oldest) return
+    if (!oldest) return
     const dead = oldest
     byId.delete(dead.id)
     nodes.splice(nodes.indexOf(dead), 1)
@@ -576,13 +585,17 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // a detached object and every lookup path tolerates the missing id
   }
   function liveNode(label: string, type?: string): BNode {
+    const found = findLiveNode(label)
+    if (found) {
+      found.touchedAt = ++touchStamp // a re-touch refreshes the recency window
+      return found
+    }
+    evictGraft()
     const norm = label.toLowerCase().replace(/\.(md|jl|json|toml)$/, "")
     const id = "live-" + norm.replace(/[^a-z0-9]+/g, "-").slice(0, 48)
-    const found = findLiveNode(label)
-    if (found) return found
-    evictGraft()
     const src = byId.get(live.cur) || byId.get("amico")!
     const n = addNode({ id, label: label.slice(0, 28), type: type || "resource" })
+    n.touchedAt = ++touchStamp
     n.half = 4
     const a = Math.random() * Math.PI * 2,
       r = 0.07 + Math.random() * 0.05

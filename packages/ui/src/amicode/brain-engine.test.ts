@@ -243,13 +243,40 @@ describe("hostile input", () => {
     expect(engine.stats().claimed).toBe(1)
   })
 
-  test("the graft population is capped — marathon sessions cannot grow the graph unboundedly", () => {
+  test("the TOTAL population is hard-capped with recency eviction — no exemptions, no edge leaks", () => {
+    // stats() exposes no node enumeration by design: recency is observed via
+    // re-touch deltas and eviction victims (claimed counts), the same
+    // "grows only from activity" observable
     const { engine } = makeEngine()
-    const boot = engine.stats().nodes
-    for (let i = 0; i < 340; i++) engine.touch({ label: `scratch/probe-${i}.md`, consider: true })
-    // 340 unique search patterns grafted, but eviction holds the line at the cap
-    expect(engine.stats().nodes).toBeLessThanOrEqual(boot + 300)
-    expect(engine.stats().edges).toBeLessThanOrEqual(boot + 300 + 200) // skeleton edges + capped thought edges
+    // fill well past the cap (replay considers: synchronous, no debounce)
+    for (let i = 1; i <= 320; i++) engine.touch({ label: `probe-${i}.md`, replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(1 + 300) // core + cap: the ceiling, never beyond
+    expect(engine.stats().edges).toBeLessThanOrEqual(300) // victims' edges went with them
+    // survivors are the most-recently-touched (probes 21..320); 1..20 evicted
+    engine.touch({ label: "probe-21.md", replay: true }) // survivor: claims in place, no growth
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(1)
+    engine.touch({ label: "probe-1.md", replay: true }) // evicted label: re-grafts (evicting the LRU) + claims
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(2)
+    engine.touch({ label: "probe-23.md", replay: true }) // survivor: claims
+    expect(engine.stats().claimed).toBe(3)
+    // a new label evicts the least-recently-TOUCHED (an old unclaimed consider),
+    // never the just-refreshed claimed nodes — re-touching refreshed their recency
+    engine.touch({ label: "probe-321.md", replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(3)
+    // NO exemption: charting the claims onto the atlas grants no immunity —
+    // an arbitrarily long touch stream still evicts them (recency always wins).
+    // Only the current live node (where amico stands) is never evicted.
+    engine.chart("a plate that must not pin its nodes", true)
+    expect(engine.stats().atlas).toBe(1)
+    engine.touch({ label: "flood-anchor.md", replay: true }) // move the cursor off the atlas claims
+    for (let i = 400; i < 720; i++) engine.touch({ label: `flood-${i}.md`, replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(301) // population still pinned at the ceiling
+    expect(engine.stats().claimed).toBe(1) // sole survivor: the cursor — every atlas-kept claim was evicted
+    expect(engine.stats().cur).toBe("live-flood-anchor")
+    expect(engine.stats().edges).toBeLessThanOrEqual(300)
     engine.tick(16) // and the survivors still draw
   })
 
