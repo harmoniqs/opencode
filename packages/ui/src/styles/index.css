@@ -37,6 +37,7 @@
 @import "../components/message-part.css" layer(components);
 @import "../amicode/amicode.css" layer(components);
 @import "../amicode/amico-presence.css" layer(components);
+@import "../amicode/brain-atmosphere.css" layer(components);
 @import "../components/message-nav.css" layer(components);
 @import "../components/popover.css" layer(components);
 @import "../components/progress.css" layer(components);

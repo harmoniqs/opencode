@@ -2,8 +2,8 @@
 // the node label the brain page uses, the brain node type, and whether the
 // touch is a commit (pulse travels, node claims) or a consider (scout flash
 // that may leak back to dark). Consumed by the chat's hover glances
-// (message-part) and the brain strip's touch stream (packages/app
-// brain-strip.tsx). Labels must match the brain page's node ids — skills map
+// (message-part) and the brain strip's event stream (packages/app
+// brain-events.ts). Labels must match the brain page's node ids — skills map
 // by bare name; unknown files graft new nodes.
 export type AmicoBrainRef = { label: string; type: string; consider: boolean }
 

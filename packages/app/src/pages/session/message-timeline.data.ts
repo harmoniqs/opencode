@@ -66,9 +66,6 @@ export namespace TimelineRow {
     userMessageID: string
   }> {}
   export class BottomSpacer extends Data.TaggedClass("BottomSpacer")<{}> {}
-  // amicode: the session's living map — a permanent row anchored after the
-  // thinking row (last content row before the spacer)
-  export class Brain extends Data.TaggedClass("Brain")<{}> {}
 
   export type TimelineRow =
     | CommentStrip
@@ -79,7 +76,6 @@ export namespace TimelineRow {
     | DiffSummary
     | Error
     | Retry
-    | Brain
     | BottomSpacer
 
   export const key = (row: TimelineRow) => {
@@ -100,8 +96,6 @@ export namespace TimelineRow {
         return `error:${row.userMessageID}`
       case "Retry":
         return `retry:${row.userMessageID}`
-      case "Brain":
-        return "brain"
       case "BottomSpacer":
         return "bottom-spacer"
     }

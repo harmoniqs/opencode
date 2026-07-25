@@ -4,7 +4,7 @@
    A charted fugue over the real vault graph, rendered on a canvas that
    lives IN the host document. This is the live-embed half of the retired
    /brain.html iframe prototype, ported to a framework-free module so the
-   session brain-strip can drive it with direct calls instead of a
+   chat's brain atmosphere can drive it with direct calls instead of a
    postMessage bridge.
 
    Why native (2026-07-20): the iframe boundary broke this animation three
