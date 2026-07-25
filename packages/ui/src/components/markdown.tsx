@@ -126,11 +126,16 @@ function ensureCodeWrapper(block: HTMLPreElement, labels: CopyLabels) {
   if (!wrapped) {
     const wrapper = document.createElement("div")
     wrapper.setAttribute("data-component", "markdown-code")
+    // amicode #61: code blocks float on the DENSE glass tier over the Brain
+    wrapper.setAttribute("data-glass", "dense")
     parent.replaceChild(wrapper, block)
     wrapper.appendChild(block)
     wrapper.appendChild(createCopyButton(labels))
     return
   }
+
+  // re-stamp the tier on the already-wrapped path (morphdom rebuilds)
+  parent.setAttribute("data-glass", "dense")
 
   const buttons = Array.from(parent.querySelectorAll('[data-slot="markdown-copy-button"]')).filter(
     (el): el is HTMLButtonElement => el instanceof HTMLButtonElement,

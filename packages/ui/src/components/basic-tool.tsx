@@ -250,7 +250,10 @@ export function BasicTool(props: BasicToolProps) {
   )
 
   return (
-    <Collapsible open={open()} onOpenChange={handleOpenChange} class="tool-collapsible">
+    // amicode #61: the tool CARD (trigger + expanded output, one unit) floats
+    // on the DENSE glass tier over the Brain — muted subtitles and tool output
+    // ride the near-opaque tint, never the bare canvas (ADR 0002).
+    <Collapsible open={open()} onOpenChange={handleOpenChange} class="tool-collapsible" data-glass="dense">
       <Show
         when={props.triggerHref}
         fallback={

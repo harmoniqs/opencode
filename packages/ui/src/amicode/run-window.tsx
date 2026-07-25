@@ -141,6 +141,7 @@ export function RunWindow(props: { run: string; lab?: string }) {
   return (
     <div
       data-component="amicode-run-window"
+      data-glass="dense" // amicode #61: run-plots float on the DENSE glass tier (ADR 0002)
       data-run={props.run}
       onClick={() => openAmicodeEntity("run")}
       style={{

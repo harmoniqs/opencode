@@ -202,6 +202,9 @@ function TimelineDiffSummaryRow(props: { diffs: SummaryDiff[] }) {
     <div
       data-slot="session-turn-diffs"
       data-component="session-turn-diffs-group"
+      // amicode #61: the diff card floats on the DENSE glass tier over the
+      // Brain (ADR 0002); the row frame around it stays transparent.
+      data-glass="dense"
       data-show-all={showAll() || undefined}
     >
       <div data-slot="session-turn-diffs-header">

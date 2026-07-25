@@ -989,6 +989,7 @@ export function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean; onS
       onOpenChange={handleOpenChange}
       variant="ghost"
       class="tool-collapsible"
+      data-glass="dense"
       data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
     >
       <Collapsible.Trigger>
@@ -1104,6 +1105,7 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
       onOpenChange={handleOpenChange}
       variant="ghost"
       class="tool-collapsible"
+      data-glass="dense"
       data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
     >
       <Collapsible.Trigger>
@@ -1283,7 +1285,10 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
       <Show when={text()}>
         <>
           <div data-slot="user-message-body">
-            <div data-slot="user-message-text">
+            {/* amicode #61: the bubble floats on the STANDARD glass tier over the
+                Brain — the tier token owns fill/edge/radius/shadow (no opaque
+                --surface-base fill; see ADR 0002) */}
+            <div data-slot="user-message-text" data-glass="standard">
               <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
             </div>
           </div>
@@ -1683,7 +1688,10 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   return (
     <Show when={text()}>
-      <div data-component="text-part" data-timeline-part-id={part().id}>
+      {/* amicode #61: bare assistant prose gains a STANDARD glass card so it
+          stays legible over the Brain (its muted meta rides a dense-backed
+          inline zone — see message-part.css) */}
+      <div data-component="text-part" data-glass="standard" data-timeline-part-id={part().id}>
         <div data-slot="text-part-body">
           <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
             <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />

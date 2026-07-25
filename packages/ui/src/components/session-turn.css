@@ -93,6 +93,12 @@
     min-width: 0;
   }
 
+  /* amicode #61: the diff card floats on the DENSE glass tier — the tier
+     token owns fill/edge/radius/shadow; on-grid padding clears the edge. */
+  [data-component="session-turn-diffs-group"][data-glass="dense"] {
+    padding: 0 12px 8px;
+  }
+
   [data-slot="session-turn-diffs-header"] {
     display: flex;
     align-items: center;
@@ -102,7 +108,9 @@
     position: sticky;
     top: var(--sticky-accordion-top, 0px);
     z-index: 20;
-    background-color: var(--background-stronger);
+    /* amicode #61: inside the dense diff card the sticky header occludes
+       scrolled content with the tier's own token, not an opaque chrome fill */
+    background-color: var(--glass-dense-bg);
     height: 44px;
   }
 
