@@ -53,10 +53,29 @@ export function BrainAtmosphere(props: {
   const sent = new Set<string>()
   let initialFlush = true
 
+  // dev-only force-full-tempo hook (#63): `?brainForceActive` pins the Brain
+  // at full musical tempo AND disables the perf governor, so a perf run — the
+  // headless proxy or the reference-laptop gate — measures the un-eased worst
+  // case. import.meta.env.DEV keeps it out of the shipped (prod) build.
+  const forceFullTempo =
+    import.meta.env.DEV &&
+    typeof location !== "undefined" &&
+    new URLSearchParams(location.search).has("brainForceActive")
+
   onMount(() => {
-    const eng = createBrainEngine(canvas, { scheme: currentScheme() })
+    const eng = createBrainEngine(canvas, { scheme: currentScheme(), governed: !forceFullTempo })
     setEngine(eng)
     eng.resize(host.clientWidth, host.clientHeight)
+
+    // dev-only: surface the live engine stats to the perf-trace harness and
+    // the manual gate checklist (window.__amicoBrainStats?.()); absent in prod
+    if (import.meta.env.DEV) {
+      const devWindow = window as Window & { __amicoBrainStats?: () => unknown }
+      devWindow.__amicoBrainStats = () => eng.stats()
+      onCleanup(() => {
+        if (devWindow.__amicoBrainStats) delete devWindow.__amicoBrainStats
+      })
+    }
 
     const ro = new ResizeObserver(() => eng.resize(host.clientWidth, host.clientHeight))
     ro.observe(host)
@@ -109,9 +128,10 @@ export function BrainAtmosphere(props: {
   })
 
   // the heartbeat: session busy ⇒ full musical tempo; idle ⇒ ~8fps breathing
+  // (the dev hook pins busy so a gated run never drops to the rest cadence)
   createEffect(() => {
     const eng = engine()
-    if (eng) eng.setActive(props.active ?? false)
+    if (eng) eng.setActive((props.active ?? false) || forceFullTempo)
   })
 
   createEffect(() => {
