@@ -17,9 +17,18 @@
 // concern (it watches prefers-reduced-motion live). The host's session-busy
 // signal arrives as `active` and routes to engine.setActive — full musical
 // tempo while a turn works, ~8fps breathing at rest (#62).
+//
+// Landing mode (Kate 2026-07-25): `mode="constellation"` boots the latent
+// constellation instead of the empty live stage — landing surfaces only;
+// session mounts stay live and untouched. `ignite` flipping true runs the
+// handoff dissolve (engine.ignite()). Live-tuning knobs are DEV-gated query
+// params (the ?brainForceActive pattern): ?constellationSpeed=<sec/rev>
+// ?constellationDensity=<nodeTarget> ?constellationTint=<0..1>
+// ?constellationFog=<0..1> — absent/invalid params fall back to the design
+// defaults, and prod builds never read them.
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js"
-import { createBrainEngine, type BrainEngine, type BrainScheme } from "./brain-engine"
+import { createBrainEngine, type BrainEngine, type BrainMode, type BrainScheme } from "./brain-engine"
 // styles: ./brain-atmosphere.css, registered in src/styles/index.css layer(components)
 
 export type BrainAtmosphereEvent =
@@ -45,6 +54,10 @@ export function BrainAtmosphere(props: {
   events?: BrainAtmosphereEvent[]
   /** session-busy signal → engine.setActive (adaptive heartbeat) */
   active?: boolean
+  /** "constellation" boots the landing's latent cloud (default "live") */
+  mode?: BrainMode
+  /** first prompt sent: flipping true runs the ignition handoff dissolve */
+  ignite?: boolean
   class?: string
 }) {
   let host!: HTMLDivElement
@@ -53,17 +66,36 @@ export function BrainAtmosphere(props: {
   const sent = new Set<string>()
   let initialFlush = true
 
-  // dev-only force-full-tempo hook (#63): `?brainForceActive` pins the Brain
-  // at full musical tempo AND disables the perf governor, so a perf run — the
-  // headless proxy or the reference-laptop gate — measures the un-eased worst
-  // case. import.meta.env.DEV keeps it out of the shipped (prod) build.
-  const forceFullTempo =
-    import.meta.env.DEV &&
-    typeof location !== "undefined" &&
-    new URLSearchParams(location.search).has("brainForceActive")
+  // dev-only hooks, all riding the same gate: import.meta.env.DEV keeps every
+  // query knob out of the shipped (prod) build.
+  const devParams =
+    import.meta.env.DEV && typeof location !== "undefined" ? new URLSearchParams(location.search) : undefined
+  // force-full-tempo (#63): `?brainForceActive` pins the Brain at full musical
+  // tempo AND disables the perf governor, so a perf run — the headless proxy
+  // or the reference-laptop gate — measures the un-eased worst case.
+  const forceFullTempo = !!devParams?.has("brainForceActive")
+  // constellation live-tuning knobs (Kate iterates at :5990); undefined fields
+  // fall through to the engine's design defaults, which also clamps ranges
+  const devNum = (key: string) => {
+    const raw = devParams?.get(key)
+    if (raw === null || raw === undefined || raw === "") return undefined
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : undefined
+  }
+  const constellationTuning = {
+    speedSec: devNum("constellationSpeed"),
+    density: devNum("constellationDensity"),
+    tint: devNum("constellationTint"),
+    fog: devNum("constellationFog"),
+  }
 
   onMount(() => {
-    const eng = createBrainEngine(canvas, { scheme: currentScheme(), governed: !forceFullTempo })
+    const eng = createBrainEngine(canvas, {
+      scheme: currentScheme(),
+      governed: !forceFullTempo,
+      mode: props.mode ?? "live",
+      constellation: constellationTuning,
+    })
     setEngine(eng)
     eng.resize(host.clientWidth, host.clientHeight)
 
@@ -132,6 +164,13 @@ export function BrainAtmosphere(props: {
   createEffect(() => {
     const eng = engine()
     if (eng) eng.setActive((props.active ?? false) || forceFullTempo)
+  })
+
+  // landing handoff: the first prompt send flips `ignite` — ease the rotation
+  // to a stop and dissolve the latent web (a no-op on live-mode mounts)
+  createEffect(() => {
+    const eng = engine()
+    if (eng && props.ignite) eng.ignite()
   })
 
   createEffect(() => {

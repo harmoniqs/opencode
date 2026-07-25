@@ -77,7 +77,9 @@ export function NewSessionView(props: NewSessionViewProps) {
       <div class="h-12 shrink-0" aria-hidden />
       <div class="flex-1 px-6 pb-30 flex items-center justify-center text-center">
         <div class="w-full max-w-200 flex flex-col items-center text-center gap-4">
-          <div class="flex flex-col items-center gap-6">
+          {/* latent-constellation: the brand block floats on its own glass
+              above the rotating web (glass vars — the #60 recipe) */}
+          <div class="flex flex-col items-center gap-6 rounded-xl border border-[var(--glass-edge)] bg-[var(--glass-standard-bg)] shadow-[var(--glass-shadow)] [backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] px-10 py-6">
             <MarkDetailed class="w-28" />
             {/* amicode: brand wordmark in the brand typeface (Racing Sans One — restored per review);
                 MarkDetailed is the redesign's detailed mark (kept from trunk) */}
@@ -92,10 +94,10 @@ export function NewSessionView(props: NewSessionViewProps) {
               if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
             }}
           />
-          {/* glass sweep (#56): directory/branch/last-modified metadata is muted
-              ink — it rides a dense-zone chip instead of floating bare on the
-              landing Brain */}
-          <div class="w-fit max-w-full mx-auto flex flex-col gap-4 items-center rounded-[var(--radius-lg)] bg-[var(--glass-dense-bg)] px-5 py-3">
+          {/* glass sweep (#56) + latent-constellation: muted workspace metadata
+              rides ONE dense-var glass zone WITH the blur (the question-hint
+              pattern) — centered, never bare faint text over the moving Brain */}
+          <div class="w-fit max-w-full mx-auto flex flex-col gap-4 items-center rounded-[var(--radius-lg)] bg-[var(--glass-dense-bg)] px-5 py-3 [backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))]">
             <div class="flex items-start justify-center gap-3 min-h-5">
               <div class="text-12-medium text-text-weak select-text leading-5 min-w-0 max-w-160 break-words text-center">
                 {getDirectory(projectRoot())}

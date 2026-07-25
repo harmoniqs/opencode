@@ -27,9 +27,49 @@
    Brand law:    circles only; #fff676 belongs to live thought alone; the
                  embed is monochrome + brand yellow; glow budget: pulse +
                  active node only.
+
+   Latent constellation (landing mode, Kate 2026-07-25): with
+   `mode: "constellation"` the engine opens on the full latent network —
+   the curated+densified cloud from brain-constellation.ts — rotating in
+   3D on a gently tilted vertical axis (~75s/rev), perspective-projected
+   with depth fog and size/alpha attenuation. Dim monochrome + whisper
+   cluster tints; ZERO #fff676 while latent (yellow stays exclusive to
+   live thought). ignite() runs the handoff: rotation eases to a stop
+   (~1s), the live core ignites #fff676, the web dissolves edges-first
+   with distant clusters last (~1.8s), then the mode exits and the live
+   graph owns the canvas. Under reduced motion the constellation is a
+   static canonical ¾-angle tableau (zero animation ticks) and ignite()
+   is an instant swap. The live-graph physics above are UNTOUCHED — the
+   constellation is a separate data + draw path sharing the same rAF
+   loop, pause law, theme re-key, and perf governor.
    ================================================================ */
 
+import {
+  CONSTELLATION_CANONICAL_ANGLE,
+  CONSTELLATION_CATS,
+  CONSTELLATION_DEFAULTS,
+  CONSTELLATION_TILT_X,
+  CONSTELLATION_TILT_Z,
+  buildConstellation,
+  type Constellation as LatentConstellation,
+} from "./brain-constellation"
+
 export type BrainScheme = "dark" | "light"
+
+export type BrainMode = "live" | "constellation"
+
+/** Live-tuning knobs for the landing constellation (Kate iterates at :5990).
+    Every field defaults to the design value (brain-constellation.ts). */
+export interface BrainConstellationTuning {
+  /** seconds per revolution (default 75) */
+  speedSec?: number
+  /** densification node target (default ~500) */
+  density?: number
+  /** cluster tint strength 0..1 (default whisper 0.15) */
+  tint?: number
+  /** depth fog strength 0..1 (default 0.5) */
+  fog?: number
+}
 
 export type BrainTouchEvent = {
   label: string
@@ -51,6 +91,11 @@ export interface BrainEngineOptions {
   /** false disables the perf governor — the dev force-full-tempo hook (#63),
       so a gated perf run measures the un-eased worst case (default true) */
   governed?: boolean
+  /** "constellation" boots the latent landing cloud instead of the sparse
+      live seed's empty stage; ignite() hands off to live (default "live") */
+  mode?: BrainMode
+  /** landing-constellation tuning knobs; inert in live mode */
+  constellation?: BrainConstellationTuning
 }
 
 export interface BrainEngineStats {
@@ -68,6 +113,11 @@ export interface BrainEngineStats {
   /** the perf governor's emitted motion level (#63) — "full" whenever the
       governor is disabled or the reduced-motion terminal is in charge */
   motion: MotionLevel
+  /** which draw path owns the canvas — flips to "live" when the ignition
+      dissolve completes (or instantly under reduced motion) */
+  mode: BrainMode
+  /** latent constellation population still on the canvas (0 in live mode) */
+  latent: number
 }
 
 export interface BrainEngine {
@@ -76,6 +126,11 @@ export interface BrainEngine {
   chart(title: string, replay?: boolean): void
   /** host busy signal: full musical tempo while a turn works, ~8fps breathing at rest */
   setActive(active: boolean): void
+  /** landing handoff (first prompt sent): ease rotation to a stop, ignite the
+      live core #fff676, dissolve the latent web edges-first (distant clusters
+      last), then exit constellation mode. Instant swap under reduced motion.
+      No-op in live mode or while a dissolve is already running. */
+  ignite(): void
   /** a glance from the log: ring the node and turn the camera to it */
   highlight(label: string): void
   /** lossless: swaps the palette and repaints — the atlas persists */
@@ -526,6 +581,171 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     return (n.y * worldScale - cam.y) * cam.k + H / 2
   }
 
+  /* ---------- latent constellation (landing mode) ----------
+     A parallel, read-only scenography layer: fixed-seed data from
+     brain-constellation.ts, rotated/projected here every frame. It never
+     touches the live graph structures above — nodes/edges/pulses/atlas stay
+     exactly the sparse live seed until the ignition dissolve hands over. */
+  const clamp01 = (v: number, d: number) => (Number.isFinite(v) ? Math.min(Math.max(v, 0), 1) : d)
+  const conTuning = {
+    speedSec: Number.isFinite(opts.constellation?.speedSec as number)
+      ? Math.min(Math.max(opts.constellation!.speedSec!, 5), 600)
+      : CONSTELLATION_DEFAULTS.speedSec,
+    density: opts.constellation?.density ?? CONSTELLATION_DEFAULTS.density,
+    tint: clamp01(opts.constellation?.tint as number, CONSTELLATION_DEFAULTS.tint),
+    fog: clamp01(opts.constellation?.fog as number, CONSTELLATION_DEFAULTS.fog),
+  }
+  let con: LatentConstellation | null = opts.mode === "constellation" ? buildConstellation(conTuning.density) : null
+  // scratch: rotated screen coords + painter's order, reused every frame
+  const conPx = con ? new Float32Array(con.count) : null
+  const conPy = con ? new Float32Array(con.count) : null
+  const conRz = con ? new Float32Array(con.count) : null
+  const conOrder = con ? Uint32Array.from({ length: con.count }, (_, i) => i) : null
+  let conAngle = CONSTELLATION_CANONICAL_ANGLE // boot pose = the canonical ¾ frame
+  let conT = 0 // drawn-frame milliseconds — the twinkle/breath/dissolve clock
+  let igniteAt = -1 // conT stamp of the handoff; -1 = latent
+  let coreIgnited = false
+  // ignition timeline (ms after ignite()): ease → edges out → clusters out
+  const IGNITE_EASE_MS = 1000
+  const IGNITE_EDGE_MS = 600
+  const IGNITE_NODE_LAG_MS = 350 // after the ease: nearest tissue lets go first
+  const IGNITE_NODE_SPREAD_MS = 950 // …distant clusters last
+  const IGNITE_NODE_FADE_MS = 500
+  const IGNITE_TOTAL_MS = IGNITE_EASE_MS + IGNITE_NODE_LAG_MS + IGNITE_NODE_SPREAD_MS + IGNITE_NODE_FADE_MS
+  // whisper cluster inks: fg pulled a breath toward the categorical color —
+  // NEVER the thought color (#fff676 stays exclusive to live thought)
+  let conInk: { scheme: BrainScheme; rgb: [number, number, number][] } | null = null
+  function conInks(): [number, number, number][] {
+    if (conInk && conInk.scheme === scheme) return conInk.rgb
+    const fg = hexToRgb(css.fg)
+    const rgb = CONSTELLATION_CATS.map((cat) => {
+      const c = hexToRgb(css.cat[cat] ?? css.fg)
+      return [0, 1, 2].map((i) => Math.round(fg[i] + (c[i] - fg[i]) * conTuning.tint)) as [number, number, number]
+    })
+    conInk = { scheme, rgb }
+    return rgb
+  }
+  // quantized rgba strings — bounded cache, kills per-edge string churn
+  const conRgbaCache = new Map<string, string>()
+  function conRgba(rgb: [number, number, number], alpha: number): string {
+    const q = Math.min(Math.round(alpha * 40), 40)
+    const key = rgb[0] + "," + rgb[1] + "," + rgb[2] + ":" + q
+    let s = conRgbaCache.get(key)
+    if (!s) {
+      s = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${q / 40})`
+      conRgbaCache.set(key, s)
+    }
+    return s
+  }
+  const conTiltCosX = Math.cos(CONSTELLATION_TILT_X)
+  const conTiltSinX = Math.sin(CONSTELLATION_TILT_X)
+  const conTiltCosZ = Math.cos(CONSTELLATION_TILT_Z)
+  const conTiltSinZ = Math.sin(CONSTELLATION_TILT_Z)
+  function exitConstellation() {
+    con = null
+    requestRender() // live mode owns the canvas from the very next frame
+  }
+  /** Paint the latent web. Returns true once the live layer should co-paint
+      (the ignition reached the core) — the caller falls through to the live
+      draw path so the first node ignites #fff676 beneath the dissolving web. */
+  function drawConstellation(dt: number): boolean {
+    const c = con!
+    if (!ctx) return false
+    if (!reduceMotion) conT += dt
+    const it = igniteAt >= 0 ? conT - igniteAt : -1
+    if (it >= IGNITE_TOTAL_MS) {
+      exitConstellation()
+      return true
+    }
+    // rotation eases to a stop over ~1s once the handoff lands
+    const rot = it < 0 ? 1 : Math.pow(Math.max(1 - it / IGNITE_EASE_MS, 0), 2)
+    if (!reduceMotion) conAngle += (((dt / 1000) * (Math.PI * 2)) / conTuning.speedSec) * rot
+    const showLive = it >= IGNITE_EASE_MS
+    if (showLive && !coreIgnited) {
+      // the live graph's first node ignites — this is live thought beginning,
+      // not the constellation's ink (which stays yellow-free to the last frame)
+      coreIgnited = true
+      core.flash = 1
+      core.ringT = clock.beat
+      core.labelA = 1
+    }
+    const breath = reduceMotion ? 1 : 1 + 0.01 * Math.sin((Math.PI * 2 * conT) / 10000) // ±1% @ ~10s
+    const cosY = Math.cos(conAngle)
+    const sinY = Math.sin(conAngle)
+    const F = 3.2 // perspective camera distance (world units)
+    const k = Math.hypot(W, H) * 0.42 * breath // full-bleed: the cloud overfills the pane
+    const cx = W / 2
+    const cy = H / 2
+    const px = conPx!
+    const py = conPy!
+    const rz = conRz!
+    for (let i = 0; i < c.count; i++) {
+      // R = Rz(tilt) · Rx(tilt) · Ry(θ) — spin on a gently tilted vertical axis
+      const x1 = c.x[i] * cosY + c.z[i] * sinY
+      const z1 = -c.x[i] * sinY + c.z[i] * cosY
+      const y2 = c.y[i] * conTiltCosX - z1 * conTiltSinX
+      const z2 = c.y[i] * conTiltSinX + z1 * conTiltCosX
+      const x3 = x1 * conTiltCosZ - y2 * conTiltSinZ
+      const y3 = x1 * conTiltSinZ + y2 * conTiltCosZ
+      const persp = F / (F - z2)
+      px[i] = cx + x3 * k * persp
+      py[i] = cy + y3 * k * persp
+      rz[i] = z2
+    }
+    const inks = conInks()
+    const edgeK = it < 0 ? 1 : Math.max(1 - Math.max(it - IGNITE_EASE_MS, 0) / IGNITE_EDGE_MS, 0)
+    const near = (i: number) => Math.min(Math.max((rz[i] / 1.4 + 1) / 2, 0), 1)
+    const fogMul = (i: number) => 1 - conTuning.fog * (1 - near(i))
+    // ---- edges first: the dim web (no pulses, no traveling signals)
+    if (edgeK > 0.01) {
+      ctx.lineWidth = 1
+      const e = c.edges
+      for (let i = 0; i < e.length; i += 2) {
+        const p = e[i]
+        const q = e[i + 1]
+        const x1 = px[p]
+        const y1 = py[p]
+        const x2 = px[q]
+        const y2 = py[q]
+        if ((x1 < -40 && x2 < -40) || (x1 > W + 40 && x2 > W + 40) || (y1 < -40 && y2 < -40) || (y1 > H + 40 && y2 > H + 40))
+          continue
+        const alpha = 0.1 * Math.min(fogMul(p), fogMul(q)) * edgeK
+        if (alpha < 0.012) continue
+        ctx.strokeStyle = conRgba(inks[c.catIx[p]], alpha)
+        ctx.beginPath()
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y2)
+        ctx.stroke()
+      }
+    }
+    // ---- nodes, far → near (stable painter's order)
+    const order = conOrder!
+    order.sort((a, b) => rz[a] - rz[b] || a - b)
+    const nodeStart = IGNITE_EASE_MS + IGNITE_NODE_LAG_MS
+    for (let oi = 0; oi < order.length; oi++) {
+      const i = order[oi]
+      const x = px[i]
+      const y = py[i]
+      if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue
+      let nodeK = 1
+      if (it >= 0) {
+        nodeK = 1 - Math.min(Math.max((it - (nodeStart + c.dist[i] * IGNITE_NODE_SPREAD_MS)) / IGNITE_NODE_FADE_MS, 0), 1)
+        if (nodeK <= 0) continue
+      }
+      // seeded slow twinkle — per-node phase, no edge pulses
+      const tw = reduceMotion ? 1 : 0.78 + 0.22 * Math.sin(conT * c.twSpeed[i] + c.twPhase[i])
+      const alpha = c.a[i] * fogMul(i) * tw * nodeK
+      if (alpha < 0.015) continue
+      const persp = F / (F - rz[i])
+      const half = c.r[i] * persp * (0.75 + 0.25 * near(i))
+      ctx.fillStyle = conRgba(inks[c.catIx[i]], alpha)
+      ctx.beginPath()
+      ctx.arc(x, y, half, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    return showLive
+  }
+
   /* ---------- musical clock ---------- */
   const clock = { beat: 0, tempoIx: 2, lastMs: 0 } // allegro — an embedded moment earns a brisker thought
   function bpmNow() {
@@ -905,7 +1125,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // window elapses with nothing in flight, ticks draw NOTHING and the
     // animation-frame chain below ends — no continuous loop at rest. This is
     // the accessibility terminal; it consults no frame-time budget (slice #63).
-    const still = reduceMotion && nowMs > nudgeUntil && !inFlight()
+    // Constellation mode is STRICTER: the tableau is one canonical ¾-angle
+    // frame — after the first paint, ticks draw nothing at all (zero animation
+    // ticks); only an explicit requestRender (theme/resize) repaints the same
+    // static pose.
+    const still = reduceMotion && (con ? lastRender !== -Infinity : nowMs > nudgeUntil && !inFlight())
     // perf-governor measurement (#63): intervals of THIS loop alone. It is an
     // independent path from the reduced-motion terminal above — under reduced
     // motion (or any paused stretch) measurement stops and the baseline
@@ -918,7 +1142,9 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       govLastMs = 0
     }
     const motion: MotionLevel = governed && !reduceMotion ? governor.level() : "full"
-    const fullTempo = active || inFlight() || unfurl < 1
+    // the rotating constellation is continuous motion — it holds full tempo
+    // (the governor's eased caps still apply; reduced motion is the tableau)
+    const fullTempo = active || inFlight() || unfurl < 1 || (!!con && !reduceMotion)
     // the governor's only levers are the paint cadence (motion tempo, via
     // bpmNow + the eased caps here) and the terminal hard-pause. Blur and
     // tint live in glass.css — this module has no path to them.
@@ -957,13 +1183,19 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     clock.lastMs = nowMs
     clock.beat += (dt / 60000) * bpmNow()
     runDue()
-    ambient()
+    if (!con) ambient() // ambient scintillation belongs to the live graph alone
     if (unfurl < 1) unfurl = Math.min(unfurl + dt / 1400, 1)
     const uf = 1 - Math.pow(1 - unfurl, 3)
 
     // camera: fixed — constant zoom, amico core dead center (see cam above)
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
     ctx.clearRect(0, 0, W, H) // transparent ground — the host surface shows through
+
+    // latent constellation: while latent it owns the frame entirely (the live
+    // seed stays unpainted beneath); once the ignition reaches the core the
+    // live path co-paints — the first node ignites #fff676 under the
+    // dissolving web, and when the dissolve completes con is null for good
+    if (con && !drawConstellation(dt)) return
 
     const breathe = reduceMotion ? 0 : Math.sin(nowMs / 4800) * 0.04 // 0.1 Hz field respiration
 
@@ -1182,6 +1414,21 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       if (destroyed) return
       active = a
     },
+    ignite: () => {
+      if (destroyed || !con) return // live mode / already handed off: no-op
+      nudge() // re-arm the frame chain (and the reduced-motion burst) either way
+      if (reduceMotion) {
+        // instant swap — no ease, no dissolve, no animation
+        coreIgnited = true
+        core.flash = 1
+        core.ringT = clock.beat
+        core.labelA = 1
+        exitConstellation()
+        return
+      }
+      if (igniteAt < 0) igniteAt = conT // a second call never restarts the dissolve
+      requestRender()
+    },
     highlight: (label) => {
       if (destroyed) return
       // a glance from the log: ring the node — the background camera holds
@@ -1241,6 +1488,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       active,
       scale: cam.k,
       motion: governed && !reduceMotion ? governor.level() : "full",
+      mode: con ? "constellation" : "live",
+      latent: con ? con.count : 0,
     }),
   }
 }

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, onMount, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, onMount, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSearchParams } from "@solidjs/router"
 import { BrainAtmosphere } from "@opencode-ai/ui/brain-atmosphere"
@@ -31,6 +31,14 @@ export default function NewSessionPage() {
   let inputRef: HTMLDivElement | undefined
 
   const composer = createSessionComposerState()
+
+  // amicode latent-constellation: the first prompt send ignites the handoff —
+  // rotation eases to a stop and the latent web starts dissolving. The
+  // draft→session promotion remounts the canvas (the session route keys its
+  // own Brain), so the visible dissolve is bounded by the session-create
+  // round trip; the session then boots its live graph normally, whose core
+  // ignition (#fff676) is the "first node ignites" beat of the design.
+  const [ignited, setIgnited] = createSignal(false)
 
   // amicode: register the Amico ops commands here too — the draft page has no
   // palette, so restart/update-memory are reachable via their direct keybinds.
@@ -84,9 +92,11 @@ export default function NewSessionPage() {
           {/* relative isolate: own stacking context so the brain layer (-z-10)
               sits above this card's surface but beneath the draft content */}
           <div class="relative isolate flex-1 min-h-0 overflow-hidden rounded-[10px]">
-            {/* amicode: the draft page's Brain background — a fresh session has
-                no events yet, so the sparse seed breathes empty (ADR 0002) */}
-            <BrainAtmosphere class="-z-10" />
+            {/* amicode: the draft page's Brain background — the EMPTY landing
+                shows the full latent constellation ("everything amico could
+                think") rotating at rest; the first prompt send ignites the
+                handoff and the promoted session mounts its live graph */}
+            <BrainAtmosphere class="-z-10" mode="constellation" ignite={ignited()} />
             <NewSessionDesignView
               gettingStarted={
                 // Chips persist while typing (Kate: no jump). They disappear on
@@ -112,7 +122,10 @@ export default function NewSessionPage() {
                 }}
                 newSessionWorktree={newSessionWorktree()}
                 onNewSessionWorktreeReset={() => setStore("worktree", "main")}
-                onSubmit={() => comments.clear()}
+                onSubmit={() => {
+                  setIgnited(true) // first prompt sent: hand the Brain off
+                  comments.clear()
+                }}
                 onResponseSubmit={() => {}}
                 setPromptDockRef={() => {}}
               />

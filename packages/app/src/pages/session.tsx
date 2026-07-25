@@ -10,6 +10,7 @@ import {
   createMemo,
   createEffect,
   createComputed,
+  createSignal,
   on,
   onMount,
   untrack,
@@ -211,6 +212,14 @@ export default function Page() {
   // amicode: the chat-wide Brain background's live feed — the active
   // session's derived event stream, empty on the landing (ADR 0002)
   const brain = createBrainEvents(() => params.id)
+
+  // amicode latent-constellation: the EMPTY landing (no session id) mounts
+  // the Brain in constellation mode; the first prompt send ignites the
+  // handoff. Navigation to the created session flips the keyed mount below
+  // to a fresh LIVE engine, so the visible dissolve is bounded by the
+  // session-create round trip — the session's own core ignition (#fff676)
+  // is the "first node ignites" beat. In-session mounts are untouched.
+  const [brainIgnited, setBrainIgnited] = createSignal(false)
 
   createEffect(() => {
     if (!prompt.ready()) return
@@ -1692,6 +1701,7 @@ export default function Page() {
       newSessionWorktree={newSessionWorktree()}
       onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
       onSubmit={() => {
+        if (!params.id) setBrainIgnited(true) // landing: hand the Brain off
         comments.clear()
         resumeScroll()
       }}
@@ -1789,9 +1799,19 @@ export default function Page() {
           >
             {/* amicode: ONE full-bleed Brain per Chat window, behind timeline +
                 landing + composer; keyed on the active session so a tab swap
-                remounts to that session's atlas (one engine alive at a time) */}
+                remounts to that session's atlas (one engine alive at a time).
+                The landing key mounts the latent constellation; session keys
+                mount the live graph (untouched). */}
             <Show when={params.id ?? "landing"} keyed>
-              {(_key) => <BrainAtmosphere class="-z-10" events={brain.events()} active={brain.active()} />}
+              {(_key) => (
+                <BrainAtmosphere
+                  class="-z-10"
+                  mode={params.id ? "live" : "constellation"}
+                  ignite={!params.id && brainIgnited()}
+                  events={brain.events()}
+                  active={brain.active()}
+                />
+              )}
             </Show>
             <div class="flex-1 min-h-0 overflow-hidden">
               <Switch>
