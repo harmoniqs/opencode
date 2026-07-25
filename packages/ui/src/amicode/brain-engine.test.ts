@@ -495,6 +495,140 @@ describe("reduced-motion hard-pause", () => {
   })
 })
 
+describe("perf governor steering (#63)", () => {
+  // the release valve (ADR 0002): the governor observes THIS loop's frame
+  // intervals and steers the SAME tempo control the heartbeat (#62) exposes —
+  // no second render loop, no second clock. Motion is the only give; the
+  // cadence observable stays clearRect counts over a driven manual clock.
+  // Timing law (see brain-perf-governor.test.ts): a steady 20ms over-budget
+  // stream steps down at fed-frame ~101/202/303/404 (the first tick only
+  // sets the measurement baseline).
+  const OVER = 20
+
+  /** drive over-budget ticks until stats().motion reaches `level` */
+  function stepTo(engine: ReturnType<typeof makeEngine>["engine"], level: string, t: number, cap = 3000): number {
+    for (let i = 0; engine.stats().motion !== level && i < cap; i++) engine.tick((t += OVER))
+    expect(engine.stats().motion).toBe(level as never)
+    return t
+  }
+
+  test("sustained over-budget intervals ease the paint cadence one level at a time", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    expect(engine.stats().motion).toBe("full") // boots at full fidelity
+    engine.setActive(true)
+    let t = 0
+    for (let i = 0; i < 100; i++) engine.tick((t += 16)) // a healthy minute-long budget is met
+    expect(engine.stats().motion).toBe("full")
+    expect(clears(ctx)).toBe(100) // busy + healthy: every tick draws
+
+    t = stepTo(engine, "eased-1", t)
+    let before = clears(ctx)
+    for (let i = 0; i < 40; i++) engine.tick((t += OVER))
+    const easedDraws = clears(ctx) - before
+    expect(easedDraws).toBeGreaterThanOrEqual(15) // ~every 2nd tick at the 33ms cap
+    expect(easedDraws).toBeLessThanOrEqual(25) // motion eased — while active stays true
+    expect(engine.stats().active).toBe(true)
+
+    t = stepTo(engine, "eased-2", t)
+    before = clears(ctx)
+    for (let i = 0; i < 40; i++) engine.tick((t += OVER))
+    const calmDraws = clears(ctx) - before
+    expect(calmDraws).toBeGreaterThanOrEqual(7) // ~every 4th tick at the 67ms cap
+    expect(calmDraws).toBeLessThanOrEqual(13)
+  })
+
+  test("the eased level steers the musical tempo itself — a pulse travels slower", () => {
+    // "extends slice 4 test surface": the governor acts through the ONE tempo
+    // control. At full tempo a one-beat commit pulse lands in ~476ms; eased
+    // two steps (largo) the same flight takes several seconds of wall time.
+    const { engine } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let t = stepTo(engine, "eased-2", 0)
+    engine.touch({ label: "slow-boat.md" })
+    for (let i = 0; i < 30; i++) engine.tick((t += OVER)) // 600ms — full tempo would have claimed
+    expect(engine.stats().claimed).toBe(0) // still in flight at largo
+    expect(engine.stats().motion).toBe("eased-2")
+  })
+
+  test("full-stop stops time-driven painting; discrete events still land one static frame", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let t = stepTo(engine, "full-stop", 0)
+    const frozen = clears(ctx)
+    for (let i = 0; i < 40; i++) engine.tick((t += OVER))
+    expect(clears(ctx)).toBe(frozen) // no cadence paints at all
+    engine.resize(800, 224) // an explicit event (requestRender) …
+    engine.tick((t += OVER))
+    expect(clears(ctx)).toBe(frozen + 1) // … lands exactly one static frame
+  })
+
+  test("the terminal valve hard-pauses to a static blurred field — nothing paints, ever", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let t = stepTo(engine, "hard-paused", 0)
+    const frozen = clears(ctx)
+    for (let i = 0; i < 60; i++) engine.tick((t += OVER))
+    expect(clears(ctx)).toBe(frozen) // the canvas froze — the glass above it is untouched
+    engine.resize(800, 224)
+    engine.touch({ label: "wake-attempt.md", replay: true })
+    engine.tick((t += OVER))
+    expect(clears(ctx)).toBe(frozen) // even events cannot paint past the terminal
+    for (let i = 0; i < 200; i++) engine.tick((t += OVER))
+    expect(engine.stats().motion).toBe("hard-paused") // no state exists past it
+  })
+
+  test("recovery is hysteretic: clear air reopens the valve one level per clear window", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let t = stepTo(engine, "full-stop", 0)
+    // clear air at 10ms — under the 13ms restore threshold
+    for (let i = 0; i < 300; i++) engine.tick((t += 10)) // 3s: not yet a full ~4s clear window
+    expect(engine.stats().motion).toBe("full-stop")
+    for (let i = 0; i < 150; i++) engine.tick((t += 10))
+    expect(engine.stats().motion).toBe("eased-2") // one level up — never a jump
+    for (let i = 0; i < 850; i++) engine.tick((t += 10))
+    expect(engine.stats().motion).toBe("full") // …and the ladder climbs home
+    const before = clears(ctx)
+    for (let i = 0; i < 30; i++) engine.tick((t += 10))
+    expect(clears(ctx) - before).toBe(30) // full fidelity restored: every tick draws
+  })
+
+  test("a paused stretch never feeds phantom over-budget frames", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let t = 0
+    for (let i = 0; i < 100; i++) engine.tick((t += 16))
+    engine.pause() // hidden / off-screen: the governor's measurement pauses too
+    t += 60_000 // a minute of stalled wall clock
+    engine.tick(t) // a stray tick while halted is a no-op
+    engine.resume()
+    for (let i = 0; i < 300; i++) engine.tick((t += 16))
+    expect(engine.stats().motion).toBe("full") // the stall registered nothing
+  })
+
+  test("reduced motion wins: the governor never engages under the accessibility terminal", () => {
+    // independent code paths (#62 vs #63): reduced-motion is a terminal that
+    // consults no budget; with it set, over-budget intervals must not ease,
+    // and the bounded-burst behavior stays exactly as shipped.
+    const { engine, ctx } = makeEngine() // reduceMotion: true
+    let t = 0
+    for (let i = 0; i < 300; i++) engine.tick((t += OVER)) // 6s of "over-budget" intervals
+    expect(engine.stats().motion).toBe("full") // the perf valve stays out of it
+    const still = clears(ctx)
+    for (let i = 0; i < 200; i++) engine.tick((t += OVER))
+    expect(clears(ctx)).toBe(still) // the terminal's stillness is undisturbed
+  })
+
+  test("governed:false (the dev force-full-tempo hook) pins full tempo and never eases", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false, governed: false })
+    engine.setActive(true)
+    let t = 0
+    for (let i = 0; i < 600; i++) engine.tick((t += OVER)) // 12s sustained over-budget
+    expect(clears(ctx)).toBe(600) // the un-eased worst case, on purpose
+    expect(engine.stats().motion).toBe("full")
+  })
+})
+
 describe("animated pipeline (manual clock)", () => {
   // full motion: reduceMotion off, clock driven by hand — a commit is a pulse
   // that must physically travel the graph before its node claims

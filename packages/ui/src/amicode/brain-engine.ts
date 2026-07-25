@@ -48,6 +48,9 @@ export interface BrainEngineOptions {
   animate?: boolean
   /** layout fallback when the canvas has no measured size yet */
   size?: { width: number; height: number }
+  /** false disables the perf governor — the dev force-full-tempo hook (#63),
+      so a gated perf run measures the un-eased worst case (default true) */
+  governed?: boolean
 }
 
 export interface BrainEngineStats {
@@ -62,6 +65,9 @@ export interface BrainEngineStats {
   active: boolean
   /** the fixed viewport-anchored camera zoom (constant — never fit-to-farthest) */
   scale: number
+  /** the perf governor's emitted motion level (#63) — "full" whenever the
+      governor is disabled or the reduced-motion terminal is in charge */
+  motion: MotionLevel
 }
 
 export interface BrainEngine {
@@ -238,6 +244,116 @@ const TEMPI = [
   { bpm: 168, name: "presto" },
 ]
 
+/* ================================================================
+   Perf governor (#63) — the pre-agreed release valve (ADR 0002).
+
+   A frame-time state machine observing the ONE render loop: when the p95
+   frame time over a rolling ~2s window stays over the 16.7ms budget for a
+   sustained ~2s trip window, motion steps down one ease level — down the
+   tempo ladder, to a full motion stop, and terminally to a hard-pause on a
+   static blurred field. Motion is the ONLY give: the governor's levers are
+   tempo and the terminal pause. It has no access to glass blur/tint by
+   construction — it emits a MotionLevel and nothing else.
+
+   Dual-guard hysteresis: restoring one level requires p95 AT OR BELOW a
+   restore threshold set a margin below budget (~13ms) for a LONGER clear
+   window (~2x the trip window). Between the thresholds is a dead band where
+   the level holds — no per-window oscillation, ever. Restoration is one
+   level per clear window, never a jump back to full.
+
+   The governor is INDEPENDENT of the reduced-motion hard-pause (#62): that
+   is an accessibility terminal consulting no budget; this is a perf valve
+   consulting no media query. While the engine is paused (hidden, off-screen,
+   reduced-motion still) measurement pauses too — stalled inter-frame gaps
+   arrive tagged `paused` and are discarded, so a stalled loop never
+   registers phantom over-budget frames and never false-trips the valve.
+   ================================================================ */
+
+export type MotionLevel = "full" | "eased-1" | "eased-2" | "full-stop" | "hard-paused"
+
+export interface PerfGovernorState {
+  /** the host's session-busy signal, informational */
+  active?: boolean
+  /** the engine is paused (hidden / off-screen / reduced-motion): discard */
+  paused?: boolean
+}
+
+export interface PerfGovernor {
+  /** feed one frame interval from the render loop; returns the motion level */
+  frame(durMs: number, state?: PerfGovernorState): MotionLevel
+  level(): MotionLevel
+}
+
+/** budget + windows (fixed by the issue-#63 decision record) */
+const GOV_BUDGET_MS = 16.7 // p95 target: one 60fps frame
+const GOV_RESTORE_MS = 13 // restore threshold: a fixed margin BELOW budget
+const GOV_WINDOW_MS = 2000 // rolling p95 window
+const GOV_TRIP_MS = 2000 // sustained over-budget before one step down
+const GOV_CLEAR_MS = 4000 // sustained at/below restore before one step up (~2x trip)
+
+const GOV_LADDER: MotionLevel[] = ["full", "eased-1", "eased-2", "full-stop", "hard-paused"]
+
+export function createPerfGovernor(): PerfGovernor {
+  let t = 0 // internal clock: the sum of ACCEPTED frame durations — paused
+  //           gaps never advance it, so a stall cannot ripen a trip window
+  const samples: { t: number; dur: number }[] = []
+  let ix = 0
+  let overSince = -1
+  let clearSince = -1
+  function p95(): number {
+    const durs = samples.map((s) => s.dur).sort((a, b) => a - b)
+    return durs.length ? durs[Math.min(durs.length - 1, Math.ceil(durs.length * 0.95) - 1)] : 0
+  }
+  function step() {
+    // a step changes the painting regime, so frames sampled under the OLD
+    // level cannot judge the new one: the window resets and both sustain
+    // timers restart. This is what pins "one level per window" — stale
+    // over-budget samples can never cascade an unearned extra step.
+    samples.length = 0
+    overSince = -1
+    clearSince = -1
+  }
+  function frame(durMs: number, state?: PerfGovernorState): MotionLevel {
+    // paused-loop guard: measurement pauses with the engine; junk is junk
+    if (state?.paused || !Number.isFinite(durMs) || durMs <= 0) return GOV_LADDER[ix]
+    t += durMs
+    samples.push({ t, dur: durMs })
+    while (samples.length && samples[0].t < t - GOV_WINDOW_MS) samples.shift()
+    const p = p95()
+    if (p > GOV_BUDGET_MS) {
+      clearSince = -1
+      if (overSince < 0) overSince = t
+      else if (t - overSince >= GOV_TRIP_MS) {
+        if (ix < GOV_LADDER.length - 1) ix++ // never past hard-paused
+        step() // each further step earns its own full sustained window
+      }
+    } else if (p <= GOV_RESTORE_MS) {
+      overSince = -1
+      if (clearSince < 0) clearSince = t
+      else if (t - clearSince >= GOV_CLEAR_MS) {
+        if (ix > 0) ix--
+        step() // one level per clear window — never a jump back to full
+      }
+    } else {
+      // the hysteresis dead band: under budget (no trip) but above the
+      // restore threshold (no restore) — the level holds, no oscillation
+      overSince = -1
+      clearSince = -1
+    }
+    return GOV_LADDER[ix]
+  }
+  return { frame, level: () => GOV_LADDER[ix] }
+}
+
+/** eased paint-cadence caps (min ms between draws while the host is busy) */
+function easeCapMs(lv: MotionLevel): number {
+  return lv === "eased-1" ? 33 : lv === "eased-2" ? 67 : 0
+}
+/** eased steps down the TEMPI ladder (allegro → andante → largo) */
+function easeTempoSteps(lv: MotionLevel): number {
+  return lv === "eased-1" ? 1 : lv === "eased-2" ? 2 : 0
+}
+
 export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOptions = {}): BrainEngine {
   let scheme: BrainScheme = opts.scheme === "light" ? "light" : "dark"
   let css: Palette = PALETTES[scheme]
@@ -413,7 +529,9 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   /* ---------- musical clock ---------- */
   const clock = { beat: 0, tempoIx: 2, lastMs: 0 } // allegro — an embedded moment earns a brisker thought
   function bpmNow() {
-    return TEMPI[clock.tempoIx].bpm
+    // the governor's eased levels step down the tempo ladder toward largo
+    const eased = governed && !reduceMotion ? easeTempoSteps(governor.level()) : 0
+    return TEMPI[Math.max(0, clock.tempoIx - eased)].bpm
   }
   const dueQueue: { t: number; fn: () => void }[] = []
   function at(beatsFromNow: number, fn: () => void) {
@@ -750,6 +868,12 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   let lastRender = -Infinity // first tick always paints
   let nudgeUntil = -Infinity // reduced-motion burst deadline, in the FRAME timebase
   let nudgePending = false // deadline armed, awaiting the next tick's clock to rebase
+  // perf governor (#63): observes THIS loop's frame intervals — no second
+  // clock, no second loop. Disabled by the dev force-full-tempo hook.
+  const governed = opts.governed ?? true
+  const governor = createPerfGovernor()
+  let govLastMs = 0 // measurement baseline; 0 = discard the next interval
+  //                   (set after any paused stretch, so stalled gaps never feed)
   const inFlight = () => pulses.length > 0 || live.queue.length > 0 || live.pumping || dueQueue.length > 0
   function requestRender() {
     lastRender = -Infinity // beat the rest throttle: the next tick must paint
@@ -782,8 +906,33 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // animation-frame chain below ends — no continuous loop at rest. This is
     // the accessibility terminal; it consults no frame-time budget (slice #63).
     const still = reduceMotion && nowMs > nudgeUntil && !inFlight()
+    // perf-governor measurement (#63): intervals of THIS loop alone. It is an
+    // independent path from the reduced-motion terminal above — under reduced
+    // motion (or any paused stretch) measurement stops and the baseline
+    // resets, so a stalled gap is discarded, never fed as a phantom
+    // over-budget frame.
+    if (governed && !reduceMotion) {
+      if (govLastMs > 0) governor.frame(nowMs - govLastMs, { active, paused: false })
+      govLastMs = nowMs
+    } else {
+      govLastMs = 0
+    }
+    const motion: MotionLevel = governed && !reduceMotion ? governor.level() : "full"
     const fullTempo = active || inFlight() || unfurl < 1
-    if (!still && (fullTempo || nowMs - lastRender >= REST_FRAME_MS)) {
+    // the governor's only levers are the paint cadence (motion tempo, via
+    // bpmNow + the eased caps here) and the terminal hard-pause. Blur and
+    // tint live in glass.css — this module has no path to them.
+    const requested = lastRender === -Infinity // an explicit requestRender event
+    let mayDraw = true
+    let minGap = fullTempo ? 0 : REST_FRAME_MS
+    if (motion === "hard-paused") {
+      mayDraw = false // terminal valve: the canvas freezes to a static blurred field
+    } else if (motion === "full-stop") {
+      mayDraw = requested // motion stopped; a discrete event still lands ONE static frame
+    } else {
+      minGap = Math.max(minGap, easeCapMs(motion))
+    }
+    if (!still && mayDraw && nowMs - lastRender >= minGap) {
       lastRender = nowMs
       try {
         drawFrame(nowMs)
@@ -797,7 +946,9 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     }
     // re-check halted: a dueQueue callback may have paused us mid-frame — and
     // track the id so pause() can cancel an already-scheduled frame (otherwise
-    // pause→resume inside one frame breeds parallel rAF chains)
+    // pause→resume inside one frame breeds parallel rAF chains). Under the
+    // governor's hard-pause the chain keeps idling WITHOUT painting: the
+    // frame-time source must survive so the hysteresis can reopen the valve.
     if (!halted && !still) scheduleFrame()
   }
   function drawFrame(nowMs: number) {
@@ -1059,12 +1210,15 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     pause: () => {
       halted = true // folded away / hidden — the hard pause: no ticks draw, no frame stays scheduled
       rafScheduled = false
+      govLastMs = 0 // the governor pauses its measurement with the engine —
+      //               the stalled gap across pause→resume is discarded (#63)
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
     },
     resume: () => {
       if (destroyed || !halted) return
       halted = false
       clock.lastMs = 0 // dt is capped, so the gap doesn't lurch the clock
+      govLastMs = 0 // a render-error halt skips pause(): reset the baseline here too
       requestRender() // unfolding must repaint now, not wait out the rest window
       nudge() // under reduced motion: one bounded repaint burst, then still again
     },
@@ -1086,6 +1240,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       cur: live.cur,
       active,
       scale: cam.k,
+      motion: governed && !reduceMotion ? governor.level() : "full",
     }),
   }
 }
