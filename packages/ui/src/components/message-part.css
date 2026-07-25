@@ -45,6 +45,9 @@
     margin-left: auto;
   }
 
+  /* glass sweep (#56): attachment chips float on the dense hook (glass.css
+     owns fill/edge) — they sit outside the glass bubble, directly over the
+     Brain. Radius re-asserted here (chip geometry, not card). */
   [data-slot="user-message-attachment"] {
     display: flex;
     flex-direction: column;
@@ -53,8 +56,6 @@
     min-width: 0;
     border-radius: 6px;
     overflow: hidden;
-    background: var(--surface-weak);
-    border: 1px solid var(--border-weak-base);
     cursor: default;
     transition:
       border-color 0.15s ease,
@@ -317,11 +318,20 @@
     flex: 0 0 auto;
     white-space: nowrap;
     text-align: center;
+    /* glass sweep (#56): muted divider label rides a dense-zone chip (#60
+       token) instead of floating bare on the Brain */
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-sm);
+    padding: 2px 10px;
   }
 }
 
+/* glass sweep (#56): reasoning summaries carry the standard hook (markup) —
+   hugging card geometry here so the Brain owns the margins around it. */
 [data-component="reasoning-part"] {
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 16px 12px;
   color: var(--text-base);
   line-height: var(--line-height-normal);
 
@@ -703,7 +713,9 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px;
-  background-color: var(--surface-critical-weak);
+  /* glass sweep (#56): semantic critical hue as a TINT over the host card's
+     frost, not an opaque band punching through it */
+  background-color: color-mix(in srgb, var(--surface-critical-weak) 75%, transparent);
   border-top: 1px solid var(--border-critical-base);
 
   [data-slot="diagnostic"] {
@@ -1269,14 +1281,15 @@
     z-index: 20;
     height: calc(32px + var(--tool-content-gap));
     padding-bottom: var(--tool-content-gap);
-    background-color: var(--background-stronger);
+    /* glass sweep (#56): sticky band occludes scrolled content with the
+       dense-zone token, not an opaque chrome fill */
+    background-color: var(--glass-dense-bg);
   }
 }
 
 [data-component="accordion"][data-scope="apply-patch"] {
-  [data-slot="accordion-trigger"] {
-    background-color: var(--background-stronger) !important;
-  }
+  /* glass sweep (#56): the old !important --background-stronger override is
+     gone — accordion.css now defers to the dense token inside glassed cards */
 
   [data-slot="apply-patch-trigger-content"] {
     display: flex;
@@ -1366,7 +1379,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0 4px 28px;
+  /* glass sweep (#56): muted "Loaded <file>" rows ride a dense-zone chip
+     (#60 token) instead of floating bare on the Brain */
+  width: fit-content;
+  max-width: 100%;
+  background: var(--glass-dense-bg);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px 4px 28px;
   font-family: var(--font-family-sans);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-regular);

@@ -53,7 +53,9 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
   return (
     <Show when={retry() && (props.show ?? true)}>
       <div data-slot="session-turn-retry">
-        <Card variant="error" class="error-card">
+        {/* glass sweep (#56): retry status floats on glass with a danger tint
+            (session-turn.css), never bare over the Brain */}
+        <Card variant="error" class="error-card" data-glass="standard">
           <div class="flex items-start gap-2">
             <AmicoSpinner class="size-4 mt-0.5" />
             <div class="min-w-0">

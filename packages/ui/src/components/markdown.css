@@ -256,7 +256,9 @@
     padding: 1px 4px;
     margin: 0 1px;
     border-radius: 3px;
-    background: var(--surface-base-hover);
+    /* glass sweep (#56): inline-code chip rides the dense-zone token inside
+       glassed prose cards, never an opaque hover-surface fill */
+    background: var(--glass-dense-bg);
     box-shadow: 0 0 0 0.5px var(--border-weak-base);
   }
 

@@ -48,7 +48,13 @@
     align-items: center;
     gap: 8px;
     margin-top: 12px;
-    width: 100%;
+    /* glass sweep (#56): the working indicator rides a dense-zone chip (#60
+       token) instead of floating bare muted ink on the animated Brain */
+    width: fit-content;
+    max-width: 100%;
+    background: var(--glass-dense-bg);
+    border-radius: var(--radius-md);
+    padding: 4px 12px;
     min-width: 0;
     color: var(--text-weak);
     font-family: var(--font-family-sans);
@@ -220,7 +226,9 @@
   }
 
   [data-slot="session-turn-diff-view"] {
-    background-color: var(--surface-inset-base);
+    /* glass sweep (#56): the expanded file view defers to the card's frost;
+       the per-line --surface-diff-* fills stay (semantic marks, waived) */
+    background-color: transparent;
     width: 100%;
     min-width: 0;
     overflow-y: auto;
@@ -236,4 +244,11 @@
 
 [data-slot="session-turn-list"] {
   gap: 24px;
+}
+
+/* glass sweep (#56): assistant-error and retry cards keep their semantic
+   rail + critical ink but ride a danger TINT over the derived glass tint —
+   never a bare (or opaque) surface floating on the Brain. */
+.error-card[data-glass] {
+  background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--glass-standard-bg));
 }

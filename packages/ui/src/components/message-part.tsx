@@ -1258,6 +1258,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
               return (
                 <div
                   data-slot="user-message-attachment"
+                  data-glass="dense" // glass sweep (#56): chip floats over the Brain outside the bubble
                   data-type={type}
                   data-clickable={type === "image" ? "true" : undefined}
                   title={type === "file" ? name : undefined}
@@ -1735,7 +1736,9 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
 
   return (
     <Show when={text()}>
-      <div data-component="reasoning-part" data-timeline-part-id={part().id}>
+      {/* glass sweep (#56): reasoning summaries are muted prose — they float on
+          a standard glass card instead of bare on the Brain (#60 invariant) */}
+      <div data-component="reasoning-part" data-glass="standard" data-timeline-part-id={part().id}>
         <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
           <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
         </Show>

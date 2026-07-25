@@ -104,6 +104,23 @@
   }
 }
 
+/* glass sweep (#56): inside a glassed card (diff summary, edit/apply-patch
+   tools) the accordion bands defer to the dense-zone token so the card's frost
+   shows through — no opaque --background-stronger strip punches the glass.
+   Selectors mirror the nested base rules above at +1 specificity. */
+[data-glass] [data-component="accordion"] [data-slot="accordion-item"] [data-slot="accordion-header"] [data-slot="accordion-trigger"] {
+  background-color: var(--glass-dense-bg);
+}
+[data-glass] [data-component="accordion"] [data-slot="accordion-item"] [data-slot="accordion-header"] [data-slot="accordion-trigger"]:hover:not([data-disabled]) {
+  background-color: var(--accent-fill-soft);
+}
+[data-glass] [data-component="accordion"] [data-slot="accordion-item"] [data-slot="accordion-header"] [data-slot="accordion-trigger"]:active:not([data-disabled]) {
+  background-color: var(--accent-fill-soft);
+}
+[data-glass] [data-component="accordion"] [data-slot="accordion-item"][data-expanded] [data-slot="accordion-content"] {
+  background-color: transparent;
+}
+
 @keyframes slideDown {
   from {
     height: 0;
