@@ -58,12 +58,18 @@ export interface BrainEngineStats {
   atlas: number
   queued: number
   cur: string
+  /** the host's session-busy signal, as the engine currently holds it */
+  active: boolean
+  /** the fixed viewport-anchored camera zoom (constant — never fit-to-farthest) */
+  scale: number
 }
 
 export interface BrainEngine {
   touch(ev: BrainTouchEvent): void
   /** chart the commits since the last plate as a named constellation */
   chart(title: string, replay?: boolean): void
+  /** host busy signal: full musical tempo while a turn works, ~8fps breathing at rest */
+  setActive(active: boolean): void
   /** a glance from the log: ring the node and turn the camera to it */
   highlight(label: string): void
   /** lossless: swaps the palette and repaints — the atlas persists */
@@ -739,6 +745,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
         if (!live.sinceChart.includes(n)) live.sinceChart.push(n)
         live.cur = n.id
       } else n.consider = Math.max(n.consider, 0.3)
+      requestRender()
       return
     }
     const key = label + (msg.consider ? "?" : "!")
@@ -753,6 +760,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       n.consider = 1 // the flash itself is a fade — fine under reduced motion
       const rec = (adj.get(live.cur) || []).find((a) => a.to === n.id)
       if (rec && !reduceMotion) firePulse(rec.e, byId.get(live.cur)!, "scout", 0.5, null)
+      requestRender()
       return
     }
     live.queue.push(n)
@@ -839,22 +847,38 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     }
   }
 
-  /* ---------- render ---------- */
+  /* ---------- render: the adaptive heartbeat ----------
+     One shared draw-gate (ADR 0002), honored by the rAF loop and the manual
+     tick() alike: full musical tempo while the host says busy, anything is in
+     flight, or the boot unfurl runs; ~8fps breathing at rest. The clock only
+     advances on drawn frames (dt cap 50ms), so ambient scintillation slows
+     with the frame rate — the port source's shipped behavior. */
+  const REST_FRAME_MS = 125 // ~8fps breathing at rest
   let halted = false
   let destroyed = false
   let rafId = 0
   let unfurl = reduceMotion ? 1 : 0
+  let active = false // the host's session-busy signal
+  let lastRender = -Infinity // first tick always paints
+  const inFlight = () => pulses.length > 0 || live.queue.length > 0 || live.pumping || dueQueue.length > 0
+  function requestRender() {
+    lastRender = -Infinity // beat the rest throttle: the next tick must paint
+  }
   function tick(nowMs: number) {
     if (halted || !ctx) return
     if (!Number.isFinite(nowMs)) return // a NaN timestamp would poison clock.beat permanently
-    try {
-      drawFrame(nowMs)
-    } catch (err) {
-      // a corrupt frame must not spin the rAF chain half-rendered forever —
-      // halt visibly (resume() re-arms after e.g. a session switch)
-      halted = true
-      console.error("[amico-brain] halted on render error:", err)
-      return
+    const fullTempo = active || inFlight() || unfurl < 1
+    if (fullTempo || nowMs - lastRender >= REST_FRAME_MS) {
+      lastRender = nowMs
+      try {
+        drawFrame(nowMs)
+      } catch (err) {
+        // a corrupt frame must not spin the rAF chain half-rendered forever —
+        // halt visibly (resume() re-arms after e.g. a session switch)
+        halted = true
+        console.error("[amico-brain] halted on render error:", err)
+        return
+      }
     }
     // re-check halted: a dueQueue callback may have paused us mid-frame — and
     // track the id so pause() can cancel an already-scheduled frame (otherwise
@@ -1117,6 +1141,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       if (destroyed) return
       live.pendingChart = { title: String(title || ""), replay: !!replay }
       maybeChart()
+      requestRender()
+    },
+    setActive: (a) => {
+      if (destroyed) return
+      active = !!a
     },
     highlight: (label) => {
       if (destroyed) return
@@ -1129,6 +1158,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
         n.consider = Math.max(n.consider, 0.9)
         n.labelA = 1
         live.glance = { id: n.id, until: clock.beat + 3.5 }
+        requestRender()
       }
     },
     setTheme: (next) => {
@@ -1136,8 +1166,12 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       scheme = next
       css = PALETTES[scheme]
       buildSprites() // the atlas, claims, and clock all persist — only ink changes
+      requestRender() // the new ink must not wait out the rest throttle
     },
-    resize: (width, height) => resize(width, height),
+    resize: (width, height) => {
+      resize(width, height)
+      requestRender()
+    },
     tick,
     pause: () => {
       halted = true // folded away — stop burning frames
@@ -1147,6 +1181,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       if (destroyed || !halted) return
       halted = false
       clock.lastMs = 0 // dt is capped, so the gap doesn't lurch the clock
+      requestRender() // unfolding must repaint now, not wait out the rest window
       if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
     },
     destroy: () => {
@@ -1164,6 +1199,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       atlas: atlas.length,
       queued: live.queue.length,
       cur: live.cur,
+      active,
+      scale: cam.k,
     }),
   }
 }

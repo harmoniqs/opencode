@@ -80,7 +80,7 @@ describe("boot", () => {
   test("first frame clears to transparent, never paints an opaque ground", () => {
     const { engine, ctx } = makeEngine()
     engine.tick(16)
-    engine.tick(32)
+    engine.tick(160) // a second rest-cadence frame (past the ~8fps window)
     const clears = ctx.calls.filter((c) => c.method === "clearRect")
     expect(clears.length).toBeGreaterThanOrEqual(2)
     expect(clears[0].args).toEqual([0, 0, 800, 224])
@@ -314,6 +314,81 @@ describe("background mount (derived session stream)", () => {
     expect(after.claimed).toBe(before.claimed)
     expect(after.atlas).toBe(before.atlas)
     expect(after.cur).toBe(before.cur)
+  })
+})
+
+describe("heartbeat cadence (shared draw-gate)", () => {
+  // the adaptive heartbeat (#62): full musical tempo while the session is
+  // active / anything is in flight / the boot unfurl runs; ~8fps breathing at
+  // rest. One draw-gate, honored by the manual tick() exactly as by the rAF
+  // loop — cadence is asserted by counting clearRect calls over a driven
+  // ~60fps clock. Beat budget per test stays under 8 so the ambient ghost
+  // (nextGhost) never fires a pulse into a rest-cadence window.
+  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
+    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+  }
+  const clears = (ctx: ReturnType<typeof recordingCtx>) => ctx.calls.filter((c) => c.method === "clearRect").length
+
+  test("an active engine draws on every tick — full musical tempo", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let ticks = 0
+    for (let t = 0; t <= 1000; t += 16) {
+      engine.tick(t)
+      ticks++
+    }
+    expect(clears(ctx)).toBe(ticks)
+    expect(engine.stats().active).toBe(true)
+  })
+
+  test("an at-rest engine breathes at ~8fps, not once per tick", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // boot unfurl (~1400ms) runs full tempo — let it finish
+    const settled = clears(ctx)
+    drive(engine, 2016, 4016) // 2s at rest, 60fps ticks
+    const restDraws = clears(ctx) - settled
+    expect(restDraws).toBeGreaterThanOrEqual(14) // ≈8/s over 2s, with window rounding
+    expect(restDraws).toBeLessThanOrEqual(17) // at most once per 125ms rest window
+    expect(engine.stats().active).toBe(false)
+  })
+
+  test("setActive flips the tempo both ways", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // past the unfurl
+    engine.setActive(true)
+    const beforeActive = clears(ctx)
+    let activeTicks = 0
+    for (let t = 2016; t <= 2516; t += 16) {
+      engine.tick(t)
+      activeTicks++
+    }
+    expect(clears(ctx) - beforeActive).toBe(activeTicks) // busy: every tick draws
+    engine.setActive(false)
+    const beforeRest = clears(ctx)
+    drive(engine, 2532, 3532) // 1s back at rest
+    const restDraws = clears(ctx) - beforeRest
+    expect(restDraws).toBeGreaterThanOrEqual(6)
+    expect(restDraws).toBeLessThanOrEqual(9) // rest cadence restored, not per-tick
+  })
+
+  test("a pulse in flight forces full tempo on a not-active engine until it resolves", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // past the unfurl, at rest
+    engine.touch({ label: "scratch/wip.md" }) // live commit: one pulse, one beat over the graft edge
+    const beforeFlight = clears(ctx)
+    let flightTicks = 0
+    for (let t = 2016; t <= 2416; t += 16) {
+      engine.tick(t) // 400ms < the ~476ms one-beat flight: in flight throughout
+      flightTicks++
+    }
+    expect(clears(ctx) - beforeFlight).toBe(flightTicks) // full tempo while the pulse travels
+    drive(engine, 2432, 3100) // pulse arrives + due-queue drains
+    const beforeRest = clears(ctx)
+    drive(engine, 3116, 4116) // 1s later: back at the rest cadence
+    const restDraws = clears(ctx) - beforeRest
+    expect(restDraws).toBeGreaterThanOrEqual(6)
+    expect(restDraws).toBeLessThanOrEqual(9)
+    expect(engine.stats().claimed).toBe(1) // the commit landed
   })
 })
 
