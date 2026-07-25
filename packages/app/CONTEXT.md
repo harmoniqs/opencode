@@ -22,6 +22,18 @@ other surface opens beside or in front of the Chat; the Chat is never replaced b
 another surface, only overlaid. There is no view in which the Chat is absent.
 _Avoid_: Main view, editor, session pane (as the whole hub)
 
+**Brain**:
+The data-true living background of the **Chat** — a map of the current session's thought that
+fills the Chat behind every component and is never interactive. One per window, present wherever
+the Chat is (Landing included) and nowhere else.
+_Avoid_: Background, wallpaper, atmosphere, brain strip, canvas
+
+**Glass**:
+The frosted, translucent surface every chat component floats on above the **Brain** — tinted
+just enough that text stays legible over the moving graph. (How the blur and tint are derived
+is an ADR-0002 concern, not a glossary one.)
+_Avoid_: Card background, frosted panel, blur layer, tier
+
 **Rail**:
 The one narrow vertical strip of icons along the window's leading edge. Collapsed to
 icons by default; each icon reveals its text label on hover. The Rail is the only
@@ -68,6 +80,9 @@ only surfaces its state), setup wall
 ## Relationships
 
 - The **Landing** is a **Chat**; the window never opens on anything else.
+- The **Brain** is the background of the **Chat** and only the Chat; every chat component
+  floats on **Glass** above it, while the **Rail**, titlebar, and **Panels** stay solid and
+  frame the living pane.
 - Every **Rail surface** opens as a **Panel** beside the **Chat**; the Chat is never
   replaced, only overlaid, and at most one Panel is open at a time.
 - The **Rail** carries navigation surfaces above and the **Account zone** below; both
@@ -100,3 +115,6 @@ reader meeting them in older code or notes should map them forward:
   a possible future, not part of this redesign. See ADR 0001.
 - **Home cards** "Meet Amico" and "Jump back in" → folded into the first-run Landing and
   the Chats surface respectively; they are no longer standalone surfaces.
+- **Inline brain strip** (the Brain as a single row inside the message timeline) → absorbed
+  into the **Brain** background. One render loop, promoted from a timeline row to the room;
+  the timeline keeps only its text shimmer. See ADR 0002.
