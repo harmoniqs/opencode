@@ -255,8 +255,8 @@ const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", 
 
 function InlineEntityView(props: { kind: string; seq?: number }) {
   const labels = createMemo(() => amicodeEntityLabels())
+  // glass sweep (#56): the inline entity card floats on standard glass
   return (
-    {/* glass sweep (#56): the inline entity card floats on standard glass */}
     <div data-component="amicode-entity-inline" data-glass="standard" data-amicode-entity-current={props.kind}>
       <AmicodeEntityView
         view={amicodeProblemView()}

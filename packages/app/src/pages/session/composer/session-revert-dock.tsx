@@ -31,8 +31,8 @@ export function SessionRevertDock(props: {
   )
   const preview = createMemo(() => props.items[0]?.text ?? "")
 
+  // glass sweep (#56): revert tray floats on standard glass
   return (
-    {/* glass sweep (#56): revert tray floats on standard glass */}
     <DockTray data-component="session-revert-dock" data-glass="standard">
       <div
         class="pl-3 pr-2 py-2 flex items-center gap-2"

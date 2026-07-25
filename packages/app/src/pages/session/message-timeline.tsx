@@ -1222,9 +1222,9 @@ export function MessageTimeline(props: {
             <div class="w-full px-4 md:px-5 pb-2">
               <div class="ml-auto max-w-[82%] overflow-x-auto no-scrollbar">
                 <div class="flex w-max min-w-full justify-end gap-2">
+                  {/* glass sweep (#56): comment chips ride the dense-zone token over the Brain */}
                   <Index each={comments()}>
                     {(comment) => (
-                      {/* glass sweep (#56): comment chips ride the dense-zone token over the Brain */}
                       <div class="shrink-0 max-w-[260px] rounded-[6px] border border-border-weak-base bg-[var(--glass-dense-bg)] px-2.5 py-2">
                         <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
                           <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />

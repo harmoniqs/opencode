@@ -90,9 +90,9 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     setTimeout(() => setState("copied", false), 2000)
   }
 
+  // glass sweep (#56): the error card keeps its semantic rail + ink but rides
+  // the glass with a danger tint (tool-error-card.css), never bare/opaque
   return (
-    {/* glass sweep (#56): the error card keeps its semantic rail + ink but rides
-        the glass with a danger tint (tool-error-card.css), never bare/opaque */}
     <Card {...rest} data-kind="tool-error-card" data-glass="standard" data-open={open() ? "true" : "false"} variant="error">
       <Collapsible class="tool-collapsible" data-open={open() ? "true" : "false"} open={open()} onOpenChange={setOpen}>
         <Collapsible.Trigger>
