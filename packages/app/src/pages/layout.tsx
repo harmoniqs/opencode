@@ -61,7 +61,6 @@ import { SessionRouteKey, SessionStateKey } from "@/utils/server-scope"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis, getDraggableId } from "@/utils/solid-dnd"
-import { DebugBar } from "@/components/debug-bar"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { ServerConnection, useServer } from "@/context/server"
@@ -2286,7 +2285,6 @@ export default function Layout(props: ParentProps) {
               {props.children}
             </Show>
           </main>
-          {import.meta.env.DEV && <DebugBar />}
           <ToastRegion v2={newDesign()} />
         </div>
       }
@@ -2438,7 +2436,6 @@ export default function Layout(props: ParentProps) {
               </div>
             </div>
           </div>
-          {import.meta.env.DEV && <DebugBar />}
         </div>
         <ToastRegion v2={newDesign()} />
       </div>
