@@ -1791,7 +1791,7 @@ export default function Page() {
                 landing + composer; keyed on the active session so a tab swap
                 remounts to that session's atlas (one engine alive at a time) */}
             <Show when={params.id ?? "landing"} keyed>
-              {(_key) => <BrainAtmosphere class="-z-10" events={brain.events()} />}
+              {(_key) => <BrainAtmosphere class="-z-10" events={brain.events()} active={brain.active()} />}
             </Show>
             <div class="flex-1 min-h-0 overflow-hidden">
               <Switch>

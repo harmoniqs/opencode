@@ -1,11 +1,13 @@
 /* ================================================================
    amico is thinking — the shape of a thought (native engine)
 
-   A charted fugue over the real vault graph, rendered on a canvas that
-   lives IN the host document. This is the live-embed half of the retired
-   /brain.html iframe prototype, ported to a framework-free module so the
-   chat's brain atmosphere can drive it with direct calls instead of a
-   postMessage bridge.
+   A charted fugue over the session's real thought-graph, rendered on a
+   canvas that lives IN the host document. This is the live-embed half of
+   the retired /brain.html iframe prototype, ported to a framework-free
+   module so the chat's brain atmosphere can drive it with direct calls
+   instead of a postMessage bridge. Since ADR 0002 it boots a SPARSE SEED
+   (the amico core alone) and grows only from real touches, breathing with
+   the session via an adaptive heartbeat.
 
    Why native (2026-07-20): the iframe boundary broke this animation three
    independent ways — document requests can't carry server auth (armed
@@ -26,8 +28,6 @@
                  embed is monochrome + brand yellow; glow budget: pulse +
                  active node only.
    ================================================================ */
-
-import { BRAIN_DATA } from "./brain-data"
 
 export type BrainScheme = "dark" | "light"
 
@@ -58,12 +58,18 @@ export interface BrainEngineStats {
   atlas: number
   queued: number
   cur: string
+  /** the host's session-busy signal, as the engine currently holds it */
+  active: boolean
+  /** the fixed viewport-anchored camera zoom (constant — never fit-to-farthest) */
+  scale: number
 }
 
 export interface BrainEngine {
   touch(ev: BrainTouchEvent): void
   /** chart the commits since the last plate as a named constellation */
   chart(title: string, replay?: boolean): void
+  /** host busy signal: full musical tempo while a turn works, ~8fps breathing at rest */
+  setActive(active: boolean): void
   /** a glance from the log: ring the node and turn the camera to it */
   highlight(label: string): void
   /** lossless: swaps the palette and repaints — the atlas persists */
@@ -241,6 +247,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   let motionQuery: MediaQueryList | null = null
   const onMotionChange = (e: MediaQueryListEvent) => {
     reduceMotion = e.matches
+    if (e.matches) unfurl = 1 // never animate the unfurl under reduced motion
+    nudge() // one bounded repaint burst either way (both fns bind later in this closure; events fire after construction)
   }
   if (opts.reduceMotion === undefined && typeof matchMedia !== "undefined") {
     motionQuery = matchMedia("(prefers-reduced-motion: reduce)")
@@ -353,148 +361,15 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     return null
   }
 
-  for (const n of BRAIN_DATA.nodes) addNode(n)
-  addNode({ id: "amico", label: "amico", type: "core" })
-  for (const n of BRAIN_DATA.nodes) if (n.type === "agent") addEdge("amico", n.id, "dispatch")
-  if (byId.has("using-amico")) addEdge("amico", "using-amico", "dispatch")
-  for (const e of BRAIN_DATA.edges) addEdge(e.s, e.t, e.kind)
-  // a thought may connect notes the vault has not linked yet: consecutive trace
-  // steps without a vault edge get a dashed "thought edge", invisible until used
-  for (const tr of BRAIN_DATA.traces) {
-    let prev = "amico"
-    for (const st of tr.steps) {
-      if (!byId.has(st.node)) continue
-      const hasPath = bfs(prev, st.node, 4)
-      if (!hasPath) addEdge(prev, st.node, "thought")
-      prev = st.node
-    }
-  }
-
-  /* size classes — atlas magnitudes, quantized, never continuous */
-  for (const n of nodes) {
-    n.half = n.type === "core" ? 8 : n.cat === "agents" ? 6.5 : n.deg > 9 ? 6 : n.deg > 5 ? 5 : n.deg > 2 ? 4 : 3
-  }
-
-  /* ---------- layout: cluster-anchored force settle, then frozen ----------
-     The strip is a wide frame: lay the graph out natively wide (wide anchor
-     ellipse + anisotropic gravity) so distances stay isotropic — a warped
-     projection reads as squashed, a wide LAYOUT reads as a landscape. */
-  const CLUSTER_ANGLE: Record<string, number> = {
-    knowledge: -Math.PI / 2,
-    skills: Math.PI * 0.05,
-    results: Math.PI / 2,
-    code: Math.PI * 0.95,
-    agents: 0,
-    core: 0,
-  }
-  function repel() {
-    for (let a = 0; a < nodes.length; a++) {
-      for (let b = a + 1; b < nodes.length; b++) {
-        const A = nodes[a],
-          B = nodes[b]
-        let dx = A.x - B.x,
-          dy = A.y - B.y
-        let d2 = dx * dx + dy * dy
-        if (d2 < 1) {
-          d2 = 1
-          dx = Math.sin(a * 7 + b)
-          dy = Math.cos(a - b * 3)
-        }
-        const f = 1900 / d2
-        const d = Math.sqrt(d2)
-        A.fx += (dx / d) * f
-        A.fy += (dy / d) * f
-        B.fx -= (dx / d) * f
-        B.fy -= (dy / d) * f
-      }
-    }
-    for (const e of edges) {
-      const dx = e.t.x - e.s.x,
-        dy = e.t.y - e.s.y
-      const d = Math.max(Math.sqrt(dx * dx + dy * dy), 0.01)
-      const rest = e.kind === "dispatch" ? 95 : 70
-      const f = (d - rest) * 0.015 * (e.ghost ? 0.25 : 1)
-      e.s.fx += (dx / d) * f * d * 0.02
-      e.s.fy += (dy / d) * f * d * 0.02
-      e.t.fx -= (dx / d) * f * d * 0.02
-      e.t.fy -= (dy / d) * f * d * 0.02
-    }
-  }
-  function settle() {
-    const AX = 2.3
-    const AY = 0.75
-    const R = 340
-    let i = 0
-    for (const n of nodes) {
-      const ang = CLUSTER_ANGLE[n.cat] + Math.sin(i * 12.9898) * 0.55
-      const rad = n.cat === "agents" ? 90 + (i % 5) * 18 : n.type === "core" ? 0 : R * (0.55 + ((i * 0.618) % 0.45))
-      n.x = Math.cos(ang) * rad * AX + Math.sin(i * 78.233) * 40
-      n.y = Math.sin(ang) * rad * AY + Math.cos(i * 37.719) * 40
-      i++
-    }
-    const core = byId.get("amico")!
-    core.x = 0
-    core.y = 0
-    for (let it = 0; it < 380; it++) {
-      for (const n of nodes) {
-        n.fx = 0
-        n.fy = 0
-      }
-      repel()
-      for (const n of nodes) {
-        const ang = CLUSTER_ANGLE[n.cat]
-        const ax = n.type === "core" ? 0 : Math.cos(ang) * (n.cat === "agents" ? 100 : 300) * AX
-        const ay = n.type === "core" ? 0 : Math.sin(ang) * (n.cat === "agents" ? 100 : 300) * AY
-        n.fx += (ax - n.x) * 0.004
-        n.fy += (ay - n.y) * 0.004
-        n.fx += -n.x * 0.0008
-        n.fy += -n.y * 0.0034
-        if (n.type !== "core") {
-          n.x += Math.max(-6, Math.min(6, n.fx))
-          n.y += Math.max(-6, Math.min(6, n.fy))
-        }
-      }
-    }
-    // stretch-then-relax: pull the settled layout wide, then let springs
-    // restore natural local distances inside a vertically-contained envelope
-    // — locally isotropic structure, globally wide silhouette
-    for (const n of nodes) if (n.type !== "core") n.x *= 3.1
-    for (let it = 0; it < 150; it++) {
-      for (const n of nodes) {
-        n.fx = 0
-        n.fy = 0
-      }
-      repel()
-      for (const n of nodes) {
-        n.fx += -n.x * 0.0004 // gentle horizontal containment
-        n.fy += -n.y * 0.009 // firm vertical envelope
-        if (n.type !== "core") {
-          n.x += Math.max(-6, Math.min(6, n.fx))
-          n.y += Math.max(-6, Math.min(6, n.fy))
-        }
-      }
-    }
-    // normalize into a unit box we can fit to any viewport; the amico core IS
-    // the center of the world — everything references it
-    let minX = 1e9,
-      maxX = -1e9,
-      minY = 1e9,
-      maxY = -1e9
-    for (const n of nodes) {
-      minX = Math.min(minX, n.x)
-      maxX = Math.max(maxX, n.x)
-      minY = Math.min(minY, n.y)
-      maxY = Math.max(maxY, n.y)
-    }
-    const span = Math.max(maxX - minX, maxY - minY)
-    const cx = core.x,
-      cy = core.y
-    for (const n of nodes) {
-      n.x = (n.x - cx) / span
-      n.y = (n.y - cy) / span
-    }
-  }
-  settle()
+  /* ---------- sparse seed (ADR 0002) ----------
+     Boot is the amico core alone — no vault skeleton, no demo traces, no
+     force-settled atlas layout (the rejected "breathing skeleton"). The core
+     IS the center of the world at (0,0); the graph grows ONLY from the
+     session's real touches (liveNode grafts beside the current position),
+     and every byte of state lives in this closure — nothing persists across
+     engines, sessions, or any store. */
+  const core = addNode({ id: "amico", label: "amico", type: "core" })
+  core.half = 8
 
   /* ---------- canvas & camera ---------- */
   let W = 0,
@@ -523,7 +398,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     ro.observe(canvas)
   }
 
-  const cam = { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1 }
+  /* fixed viewport-anchored camera (ADR 0002): a constant, core-centered zoom.
+     No per-frame fit-to-farthest and no close-up follow — auto-zoom-to-fit
+     visually SHRINKS growth instead of densifying it. Growth fills the frame;
+     the recency-bounded, near-source graft population keeps nodes in view. */
+  const cam = { x: 0, y: 0, k: 1 }
   function nx(n: BNode) {
     return (n.x * worldScale - cam.x) * cam.k + W / 2
   }
@@ -580,9 +459,10 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     node.flash = 1
     node.ringT = clock.beat
     node.labelA = 1
-    node.touchedAt = clock.beat
     node.uses++
     node.refractUntil = clock.beat + 2
+    // recency (touchedAt) is stamped by liveNode, in touch order — the beat
+    // clock stalls at rest, so it cannot order a recency window
   }
   function conduct(node: BNode) {
     // pass-through: signal conducts, node does not claim
@@ -594,11 +474,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   }
 
   /* ---------- live thought: the host streams the REAL session ----------
-     Reads and skill invocations COMMIT — a pulse travels the skeleton and the
+     Reads and skill invocations COMMIT — a pulse travels the graph and the
      node claims its color. Searches/globs CONSIDER — a scout flash that may
-     leak back to dark. Labels matching skeleton nodes light the real graph;
-     unknown files graft new nodes beside the current position over dashed
-     thought-edges. */
+     leak back to dark. Every label grafts a node beside the current position
+     over a dashed thought-edge (or resolves to its existing graft): the
+     sparse seed grows only from these touches. */
   const live = {
     cur: "amico",
     queue: [] as BNode[],
@@ -606,7 +486,6 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     recent: new Map<string, number>(),
     sinceChart: [] as BNode[],
     pendingChart: null as { title: string; replay: boolean } | null,
-    glance: null as { id: string; until: number } | null,
   }
   function maybeChart() {
     // charts wait for the queue to drain so a plate never misses its own
@@ -667,21 +546,29 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     return byId.get(norm) || byId.get(id) || nodes.find((x) => x.label.toLowerCase() === norm)
   }
   // marathon sessions: every unique file AND every unique search pattern
-  // grafts a node + edge, and the render loop is O(nodes+edges) per frame.
-  // The iframe used to reset this on every theme-flip reload; the native
-  // engine persists, so cap the graft population — evict the oldest graft
-  // that is not charted, not pending a plate, and not where amico stands.
+  // grafts a node + edge, and the render loop is O(nodes+edges) per frame —
+  // so the TOTAL population is hard-capped at core + GRAFT_CAP (ADR 0002).
+  // When a new graft would exceed it, evict the least-recently-touched node
+  // that is not where amico stands and not referenced by an in-flight pulse.
+  // NO path exempts a node from the recency window — replay, charting, atlas
+  // keep: recency always wins, so an arbitrarily long touch stream can never
+  // grow the node set or the per-frame draw count without limit.
   const GRAFT_CAP = 300
+  let touchStamp = 0 // monotonic recency, advanced by liveNode on every touch
   function evictGraft() {
-    let count = 0
+    if (nodes.length < 1 + GRAFT_CAP) return // total population: core + cap
+    const pulseRefs = new Set<string>()
+    for (const p of pulses) {
+      pulseRefs.add(p.e.s.id)
+      pulseRefs.add(p.e.t.id)
+    }
     let oldest: BNode | null = null
     for (const n of nodes) {
-      if (!n.id.startsWith("live-")) continue
-      count++
-      if (n.atlasKeep || n.id === live.cur || live.sinceChart.includes(n) || live.queue.includes(n)) continue
+      if (n.type === "core") continue
+      if (n.id === live.cur || pulseRefs.has(n.id)) continue
       if (!oldest || n.touchedAt < oldest.touchedAt) oldest = n
     }
-    if (count < GRAFT_CAP || !oldest) return
+    if (!oldest) return
     const dead = oldest
     byId.delete(dead.id)
     nodes.splice(nodes.indexOf(dead), 1)
@@ -700,13 +587,17 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // a detached object and every lookup path tolerates the missing id
   }
   function liveNode(label: string, type?: string): BNode {
+    const found = findLiveNode(label)
+    if (found) {
+      found.touchedAt = ++touchStamp // a re-touch refreshes the recency window
+      return found
+    }
+    evictGraft()
     const norm = label.toLowerCase().replace(/\.(md|jl|json|toml)$/, "")
     const id = "live-" + norm.replace(/[^a-z0-9]+/g, "-").slice(0, 48)
-    const found = findLiveNode(label)
-    if (found) return found
-    evictGraft()
     const src = byId.get(live.cur) || byId.get("amico")!
     const n = addNode({ id, label: label.slice(0, 28), type: type || "resource" })
+    n.touchedAt = ++touchStamp
     n.half = 4
     const a = Math.random() * Math.PI * 2,
       r = 0.07 + Math.random() * 0.05
@@ -718,6 +609,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   function liveTouch(msg: BrainTouchEvent) {
     const label = String(msg.label || "").trim()
     if (!label) return
+    nudge() // every real event earns a bounded reduced-motion burst
     if (msg.replay) {
       // a prior turn's step: restore it to the atlas instantly and quietly —
       // the session's whole thought-path persists across turns
@@ -739,6 +631,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
         if (!live.sinceChart.includes(n)) live.sinceChart.push(n)
         live.cur = n.id
       } else n.consider = Math.max(n.consider, 0.3)
+      requestRender()
       return
     }
     const key = label + (msg.consider ? "?" : "!")
@@ -753,6 +646,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       n.consider = 1 // the flash itself is a fade — fine under reduced motion
       const rec = (adj.get(live.cur) || []).find((a) => a.to === n.id)
       if (rec && !reduceMotion) firePulse(rec.e, byId.get(live.cur)!, "scout", 0.5, null)
+      requestRender()
       return
     }
     live.queue.push(n)
@@ -835,31 +729,76 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     if (clock.beat > nextGhost) {
       nextGhost = clock.beat + 4 + Math.random() * 4
       const e = edges[(Math.random() * edges.length) | 0]
-      if (!e.ghost) firePulse(e, e.s, "ghost", 1.5, null)
+      if (e && !e.ghost) firePulse(e, e.s, "ghost", 1.5, null) // sparse seed: there may be no edges yet
     }
   }
 
-  /* ---------- render ---------- */
+  /* ---------- render: the adaptive heartbeat ----------
+     One shared draw-gate (ADR 0002), honored by the rAF loop and the manual
+     tick() alike: full musical tempo while the host says busy, anything is in
+     flight, or the boot unfurl runs; ~8fps breathing at rest. The clock only
+     advances on drawn frames (dt cap 50ms), so ambient scintillation slows
+     with the frame rate — the port source's shipped behavior. */
+  const REST_FRAME_MS = 125 // ~8fps breathing at rest
+  const NUDGE_MS = 3000 // reduced motion: draw this long around an event, then still
   let halted = false
   let destroyed = false
   let rafId = 0
+  let rafScheduled = false
   let unfurl = reduceMotion ? 1 : 0
+  let active = false // the host's session-busy signal
+  let lastRender = -Infinity // first tick always paints
+  let nudgeUntil = -Infinity // reduced-motion burst deadline, in the FRAME timebase
+  let nudgePending = false // deadline armed, awaiting the next tick's clock to rebase
+  const inFlight = () => pulses.length > 0 || live.queue.length > 0 || live.pumping || dueQueue.length > 0
+  function requestRender() {
+    lastRender = -Infinity // beat the rest throttle: the next tick must paint
+  }
+  function scheduleFrame() {
+    if (halted || destroyed || !animate || typeof requestAnimationFrame === "undefined") return
+    if (rafScheduled) return
+    rafScheduled = true
+    rafId = requestAnimationFrame((nowMs) => {
+      rafScheduled = false
+      tick(nowMs)
+    })
+  }
+  function nudge() {
+    // an event happened: arm one bounded reduced-motion burst. The deadline is
+    // rebased onto the NEXT tick's nowMs — the manual/rAF frame clock — never
+    // performance.now(), so the headless drive() clock crosses it deterministically
+    nudgePending = true
+    scheduleFrame() // re-arm the chain if the reduced-motion terminal ended it
+  }
   function tick(nowMs: number) {
     if (halted || !ctx) return
     if (!Number.isFinite(nowMs)) return // a NaN timestamp would poison clock.beat permanently
-    try {
-      drawFrame(nowMs)
-    } catch (err) {
-      // a corrupt frame must not spin the rAF chain half-rendered forever —
-      // halt visibly (resume() re-arms after e.g. a session switch)
-      halted = true
-      console.error("[amico-brain] halted on render error:", err)
-      return
+    if (nudgePending) {
+      nudgePending = false
+      nudgeUntil = nowMs + NUDGE_MS
+    }
+    // reduced-motion hard terminal (ADR 0002): once the post-event burst
+    // window elapses with nothing in flight, ticks draw NOTHING and the
+    // animation-frame chain below ends — no continuous loop at rest. This is
+    // the accessibility terminal; it consults no frame-time budget (slice #63).
+    const still = reduceMotion && nowMs > nudgeUntil && !inFlight()
+    const fullTempo = active || inFlight() || unfurl < 1
+    if (!still && (fullTempo || nowMs - lastRender >= REST_FRAME_MS)) {
+      lastRender = nowMs
+      try {
+        drawFrame(nowMs)
+      } catch (err) {
+        // a corrupt frame must not spin the rAF chain half-rendered forever —
+        // halt visibly (resume() re-arms after e.g. a session switch)
+        halted = true
+        console.error("[amico-brain] halted on render error:", err)
+        return
+      }
     }
     // re-check halted: a dueQueue callback may have paused us mid-frame — and
     // track the id so pause() can cancel an already-scheduled frame (otherwise
     // pause→resume inside one frame breeds parallel rAF chains)
-    if (!halted && animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+    if (!halted && !still) scheduleFrame()
   }
   function drawFrame(nowMs: number) {
     if (!ctx) return
@@ -871,39 +810,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     if (unfurl < 1) unfurl = Math.min(unfurl + dt / 1400, 1)
     const uf = 1 - Math.pow(1 - unfurl, 3)
 
-    // camera
-    if (H < 120) {
-      // condensed = a CLOSE-UP on where amico is (never a miniature map);
-      // glances steer the eye since most nodes live outside this window
-      const glanced = live.glance && live.glance.until > clock.beat ? byId.get(live.glance.id) : null
-      const cur = glanced || byId.get(live.cur)
-      if (cur) {
-        cam.tx = cur.x * worldScale
-        cam.ty = cur.y * worldScale
-        cam.tk = Math.min(8, Math.max(1.05, 320 / worldScale))
-      }
-    } else {
-      // expanded = the WHOLE network with the AMICO CORE dead center (the
-      // core is the world origin); zoom fits the farthest node from it so
-      // nothing clips. Recomputed per frame so grafts never fall outside.
-      let hw = 0.01,
-        hh = 0.01
-      for (const n of nodes) {
-        const ax = Math.abs(n.x),
-          ay = Math.abs(n.y)
-        if (ax > hw) hw = ax
-        if (ay > hh) hh = ay
-      }
-      cam.tx = 0
-      cam.ty = 0
-      cam.tk = Math.min((W - 28) / (2 * hw * worldScale), (H - 14) / (2 * hh * worldScale))
-    }
-    // a hover glance deserves a brisk look, not a two-second pan
-    const camEase = live.glance && live.glance.until > clock.beat ? 0.14 : 0.035
-    cam.x += (cam.tx - cam.x) * camEase
-    cam.y += (cam.ty - cam.y) * camEase
-    cam.k += (cam.tk - cam.k) * camEase
-
+    // camera: fixed — constant zoom, amico core dead center (see cam above)
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
     ctx.clearRect(0, 0, W, H) // transparent ground — the host surface shows through
 
@@ -1103,11 +1010,11 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     }
   }
 
-  // waking — the thought begins here
-  const core = byId.get("amico")!
+  // waking — the thought begins here; the wake is itself a nudged event, so a
+  // reduced-motion boot paints one bounded burst and then rests still
   core.flash = 1
   core.ringT = clock.beat
-  if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+  nudge()
 
   return {
     touch: (ev) => {
@@ -1115,20 +1022,26 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     },
     chart: (title, replay) => {
       if (destroyed) return
+      nudge()
       live.pendingChart = { title: String(title || ""), replay: !!replay }
       maybeChart()
+      requestRender()
+    },
+    setActive: (a) => {
+      if (destroyed) return
+      active = a
     },
     highlight: (label) => {
       if (destroyed) return
-      // a glance from the log: ring the node AND turn the camera to look at
-      // it — in the collapsed close-up most nodes are outside the window, so
-      // an unsteered ring is invisible
+      // a glance from the log: ring the node — the background camera holds
+      // the whole frame, so no steering (that was the close-up strip's need)
       const n = findLiveNode(String(label || ""))
       if (n) {
+        nudge()
         n.ringT = clock.beat
         n.consider = Math.max(n.consider, 0.9)
         n.labelA = 1
-        live.glance = { id: n.id, until: clock.beat + 3.5 }
+        requestRender()
       }
     },
     setTheme: (next) => {
@@ -1136,22 +1049,29 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       scheme = next
       css = PALETTES[scheme]
       buildSprites() // the atlas, claims, and clock all persist — only ink changes
+      requestRender() // the new ink must not wait out the rest throttle
     },
-    resize: (width, height) => resize(width, height),
+    resize: (width, height) => {
+      resize(width, height)
+      requestRender()
+    },
     tick,
     pause: () => {
-      halted = true // folded away — stop burning frames
+      halted = true // folded away / hidden — the hard pause: no ticks draw, no frame stays scheduled
+      rafScheduled = false
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
     },
     resume: () => {
       if (destroyed || !halted) return
       halted = false
       clock.lastMs = 0 // dt is capped, so the gap doesn't lurch the clock
-      if (animate && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(tick)
+      requestRender() // unfolding must repaint now, not wait out the rest window
+      nudge() // under reduced motion: one bounded repaint burst, then still again
     },
     destroy: () => {
       destroyed = true
       halted = true
+      rafScheduled = false
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
       ro?.disconnect()
       motionQuery?.removeEventListener("change", onMotionChange)
@@ -1164,6 +1084,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       atlas: atlas.length,
       queued: live.queue.length,
       cur: live.cur,
+      active,
+      scale: cam.k,
     }),
   }
 }

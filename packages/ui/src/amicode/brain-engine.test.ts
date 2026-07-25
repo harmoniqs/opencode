@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import { createBrainEngine, type BrainEngineOptions } from "./brain-engine"
-import { BRAIN_DATA } from "./brain-data"
 
 /* The engine must run headless: bun test has no DOM, no rAF, no matchMedia.
    That is the point — the old /brain.html iframe could only be exercised by
@@ -56,17 +55,27 @@ function makeEngine(opts: Partial<BrainEngineOptions> = {}) {
   })
   return { engine, ctx }
 }
+/** drive the manual clock at ~60fps between two timestamps */
+function drive(engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) {
+  for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+}
+/** the cadence observable: one clearRect per drawn frame */
+function clears(ctx: ReturnType<typeof recordingCtx>) {
+  return ctx.calls.filter((c) => c.method === "clearRect").length
+}
 
 describe("boot", () => {
-  test("builds the full skeleton graph headless, centered on the amico core", () => {
+  test("boots the sparse seed: the amico core alone, nothing preloaded", () => {
+    // ADR 0002 rejects the "breathing skeleton atlas" — the at-rest seed is
+    // the core, and the graph grows only from the session's real touches
     const { engine } = makeEngine()
     const s = engine.stats()
-    // every vault-sample node plus the core; edges include the dispatch spokes
-    expect(s.nodes).toBe(BRAIN_DATA.nodes.length + 1)
-    expect(s.edges).toBeGreaterThan(BRAIN_DATA.edges.length)
+    expect(s.nodes).toBe(1)
+    expect(s.edges).toBe(0)
     expect(s.cur).toBe("amico")
     expect(s.claimed).toBe(0)
     expect(s.atlas).toBe(0)
+    expect(s.queued).toBe(0)
   })
 
   test("wears the requested scheme from frame zero — no wrong-theme first frame", () => {
@@ -80,7 +89,7 @@ describe("boot", () => {
   test("first frame clears to transparent, never paints an opaque ground", () => {
     const { engine, ctx } = makeEngine()
     engine.tick(16)
-    engine.tick(32)
+    engine.tick(160) // a second rest-cadence frame (past the ~8fps window)
     const clears = ctx.calls.filter((c) => c.method === "clearRect")
     expect(clears.length).toBeGreaterThanOrEqual(2)
     expect(clears[0].args).toEqual([0, 0, 800, 224])
@@ -95,12 +104,13 @@ describe("boot", () => {
 })
 
 describe("live thought", () => {
-  test("a replay commit claims the node instantly and moves the cursor", () => {
+  test("a replay commit grafts, claims instantly, and moves the cursor", () => {
     const { engine } = makeEngine()
     engine.touch({ label: "solve", replay: true })
     const s = engine.stats()
+    expect(s.nodes).toBe(2) // core + the graft — nothing else exists to light
     expect(s.claimed).toBe(1)
-    expect(s.cur).toBe("solve")
+    expect(s.cur).toBe("live-solve")
   })
 
   test("a consider touch is a scout flash — it never claims", () => {
@@ -111,14 +121,19 @@ describe("live thought", () => {
     expect(s.cur).toBe("amico")
   })
 
-  test("an unknown label grafts a new node over a thought edge", () => {
+  test("every commit label grafts one node over one edge; re-touches add nothing", () => {
+    // the sparse seed grows ONLY from activity: N distinct commits ⇒ exactly
+    // N grafts (plus the core) and N claims — no node exists unproduced by a touch
     const { engine } = makeEngine()
-    const before = engine.stats()
-    engine.touch({ label: "scratch/wip-notes.md", replay: true })
-    const after = engine.stats()
-    expect(after.nodes).toBe(before.nodes + 1)
-    expect(after.edges).toBe(before.edges + 1)
-    expect(after.claimed).toBe(1)
+    const labels = ["scratch/wip-notes.md", "solve.jl", "docs/plan.md", "config.toml", "deep/nested/file.jl"]
+    for (const l of labels) engine.touch({ label: l, replay: true })
+    const s = engine.stats()
+    expect(s.nodes).toBe(1 + labels.length)
+    expect(s.edges).toBe(labels.length) // one thought edge per graft, near the current position
+    expect(s.claimed).toBe(labels.length)
+    for (const l of labels) engine.touch({ label: l, replay: true }) // an already-grafted label adds no node
+    expect(engine.stats().nodes).toBe(1 + labels.length)
+    expect(engine.stats().edges).toBe(labels.length)
   })
 
   test("a live commit claims through the reduced-motion pump", () => {
@@ -127,7 +142,7 @@ describe("live thought", () => {
     // reduced motion: no traveling pulses — the claim lands synchronously
     const s = engine.stats()
     expect(s.claimed).toBe(1)
-    expect(s.cur).toBe("setup")
+    expect(s.cur).toBe("live-setup")
   })
 
   test("charting two commits since the last plate yields one constellation", () => {
@@ -165,15 +180,21 @@ describe("theme", () => {
 })
 
 describe("lifecycle", () => {
-  test("pause stops the frame loop; resume restarts it", () => {
+  test("pause is a hard stop — hidden means ZERO draws; resume restores drawing", () => {
+    // the host's visibilitychange/IntersectionObserver wiring (#59) drives
+    // this pause()/resume() primitive; the engine-side guarantee is that a
+    // paused engine draws nothing at all, however hard it is ticked
     const { engine, ctx } = makeEngine()
     engine.tick(16)
     const n = ctx.calls.length
+    const drawn = ctx.calls.filter((c) => c.method === "clearRect").length
     engine.pause()
-    engine.tick(1000)
-    expect(ctx.calls.length).toBe(n) // folded away — no frames burned
+    for (let t = 200; t <= 2000; t += 150) engine.tick(t) // well past every rest window
+    expect(ctx.calls.length).toBe(n) // no context call of any kind while hidden
+    expect(ctx.calls.filter((c) => c.method === "clearRect").length).toBe(drawn) // zero draws
     engine.resume()
-    engine.tick(1016)
+    engine.tick(2016)
+    expect(ctx.calls.filter((c) => c.method === "clearRect").length).toBe(drawn + 1) // drawing restored
     expect(ctx.calls.length).toBeGreaterThan(n)
   })
 
@@ -236,13 +257,40 @@ describe("hostile input", () => {
     expect(engine.stats().claimed).toBe(1)
   })
 
-  test("the graft population is capped — marathon sessions cannot grow the graph unboundedly", () => {
+  test("the TOTAL population is hard-capped with recency eviction — no exemptions, no edge leaks", () => {
+    // stats() exposes no node enumeration by design: recency is observed via
+    // re-touch deltas and eviction victims (claimed counts), the same
+    // "grows only from activity" observable
     const { engine } = makeEngine()
-    const boot = engine.stats().nodes
-    for (let i = 0; i < 340; i++) engine.touch({ label: `scratch/probe-${i}.md`, consider: true })
-    // 340 unique search patterns grafted, but eviction holds the line at the cap
-    expect(engine.stats().nodes).toBeLessThanOrEqual(boot + 300)
-    expect(engine.stats().edges).toBeLessThanOrEqual(boot + 300 + 200) // skeleton edges + capped thought edges
+    // fill well past the cap (replay considers: synchronous, no debounce)
+    for (let i = 1; i <= 320; i++) engine.touch({ label: `probe-${i}.md`, replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(1 + 300) // core + cap: the ceiling, never beyond
+    expect(engine.stats().edges).toBeLessThanOrEqual(300) // victims' edges went with them
+    // survivors are the most-recently-touched (probes 21..320); 1..20 evicted
+    engine.touch({ label: "probe-21.md", replay: true }) // survivor: claims in place, no growth
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(1)
+    engine.touch({ label: "probe-1.md", replay: true }) // evicted label: re-grafts (evicting the LRU) + claims
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(2)
+    engine.touch({ label: "probe-23.md", replay: true }) // survivor: claims
+    expect(engine.stats().claimed).toBe(3)
+    // a new label evicts the least-recently-TOUCHED (an old unclaimed consider),
+    // never the just-refreshed claimed nodes — re-touching refreshed their recency
+    engine.touch({ label: "probe-321.md", replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(301)
+    expect(engine.stats().claimed).toBe(3)
+    // NO exemption: charting the claims onto the atlas grants no immunity —
+    // an arbitrarily long touch stream still evicts them (recency always wins).
+    // Only the current live node (where amico stands) is never evicted.
+    engine.chart("a plate that must not pin its nodes", true)
+    expect(engine.stats().atlas).toBe(1)
+    engine.touch({ label: "flood-anchor.md", replay: true }) // move the cursor off the atlas claims
+    for (let i = 400; i < 720; i++) engine.touch({ label: `flood-${i}.md`, replay: true, consider: true })
+    expect(engine.stats().nodes).toBe(301) // population still pinned at the ceiling
+    expect(engine.stats().claimed).toBe(1) // sole survivor: the cursor — every atlas-kept claim was evicted
+    expect(engine.stats().cur).toBe("live-flood-anchor")
+    expect(engine.stats().edges).toBeLessThanOrEqual(300)
     engine.tick(16) // and the survivors still draw
   })
 
@@ -250,7 +298,7 @@ describe("hostile input", () => {
     const ctx = recordingCtx()
     let arcs = 0
     ctx.arc = (..._args: unknown[]) => {
-      if (++arcs > 4) throw new Error("boom")
+      if (++arcs > 2) throw new Error("boom") // the sparse first frame draws few arcs — trip early
     }
     const canvas = stubCanvas(ctx)
     const engine = createBrainEngine(canvas, {
@@ -317,23 +365,148 @@ describe("background mount (derived session stream)", () => {
   })
 })
 
+describe("sparse seed & isolation", () => {
+  test("two independently created engines share no state; a fresh engine always boots the seed", () => {
+    // one engine per session, no cross-session persistence: no module-scope
+    // graph, no persistent store — every byte lives in the engine closure
+    const a = makeEngine()
+    a.engine.touch({ label: "alpha.md", replay: true })
+    a.engine.touch({ label: "beta.md", replay: true })
+    const b = makeEngine()
+    expect(b.engine.stats().nodes).toBe(1) // boots sparse despite a's prior activity
+    expect(b.engine.stats().claimed).toBe(0)
+    expect(b.engine.stats().cur).toBe("amico")
+    b.engine.touch({ label: "gamma.md", replay: true })
+    expect(a.engine.stats().nodes).toBe(3) // b's touch is invisible to a
+    expect(b.engine.stats().nodes).toBe(2) // and a's history never leaked into b
+  })
+
+  test("the camera scale holds fixed while the graph grows — densify in place, no zoom-out", () => {
+    const { engine } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 500)
+    engine.touch({ label: "seed-a.md", replay: true })
+    engine.touch({ label: "seed-b.md", replay: true })
+    drive(engine, 516, 1000)
+    const small = engine.stats().scale
+    expect(Number.isFinite(small)).toBe(true)
+    expect(small).toBeGreaterThan(0)
+    // grow a few hundred grafts (replay considers: synchronous, star-shaped)
+    for (let i = 0; i < 290; i++) engine.touch({ label: `grow/probe-${i}.md`, replay: true, consider: true })
+    drive(engine, 1016, 2000) // any per-frame fit-to-farthest would ease the zoom out here
+    expect(engine.stats().scale).toBeCloseTo(small, 6)
+  })
+})
+
+describe("heartbeat cadence (shared draw-gate)", () => {
+  // the adaptive heartbeat (#62): full musical tempo while the session is
+  // active / anything is in flight / the boot unfurl runs; ~8fps breathing at
+  // rest. One draw-gate, honored by the manual tick() exactly as by the rAF
+  // loop — cadence is asserted by counting clearRect calls over a driven
+  // ~60fps clock. Beat budget per test stays under 8 so the ambient ghost
+  // (nextGhost) never fires a pulse into a rest-cadence window.
+  test("an active engine draws on every tick — full musical tempo", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    engine.setActive(true)
+    let ticks = 0
+    for (let t = 0; t <= 1000; t += 16) {
+      engine.tick(t)
+      ticks++
+    }
+    expect(clears(ctx)).toBe(ticks)
+    expect(engine.stats().active).toBe(true)
+  })
+
+  test("an at-rest engine breathes at ~8fps, not once per tick", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // boot unfurl (~1400ms) runs full tempo — let it finish
+    const settled = clears(ctx)
+    drive(engine, 2016, 4016) // 2s at rest, 60fps ticks
+    const restDraws = clears(ctx) - settled
+    expect(restDraws).toBeGreaterThanOrEqual(14) // ≈8/s over 2s, with window rounding
+    expect(restDraws).toBeLessThanOrEqual(17) // at most once per 125ms rest window
+    expect(engine.stats().active).toBe(false)
+  })
+
+  test("setActive flips the tempo both ways", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // past the unfurl
+    engine.setActive(true)
+    const beforeActive = clears(ctx)
+    let activeTicks = 0
+    for (let t = 2016; t <= 2516; t += 16) {
+      engine.tick(t)
+      activeTicks++
+    }
+    expect(clears(ctx) - beforeActive).toBe(activeTicks) // busy: every tick draws
+    engine.setActive(false)
+    const beforeRest = clears(ctx)
+    drive(engine, 2532, 3532) // 1s back at rest
+    const restDraws = clears(ctx) - beforeRest
+    expect(restDraws).toBeGreaterThanOrEqual(6)
+    expect(restDraws).toBeLessThanOrEqual(9) // rest cadence restored, not per-tick
+  })
+
+  test("a pulse in flight forces full tempo on a not-active engine until it resolves", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // past the unfurl, at rest
+    engine.touch({ label: "scratch/wip.md" }) // live commit: one pulse, one beat over the graft edge
+    const beforeFlight = clears(ctx)
+    let flightTicks = 0
+    for (let t = 2016; t <= 2416; t += 16) {
+      engine.tick(t) // 400ms < the ~476ms one-beat flight: in flight throughout
+      flightTicks++
+    }
+    expect(clears(ctx) - beforeFlight).toBe(flightTicks) // full tempo while the pulse travels
+    drive(engine, 2432, 3100) // pulse arrives + due-queue drains
+    const beforeRest = clears(ctx)
+    drive(engine, 3116, 4116) // 1s later: back at the rest cadence
+    const restDraws = clears(ctx) - beforeRest
+    expect(restDraws).toBeGreaterThanOrEqual(6)
+    expect(restDraws).toBeLessThanOrEqual(9)
+    expect(engine.stats().claimed).toBe(1) // the commit landed
+  })
+})
+
+describe("reduced-motion hard-pause", () => {
+  // the accessibility terminal (ADR 0002): with reduced motion set there is
+  // no idle breathing and no continuous loop at rest — the engine draws one
+  // bounded burst around events (the nudge window, rebased onto the frame
+  // clock), then goes still until the next touch. This terminal is DISTINCT
+  // from any frame-time perf ease (slice #63) — no budget is consulted.
+  test("after the boot burst elapses with nothing in flight, ticks produce no draws", () => {
+    const { engine, ctx } = makeEngine() // reduceMotion: true
+    drive(engine, 16, 3100) // the boot burst window (~3s), rest cadence inside it
+    const burst = clears(ctx)
+    expect(burst).toBeGreaterThan(0) // the burst painted
+    drive(engine, 3216, 6000) // long past the window: still — zero draws, ticks are no-ops
+    expect(clears(ctx)).toBe(burst)
+  })
+
+  test("a touch re-arms one bounded burst that draws, then settles back to still", () => {
+    const { engine, ctx } = makeEngine()
+    drive(engine, 16, 4000) // exhaust the boot burst, reach the still state
+    const still = clears(ctx)
+    engine.touch({ label: "wake.md", replay: true })
+    drive(engine, 4016, 5000) // inside the re-armed window (4016 + ~3s)
+    const burst = clears(ctx)
+    expect(burst).toBeGreaterThan(still) // the event woke a bounded burst
+    drive(engine, 7100, 9000) // the window has elapsed, nothing in flight
+    expect(clears(ctx)).toBe(burst) // still again — no continuous loop ever
+  })
+})
+
 describe("animated pipeline (manual clock)", () => {
   // full motion: reduceMotion off, clock driven by hand — a commit is a pulse
-  // that must physically travel the skeleton before its node claims
-  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
-    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
-    return toMs
-  }
-
+  // that must physically travel the graph before its node claims
   test("a live commit claims only after its pulse arrives", () => {
     const { engine } = makeEngine({ reduceMotion: false })
     engine.tick(0)
-    engine.touch({ label: "setup" }) // amico → experimenter → setup, one beat per hop
+    engine.touch({ label: "setup" }) // grafts beside the core; one beat over the thought edge
     expect(engine.stats().claimed).toBe(0) // departure is not arrival
-    drive(engine, 16, 4000) // allegro q=126: plenty of beats for both hops
+    drive(engine, 16, 4000) // allegro q=126: plenty of beats for the hop
     const s = engine.stats()
     expect(s.claimed).toBeGreaterThanOrEqual(1)
-    expect(s.cur).toBe("setup")
+    expect(s.cur).toBe("live-setup")
   })
 
   test("a chart waits for the pump to drain, then plates every commit", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { AssistantMessage, Part, UserMessage } from "@opencode-ai/sdk/v2"
-import { deriveBrainEvents } from "./brain-events"
+import { deriveBrainActive, deriveBrainEvents } from "./brain-events"
 
 /* The live-feed contract for the chat-wide Brain background: the inline
    strip's event derivation, lifted to a pure session-scoped function so it
@@ -178,5 +178,16 @@ describe("deriveBrainEvents", () => {
       partsFor({ a1: [dup, dup, toolPart("p2", "a1", "read", { filePath: "setup.jl" })] }),
     )
     expect(events.map((e) => e.id)).toEqual(["p1", "p2", "chart-a1"])
+  })
+})
+
+describe("deriveBrainActive", () => {
+  // the Brain's heartbeat signal (#62): the session-busy status routed into
+  // engine.setActive — full musical tempo while a turn works, rest otherwise
+  test("a session is active exactly while its status is non-idle", () => {
+    expect(deriveBrainActive(undefined)).toBe(false) // no session / no status yet: at rest
+    expect(deriveBrainActive({ type: "idle" })).toBe(false)
+    expect(deriveBrainActive({ type: "busy" })).toBe(true)
+    expect(deriveBrainActive({ type: "retry", attempt: 1, message: "rate limited", next: 0 })).toBe(true)
   })
 })
