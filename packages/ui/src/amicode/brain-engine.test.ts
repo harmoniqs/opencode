@@ -593,6 +593,17 @@ describe("perf governor steering (#63)", () => {
     expect(clears(ctx) - before).toBe(30) // full fidelity restored: every tick draws
   })
 
+  test("rest is full fidelity: a met budget at the breathing cadence never pre-emptively eases", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: false })
+    drive(engine, 0, 2000) // boot unfurl done, engine at rest
+    const settled = clears(ctx)
+    drive(engine, 2016, 4016) // 2s of met budget (16ms intervals), breathing
+    expect(engine.stats().motion).toBe("full") // full motion always applies at rest
+    const restDraws = clears(ctx) - settled
+    expect(restDraws).toBeGreaterThanOrEqual(14) // the ~8fps breathing is untouched
+    expect(restDraws).toBeLessThanOrEqual(17)
+  })
+
   test("a paused stretch never feeds phantom over-budget frames", () => {
     const { engine } = makeEngine({ reduceMotion: false })
     engine.setActive(true)
