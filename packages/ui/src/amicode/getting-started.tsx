@@ -49,10 +49,11 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
 const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Execute and tune on hardware"]
 
 /** amicode chat-redesign (Kate): chips-only row for the composer-as-hero start
- *  screen — no tagline, no byline, no steps. Quiet neutral pills (Kimi-style):
- *  a filled body (bg-layer-02) + a hairline (border-strong) so they read on the
- *  near-white start page; muted ink that lifts on hover. A transparent fill with
- *  a 10%-alpha border was ~1.25:1 vs the page — effectively invisible in light. */
+ *  screen — no tagline, no byline, no steps. Quiet GLASS pills over the Brain
+ *  (latent-constellation slice): the slice-#60 glass recipe via its vars —
+ *  translucent tier tint + hairline edge + the shared blur/brightness filter —
+ *  so the constellation stays alive behind them instead of being tiled away
+ *  by an opaque layer fill; muted ink that lifts on hover. */
 export function AmicodeStarterChips(props: {
   onStart: (prompt: string) => void
   resumeName?: string
@@ -61,7 +62,7 @@ export function AmicodeStarterChips(props: {
   // The chips' OWN wrapping row (Kate: separate container from the folder
   // picker) — centered, quiet pills. Class-based styling so hover works.
   const pill =
-    "rounded-full border border-[var(--v2-border-border-strong)] bg-[var(--v2-background-bg-layer-02)] px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-03)]"
+    "rounded-full border border-[var(--glass-edge)] bg-[var(--glass-standard-bg)] shadow-[var(--glass-shadow)] [backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:border-[var(--v2-border-border-strong)]"
   return (
     <div
       data-component="amicode-starter-chips"
@@ -109,15 +110,37 @@ export function AmicodeGettingStarted(props: {
         "max-width": "100%",
       }}
     >
+      {/* amicode latent-constellation: bare text floats over the moving Brain
+          now — each muted line rides a dense-var backed zone (the question-
+          hint pattern: slice #60's token, never a new tint literal) */}
       <div
         data-slot="amicode-gs-tagline"
-        style={{ "font-size": "14px", "line-height": "20px", color: "var(--v2-text-text-base)" }}
+        style={{
+          "font-size": "14px",
+          "line-height": "20px",
+          color: "var(--v2-text-text-base)",
+          background: "var(--glass-dense-bg)",
+          "border-radius": "var(--radius-sm)",
+          padding: "2px 8px",
+          "-webkit-backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+          "backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+        }}
       >
         <AmicodeTagline />
       </div>
       <div
         data-slot="amicode-gs-byline"
-        style={{ "font-size": "11px", "line-height": "14px", color: "var(--v2-text-text-faint)", "margin-top": "-8px" }}
+        style={{
+          "font-size": "11px",
+          "line-height": "14px",
+          color: "var(--v2-text-text-faint)",
+          "margin-top": "-8px",
+          background: "var(--glass-dense-bg)",
+          "border-radius": "var(--radius-sm)",
+          padding: "2px 8px",
+          "-webkit-backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+          "backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+        }}
       >
         By Harmoniqs
       </div>
@@ -133,6 +156,11 @@ export function AmicodeGettingStarted(props: {
             "font-size": "12px",
             "line-height": "16px",
             color: "var(--v2-text-text-faint)",
+            background: "var(--glass-dense-bg)",
+            "border-radius": "var(--radius-sm)",
+            padding: "2px 8px",
+            "-webkit-backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+            "backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
           }}
         >
           <For each={STEPS}>{(step) => <span style={{ "white-space": "nowrap" }}>{step}</span>}</For>
@@ -154,9 +182,13 @@ export function AmicodeGettingStarted(props: {
               data-slot="amicode-gs-starter"
               onClick={() => props.onStart(starter.prompt)}
               style={{
-                border: "1px solid var(--v2-icon-icon-accent)",
+                // latent-constellation: glass, not an opaque layer fill
+                border: "1px solid var(--glass-edge)",
                 "border-radius": "var(--radius-md)",
-                background: "var(--v2-background-bg-layer-02)",
+                background: "var(--glass-standard-bg)",
+                "box-shadow": "var(--glass-shadow)",
+                "-webkit-backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+                "backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
                 color: "var(--v2-text-text-base)",
                 padding: "4px 12px",
                 "font-size": "12px",
@@ -174,9 +206,13 @@ export function AmicodeGettingStarted(props: {
             data-slot="amicode-gs-resume"
             onClick={() => props.onResume?.()}
             style={{
-              border: "1px solid var(--v2-icon-icon-accent)",
+              // latent-constellation: glass, not an opaque layer fill
+              border: "1px solid var(--glass-edge)",
               "border-radius": "var(--radius-md)",
-              background: "var(--v2-background-bg-layer-02)",
+              background: "var(--glass-standard-bg)",
+              "box-shadow": "var(--glass-shadow)",
+              "-webkit-backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
+              "backdrop-filter": "blur(var(--glass-blur)) brightness(var(--glass-brightness, 1))",
               color: "var(--v2-text-text-base)",
               padding: "4px 12px",
               "font-size": "12px",
