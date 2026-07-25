@@ -55,6 +55,14 @@ function makeEngine(opts: Partial<BrainEngineOptions> = {}) {
   })
   return { engine, ctx }
 }
+/** drive the manual clock at ~60fps between two timestamps */
+function drive(engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) {
+  for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
+}
+/** the cadence observable: one clearRect per drawn frame */
+function clears(ctx: ReturnType<typeof recordingCtx>) {
+  return ctx.calls.filter((c) => c.method === "clearRect").length
+}
 
 describe("boot", () => {
   test("boots the sparse seed: the amico core alone, nothing preloaded", () => {
@@ -375,19 +383,16 @@ describe("sparse seed & isolation", () => {
 
   test("the camera scale holds fixed while the graph grows — densify in place, no zoom-out", () => {
     const { engine } = makeEngine({ reduceMotion: false })
-    const drive = (fromMs: number, toMs: number) => {
-      for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
-    }
-    drive(0, 500)
+    drive(engine, 0, 500)
     engine.touch({ label: "seed-a.md", replay: true })
     engine.touch({ label: "seed-b.md", replay: true })
-    drive(516, 1000)
+    drive(engine, 516, 1000)
     const small = engine.stats().scale
     expect(Number.isFinite(small)).toBe(true)
     expect(small).toBeGreaterThan(0)
     // grow a few hundred grafts (replay considers: synchronous, star-shaped)
     for (let i = 0; i < 290; i++) engine.touch({ label: `grow/probe-${i}.md`, replay: true, consider: true })
-    drive(1016, 2000) // any per-frame fit-to-farthest would ease the zoom out here
+    drive(engine, 1016, 2000) // any per-frame fit-to-farthest would ease the zoom out here
     expect(engine.stats().scale).toBeCloseTo(small, 6)
   })
 })
@@ -399,11 +404,6 @@ describe("heartbeat cadence (shared draw-gate)", () => {
   // loop — cadence is asserted by counting clearRect calls over a driven
   // ~60fps clock. Beat budget per test stays under 8 so the ambient ghost
   // (nextGhost) never fires a pulse into a rest-cadence window.
-  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
-    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
-  }
-  const clears = (ctx: ReturnType<typeof recordingCtx>) => ctx.calls.filter((c) => c.method === "clearRect").length
-
   test("an active engine draws on every tick — full musical tempo", () => {
     const { engine, ctx } = makeEngine({ reduceMotion: false })
     engine.setActive(true)
@@ -473,11 +473,6 @@ describe("reduced-motion hard-pause", () => {
   // bounded burst around events (the nudge window, rebased onto the frame
   // clock), then goes still until the next touch. This terminal is DISTINCT
   // from any frame-time perf ease (slice #63) — no budget is consulted.
-  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
-    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
-  }
-  const clears = (ctx: ReturnType<typeof recordingCtx>) => ctx.calls.filter((c) => c.method === "clearRect").length
-
   test("after the boot burst elapses with nothing in flight, ticks produce no draws", () => {
     const { engine, ctx } = makeEngine() // reduceMotion: true
     drive(engine, 16, 3100) // the boot burst window (~3s), rest cadence inside it
@@ -502,12 +497,7 @@ describe("reduced-motion hard-pause", () => {
 
 describe("animated pipeline (manual clock)", () => {
   // full motion: reduceMotion off, clock driven by hand — a commit is a pulse
-  // that must physically travel the skeleton before its node claims
-  const drive = (engine: ReturnType<typeof makeEngine>["engine"], fromMs: number, toMs: number) => {
-    for (let t = fromMs; t <= toMs; t += 16) engine.tick(t)
-    return toMs
-  }
-
+  // that must physically travel the graph before its node claims
   test("a live commit claims only after its pulse arrives", () => {
     const { engine } = makeEngine({ reduceMotion: false })
     engine.tick(0)

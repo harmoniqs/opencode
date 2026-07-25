@@ -1029,7 +1029,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     },
     setActive: (a) => {
       if (destroyed) return
-      active = !!a
+      active = a
     },
     highlight: (label) => {
       if (destroyed) return

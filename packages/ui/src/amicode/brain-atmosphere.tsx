@@ -14,8 +14,9 @@
 // order); the component diffs by id — the strip's `sent` semantics — and the
 // FIRST flush restores charts silently (a mounted mid-session brain replays
 // the atlas instantly and quietly). Reduced-motion is the engine's own
-// concern (it watches prefers-reduced-motion live); tempo/at-rest changes
-// are out of scope here — the engine's current motion is reused verbatim.
+// concern (it watches prefers-reduced-motion live). The host's session-busy
+// signal arrives as `active` and routes to engine.setActive — full musical
+// tempo while a turn works, ~8fps breathing at rest (#62).
 
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { createBrainEngine, type BrainEngine, type BrainScheme } from "./brain-engine"
@@ -42,6 +43,8 @@ function currentScheme(): BrainScheme {
 export function BrainAtmosphere(props: {
   /** cumulative session event stream, diffed by id */
   events?: BrainAtmosphereEvent[]
+  /** session-busy signal → engine.setActive (adaptive heartbeat) */
+  active?: boolean
   class?: string
 }) {
   let host!: HTMLDivElement
@@ -103,6 +106,12 @@ export function BrainAtmosphere(props: {
     }
 
     onCleanup(() => eng.destroy())
+  })
+
+  // the heartbeat: session busy ⇒ full musical tempo; idle ⇒ ~8fps breathing
+  createEffect(() => {
+    const eng = engine()
+    if (eng) eng.setActive(props.active ?? false)
   })
 
   createEffect(() => {

@@ -8,7 +8,7 @@
 // and the busy turn animates live.
 
 import { createMemo, type Accessor } from "solid-js"
-import type { Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { amicoBrainRef } from "@opencode-ai/ui/brain-ref"
 import type { BrainAtmosphereEvent } from "@opencode-ai/ui/brain-atmosphere"
 import { useSync } from "@/context/sync"
@@ -56,8 +56,17 @@ export function deriveBrainEvents(
   return out
 }
 
+/** The Brain's heartbeat signal (#62): a session is active exactly while its
+ *  status is non-idle (busy or retrying) — the strip's `busy` derivation,
+ *  lifted pure so it is unit-testable headless. Routed into
+ *  `engine.setActive`: full musical tempo while a turn works, rest otherwise. */
+export function deriveBrainActive(status: SessionStatus | undefined): boolean {
+  return (status?.type ?? "idle") !== "idle"
+}
+
 /** The live feed for a Chat window's Brain: the active session's cumulative
- *  event stream out of the sync store — empty on the landing (no session). */
+ *  event stream and busy signal out of the sync store — empty/at-rest on the
+ *  landing (no session). */
 export function createBrainEvents(sessionID: Accessor<string | undefined>) {
   const sync = useSync()
   const events = createMemo<BrainAtmosphereEvent[]>(() => {
@@ -65,5 +74,10 @@ export function createBrainEvents(sessionID: Accessor<string | undefined>) {
     if (!id) return []
     return deriveBrainEvents(sync.data.message[id] ?? [], (messageID) => sync.data.part[messageID] ?? [])
   })
-  return { events }
+  const active = createMemo<boolean>(() => {
+    const id = sessionID()
+    if (!id) return false
+    return deriveBrainActive(sync.data.session_status[id])
+  })
+  return { events, active }
 }
