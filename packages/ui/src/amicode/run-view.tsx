@@ -33,6 +33,7 @@ export function RunVerdictView(props: { verdict: RunVerdict }) {
   const v = () => props.verdict
   return (
     <div class="amc-run" data-component="amicode-run-view">
+      <div class="amc-ev-sec">Result</div>
       <div class="amc-run-head">
         <Show when={v().fidelity !== null}>
           <span class="amc-run-fid" data-slot="amicode-run-fidelity">
@@ -43,18 +44,12 @@ export function RunVerdictView(props: { verdict: RunVerdict }) {
           {STATUS_LABEL[v().status] ?? v().status}
         </span>
       </div>
-      <Show when={v().iteration !== null || v().tier}>
-        <div class="amc-run-sub">
-          <Show when={v().iteration !== null}>
-            <span data-slot="amicode-run-iters">{v().iteration} iters</span>
-          </Show>
-          <Show when={v().tier}>
-            {(tier) => (
-              <span class="amc-tier" data-slot="amicode-entity-tier" data-tier={tier()}>
-                {tier() === "free" ? "free · unvetted" : tier()}
-              </span>
-            )}
-          </Show>
+      <Show when={v().iteration !== null}>
+        <div class="amc-term">
+          <div class="amc-term-head">
+            <span class="amc-term-name">iterations</span>
+          </div>
+          <div class="amc-term-val" data-slot="amicode-run-iters">{v().iteration}</div>
         </div>
       </Show>
     </div>

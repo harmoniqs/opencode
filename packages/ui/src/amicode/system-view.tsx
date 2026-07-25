@@ -2,7 +2,7 @@ import { For, Show, createMemo } from "solid-js"
 import katex from "katex"
 import { systemProjection } from "./problem"
 import { formatSci } from "./facets"
-import { systemTableModel, systemHamiltonianLatex, systemIdentityLine } from "./system-render"
+import { systemTableModel, systemHamiltonianLatex } from "./system-render"
 
 // AMICODE System hero (spec §6.1) — PHYSICS-FORWARD (Kate 2026-07-23): lead with
 // the Hamiltonian, then a labeled physics spec (frequency, anharmonicity, drive
@@ -42,8 +42,6 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
     const latex = systemHamiltonianLatex(proj())
     return latex ? katex.renderToString(latex, { throwOnError: false }) : undefined
   })
-  const identity = createMemo(() => systemIdentityLine(proj()))
-
   // Single qubit/atom, no couplings → the physics spec. Else the structural view.
   const single = createMemo(() => proj().components.length === 1 && proj().couplings.length === 0)
   const physics = createMemo<PhysRow[]>(() => {
@@ -76,18 +74,21 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
 
   return (
     <div class="amc-system" data-component="amicode-system-view">
-      <Show when={identity()}>
-        <div class="amc-sys-identity" data-slot="amicode-system-identity">
-          {identity()}
+      <Show when={proj().platform || proj().driveArch}>
+        <div class="amc-modebar" data-slot="amicode-system-identity">
+          <Show when={proj().platform}>{(p) => <span class="amc-badge">{p()}</span>}</Show>
+          <Show when={proj().driveArch}>{(d) => <span class="amc-badge">{d()} drive</span>}</Show>
         </div>
       </Show>
 
       <Show when={hamiltonian()}>
         {(html) => (
-          <div class="amc-ev-formula" data-slot="amicode-system-hamiltonian">
-            <div class="amc-ev-formula-label">Hamiltonian</div>
-            <div innerHTML={html()} />
-          </div>
+          <>
+            <div class="amc-ev-sec">Hamiltonian</div>
+            <div class="amc-ev-formula" data-slot="amicode-system-hamiltonian">
+              <div innerHTML={html()} />
+            </div>
+          </>
         )}
       </Show>
 
@@ -119,22 +120,24 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
           </div>
         }
       >
-        <div class="amc-sys-physics" data-slot="amicode-system-physics">
-          <div class="amc-ev-formula-label">Physics</div>
-          <For each={physics()}>
-            {(r) => (
-              <div class="amc-phys-row" classList={{ "is-unset": !r.set }}>
-                <span class="amc-phys-key">
-                  {r.label}
-                  <Show when={r.sym}>
-                    <span class="amc-phys-sym"> {r.sym}</span>
-                  </Show>
-                </span>
-                <span class="amc-phys-val">{r.value}</span>
-              </div>
-            )}
-          </For>
-        </div>
+        <>
+          <div class="amc-ev-sec">Physics</div>
+          <div class="amc-sys-physics" data-slot="amicode-system-physics">
+            <For each={physics()}>
+              {(r) => (
+                <div class="amc-term">
+                  <div class="amc-term-head">
+                    <span class="amc-term-name">{r.label}</span>
+                  </div>
+                  <div class="amc-term-val" classList={{ "is-unset": !r.set }}>
+                    <span>{r.value}</span>
+                    <Show when={r.sym}>{(s) => <span class="amc-term-sym">{s()}</span>}</Show>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </>
       </Show>
     </div>
   )

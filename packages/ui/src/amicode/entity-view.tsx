@@ -7,9 +7,11 @@ import {
   editPromptText,
   entityRows,
   fieldGroup,
+  formulationProjection,
   historyRows,
   humanizeKey,
   runVerdict,
+  systemProjection,
 } from "./problem"
 import { SystemComposite } from "./system-view"
 import { FormulationView } from "./formulation-view"
@@ -36,6 +38,13 @@ import { CalibrationView } from "./calibration-view"
 // (Event history removed 2026-07-23 — the change-log was meta-noise, not the
 // decision-relevant physics; entity views surface current state only.)
 
+// Per-kind raw-field-table suppressions: linkage/metadata that's noise in the
+// dialog (the Run's system_ref/formulation_ref/tier/note — Kate 2026-07-24; the
+// Run modal leads with the verdict + derived problem size instead).
+const HIDDEN_FIELDS: Record<string, Set<string>> = {
+  run: new Set(["system_ref", "formulation_ref", "tier", "note"]),
+}
+
 export function AmicodeEntityView(props: {
   view: ProblemView | undefined // undefined → loading skeleton
   kind: string
@@ -47,7 +56,12 @@ export function AmicodeEntityView(props: {
   editLabel: string
 }) {
   const entity = createMemo(() => props.view?.entities[props.kind] ?? {})
-  const rows = createMemo(() => entityRows(entity()))
+  const rows = createMemo(() => {
+    const hidden = HIDDEN_FIELDS[props.kind]
+    const all = entityRows(entity())
+    if (!hidden) return all
+    return all.filter((r) => !hidden.has(r.key) && !hidden.has(r.key.split(".").pop() ?? r.key))
+  })
   const history = createMemo(() => (props.view ? historyRows(props.view.events, props.kind) : []))
   const anchored = createMemo(() =>
     props.anchorSeq !== undefined && history().some((event) => event.seq === props.anchorSeq)
@@ -93,6 +107,29 @@ export function AmicodeEntityView(props: {
   )
   const deviceV = createMemo(() => (props.kind === "device_session" ? deviceVerdict(entity()) : null))
   const calibV = createMemo(() => (props.kind === "calibration" ? calibrationVerdict(entity(), Date.now()) : null))
+  // Run modal only: derived problem-size metrics — Hilbert dimension (∏ levels
+  // from the system), knot points N (from the formulation solve), and the state-
+  // trajectory variable count (N × 2d² for a gate, N × 2d for a ket). All exact,
+  // derived from the sibling system/formulation entities.
+  const runSize = createMemo(() => {
+    if (props.kind !== "run") return undefined
+    const sysE = props.view?.entities.system
+    const fmlE = props.view?.entities.formulation
+    if (!sysE && !fmlE) return undefined
+    const sp = sysE ? systemProjection(sysE) : undefined
+    const fp = fmlE ? formulationProjection(fmlE) : undefined
+    const comps = sp?.components ?? []
+    const dim = comps.length
+      ? comps.reduce((acc, c) => acc * (typeof c.levels === "number" && c.levels > 0 ? c.levels : 1), 1)
+      : undefined
+    const solveN = fp?.solve?.N
+    const N = typeof solveN === "number" ? solveN : undefined
+    const ket = fp?.trajectory_type === "ket" || fp?.trajectory_type === "multiket"
+    const stateDim = dim !== undefined ? (ket ? 2 * dim : 2 * dim * dim) : undefined
+    const vars = N !== undefined && stateDim !== undefined ? N * stateDim : undefined
+    if (dim === undefined && N === undefined) return undefined
+    return { dim, N, vars }
+  })
   // A hero renders only when the kind has one AND it has content to show
   // (run/device/calibration return null when there's nothing worth surfacing,
   // so the raw field table takes over instead of showing an empty hero).
@@ -144,12 +181,39 @@ export function AmicodeEntityView(props: {
               <FormulationView entity={entity()} />
             </Show>
             <Show when={props.kind === "run" && verdict()}>{(v) => <RunVerdictView verdict={v()} />}</Show>
+            <Show when={props.kind === "run" && runSize()}>
+              {(s) => (
+                <>
+                  <div class="amc-ev-sec">Problem size</div>
+                  <Show when={s().dim !== undefined}>
+                    <div class="amc-term">
+                      <div class="amc-term-head">
+                        <span class="amc-term-name">hilbert dimension</span>
+                      </div>
+                      <div class="amc-term-val" data-slot="amicode-run-hilbert">{s().dim}</div>
+                    </div>
+                  </Show>
+                  <Show when={s().N !== undefined}>
+                    <div class="amc-term">
+                      <div class="amc-term-head">
+                        <span class="amc-term-name">knot points</span>
+                      </div>
+                      <div class="amc-term-val">{s().N}</div>
+                    </div>
+                  </Show>
+                  <Show when={s().vars !== undefined}>
+                    <div class="amc-term">
+                      <div class="amc-term-head">
+                        <span class="amc-term-name">state variables</span>
+                      </div>
+                      <div class="amc-term-val" data-slot="amicode-run-vars">{s().vars}</div>
+                    </div>
+                  </Show>
+                </>
+              )}
+            </Show>
             <Show when={props.kind === "device_session" && deviceV()}>{(v) => <DeviceView verdict={v()} />}</Show>
             <Show when={props.kind === "calibration" && calibV()}>{(v) => <CalibrationView verdict={v()} />}</Show>
-
-            <Show when={!hasHero() && fieldRows().length === 0}>
-              <div class="amc-ev-empty">No fields recorded yet.</div>
-            </Show>
 
             {/* Raw field table only for kinds WITHOUT a hero (so their dialog
                 isn't empty). Hero kinds surface their content directly — the

@@ -48,12 +48,15 @@ export function DeviceView(props: { verdict: DeviceVerdict }) {
         </div>
       </Show>
       <Show when={links().length > 0}>
+        <div class="amc-ev-sec">Links</div>
         <div class="amc-device-links" data-slot="amicode-device-links">
           <For each={links()}>
             {(l) => (
-              <div class="amc-device-link">
-                <span class="amc-vk">{l.label}</span>
-                <span class="amc-vv">{l.value}</span>
+              <div class="amc-term">
+                <div class="amc-term-head">
+                  <span class="amc-term-name">{l.label}</span>
+                </div>
+                <div class="amc-term-val">{l.value}</div>
               </div>
             )}
           </For>

@@ -305,20 +305,12 @@
   border: 1px solid var(--v2-border-border-muted);
   overflow-x: auto;
 }
-[data-component="amicode-entity-view"] .amc-ev-formula-label {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--v2-text-text-faint);
-  margin-bottom: 10px;
-}
 
 [data-component="amicode-entity-view"] .amc-ev-sec {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 20px 4px 8px;
+  margin: 12px 4px 8px;
   font-family: var(--font-family-mono, ui-monospace, monospace);
   font-size: 9px;
   letter-spacing: 0.16em;
@@ -331,9 +323,13 @@
   height: 1px;
   background: var(--v2-border-border-muted);
 }
+/* a section header that LEADS a modal (Run, Pulse, system-without-identity)
+   shouldn't carry the full inter-section top gap — trim it so the dialog doesn't
+   open with dead space. Only applies when the header is the first element. */
+[data-component="amicode-entity-view"] .amc-ev-sec:first-child { margin-top: 4px; }
 
 [data-component="amicode-entity-view"] .amc-ev-group {
-  margin: 8px 4px 2px;
+  margin: 8px 4px 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--v2-text-text-muted);
@@ -341,19 +337,22 @@
 
 [data-component="amicode-entity-view"] .amc-field {
   display: grid;
-  grid-template-columns: 160px 1fr auto;
+  grid-template-columns: 10rem 1fr auto;
   align-items: baseline;
-  gap: 14px;
-  padding: 8px 8px 8px 4px;
+  gap: 16px;
+  padding: 4px 8px 4px 4px;
   border-radius: var(--radius-md);
   transition: background 0.12s ease;
 }
 [data-component="amicode-entity-view"] .amc-field:hover { background: var(--v2-background-bg-layer-01); }
 [data-component="amicode-entity-view"] .amc-field .amc-fk { min-width: 0; }
+/* match the shared entity row: an uppercase micro-label, wire key as faint sub */
 [data-component="amicode-entity-view"] .amc-field .amc-fk .name {
-  font-size: 13px;
-  font-weight: 560;
-  color: var(--v2-text-text-base);
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--v2-text-text-muted);
 }
 [data-component="amicode-entity-view"] .amc-field .amc-fk .raw {
   display: block;
@@ -363,10 +362,9 @@
   margin-top: 1px;
 }
 [data-component="amicode-entity-view"] .amc-field .amc-fv {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 13px;
+  font-size: 0.82rem;
   color: var(--v2-text-text-base);
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
   word-break: break-word;
   min-width: 0;
@@ -543,12 +541,6 @@
 [data-component="amicode-entity-view"] .amc-ev-foot b {
   color: var(--v2-text-text-base);
   font-weight: 600;
-}
-
-[data-component="amicode-entity-view"] .amc-ev-empty {
-  font-size: 13px;
-  color: var(--v2-text-text-muted);
-  padding: 4px;
 }
 
 /* error + skeleton states */
@@ -728,38 +720,11 @@
 }
 
 /* ---- System hero (spec §6.1): identity + schematic + table + Hamiltonian ---- */
-[data-component="amicode-system-view"] { display: flex; flex-direction: column; gap: 12px; }
-[data-component="amicode-system-view"] .amc-sys-identity {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--v2-text-text-base);
-  padding: 2px 4px 0;
-}
-[data-component="amicode-system-view"] .amc-schematic {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 4px;
-}
-[data-component="amicode-system-view"] .amc-node {
-  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 6px 12px; border-radius: var(--radius-md);
-  border: 1px solid var(--v2-border-border-base);
-  background: var(--v2-background-bg-layer-01);
-}
-[data-component="amicode-system-view"] .amc-node-id { font-weight: 600; color: var(--v2-text-text-base); }
-[data-component="amicode-system-view"] .amc-node-lvl { font-size: 0.72rem; color: var(--v2-text-text-muted); }
-[data-component="amicode-system-view"] .amc-edge {
-  display: inline-flex; flex-direction: column; align-items: center; min-width: 40px; padding: 0 4px;
-}
-[data-component="amicode-system-view"] .amc-edge-line { color: var(--v2-border-border-base); line-height: 1; }
-[data-component="amicode-system-view"] .amc-edge-label {
-  font-size: 0.7rem; letter-spacing: 0.02em; color: var(--v2-text-text-accent);
-}
-[data-component="amicode-system-view"] .amc-loose {
-  display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.78rem; color: var(--v2-text-text-muted);
-}
+[data-component="amicode-system-view"] { display: flex; flex-direction: column; gap: 8px; }
 [data-component="amicode-system-view"] .amc-systbl { display: flex; flex-direction: column; }
 [data-component="amicode-system-view"] .amc-systbl-row {
   display: grid; grid-template-columns: 3rem 5rem auto 1fr; gap: 8px; align-items: baseline;
-  padding: 4px 2px; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 55%, transparent);
+  padding: 4px; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 55%, transparent);
   font-variant-numeric: tabular-nums;
 }
 [data-component="amicode-system-view"] .amc-systbl-row.amc-coupling { grid-template-columns: 8rem 5rem 1fr; }
@@ -768,37 +733,51 @@
 [data-component="amicode-system-view"] .amc-c-lvl { color: var(--v2-text-text-muted); font-size: 0.8rem; }
 [data-component="amicode-system-view"] .amc-c-params { color: var(--v2-text-text-base); font-size: 0.8rem; }
 [data-component="amicode-system-view"] .amc-ev-formula { margin-top: 4px; }
-[data-component="amicode-system-view"] .amc-ev-formula-label {
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v2-text-text-muted); margin-bottom: 2px;
-}
 
 /* ---- Formulation hero (spec §6.2): mode badges + objective + constraints ---- */
 [data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }
-[data-component="amicode-formulation-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
-[data-component="amicode-formulation-view"] .amc-badge {
+[data-component="amicode-entity-view"] .amc-modebar { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-component="amicode-entity-view"] .amc-badge {
   display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: var(--radius-full);
   border: 1px solid var(--v2-border-border-base); background: var(--v2-background-bg-layer-01);
-  font-size: 0.76rem;
+  color: var(--v2-text-text-base); font-size: 0.76rem; line-height: 1.35;
 }
-[data-component="amicode-formulation-view"] .amc-badge.active {
-  border-color: var(--accent-edge);
-  background: var(--accent-fill-soft);
+[data-component="amicode-entity-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
+[data-component="amicode-entity-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
+[data-component="amicode-formulation-view"] .amc-obj { display: flex; flex-direction: column; gap: 8px; }
+[data-component="amicode-formulation-view"] .amc-constraints { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---- shared entity row primitive — used by formulation, system, run, device,
+   calibration and the generic field table so every entity modal reads the same:
+   a quiet uppercase micro-label in a fixed left column + value in the right
+   column (an optional faint physics symbol / wire-key beside it). ---- */
+[data-component="amicode-entity-view"] .amc-term {
+  display: flex; flex-direction: row; align-items: baseline; gap: 16px;
 }
-[data-component="amicode-formulation-view"] .amc-badge .k { color: var(--v2-text-text-muted); }
-[data-component="amicode-formulation-view"] .amc-badge .v { color: var(--v2-text-text-base); font-weight: 600; }
-[data-component="amicode-formulation-view"] .amc-obj { display: flex; flex-direction: column; gap: 4px; }
-[data-component="amicode-formulation-view"] .amc-obj-primary { display: flex; align-items: baseline; gap: 8px; }
-[data-component="amicode-formulation-view"] .amc-obj-name { color: var(--v2-text-text-base); font-weight: 600; }
-[data-component="amicode-formulation-view"] .amc-obj-tag {
-  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--v2-text-text-muted);
+[data-component="amicode-entity-view"] .amc-term-head {
+  flex: 0 0 10rem; min-width: 0; display: flex; flex-direction: column; gap: 1px;
 }
-[data-component="amicode-formulation-view"] .amc-obj-latex { margin: 2px 0; }
-[data-component="amicode-formulation-view"] .amc-obj-term,
-[data-component="amicode-formulation-view"] .amc-constraint {
+[data-component="amicode-entity-view"] .amc-obj-name,
+[data-component="amicode-entity-view"] .amc-term-name {
+  font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--v2-text-text-muted); font-variant-numeric: tabular-nums;
+}
+/* secondary annotation under a name (ensemble "M = 3", a wire key, …) */
+[data-component="amicode-entity-view"] .amc-term-sub {
+  font-size: 0.62rem; color: var(--v2-text-text-faint); font-variant-numeric: tabular-nums;
+}
+/* value column — plain text/number, with an optional faint physics symbol */
+[data-component="amicode-entity-view"] .amc-term-val {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px;
   font-size: 0.82rem; color: var(--v2-text-text-base); font-variant-numeric: tabular-nums;
-  padding: 2px 0; border-top: 1px solid color-mix(in srgb, var(--v2-border-border-base) 45%, transparent);
+  overflow-wrap: anywhere;
 }
-[data-component="amicode-formulation-view"] .amc-solve { font-size: 0.82rem; color: var(--v2-text-text-muted); font-variant-numeric: tabular-nums; }
+[data-component="amicode-entity-view"] .amc-term-sym { flex: none; font-size: 0.72rem; color: var(--v2-text-text-faint); }
+[data-component="amicode-entity-view"] .amc-term-val.is-unset { color: var(--v2-text-text-faint); font-style: italic; }
+
+/* formulation-only: the KaTeX equation as the value (Solve is now mode badges) */
+[data-component="amicode-formulation-view"] .amc-obj-latex,
+[data-component="amicode-formulation-view"] .amc-term-latex { flex: 1 1 auto; min-width: 0; margin: 0; }
 
 /* ---- overflow hardening: keep the entity-view dialog from bleeding past its
    width. Grid/flex children default to min-width:auto (content-based), so a long
@@ -813,15 +792,13 @@
 [data-component="amicode-entity-view"] .amc-event .summary .v { overflow-wrap: anywhere; min-width: 0; }
 [data-component="amicode-system-view"] .amc-systbl-row > * { min-width: 0; }
 [data-component="amicode-system-view"] .amc-c-params,
-[data-component="amicode-system-view"] .amc-loose,
 [data-component="amicode-formulation-view"] .amc-obj-latex,
-[data-component="amicode-formulation-view"] .amc-obj-term,
-[data-component="amicode-formulation-view"] .amc-constraint,
-[data-component="amicode-formulation-view"] .amc-solve { overflow-wrap: anywhere; min-width: 0; }
-[data-component="amicode-system-view"] .amc-schematic,
+[data-component="amicode-formulation-view"] .amc-term-latex,
+[data-component="amicode-formulation-view"] .amc-term-name { overflow-wrap: anywhere; min-width: 0; }
 [data-component="amicode-formulation-view"] .amc-modebar { max-width: 100%; }
 [data-component="amicode-system-view"] .amc-ev-formula,
-[data-component="amicode-formulation-view"] .amc-obj-latex { overflow-x: auto; }
+[data-component="amicode-formulation-view"] .amc-obj-latex,
+[data-component="amicode-formulation-view"] .amc-term-latex { overflow-x: auto; }
 
 /* ---- Widget grid edit mode (spec T3.1/T2.6) ------------------------------
    Rebuilt for clarity: instead of a heavy row of buttons floating above each
@@ -1167,8 +1144,7 @@
 [data-component="amicode-calibration-view"] {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin: 4px 4px 2px;
+  gap: 8px;
 }
 
 /* Run: big fidelity + status badge */
@@ -1198,16 +1174,6 @@
   background: var(--v2-background-bg-layer-02);
   color: var(--v2-text-text-muted);
 }
-[data-component="amicode-run-view"] .amc-run-sub {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 11px;
-  color: var(--v2-text-text-muted);
-}
-
 /* verdict tones (shared across run status + device/calibration pills) */
 [data-component="amicode-run-view"] .amc-run-status[data-tone="ok"],
 [data-component="amicode-device-view"] .amc-vpill[data-tone="ok"],
@@ -1262,29 +1228,11 @@
 [data-component="amicode-device-view"] .amc-device-links {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
-[data-component="amicode-device-view"] .amc-device-link,
 [data-component="amicode-calibration-view"] .amc-calib-source {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 12px;
-}
-[data-component="amicode-device-view"] .amc-vk,
-[data-component="amicode-calibration-view"] .amc-vk {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--v2-text-text-faint);
-  min-width: 3rem;
-}
-[data-component="amicode-device-view"] .amc-vv,
-[data-component="amicode-calibration-view"] .amc-vv {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  color: var(--v2-text-text-base);
-  overflow-wrap: anywhere;
+  flex-direction: column;
 }
 [data-component="amicode-device-view"] .amc-device-note {
   font-size: 12px;
@@ -1292,55 +1240,9 @@
   overflow-wrap: anywhere;
 }
 
-/* "Show all fields" toggle — mirrors the history toggle, as a standalone row */
-[data-component="amicode-entity-view"] .amc-ev-fields-toggle {
-  align-self: flex-start;
-  margin: 16px 4px 0;
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  font-size: 11.5px;
-  font-weight: 550;
-  color: var(--v2-text-text-accent);
-  cursor: pointer;
-}
-[data-component="amicode-entity-view"] .amc-ev-fields-toggle:hover { text-decoration: underline; }
-[data-component="amicode-entity-view"] .amc-ev-fields-toggle:focus-visible {
-  outline: 1px solid var(--v2-icon-icon-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
 /* ---- System physics spec (physics-forward System hero) --------------------- */
 [data-component="amicode-system-view"] .amc-sys-physics {
   display: flex;
   flex-direction: column;
-  margin-top: 8px;
-}
-[data-component="amicode-system-view"] .amc-phys-row {
-  display: grid;
-  grid-template-columns: 8rem 1fr;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-1) 4px;
-  font-size: 13px;
-}
-[data-component="amicode-system-view"] .amc-phys-row + .amc-phys-row {
-  border-top: 1px solid var(--v2-border-border-muted);
-}
-[data-component="amicode-system-view"] .amc-phys-key {
-  color: var(--v2-text-text-muted);
-}
-[data-component="amicode-system-view"] .amc-phys-sym {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  color: var(--v2-text-text-faint);
-}
-[data-component="amicode-system-view"] .amc-phys-val {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  color: var(--v2-text-text-base);
-  font-variant-numeric: tabular-nums;
-}
-[data-component="amicode-system-view"] .amc-phys-row.is-unset .amc-phys-val {
-  color: var(--v2-text-text-faint);
-  font-style: italic;
+  gap: 8px;
 }

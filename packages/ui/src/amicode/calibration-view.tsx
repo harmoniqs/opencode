@@ -36,10 +36,17 @@ export function CalibrationView(props: { verdict: CalibrationVerdict }) {
       </Show>
       <Show when={v().source}>
         {(src) => (
-          <div class="amc-calib-source" data-slot="amicode-calibration-source">
-            <span class="amc-vk">source</span>
-            <span class="amc-vv">{src()}</span>
-          </div>
+          <>
+            <div class="amc-ev-sec">Source</div>
+            <div class="amc-calib-source" data-slot="amicode-calibration-source">
+              <div class="amc-term">
+                <div class="amc-term-head">
+                  <span class="amc-term-name">source</span>
+                </div>
+                <div class="amc-term-val">{src()}</div>
+              </div>
+            </div>
+          </>
         )}
       </Show>
     </div>
