@@ -179,7 +179,9 @@
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid var(--border-weak-base, rgba(255, 255, 255, 0.08));
-  background: color-mix(in srgb, var(--background-base) 92%, transparent);
+  /* glass sweep (#56): the subagent card is a dense zone inside the glassed
+     BasicTool wrapper — the frost shows through */
+  background: var(--glass-dense-bg);
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
@@ -239,7 +241,7 @@
   &:hover,
   &:focus-visible {
     border-color: var(--border-weak-base, rgba(255, 255, 255, 0.08));
-    background: color-mix(in srgb, var(--background-stronger) 88%, transparent);
+    background: var(--accent-fill-soft);
 
     [data-component="task-tool-action"] {
       opacity: 1;

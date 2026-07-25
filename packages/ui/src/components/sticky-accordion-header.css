@@ -4,3 +4,9 @@
   z-index: 10;
   background-color: var(--background-stronger);
 }
+
+/* glass sweep (#56): inside a glassed card the sticky band occludes scrolled
+   content with the dense-zone token, not an opaque chrome fill. */
+[data-glass] [data-component="sticky-accordion-header"] {
+  background-color: var(--glass-dense-bg);
+}

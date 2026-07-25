@@ -1,3 +1,9 @@
+/* glass sweep (#56): the semantic hue rides as a danger TINT over the derived
+   glass tint — the rail/ink stay, the surface never goes opaque or bare. */
+[data-component="card"][data-kind="tool-error-card"][data-glass] {
+  background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--glass-standard-bg));
+}
+
 [data-component="card"][data-kind="tool-error-card"] {
   --card-pad-y: 8px;
   --card-line-pad: 12px;

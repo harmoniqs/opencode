@@ -42,9 +42,11 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                 <div
                   classList={{
                     "group shrink-0 flex flex-col rounded-[6px] pl-2 pr-1 py-1 max-w-[200px] h-12 cursor-default transition-all transition-transform shadow-xs-border hover:shadow-xs-border-hover": true,
-                    "hover:bg-surface-interactive-weak": !!item.commentID && !selected,
-                    "bg-surface-interactive-hover hover:bg-surface-interactive-hover shadow-xs-border-hover": selected,
-                    "bg-background-stronger": !selected,
+                    // glass sweep (#56): dense-zone chip fill; selected/hover ride
+                    // the design-system accent state fill, never an opaque layer
+                    "hover:bg-[var(--accent-fill-soft)]": !!item.commentID && !selected,
+                    "bg-[var(--accent-fill-soft)] hover:bg-[var(--accent-fill-soft)] shadow-xs-border-hover": selected,
+                    "bg-[var(--glass-dense-bg)]": !selected,
                   }}
                   onClick={() => props.openComment(item)}
                 >

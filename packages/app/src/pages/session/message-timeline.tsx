@@ -1222,9 +1222,10 @@ export function MessageTimeline(props: {
             <div class="w-full px-4 md:px-5 pb-2">
               <div class="ml-auto max-w-[82%] overflow-x-auto no-scrollbar">
                 <div class="flex w-max min-w-full justify-end gap-2">
+                  {/* glass sweep (#56): comment chips ride the dense-zone token over the Brain */}
                   <Index each={comments()}>
                     {(comment) => (
-                      <div class="shrink-0 max-w-[260px] rounded-[6px] border border-border-weak-base bg-background-stronger px-2.5 py-2">
+                      <div class="shrink-0 max-w-[260px] rounded-[6px] border border-border-weak-base bg-[var(--glass-dense-bg)] px-2.5 py-2">
                         <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
                           <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
                           <span class="truncate">{getFilename(comment().path)}</span>
@@ -1343,7 +1344,9 @@ export function MessageTimeline(props: {
         return (
           <TimelineRowFrame row={errorRow}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
-              <Card variant="error" class="error-card">
+              {/* glass sweep (#56): the error card floats on glass with a danger
+                  tint (session-turn.css), never bare over the Brain */}
+              <Card variant="error" class="error-card" data-glass="standard">
                 {errorRow().text}
               </Card>
             </div>
@@ -1372,12 +1375,13 @@ export function MessageTimeline(props: {
           class="pointer-events-auto flex items-center justify-center w-10 h-8 bg-transparent border-none cursor-pointer p-0 group"
           onClick={props.onResumeScroll}
         >
+          {/* glass sweep (#56): the jump-to-bottom pill drops its hand-rolled
+              near-glass (color-mix fill, 0.75px blur, bespoke shadows) for the
+              single recipe; inline radius keeps the control geometry. */}
           <div
-            class="flex items-center justify-center w-8 h-6 rounded-[6px] border border-border-weaker-base bg-[color-mix(in_srgb,var(--surface-raised-stronger-non-alpha)_80%,transparent)] backdrop-blur-[0.75px] transition-colors group-hover:border-[var(--border-weak-base)] group-hover:[--icon-base:var(--icon-hover)]"
-            style={{
-              "box-shadow":
-                "0 51px 60px 0 rgba(0,0,0,0.10), 0 15px 18px 0 rgba(0,0,0,0.12), 0 6.386px 7.513px 0 rgba(0,0,0,0.12), 0 2.31px 2.717px 0 rgba(0,0,0,0.20)",
-            }}
+            data-glass="standard"
+            class="flex items-center justify-center w-8 h-6 transition-colors group-hover:border-[var(--border-weak-base)] group-hover:[--icon-base:var(--icon-hover)]"
+            style={{ "border-radius": "6px" }}
           >
             <Icon name="arrow-down-to-line" size="small" />
           </div>
@@ -1406,7 +1410,12 @@ export function MessageTimeline(props: {
             }}
             data-session-title
             classList={{
-              "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)] backdrop-blur-[10px]": true,
+              // glass sweep (#56): the sticky title band converts its hand-rolled
+              // chrome (opaque --background-stronger gradient + 10px blur) to the
+              // glass recipe's own terms — the derived tint fading to transparent
+              // over the shared blur+brightness. Band form (no border/radius), so
+              // the vars are used directly rather than the card hook.
+              "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--glass-standard-bg)_48px,transparent)] [backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))]": true,
               "w-full": true,
               "pb-4": true,
               "pl-2 pr-3 md:pl-4 md:pr-3": true,

@@ -41,9 +41,13 @@
   transition: all 150ms ease-out;
 
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-weak-base);
-  background: var(--surface-float-base);
+  /* glass sweep (#56): legacy toast keeps its inverse ink on a HEAVIER glass —
+     denser token tint + shared blur/edge, never a raw opaque token. */
+  border: 1px solid var(--glass-edge, var(--border-weak-base));
+  background: color-mix(in srgb, var(--surface-float-base) 84%, transparent);
   color: var(--text-invert-base);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
   box-shadow: var(--shadow-md);
 
   [data-slot="toast-inner"] {

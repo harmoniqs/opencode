@@ -92,7 +92,10 @@ export function NewSessionView(props: NewSessionViewProps) {
               if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
             }}
           />
-          <div class="w-full flex flex-col gap-4 items-center">
+          {/* glass sweep (#56): directory/branch/last-modified metadata is muted
+              ink — it rides a dense-zone chip instead of floating bare on the
+              landing Brain */}
+          <div class="w-fit max-w-full mx-auto flex flex-col gap-4 items-center rounded-[var(--radius-lg)] bg-[var(--glass-dense-bg)] px-5 py-3">
             <div class="flex items-start justify-center gap-3 min-h-5">
               <div class="text-12-medium text-text-weak select-text leading-5 min-w-0 max-w-160 break-words text-center">
                 {getDirectory(projectRoot())}

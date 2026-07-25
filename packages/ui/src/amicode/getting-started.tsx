@@ -100,6 +100,10 @@ export function AmicodeGettingStarted(props: {
   return (
     <div
       data-component="amicode-getting-started"
+      // glass sweep (#56): the classic in-chat landing floats as ONE standard
+      // glass card — its bare tagline/byline/steps text otherwise sits directly
+      // on the live Brain (fails AA over peak bloom).
+      data-glass="standard"
       style={{
         display: "flex",
         "flex-direction": "column",
@@ -107,6 +111,7 @@ export function AmicodeGettingStarted(props: {
         gap: "12px",
         "min-width": "0",
         "max-width": "100%",
+        padding: "20px 24px",
       }}
     >
       <div
@@ -153,10 +158,13 @@ export function AmicodeGettingStarted(props: {
               type="button"
               data-slot="amicode-gs-starter"
               onClick={() => props.onStart(starter.prompt)}
+              // glass sweep (#56): dense-zone chip fill + accent-edge (neutral on
+              // light, yellow on dark) — never an opaque layer or a yellow
+              // foreground on light (design-system accent law).
               style={{
-                border: "1px solid var(--v2-icon-icon-accent)",
+                border: "1px solid var(--accent-edge)",
                 "border-radius": "var(--radius-md)",
-                background: "var(--v2-background-bg-layer-02)",
+                background: "var(--glass-dense-bg)",
                 color: "var(--v2-text-text-base)",
                 padding: "4px 12px",
                 "font-size": "12px",
@@ -174,9 +182,9 @@ export function AmicodeGettingStarted(props: {
             data-slot="amicode-gs-resume"
             onClick={() => props.onResume?.()}
             style={{
-              border: "1px solid var(--v2-icon-icon-accent)",
+              border: "1px solid var(--accent-edge)",
               "border-radius": "var(--radius-md)",
-              background: "var(--v2-background-bg-layer-02)",
+              background: "var(--glass-dense-bg)",
               color: "var(--v2-text-text-base)",
               padding: "4px 12px",
               "font-size": "12px",

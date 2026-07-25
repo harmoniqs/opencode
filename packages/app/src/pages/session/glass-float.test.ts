@@ -123,23 +123,40 @@ describe("glass float — gaps stay live", () => {
   })
 })
 
-describe("glass float — the sticky session-title header is untouched chrome", () => {
-  test("it keeps its pre-existing backdrop blur and carries no data-glass", async () => {
+describe("glass sweep (#56) — the sticky session-title band rides the glass vars", () => {
+  test("its gradient + blur are the recipe's own terms, not chrome literals; band form keeps no hook", async () => {
     const src = await read("pages/session/message-timeline.tsx")
     const idx = src.indexOf("data-session-title")
     expect(idx).toBeGreaterThan(-1)
-    const block = src.slice(idx, idx + 600)
-    // pre-existing chrome blur stays byte-identical — explicitly excluded
-    // from the no-literal scan (out-of-scope chrome, issue #61)
-    expect(block).toContain("backdrop-blur-[10px]")
+    const block = src.slice(idx, idx + 1200) // the band's classList follows the attribute
+    // converted (#56): derived tint fading to transparent over the shared
+    // blur+brightness — the opaque --background-stronger gradient and the
+    // hand-rolled 10px blur are gone
+    expect(block).toContain("var(--glass-standard-bg)")
+    expect(block).toContain("blur(var(--glass-blur,8px))")
+    expect(block).toContain("brightness(var(--glass-brightness,1))")
+    expect(block).not.toContain("var(--background-stronger)")
+    expect(block).not.toContain("backdrop-blur-[10px]")
+    // it stays a BAND (no border/radius/shadow), so no card hook on it
     expect(block).not.toContain("data-glass")
   })
 
-  test("no data-glass anywhere in the timeline except the diff card", async () => {
+  test("timeline data-glass census: diff card (dense) + jump-to-bottom + error card (standard)", async () => {
     const src = await read("pages/session/message-timeline.tsx")
-    const hits = [...src.matchAll(/data-glass="([\w-]+)"/g)]
-    expect(hits).toHaveLength(1)
-    expect(hits[0]![1]).toBe("dense")
+    const hits = [...src.matchAll(/data-glass="([\w-]+)"/g)].map((m) => m[1])
+    expect(hits.sort()).toEqual(["dense", "standard", "standard"])
+  })
+
+  test("comment-strip chips ride the dense-zone token, not an opaque layer", async () => {
+    const src = await read("pages/session/message-timeline.tsx")
+    expect(src).toContain("bg-[var(--glass-dense-bg)]")
+    expect(src).not.toContain("bg-background-stronger")
+  })
+
+  test("jump-to-bottom dropped its hand-rolled near-glass for the single recipe", async () => {
+    const src = await read("pages/session/message-timeline.tsx")
+    expect(src).not.toContain("backdrop-blur-[0.75px]")
+    expect(src).not.toContain("color-mix(in_srgb,var(--surface-raised-stronger-non-alpha)")
   })
 
   test("rail, titlebar and panels carry no data-glass", async () => {
@@ -154,5 +171,67 @@ describe("glass float — the sticky session-title header is untouched chrome", 
       if (!(await file.exists())) continue
       expect(await file.text()).not.toContain("data-glass")
     }
+  })
+})
+
+describe("glass sweep (#56) — docks and composer chrome float on the recipe", () => {
+  test("todo / followup / revert trays carry standard glass", async () => {
+    for (const rel of [
+      "pages/session/composer/session-todo-dock.tsx",
+      "pages/session/composer/session-followup-dock.tsx",
+      "pages/session/composer/session-revert-dock.tsx",
+    ]) {
+      expect(await read(rel)).toContain('data-glass="standard"')
+    }
+  })
+
+  test("the todo scroll-fade rides the glass tint, not the opaque page ground", async () => {
+    const src = await read("pages/session/composer/session-todo-dock.tsx")
+    expect(src).toContain("linear-gradient(to bottom, var(--glass-standard-bg), transparent)")
+    expect(src).not.toContain("linear-gradient(to bottom, var(--background-base)")
+  })
+
+  test("composer loading stub rides the dense hook, not a half-opaque one-off", async () => {
+    const src = await read("pages/session/composer/session-composer-region.tsx")
+    expect(src).not.toContain("bg-background-base/50")
+  })
+
+  test("autocomplete popover + project picker + model menu carry standard; highlights use the accent state fill", async () => {
+    const slash = await read("components/prompt-input/slash-popover.tsx")
+    expect(slash).toContain('data-glass="standard"')
+    expect(slash).toContain("bg-[var(--accent-fill-soft)]")
+    expect(slash).not.toContain("bg-surface-raised-stronger-non-alpha")
+    const model = await read("components/dialog-select-model.tsx")
+    expect(model).toContain('data-glass="standard"')
+    expect(model).not.toContain("bg-surface-raised-stronger-non-alpha")
+    const prompt = await read("components/prompt-input.tsx")
+    expect(prompt).not.toContain("bg-v2-background-bg-layer-01")
+  })
+
+  test("context chips + attachment tiles: dense-zone/token tints, no theme-blind literals", async () => {
+    const ctx = await read("components/prompt-input/context-items.tsx")
+    expect(ctx).toContain("bg-[var(--glass-dense-bg)]")
+    expect(ctx).not.toContain("bg-background-stronger")
+    const img = await read("components/prompt-input/image-attachments.tsx")
+    expect(img).toContain("var(--glass-dense-bg)")
+    // the filename bar's theme-blind bg-black/50 literal became a float-token mix
+    expect(img).toContain("bg-[color-mix(in_srgb,var(--surface-float-base)_60%,transparent)]")
+    expect(img).not.toContain('"bg-black/50')
+    expect(img).not.toContain("bg-surface-base ")
+  })
+
+  test("drag overlay: heavier by function (masking) but token-mix + shared blur, never a raw 90% token", async () => {
+    const src = await read("components/prompt-input/drag-overlay.tsx")
+    expect(src).toContain("color-mix(in_srgb,var(--surface-raised-stronger-non-alpha)_80%,transparent)")
+    expect(src).toContain("blur(var(--glass-blur,8px))")
+    expect(src).not.toContain("bg-surface-raised-stronger-non-alpha/90")
+  })
+
+  test("the legacy composer path (flag off) floats on standard; its clip-mask stays heavier by function", async () => {
+    const src = await read("components/prompt-input.tsx")
+    // both DockShellForm branches carry the hook
+    const forms = [...src.matchAll(/<DockShellForm[\s\S]{0,800}?data-glass="standard"/g)]
+    expect(forms.length).toBe(2)
+    expect(src).toContain("color-mix(in srgb, var(--surface-raised-stronger-non-alpha) 92%, transparent)")
   })
 })

@@ -28,6 +28,8 @@ export function SessionFollowupDock(props: {
   return (
     <DockTray
       data-component="session-followup-dock"
+      // glass sweep (#56): queued-followup tray floats on standard glass
+      data-glass="standard"
       style={{
         "margin-bottom": "-0.875rem",
         "border-bottom-left-radius": 0,

@@ -19,11 +19,15 @@
   z-index: 1000;
   max-width: 320px;
   border-radius: var(--radius-sm);
-  background-color: var(--surface-float-base);
+  /* glass sweep (#56): the tooltip stays the deliberate INVERSE chip (invert
+     ink needs the dark ground) but rides a HEAVIER glass — denser token tint
+     + the shared blur/edge — never a raw opaque token. */
+  background: color-mix(in srgb, var(--surface-float-base) 84%, transparent);
   color: var(--text-invert-strong);
-  background: var(--surface-float-base);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
   padding: 2px 8px;
-  border: 1px solid var(--border-weak-base, rgba(0, 0, 0, 0.07));
+  border: 1px solid var(--glass-edge, var(--border-weak-base, rgba(0, 0, 0, 0.07)));
 
   box-shadow: var(--shadow-md);
   pointer-events: none !important;

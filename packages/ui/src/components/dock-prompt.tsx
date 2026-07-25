@@ -15,9 +15,9 @@ export function DockPrompt(props: {
     <div
       data-component="dock-prompt"
       data-kind={props.kind}
-      // amicode #61 follow-up: the question panel floats on standard Glass over
-      // the Brain (ADR 0002); other kinds keep their opaque surfaces for now.
-      data-glass={props.kind === "question" ? "standard" : undefined}
+      // glass sweep (#56): EVERY dock prompt floats on standard Glass over the
+      // Brain (ADR 0002) — the permission dock was the un-migrated sibling.
+      data-glass="standard"
       ref={props.ref}
       onKeyDown={props.onKeyDown}
     >

@@ -280,9 +280,23 @@ describe("glass float — tier assignment on the real message markup", () => {
     }
   })
 
-  test("the tool ERROR card is not an archetype — its collapsible carries no glass", async () => {
+  test("the tool ERROR card floats on standard glass with a danger TINT, not bare/opaque (#56)", async () => {
     const src = await read("components/tool-error-card.tsx")
-    expect(src).not.toContain("data-glass")
+    expect(src).toContain('data-glass="standard"')
+    const css = await read("components/tool-error-card.css")
+    const tint = cssBlock(css, '[data-component="card"][data-kind="tool-error-card"][data-glass]')
+    // semantic hue rides OVER the derived glass tint — tokens only
+    expect(tint).toContain("color-mix(in srgb, var(--v2-state-fg-danger)")
+    expect(tint).toContain("var(--glass-standard-bg)")
+  })
+
+  test("retry + assistant error cards: same danger-tint-over-glass ruling (#56)", async () => {
+    const retry = await read("components/session-retry.tsx")
+    expect(openTag(retry, 'class="error-card"')).toContain('data-glass="standard"')
+    const css = await read("components/session-turn.css")
+    const tint = cssBlock(css, ".error-card[data-glass]")
+    expect(tint).toContain("color-mix(in srgb, var(--v2-state-fg-danger)")
+    expect(tint).toContain("var(--glass-standard-bg)")
   })
 
   test("run-plot: the run window root carries dense glass", async () => {
@@ -351,6 +365,201 @@ describe("glass float — no ad-hoc literals; the opaque bubble fill is gone", (
 })
 
 /* ------------------------------------------------------------------ */
+/* 4b. Glass sweep (#56) — EVERYTHING in the chat carries the recipe   */
+/* ------------------------------------------------------------------ */
+
+describe("glass sweep — the AMICO family carries the single recipe", () => {
+  test("receipt chip: both shells (inert div + clickable button) carry standard", async () => {
+    const src = await read("amicode/card.tsx")
+    const hits = [...src.matchAll(/data-component="amicode-card"[\s\S]{0,200}?data-glass="standard"|data-glass="standard"[\s\S]{0,200}?data-component="amicode-card"/g)]
+    expect(hits.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test("receipt chip css: no opaque layer fill; error is a danger tint over glass; hover never snaps opaque", async () => {
+    const css = await read("amicode/amicode.css")
+    const base = cssBlock(css, '[data-component="amicode-card"] {')
+    expect(base).not.toContain("--v2-background-bg-layer")
+    const error = cssBlock(css, '[data-component="amicode-card"][data-state="error"] {')
+    expect(error).toContain("var(--glass-standard-bg)")
+    const hover = cssBlock(css, '[data-component="amicode-card"][data-clickable="true"]:hover')
+    expect(hover).toContain("var(--accent-fill-soft)")
+    expect(hover).not.toContain("--v2-background-bg-layer")
+  })
+
+  test("ask card + inline entity + widget preview shells carry standard; run-window hover is glass-consistent", async () => {
+    expect(await read("amicode/ask-card.tsx")).toContain('data-glass="standard"')
+    const card = await read("amicode/card.tsx")
+    expect(openTag(card, 'data-component="amicode-entity-inline"')).toContain('data-glass="standard"')
+    expect(openTag(await read("amicode/widget-preview-card.tsx"), 'data-component="amicode-widget-preview"')).toContain(
+      'data-glass="standard"',
+    )
+    const css = await read("amicode/amicode.css")
+    const hover = cssBlock(css, '[data-component="amicode-run-window"]:hover')
+    expect(hover).toContain("var(--accent-fill-soft)")
+    expect(hover).not.toContain("--v2-background-bg-layer")
+    // ask options: fills live in css (dense zone + accent states), no !important
+    const opt = cssBlock(css, '[data-component="amicode-ask-card"] [data-slot="amicode-ask-option"] {')
+    expect(opt).toContain("var(--glass-dense-bg)")
+    // the whole ask-option rule set (base → hover) carries no !important overrides
+    const optRegion = css.slice(css.indexOf("amicode-ask-option"), css.indexOf('[data-component="amicode-run-window"]'))
+    expect(optRegion).not.toContain("!important")
+  })
+
+  test("entity rail chips + entity-view inner atoms ride dense-zone fills, not opaque layers", async () => {
+    const css = await read("amicode/amicode.css")
+    expect(cssBlock(css, ".amc-rail-chip {")).toContain("var(--glass-dense-bg)")
+    for (const sel of [".amc-tier {", ".amc-ev-formula {", ".amc-sk {", ".amc-badge {"]) {
+      expect(cssBlock(css, sel)).toContain("var(--glass-dense-bg)")
+    }
+  })
+})
+
+describe("glass sweep — docks and prompts float on the recipe", () => {
+  test("dock-prompt carries standard for EVERY kind (permission included)", async () => {
+    const src = await read("components/dock-prompt.tsx")
+    expect(src).toContain('data-glass="standard"')
+    expect(src).not.toMatch(/data-glass=\{props\.kind/)
+  })
+
+  test("the unified prompt card generalizes beyond the question kind", async () => {
+    const css = await read("components/message-part.css")
+    const flat = cssBlock(css, '[data-component="dock-prompt"] [data-dock-surface="shell"]')
+    expect(flat).toContain("transparent")
+    expect(css).toContain('[data-component="dock-prompt"][data-kind] [data-slot="permission-footer"]')
+  })
+
+  test("question option tiles: dense-zone fill, accent-soft hover, no opaque raised fill", async () => {
+    const css = await read("components/message-part.css")
+    const opt = cssBlock(css, '[data-slot="question-option"] {')
+    expect(opt).toContain("var(--glass-dense-bg)")
+    expect(opt).toContain("var(--accent-fill-soft)")
+    expect(opt).not.toContain("var(--surface-raised-stronger-non-alpha)")
+    expect(opt).not.toContain("var(--background-base)")
+  })
+})
+
+describe("glass sweep — no opaque band punches a glassed card", () => {
+  test("edit/write sticky trigger + StickyAccordionHeader + accordion bands defer to the dense token inside glass", async () => {
+    const mp = await read("components/message-part.css")
+    const sticky = cssBlock(mp, '> [data-component="collapsible"] > [data-slot="collapsible-trigger"][aria-expanded="true"]')
+    expect(sticky).toContain("var(--glass-dense-bg)")
+    expect(sticky).not.toContain("var(--background-stronger)")
+    expect(mp).not.toContain("var(--background-stronger) !important")
+    const sah = await read("components/sticky-accordion-header.css")
+    expect(cssBlock(sah, '[data-glass] [data-component="sticky-accordion-header"]')).toContain("var(--glass-dense-bg)")
+    const acc = await read("components/accordion.css")
+    expect(acc).toContain('[data-glass] [data-component="accordion"]')
+    expect(cssBlock(acc, '[data-slot="accordion-trigger"] {')).toContain("var(--background-stronger)") // non-chat base intact
+  })
+
+  test("task/subagent card is a dense zone with the accent-soft hover", async () => {
+    const css = await read("components/basic-tool.css")
+    const card = cssBlock(css, '[data-component="task-tool-card"]')
+    expect(card).toContain("var(--glass-dense-bg)")
+    expect(card).toContain("var(--accent-fill-soft)")
+    expect(card).not.toContain("color-mix(in srgb, var(--background-base)")
+    expect(card).not.toContain("color-mix(in srgb, var(--background-stronger)")
+  })
+
+  test("diagnostics keep the critical hue as a TINT, not an opaque strip", async () => {
+    const css = await read("components/message-part.css")
+    const block = cssBlock(css, '[data-component="diagnostics"] {')
+    expect(block).toContain("color-mix(in srgb, var(--surface-critical-weak)")
+    expect(block).toContain("transparent")
+  })
+
+  test("the expanded diff view defers to the card's frost (session-turn)", async () => {
+    const css = await read("components/session-turn.css")
+    const view = cssBlock(css, '[data-slot="session-turn-diff-view"]')
+    expect(view).toContain("transparent")
+    expect(view).not.toContain("var(--surface-inset-base)")
+  })
+
+  test("inline-code chips ride the dense token inside prose cards", async () => {
+    const css = await read("components/markdown.css")
+    const code = cssBlock(css, ":not(pre) > code")
+    expect(code).toContain("var(--glass-dense-bg)")
+    expect(code).not.toContain("var(--surface-base-hover)")
+  })
+})
+
+describe("glass sweep — bare muted ink over the Brain gets a backing (#60 invariant)", () => {
+  test("thinking indicator, loaded-file rows, divider label and attachments", async () => {
+    const st = await read("components/session-turn.css")
+    expect(cssBlock(st, '[data-slot="session-turn-thinking"]')).toContain("var(--glass-dense-bg)")
+    const mp = await read("components/message-part.css")
+    expect(cssBlock(mp, '[data-component="tool-loaded-file"]')).toContain("var(--glass-dense-bg)")
+    expect(cssBlock(mp, '[data-slot="compaction-part-label"]')).toContain("var(--glass-dense-bg)")
+    const tsx = await read("components/message-part.tsx")
+    expect(openTag(tsx, 'data-slot="user-message-attachment"')).toContain('data-glass="dense"')
+    const bubbleChip = cssBlock(mp, '[data-slot="user-message-attachment"] {')
+    expect(bubbleChip).not.toContain("var(--surface-weak)")
+    // reasoning summaries float on a standard card
+    expect(openTag(tsx, 'data-component="reasoning-part"')).toContain('data-glass="standard"')
+  })
+})
+
+describe("glass sweep — floating ephemeral chrome carries the recipe", () => {
+  const GLASS_BG = "var(--glass-standard-bg"
+  const BLUR = "backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1))"
+
+  test("dialogs (one dialog.css edit covers all launch sites) + ImagePreview", async () => {
+    for (const rel of ["components/dialog.css", "components/image-preview.css"]) {
+      const css = await read(rel)
+      expect(css).toContain(GLASS_BG)
+      expect(css).toContain(BLUR)
+      expect(css).toContain("var(--glass-edge")
+      // the raw opaque token survives ONLY inside the var() fallback slot
+      expect(css.replace(/var\(--glass-standard-bg, var\(--surface-raised-stronger-non-alpha\)\)/g, "")).not.toContain(
+        "var(--surface-raised-stronger-non-alpha)",
+      )
+    }
+  })
+
+  test("popover, dropdown menu, select menu, toast v2", async () => {
+    for (const rel of [
+      "components/popover.css",
+      "components/dropdown-menu.css",
+      "components/select.css",
+      "v2/components/toast-v2.css",
+    ]) {
+      const css = await read(rel)
+      expect(css).toContain(GLASS_BG)
+      expect(css).toContain(BLUR)
+      expect(css).toContain("var(--glass-edge")
+    }
+    // item highlights inside the floating MENUS use the accent state fill, not
+    // an opaque hover surface (the select TRIGGER is composer chrome, out of scope)
+    expect(await read("components/dropdown-menu.css")).not.toContain("var(--surface-raised-base-hover)")
+    expect(cssBlock(await read("components/select.css"), '[data-component="select-content"] {')).not.toContain(
+      "var(--surface-raised-base-hover)",
+    )
+  })
+
+  test("tooltips + legacy toast + code-fence copy tooltip: HEAVIER inverse glass, never a raw opaque token", async () => {
+    for (const rel of ["components/tooltip.css", "components/toast.css", "components/markdown.css"]) {
+      const css = await read(rel)
+      expect(css).toContain("color-mix(in srgb, var(--surface-float-base)")
+      expect(css).not.toMatch(/background(?:-color)?:\s*var\(--surface-float-base\)/)
+    }
+    // tooltip + toast + copy tooltip all blur what's behind them
+    expect(await read("components/tooltip.css")).toContain(BLUR)
+    expect(await read("components/toast.css")).toContain(BLUR)
+    // the copy button itself rides the dense token
+    const md = await read("components/markdown.css")
+    expect(cssBlock(md, '[data-slot="markdown-copy-button"][data-variant="secondary"] {')).toContain(
+      "var(--glass-dense-bg)",
+    )
+  })
+
+  test("review surfaces convert their opaque chrome fills to the glass tokens", async () => {
+    const css = await read("components/session-review.css")
+    expect(cssBlock(css, '[data-slot="session-review-header"]')).toContain("var(--glass-dense-bg")
+    expect(cssBlock(css, '[data-slot="session-review-large-diff"] {')).toContain("var(--glass-dense-bg")
+  })
+})
+
+/* ------------------------------------------------------------------ */
 /* 5. Chrome untouched — data-glass appears ONLY on the content cards  */
 /* ------------------------------------------------------------------ */
 
@@ -363,7 +572,7 @@ describe("glass float — chrome untouched, no third tier anywhere", () => {
       "amicode/glass-tokens.test.ts",
       "amicode/glass.css",
       "amicode/glass-float.test.ts",
-      // the seven content archetypes (this slice)
+      // the seven content archetypes (#61)
       "components/message-part.tsx",
       "components/message-part.css",
       "components/markdown.tsx",
@@ -372,11 +581,34 @@ describe("glass float — chrome untouched, no third tier anywhere", () => {
       "components/collapsible.css",
       "components/session-turn.css",
       "amicode/run-window.tsx",
-      "pages/session/message-timeline.tsx", // diff card only — asserted in the app test
-      "components/prompt-input.tsx", // composer
-      "components/dock-prompt.tsx", // question dock (review feedback)
-      "pages/session/composer/session-composer-region.tsx", // child-session stub (dimmed zone)
+      "pages/session/message-timeline.tsx", // diff card + jump-to-bottom + error card (app test)
+      "components/prompt-input.tsx", // composer (new + legacy paths) + project picker
+      "components/dock-prompt.tsx", // question AND permission docks (#56)
+      "pages/session/composer/session-composer-region.tsx", // child-session stub + loading stub
       "pages/session/glass-float.test.ts",
+      // glass sweep (#56): the comprehensive audited sweep — every component
+      // that can appear in the Chat carries the single recipe
+      "amicode/amicode.css",
+      "amicode/card.tsx",
+      "amicode/ask-card.tsx",
+      "amicode/widget-preview-card.tsx",
+      "amicode/getting-started.tsx",
+      "components/accordion.css",
+      "components/sticky-accordion-header.css",
+      "components/session-retry.tsx",
+      "components/tool-error-card.tsx",
+      "components/tool-error-card.css",
+      "components/dialog-select-model.tsx",
+      "components/prompt-input/slash-popover.tsx",
+      "pages/session/composer/session-todo-dock.tsx",
+      "pages/session/composer/session-followup-dock.tsx",
+      "pages/session/composer/session-revert-dock.tsx",
+      // pre-allowed for the parallel draft-landing rebuild (not this slice):
+      // both the path named in the work order and the file's real location.
+      "pages/session/new-session.tsx",
+      "pages/new-session.tsx",
+      "components/session/session-new-design-view.tsx",
+      "components/session/session-new-view.tsx",
     ])
     const glob = new Bun.Glob("**/*.{ts,tsx,css}")
     const values = new Set<string>()
