@@ -3,9 +3,12 @@
   min-width: 8rem;
   overflow: hidden;
   border-radius: var(--radius-md);
-  border: 1px solid color-mix(in oklch, var(--border-base) 50%, transparent);
+  /* glass sweep (#56): floating chrome carries the single glass recipe */
+  border: 1px solid var(--glass-edge, color-mix(in oklch, var(--border-base) 50%, transparent));
   background-clip: padding-box;
-  background-color: var(--surface-raised-stronger-non-alpha);
+  background-color: var(--glass-standard-bg, var(--surface-raised-stronger-non-alpha));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
   padding: 4px;
   box-shadow: var(--shadow-md);
   z-index: 50;
@@ -49,7 +52,7 @@
     color: var(--text-strong);
 
     &[data-highlighted] {
-      background: var(--surface-raised-base-hover);
+      background: var(--accent-fill-soft);
     }
 
     &[data-disabled] {
@@ -65,7 +68,7 @@
 
   [data-slot="dropdown-menu-sub-trigger"] {
     &[data-expanded] {
-      background: var(--surface-raised-base-hover);
+      background: var(--accent-fill-soft);
     }
   }
 
@@ -108,7 +111,7 @@
   }
 
   [data-slot="dropdown-menu-arrow"] {
-    fill: var(--surface-raised-stronger-non-alpha);
+    fill: var(--glass-standard-bg, var(--surface-raised-stronger-non-alpha));
   }
 }
 

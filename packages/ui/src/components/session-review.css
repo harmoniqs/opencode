@@ -21,7 +21,11 @@
 
   [data-slot="session-review-header"] {
     z-index: 120;
-    background-color: var(--background-stronger);
+    /* glass sweep (#56): the sticky review header occludes scrolled diffs with
+       the dense token + the shared blur, not an opaque chrome fill */
+    background-color: var(--glass-dense-bg, var(--background-stronger));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+    backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
     height: 40px;
     padding-bottom: 8px;
     flex-shrink: 0;
@@ -203,6 +207,9 @@
   [data-slot="session-review-diff-wrapper"] {
     position: relative;
     overflow: hidden;
+    /* glass sweep (#56): tint-only backing so mobile diff text never sits bare
+       on the Brain (no blur here — this scrolls) */
+    background: var(--glass-standard-bg);
     z-index: 0;
     --line-comment-z: 5;
     --line-comment-popover-z: 30;
@@ -211,7 +218,7 @@
 
   [data-slot="session-review-large-diff"] {
     padding: 12px;
-    background: var(--background-stronger);
+    background: var(--glass-dense-bg, var(--background-stronger));
   }
 
   [data-slot="session-review-large-diff-title"] {

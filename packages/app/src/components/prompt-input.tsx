@@ -1700,6 +1700,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         </Match>
         <Match when>
           <DockShellForm
+            // glass sweep (#56): the legacy composer path (newLayoutDesigns off)
+            // floats on standard glass too — the Brain is not gated on the flag.
+            data-glass="standard"
             onSubmit={handleSubmit}
             classList={{
               "group/prompt-input": true,
@@ -1801,8 +1804,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 style={{
                   height: space,
                   // flat (Kate): solid block, no fade gradient — text simply
-                  // clips at the controls edge.
-                  background: "var(--surface-raised-stronger-non-alpha)",
+                  // clips at the controls edge. Glass sweep (#56): kept HEAVIER
+                  // (near-opaque token mix) because this strip must mask the
+                  // editor text scrolling behind the controls; a translucent
+                  // tint would ghost it. Legacy path (newLayoutDesigns off).
+                  background: "color-mix(in srgb, var(--surface-raised-stronger-non-alpha) 92%, transparent)",
                 }}
               />
 
@@ -2154,8 +2160,10 @@ function ComposerPicker(props: { state: ComposerPickerState }) {
     >
       <KobaltePopover.Trigger as={ComposerPickerTrigger} state={props.state.trigger} />
       <KobaltePopover.Portal>
+        {/* glass sweep (#56): the project picker floats on the single glass recipe */}
         <KobaltePopover.Content
-          class="w-[243px] overflow-hidden rounded-md bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-floating)] focus:outline-none"
+          data-glass="standard"
+          class="w-[243px] overflow-hidden rounded-md shadow-[var(--v2-elevation-floating)] focus:outline-none"
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div class={`flex flex-col p-0.5 ${props.state.listClass ?? ""}`}>

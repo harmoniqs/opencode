@@ -95,7 +95,11 @@
   max-width: 23rem;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background-color: var(--surface-raised-stronger-non-alpha);
+  /* glass sweep (#56): floating chrome carries the single glass recipe */
+  background-color: var(--glass-standard-bg, var(--surface-raised-stronger-non-alpha));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+  backdrop-filter: blur(var(--glass-blur, 8px)) brightness(var(--glass-brightness, 1));
+  border: 1px solid var(--glass-edge, transparent);
   padding: 4px;
   box-shadow: var(--shadow-xs-border);
   z-index: 60;
@@ -147,7 +151,7 @@
     user-select: none;
 
     &[data-highlighted] {
-      background: var(--surface-raised-base-hover);
+      background: var(--accent-fill-soft);
     }
     &[data-disabled] {
       background-color: var(--surface-raised-base);
@@ -165,7 +169,7 @@
       outline: none;
     }
     &:hover {
-      background: var(--surface-raised-base-hover);
+      background: var(--accent-fill-soft);
     }
   }
 }

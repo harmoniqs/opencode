@@ -36,13 +36,15 @@ type PromptPopoverProps = {
 export const PromptPopover: Component<PromptPopoverProps> = (props) => {
   return (
     <Show when={props.popover}>
+      {/* glass sweep (#56): the autocomplete panel floats on the single glass
+          recipe — the opaque raised fill and bespoke shadow are gone */}
       <div
         ref={(el) => {
           if (props.popover === "slash") props.setSlashPopoverRef(el)
         }}
+        data-glass="standard"
         class="absolute inset-x-0 -top-2 -translate-y-full origin-bottom-left max-h-80 min-h-10
-                 overflow-auto no-scrollbar flex flex-col p-2 rounded-[12px]
-                 bg-surface-raised-stronger-non-alpha shadow-[var(--shadow-lg-border-base)]"
+                 overflow-auto no-scrollbar flex flex-col p-2"
         onMouseDown={(e) => e.preventDefault()}
       >
         <Switch>
@@ -59,7 +61,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     return (
                       <button
                         class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
-                        classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
+                        classList={{ "bg-[var(--accent-fill-soft)]": props.atActive === key }}
                         onClick={() => props.onAtSelect(item)}
                         onMouseEnter={() => props.setAtActive(key)}
                       >
@@ -76,7 +78,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                   return (
                     <button
                       class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
-                      classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
+                      classList={{ "bg-[var(--accent-fill-soft)]": props.atActive === key }}
                       onClick={() => props.onAtSelect(item)}
                       onMouseEnter={() => props.setAtActive(key)}
                     >
@@ -104,7 +106,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     data-slash-id={cmd.id}
                     classList={{
                       "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
-                      "bg-surface-raised-base-hover": props.slashActive === cmd.id,
+                      "bg-[var(--accent-fill-soft)]": props.slashActive === cmd.id,
                     }}
                     onClick={() => props.onSlashSelect(cmd)}
                     onMouseEnter={() => props.setSlashActive(cmd.id)}
@@ -117,7 +119,7 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
                       <Show when={cmd.type === "custom" && cmd.source !== "command"}>
-                        <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
+                        <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-[var(--glass-dense-bg)] rounded">
                           {cmd.source === "skill"
                             ? props.t("prompt.slash.badge.skill")
                             : cmd.source === "mcp"
