@@ -99,13 +99,21 @@ export function BrainAtmosphere(props: {
     setEngine(eng)
     eng.resize(host.clientWidth, host.clientHeight)
 
-    // dev-only: surface the live engine stats to the perf-trace harness and
-    // the manual gate checklist (window.__amicoBrainStats?.()); absent in prod
+    // dev-only: surface the live engine to the perf-trace harness, the manual
+    // gate checklist, and the flare preview (window.__amicoBrainStats?.() /
+    // __amicoBrainTouch?.({label, type})); absent in prod. The touch hook
+    // outlives router redirects that strip ?-param knobs — drive it from the
+    // console to preview live-thought flares without running a real turn.
     if (import.meta.env.DEV) {
-      const devWindow = window as Window & { __amicoBrainStats?: () => unknown }
+      const devWindow = window as Window & {
+        __amicoBrainStats?: () => unknown
+        __amicoBrainTouch?: (ev: { label: string; type?: string; consider?: boolean; replay?: boolean }) => void
+      }
       devWindow.__amicoBrainStats = () => eng.stats()
+      devWindow.__amicoBrainTouch = (ev) => eng.touch(ev)
       onCleanup(() => {
         if (devWindow.__amicoBrainStats) delete devWindow.__amicoBrainStats
+        if (devWindow.__amicoBrainTouch) delete devWindow.__amicoBrainTouch
       })
     }
 

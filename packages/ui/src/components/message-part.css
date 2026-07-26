@@ -330,7 +330,8 @@
    hugging card geometry here so the Brain owns the margins around it. */
 [data-component="reasoning-part"] {
   width: fit-content;
-  max-width: 100%;
+  /* Kate 2026-07-25: reasoning shares the prose measure like text-part */
+  max-width: min(88%, 72ch);
   padding: 0 16px 12px;
   color: var(--text-base);
   line-height: var(--line-height-normal);
@@ -1207,14 +1208,15 @@
    Glass sweep (#56): generalized to EVERY dock-prompt kind — the permission
    dock rides the same unified glass card as the question dock. */
 [data-component="dock-prompt"] {
-  box-shadow: 0 0 0 1px var(--border-weak-base);
-  border-radius: 10px;
+  border-radius: var(--radius-lg, 12px);
   overflow: clip;
 }
-/* glassed prompt panels get their fill from glass.css; the opaque layer-02
-   fill survives only where glass is absent. */
+/* glassed prompt panels get fill/blur/radius from glass.css and NOTHING else
+   (Kate 2026-07-25: glass = blur + tint + radius — no ring, no border, no
+   shadow); the opaque layer-02 fill + 1px ring survive only off-glass. */
 [data-component="dock-prompt"]:not([data-glass]) {
   background-color: var(--v2-background-bg-layer-02);
+  box-shadow: 0 0 0 1px var(--border-weak-base);
 }
 [data-component="dock-prompt"] [data-dock-surface="shell"] {
   background: transparent;
@@ -1234,6 +1236,11 @@
 [data-component="dock-prompt"][data-kind] [data-slot="permission-footer"] {
   margin-top: 0;
   padding: 10px;
+}
+/* the footer divider is chrome — glass docks share ONE surface (Kate
+   2026-07-25, same law as the composer footer); the hairline survives off-glass */
+[data-component="dock-prompt"][data-kind]:not([data-glass]) [data-slot="question-footer"],
+[data-component="dock-prompt"][data-kind]:not([data-glass]) [data-slot="permission-footer"] {
   border-top: 1px solid var(--border-weak-base);
 }
 

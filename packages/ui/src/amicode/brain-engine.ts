@@ -118,6 +118,8 @@ export interface BrainEngineStats {
   mode: BrainMode
   /** latent constellation population still on the canvas (0 in live mode) */
   latent: number
+  /** live-thought flares currently lit over the latent web (0 in live mode) */
+  latentPulses: number
 }
 
 export interface BrainEngine {
@@ -641,8 +643,72 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   const conTiltSinX = Math.sin(CONSTELLATION_TILT_X)
   const conTiltCosZ = Math.cos(CONSTELLATION_TILT_Z)
   const conTiltSinZ = Math.sin(CONSTELLATION_TILT_Z)
+  /* live thought over the latent web (Kate 2026-07-25, "constellation + live
+     thought"): a REAL session touch flares a constellation node in css.thought
+     — the one place the latent canvas ever shows the thought color, because a
+     flare IS live thought, not the constellation's own ink. The label hashes
+     deterministically into the touch's category lobe (file work lights the
+     code lobe, skills the skills lobe…), so the same label always flares the
+     same node and re-touches read as the same concept firing again. Replays
+     (history restored on mount) stay silent, per the touch contract. */
+  type ConPulse = { ix: number; t0: number; gain: number; label: string }
+  const conPulses: ConPulse[] = []
+  const CON_PULSE_MS = 1600
+  const CON_PULSE_RISE_MS = 150
+  const CON_PULSE_CAP = 24 // a torrent of touches stays a shimmer, not a floodlight
+  let conCatNodes: number[][] | null = null // node indices per CONSTELLATION_CATS lobe
+  let conIncident: Map<number, number[]> | null = null // node ix → flat-edge offsets
+  function conNodeFor(label: string, type?: string): number {
+    const c = con!
+    if (!conCatNodes) {
+      conCatNodes = CONSTELLATION_CATS.map(() => [])
+      for (let i = 0; i < c.count; i++) conCatNodes[c.catIx[i]].push(i)
+    }
+    const norm = label.toLowerCase().replace(/\.(md|jl|json|toml)$/, "")
+    let h = 0x811c9dc5 // FNV-1a: deterministic, no Math.random on this path
+    for (let i = 0; i < norm.length; i++) {
+      h ^= norm.charCodeAt(i)
+      h = Math.imul(h, 0x01000193)
+    }
+    h >>>= 0
+    const catIx = CONSTELLATION_CATS.indexOf((CAT_OF_TYPE[type || ""] ?? "") as (typeof CONSTELLATION_CATS)[number])
+    const pool = catIx >= 0 && conCatNodes[catIx].length ? conCatNodes[catIx] : null
+    // the overfilled cloud projects many nodes outside the pane — a flare the
+    // user can't see isn't thought. From the hashed seat, walk the pool (in
+    // deterministic order, last-drawn projection) to the first VISIBLE node;
+    // same label at the same pose always lands the same seat.
+    const size = pool ? pool.length : c.count
+    const at = (k: number) => (pool ? pool[(h + k) % size] : (h + k) % size)
+    const margin = 24
+    for (let k = 0; k < Math.min(size, 96); k++) {
+      const ix = at(k)
+      const x = conPx![ix]
+      const y = conPy![ix]
+      if (x >= margin && x <= W - margin && y >= margin && y <= H - margin) return ix
+    }
+    return at(0)
+  }
+  function conFlare(ev: BrainTouchEvent) {
+    if (!con || igniteAt >= 0) return // dissolving or live: the live graph owns thought
+    if (ev.replay) return // history restores silently — no fireworks on mount
+    const label = String(ev.label || "").trim()
+    if (!label) return
+    const ix = conNodeFor(label, ev.type)
+    const gain = ev.consider ? 0.55 : 1 // scouts glow, real work flares
+    const existing = conPulses.find((p) => p.ix === ix)
+    if (existing) {
+      existing.t0 = conT // a re-touch refreshes the flare instead of stacking a twin
+      existing.gain = Math.max(existing.gain, gain)
+    } else {
+      if (reduceMotion) conPulses.length = 0 // tableau: one lit node — where amico is now
+      conPulses.push({ ix, t0: conT, gain, label: label.slice(0, 24) })
+      if (conPulses.length > CON_PULSE_CAP) conPulses.shift()
+    }
+    requestRender()
+  }
   function exitConstellation() {
     con = null
+    conPulses.length = 0 // live thought moves to the live graph with the handoff
     requestRender() // live mode owns the canvas from the very next frame
   }
   /** Paint the latent web. Returns true once the live layer should co-paint
@@ -744,6 +810,81 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       ctx.beginPath()
       ctx.arc(x, y, half, 0, Math.PI * 2)
       ctx.fill()
+    }
+    // ---- live thought: real touches flare their node in css.thought — rise
+    // fast, decay easing out, an expanding ring naming the spot, incident
+    // edges glinting so the web reads as tissue firing. Unfogged: thought is
+    // the foreground signal. Under reduced motion the clock (conT) is frozen,
+    // so the latest touch holds as a single statically lit node in the tableau.
+    if (conPulses.length && it < 0) {
+      const thought = hexToRgb(css.thought)
+      for (let pi = conPulses.length - 1; pi >= 0; pi--) {
+        const p = conPulses[pi]
+        const age = reduceMotion ? CON_PULSE_RISE_MS : conT - p.t0
+        if (age >= CON_PULSE_MS) {
+          conPulses.splice(pi, 1)
+          continue
+        }
+        const i = p.ix
+        const x = px[i]
+        const y = py[i]
+        if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue
+        const rise = Math.min(age / CON_PULSE_RISE_MS, 1)
+        const fall = 1 - Math.max((age - CON_PULSE_RISE_MS) / (CON_PULSE_MS - CON_PULSE_RISE_MS), 0)
+        const env = rise * fall * fall * p.gain
+        if (env < 0.02) continue
+        const persp = F / (F - rz[i])
+        // size floor: a satellite's thought flares as visibly as a concept's
+        const base = Math.max(c.r[i] * persp * (0.75 + 0.25 * near(i)), 2.6)
+        if (conIncident === null) {
+          conIncident = new Map()
+          const e = c.edges
+          for (let k = 0; k < e.length; k += 2) {
+            for (const n of [e[k], e[k + 1]]) {
+              let list = conIncident.get(n)
+              if (!list) conIncident.set(n, (list = []))
+              list.push(k)
+            }
+          }
+        }
+        ctx.lineWidth = 1
+        for (const k of conIncident.get(i) ?? []) {
+          const q = c.edges[k] === i ? c.edges[k + 1] : c.edges[k]
+          ctx.strokeStyle = conRgba(thought, 0.2 * env)
+          ctx.beginPath()
+          ctx.moveTo(x, y)
+          ctx.lineTo(px[q], py[q])
+          ctx.stroke()
+        }
+        // soft bloom under the core: the flare must read instantly against
+        // ~500 latent nodes — a thought is unmistakable, never a twinkle
+        ctx.fillStyle = conRgba(thought, 0.12 * env)
+        ctx.beginPath()
+        ctx.arc(x, y, base + 9, 0, Math.PI * 2)
+        ctx.fill()
+        const ringR = base + 3 + (1 - fall) * 14 // names the touch, then lets go
+        ctx.strokeStyle = conRgba(thought, 0.55 * env * fall)
+        ctx.beginPath()
+        ctx.arc(x, y, ringR, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.fillStyle = conRgba(thought, Math.min(env * 1.2, 1))
+        ctx.beginPath()
+        ctx.arc(x, y, base * 1.3 + 1.2, 0, Math.PI * 2)
+        ctx.fill()
+        // the touched label names the thought — the readable layer of "live".
+        // fg ink + halo (the live graph's label recipe): legible both themes;
+        // the dot already carries the thought color. Scouts stay nameless.
+        if (p.gain >= 1 && env > 0.18) {
+          ctx.font = "10px JuliaMono, ui-monospace, SFMono-Regular, Menlo, monospace"
+          ctx.textBaseline = "middle"
+          const tw = ctx.measureText(p.label).width
+          const lx = x + base + 8
+          ctx.fillStyle = css.labelHalo
+          ctx.fillRect(lx - 2, y - 7, tw + 4, 14)
+          ctx.fillStyle = rgba(css.fg, Math.min(env * 1.3, 0.9))
+          ctx.fillText(p.label, lx, y)
+        }
+      }
     }
     return showLive
   }
@@ -1403,7 +1544,9 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
 
   return {
     touch: (ev) => {
-      if (!destroyed) liveTouch(ev)
+      if (destroyed) return
+      conFlare(ev) // latent web: live thought flares over the constellation
+      liveTouch(ev) // the live graph still records the session beneath
     },
     chart: (title, replay) => {
       if (destroyed) return
@@ -1492,6 +1635,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       motion: governed && !reduceMotion ? governor.level() : "full",
       mode: con ? "constellation" : "live",
       latent: con ? con.count : 0,
+      latentPulses: con ? conPulses.length : 0,
     }),
   }
 }

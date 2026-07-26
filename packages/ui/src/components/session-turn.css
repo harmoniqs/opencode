@@ -83,6 +83,9 @@
     overflow-wrap: anywhere;
     word-break: break-word;
     overflow-y: auto;
+    /* Kate 2026-07-25: errors share the prose measure like every other card */
+    width: fit-content;
+    max-width: min(88%, 72ch);
   }
 
   [data-slot="session-turn-assistant-content"] {
@@ -100,9 +103,12 @@
   }
 
   /* amicode #61: the diff card floats on the DENSE glass tier — the tier
-     token owns fill/edge/radius/shadow; on-grid padding clears the edge. */
+     token owns fill/edge/radius/shadow; on-grid padding clears the edge.
+     Kate 2026-07-25 (launch-composer feel): shares the prose measure — a
+     floating card on the Brain, never a full-width band. */
   [data-component="session-turn-diffs-group"][data-glass="dense"] {
     padding: 0 12px 8px;
+    max-width: min(88%, 72ch);
   }
 
   [data-slot="session-turn-diffs-header"] {

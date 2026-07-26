@@ -9,6 +9,7 @@ import { type Component, Show } from "solid-js"
 import { useLocal } from "@/context/local"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { ModelTooltip } from "./model-tooltip"
+import { ModelVariantRow } from "./dialog-select-model"
 import { useLanguage } from "@/context/language"
 
 type ModelState = ReturnType<typeof useLocal>["model"]
@@ -83,6 +84,9 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
             </div>
           )}
         </List>
+        {/* thinking effort folded into the model surface (Kate 2026-07-25) —
+            the unpaid path keeps the control the footer Select used to carry */}
+        <ModelVariantRow model={model} class="px-5 pb-1" />
       </div>
       <div class="px-1.5 pb-1.5">
         <div class="w-full rounded-sm border border-border-weak-base bg-surface-raised-base">

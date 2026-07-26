@@ -168,6 +168,10 @@ describe("constellation mode — determinism", () => {
 })
 
 describe("constellation mode — color law", () => {
+  // The law's boundary (Kate 2026-07-25, "constellation + live thought"): the
+  // latent web's OWN ink never uses the thought color — but a REAL session
+  // touch flares its node in css.thought, because a flare IS live thought.
+  // These two tests drive zero touches, so the canvas must stay yellow-free.
   test("dark: the latent web never paints the thought color", () => {
     const { engine, ctx } = makeEngine({ scheme: "dark" })
     drive(engine, 0, 3000)
@@ -184,6 +188,106 @@ describe("constellation mode — color law", () => {
     drive(engine, 3016, 4000)
     expectNoThoughtInk(ctx)
     expect(engine.stats().mode).toBe("constellation")
+  })
+})
+
+describe("constellation mode — live thought", () => {
+  /** did any frame paint the scheme's thought ink? */
+  function paintedThoughtInk(ctx: ReturnType<typeof recordingCtx>) {
+    return styles(ctx).some((s) => THOUGHT_INKS.some((re) => re.test(s)))
+  }
+  /** a deterministic spread across every lobe — the overfilled cloud culls
+      offscreen nodes, so a lone label can hash to a culled spot; a working
+      turn touches many, and several always project onscreen */
+  const TURN_TOUCHES = [
+    { label: "glass-tokens.ts", type: "resource" },
+    { label: "session.tsx", type: "resource" },
+    { label: "prompt-input.tsx", type: "resource" },
+    { label: "piccolo.jl", type: "package" },
+    { label: "stretto", type: "package" },
+    { label: "amico-vault", type: "skill" },
+    { label: "tdd", type: "skill" },
+    { label: "adr-0002.md", type: "note" },
+    { label: "context.md", type: "charter" },
+    { label: "run9", type: "experiment" },
+    { label: "pulses", type: "catalog" },
+    { label: "orchestrator", type: "agent" },
+  ]
+
+  test("a working turn flares its touched nodes in the thought color", () => {
+    const { engine, ctx } = makeEngine({ scheme: "dark" })
+    drive(engine, 0, 100)
+    for (const t of TURN_TOUCHES) engine.touch(t)
+    drive(engine, 116, 400)
+    expect(engine.stats().latentPulses).toBe(TURN_TOUCHES.length)
+    expect(engine.stats().mode).toBe("constellation") // no handoff — the web stays
+    expect(paintedThoughtInk(ctx)).toBe(true)
+  })
+
+  test("light: the flare uses the derived-dark thought ink, never raw #fff676", () => {
+    const { engine, ctx } = makeEngine({ scheme: "light" })
+    drive(engine, 0, 100)
+    for (const t of TURN_TOUCHES) engine.touch(t)
+    drive(engine, 116, 400)
+    const inks = styles(ctx)
+    expect(inks.some((s) => /143,128,0/.test(s))).toBe(true) // #8f8000
+    expect(inks.some((s) => /255,246,118/.test(s))).toBe(false) // yellow never fronts light
+  })
+
+  test("replay touches restore silently: zero flares, zero thought ink", () => {
+    const { engine, ctx } = makeEngine({ scheme: "dark" })
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource", replay: true })
+    engine.touch({ label: "prompt-input.tsx", type: "resource", replay: true, consider: true })
+    drive(engine, 116, 600)
+    expect(engine.stats().latentPulses).toBe(0)
+    expectNoThoughtInk(ctx)
+  })
+
+  test("a re-touch of the same label refreshes its flare instead of stacking a twin", () => {
+    const { engine } = makeEngine()
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    engine.touch({ label: "session.tsx", type: "resource" })
+    expect(engine.stats().latentPulses).toBe(1)
+    engine.touch({ label: "amico-vault", type: "skill" })
+    expect(engine.stats().latentPulses).toBe(2)
+  })
+
+  test("flares decay: the web returns to rest, yellow-free again", () => {
+    const { engine } = makeEngine()
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    expect(engine.stats().latentPulses).toBe(1)
+    drive(engine, 116, 2400) // past the ~1.6s pulse life
+    expect(engine.stats().latentPulses).toBe(0)
+    expect(engine.stats().mode).toBe("constellation")
+  })
+
+  test("reduced motion: the tableau holds ONE statically lit node — the latest touch", () => {
+    const { engine, ctx } = makeEngine({ reduceMotion: true })
+    engine.tick(0) // the single tableau frame
+    const before = clears(ctx)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    engine.touch({ label: "amico-vault", type: "skill" })
+    engine.tick(16) // requestRender beats the tableau stillness for one frame
+    expect(engine.stats().latentPulses).toBe(1)
+    expect(clears(ctx)).toBe(before + 1)
+    expect(paintedThoughtInk(ctx)).toBe(true)
+  })
+
+  test("determinism holds under touches: same clock + same touches ⇒ byte-identical frames", () => {
+    const a = makeEngine()
+    const b = makeEngine()
+    for (let t = 0; t <= 800; t += 16) {
+      if (t === 96) {
+        a.engine.touch({ label: "piccolo.jl", type: "package" })
+        b.engine.touch({ label: "piccolo.jl", type: "package" })
+      }
+      a.engine.tick(t)
+      b.engine.tick(t)
+    }
+    expect(JSON.stringify(a.ctx.calls)).toBe(JSON.stringify(b.ctx.calls))
   })
 })
 

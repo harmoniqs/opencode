@@ -270,7 +270,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     draggingType: "image" | "@mention" | null
     mode: "normal" | "shell"
     applyingHistory: boolean
-    variantOpen: boolean
   }>({
     popover: null,
     historyIndex: -1,
@@ -279,7 +278,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     draggingType: null,
     mode: "normal",
     applyingHistory: false,
-    variantOpen: false,
   })
   const [picker, setPicker] = createStore({
     projectOpen: false,
@@ -1153,9 +1151,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     />
   )
 
-  const variants = createMemo(() => ["default", ...local.model.variant.list()])
-  // Check provider variants directly: `variants` also includes the UI-only default option.
-  const showVariantControl = createMemo(() => local.model.variant.list().length > 0)
   const accepting = createMemo(() => {
     const id = params.id
     if (!id) return permission.isAutoAcceptingDirectory(sdk.directory)
@@ -1436,6 +1431,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     model: local.model,
     providerID: local.model.current()?.provider?.id,
     modelName: local.model.current()?.name ?? language.t("dialog.model.select.title"),
+    // a non-default thinking effort stays visible at rest ("· high") — the
+    // standalone variant control folded into the model menu (Kate 2026-07-25)
+    variantName: local.model.variant.current() ?? undefined,
     style: control(),
     onClose: restoreFocus,
     onUnpaidClick: () => {
@@ -1739,40 +1737,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 {/* amicode chat-redesign (Kate): model + speed live on the RIGHT,
                     clustered with the submit arrow (Kimi-style). */}
                 <div class="flex items-center gap-1">
+                  {/* Kate 2026-07-25: thinking effort folded INTO the model menu —
+                      no standalone variant Select in the footer anymore. */}
                   <ComposerModelControl state={modelControlState()} />
-                  <Show when={store.mode !== "shell" && showVariantControl()}>
-                    <div
-                      data-component="prompt-variant-control"
-                      classList={{
-                        "hidden group-hover/prompt-input:block group-focus-within/prompt-input:block":
-                          !local.model.variant.current() && !store.variantOpen,
-                      }}
-                    >
-                      <TooltipKeybind
-                        placement="top"
-                        gutter={4}
-                        title={language.t("command.model.variant.cycle")}
-                        keybind={command.keybind("model.variant.cycle")}
-                      >
-                        <Select
-                          size="normal"
-                          options={variants()}
-                          current={local.model.variant.current() ?? "default"}
-                          label={(x) => (x === "default" ? language.t("common.default") : x)}
-                          onOpenChange={(open) => setStore("variantOpen", open)}
-                          onSelect={(value) => {
-                            local.model.variant.set(value === "default" ? undefined : value)
-                            restoreFocus()
-                          }}
-                          class="capitalize max-w-[160px] justify-start text-v2-text-text-faint"
-                          valueClass="truncate text-[13px] font-[440] leading-5 text-v2-text-text-faint"
-                          triggerStyle={control()}
-                          triggerProps={{ "data-action": "prompt-model-variant" }}
-                          variant="ghost"
-                        />
-                      </TooltipKeybind>
-                    </div>
-                  </Show>
                   <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
                     {/* submit: HIGH-CONTRAST inverted fill (Kate: more contrast in
                         dark). bg-inverse (near-black in light / near-white in
@@ -1803,7 +1770,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             onSubmit={handleSubmit}
             classList={{
               "group/prompt-input": true,
-              "focus-within:shadow-xs-border": true,
+              // Kate 2026-07-25: no focus ring on the glass composer — glass is
+              // blur+tint+radius only; the caret carries focus. Drag keeps its
+              // dashed dropzone affordance (a state signal, not chrome).
               "border-icon-info-active border-dashed": store.draggingType !== null,
               [props.class ?? ""]: !!props.class,
             }}
@@ -2099,35 +2068,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                             </TooltipKeybind>
                           </Show>
                         </div>
-                        <Show when={showVariantControl()}>
-                          <div
-                            data-component="prompt-variant-control"
-                            style={providersShouldFadeIn() ? { animation: "fade-in 0.3s" } : undefined}
-                          >
-                            <TooltipKeybind
-                              placement="top"
-                              gutter={4}
-                              title={language.t("command.model.variant.cycle")}
-                              keybind={command.keybind("model.variant.cycle")}
-                            >
-                              <Select
-                                size="normal"
-                                options={variants()}
-                                current={local.model.variant.current() ?? "default"}
-                                label={(x) => (x === "default" ? language.t("common.default") : x)}
-                                onSelect={(value) => {
-                                  local.model.variant.set(value === "default" ? undefined : value)
-                                  restoreFocus()
-                                }}
-                                class="capitalize max-w-[160px] text-text-base"
-                                valueClass="truncate text-13-regular text-text-base"
-                                triggerStyle={control()}
-                                triggerProps={{ "data-action": "prompt-model-variant" }}
-                                variant="ghost"
-                              />
-                            </TooltipKeybind>
-                          </div>
-                        </Show>
                       </Show>
                     </Show>
                   </div>
@@ -2189,6 +2129,8 @@ type ComposerModelControlState = {
   model: ReturnType<typeof useLocal>["model"]
   providerID?: string
   modelName: string
+  /** active thinking effort (undefined = the provider default, not shown) */
+  variantName?: string
   style: JSX.CSSProperties | undefined
   onClose: () => void
   onUnpaidClick: () => void
@@ -2345,6 +2287,9 @@ function ComposerModelControl(props: { state: ComposerModelControlState }) {
                 )}
               </Show>
               <span class="truncate">{props.state.modelName}</span>
+              <Show when={props.state.variantName}>
+                {(variantName) => <span class="shrink-0 capitalize">· {variantName()}</span>}
+              </Show>
               <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
             </Button>
           </TooltipKeybind>
@@ -2374,6 +2319,9 @@ function ComposerModelControl(props: { state: ComposerModelControlState }) {
               )}
             </Show>
             <span class="truncate">{props.state.modelName}</span>
+            <Show when={props.state.variantName}>
+              {(variantName) => <span class="shrink-0 capitalize">· {variantName()}</span>}
+            </Show>
             <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
           </ModelSelectorPopover>
         </TooltipKeybind>

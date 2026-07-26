@@ -1225,7 +1225,8 @@ export function MessageTimeline(props: {
                   {/* glass sweep (#56): comment chips ride the dense-zone token over the Brain */}
                   <Index each={comments()}>
                     {(comment) => (
-                      <div class="shrink-0 max-w-[260px] rounded-[6px] border border-border-weak-base bg-[var(--glass-dense-bg)] px-2.5 py-2">
+                      // Kate 2026-07-25: no border on glass chips — the dense tint alone
+                      <div class="shrink-0 max-w-[260px] rounded-md bg-[var(--glass-dense-bg)] px-2.5 py-2">
                         <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
                           <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
                           <span class="truncate">{getFilename(comment().path)}</span>

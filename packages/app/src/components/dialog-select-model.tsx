@@ -1,5 +1,5 @@
 import { Popover as Kobalte } from "@kobalte/core/popover"
-import { Component, ComponentProps, createMemo, JSX, Show, ValidComponent } from "solid-js"
+import { Component, ComponentProps, createMemo, For, JSX, Show, ValidComponent } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -85,6 +85,52 @@ const ModelList: Component<{
   )
 }
 
+/** Thinking effort, INSIDE the model surface (Kate 2026-07-25): one control
+    for "which brain, how hard". Renders nothing unless the current model
+    exposes variants; picking one never dismisses the host — effort is an
+    attribute, not a selection. Shared by the paid popover and the unpaid
+    dialog so no path loses the control the standalone footer Select had. */
+export const ModelVariantRow: Component<{ model?: ModelState; class?: string }> = (props) => {
+  const model = props.model ?? useLocal().model
+  const language = useLanguage()
+  const options = createMemo(() => {
+    const list = model.variant.list()
+    return list.length > 0 ? ["default", ...list] : []
+  })
+  return (
+    <Show when={options().length > 0}>
+      <div class={`flex shrink-0 items-center gap-2 ${props.class ?? ""}`}>
+        <span class="text-[13px] font-[440] leading-5 text-v2-text-text-faint">
+          {language.t("dialog.model.variant.label")}
+        </span>
+        <div class="ml-auto flex items-center gap-1">
+          <For each={options()}>
+            {(option) => {
+              const selected = () => (model.variant.current() ?? "default") === option
+              return (
+                <button
+                  type="button"
+                  aria-pressed={selected()}
+                  class="h-6 rounded-md px-2 text-[12px] font-[500] capitalize transition-colors duration-120 focus-visible:outline-none"
+                  classList={{
+                    "bg-[var(--accent-fill-soft)] text-v2-text-text-base shadow-[inset_0_0_0_1px_var(--accent-edge)]":
+                      selected(),
+                    "text-v2-text-text-faint hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base focus-visible:bg-v2-background-bg-layer-02 focus-visible:text-v2-text-text-base":
+                      !selected(),
+                  }}
+                  onClick={() => model.variant.set(option === "default" ? undefined : option)}
+                >
+                  {option === "default" ? language.t("common.default") : option}
+                </button>
+              )
+            }}
+          </For>
+        </div>
+      </div>
+    </Show>
+  )
+}
+
 type ModelSelectorTriggerProps = Omit<ComponentProps<typeof Kobalte.Trigger>, "as" | "ref">
 type Dismiss = "escape" | "outside" | "select" | "manage" | "provider"
 
@@ -124,6 +170,11 @@ export function ModelSelectorPopover(props: {
     })
   }
   const language = useLanguage()
+
+  // Kate 2026-07-25: thinking effort lives INSIDE the model menu — see
+  // ModelVariantRow (shared with the unpaid dialog; the footer Select is gone)
+  const model = props.model ?? useLocal().model
+  const hasVariants = createMemo(() => model.variant.list().length > 0)
 
   return (
     <Kobalte
@@ -192,6 +243,10 @@ export function ModelSelectorPopover(props: {
               </div>
             }
           />
+          <Show when={hasVariants()}>
+            <div class="mx-1 mt-1 h-px shrink-0 bg-v2-border-border-muted" />
+            <ModelVariantRow model={props.model} class="px-2 pb-1 pt-2" />
+          </Show>
         </Kobalte.Content>
       </Kobalte.Portal>
     </Kobalte>
