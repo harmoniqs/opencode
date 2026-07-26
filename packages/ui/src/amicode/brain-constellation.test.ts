@@ -288,23 +288,25 @@ describe("constellation mode — live thought", () => {
     expect(engine.stats().latentPulses).toBe(0) // idle: decays out normally
   })
 
-  test("flares avoid occluded regions: thought lands in the gutters beside the column", () => {
+  test("flares SEAT clear of occluded regions (the camera then brings the newest to center)", () => {
     const { engine, ctx } = makeEngine({ scheme: "dark" })
     drive(engine, 0, 100)
     // the real session geometry: a centered message column covers the middle
-    // band; the Brain stays visible in the gutters on BOTH sides
+    // band; the Brain stays visible in the gutters on BOTH sides. Seating is
+    // ambient-space: on the FIRST frame after the touches — before the
+    // tracking camera has moved — every flare paints clear of the band.
     engine.occlude([{ x: 250, y: 0, w: 300, h: 480 }])
+    const before = ctx.calls.length
     for (const t of TURN_TOUCHES) engine.touch(t)
-    drive(engine, 116, 400)
-    // every thought-colored arc must land clear of the covered band
+    engine.tick(116) // one frame: camera displacement ≤ ~3% of its glide
     let sawThought = false
     let fill = ""
-    for (const call of ctx.calls) {
+    for (const call of ctx.calls.slice(before)) {
       if (call.method === "set:fillStyle") fill = String(call.args[0])
       if (call.method === "arc" && /255,246,118/.test(fill)) {
         sawThought = true
         const x = call.args[0] as number
-        expect(x < 250 || x > 550).toBe(true)
+        expect(x < 265 || x > 535).toBe(true) // 15px glide tolerance on the band
       }
     }
     expect(sawThought).toBe(true)
@@ -316,6 +318,54 @@ describe("constellation mode — live thought", () => {
     engine.occlude([{ x: 0, y: 0, w: 800, h: 480 }])
     for (const t of TURN_TOUCHES) engine.touch(t)
     expect(engine.stats().latentPulses).toBe(TURN_TOUCHES.length)
+  })
+
+  test("thinking stops the spin and zooms the camera in; quiet eases home", () => {
+    const { engine } = makeEngine()
+    engine.setActive(true) // a working turn: the newest flare holds lit
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    drive(engine, 116, 3000)
+    expect(engine.stats().latentPulses).toBe(1)
+    expect(engine.stats().latentZoom).toBeGreaterThan(1.4) // camera on the thought
+    engine.setActive(false)
+    drive(engine, 3016, 9000) // flare decays; camera eases home, spin resumes
+    expect(engine.stats().latentPulses).toBe(0)
+    expect(engine.stats().latentZoom).toBeLessThan(1.05)
+  })
+
+  test("the camera follows the trajectory of thought: a newer flare retargets it", () => {
+    const { engine } = makeEngine()
+    engine.setActive(true)
+    drive(engine, 0, 100)
+    engine.touch({ label: "piccolo.jl", type: "package" })
+    drive(engine, 116, 2000)
+    const mid = engine.stats().latentZoom
+    engine.touch({ label: "amico-vault", type: "skill" }) // thought moves on
+    drive(engine, 2016, 4000)
+    expect(mid).toBeGreaterThan(1.4)
+    expect(engine.stats().latentZoom).toBeGreaterThan(1.4) // still on the thought
+    expect(engine.stats().latentPulses).toBeGreaterThanOrEqual(1)
+  })
+
+  test("the busy-hold is budgeted: a wedged active signal cannot freeze the camera forever", () => {
+    const { engine } = makeEngine()
+    engine.setActive(true) // …and never flips false (wedged stream / dev pin)
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    drive(engine, 116, 36_000) // past the ~30s hold budget + decay
+    expect(engine.stats().latentPulses).toBe(0) // the hold released
+    expect(engine.stats().latentZoom).toBeLessThan(1.05) // ambient again
+  })
+
+  test("reduced motion never tracks: the tableau holds, zoom stays 1", () => {
+    const { engine } = makeEngine({ reduceMotion: true })
+    engine.tick(0)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    engine.tick(16)
+    engine.tick(32)
+    expect(engine.stats().latentPulses).toBe(1)
+    expect(engine.stats().latentZoom).toBe(1)
   })
 
   test("determinism holds under touches: same clock + same touches ⇒ byte-identical frames", () => {

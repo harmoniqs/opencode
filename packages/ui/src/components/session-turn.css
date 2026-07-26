@@ -259,3 +259,20 @@
 .error-card[data-glass] {
   background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--glass-standard-bg));
 }
+
+/* Kate 2026-07-26: the conversation stacks from the BOTTOM (messenger law) —
+   a short thread sits just above the composer, not stuck under the header.
+   The SCROLLER's height is content-driven up to the space the (out-of-scroll)
+   header leaves, and its anchor region justifies it to the end; inside it,
+   scrolling stays classic top-anchored, so virtua's geometry never changes.
+   The flex chain below lets the viewport shrink to the capped root instead of
+   relying on percentage heights against an auto box. */
+[data-component="session-timeline"] .scroll-view {
+  display: flex;
+  flex-direction: column;
+}
+[data-component="session-timeline"] .scroll-view__viewport {
+  flex: 0 1 auto;
+  height: auto;
+  min-height: 0;
+}

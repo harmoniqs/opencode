@@ -1196,9 +1196,10 @@ export function MessageTimeline(props: {
         data-message-id={input.row().userMessageID}
         data-timeline-row={input.row()._tag}
         classList={{
+          // Kate 2026-07-26: no centered column — rows span the pane so the
+          // user's messages justify RIGHT and amico's justify LEFT (each card
+          // still capped at its own reading measure); the Brain owns the middle.
           "min-w-0 w-full max-w-full": true,
-          "md:max-w-200 2xl:max-w-[1000px]": props.centered,
-          "md:mx-auto": props.centered,
           "pt-6": previousUserMessage(),
           "pt-3": previousAssistantPart(),
         }}
@@ -1364,7 +1365,7 @@ export function MessageTimeline(props: {
   }
 
   return (
-    <div class="relative w-full h-full min-w-0">
+    <div data-component="session-timeline" class="relative w-full h-full min-w-0 flex flex-col">
       <div
         class="absolute left-1/2 -translate-x-1/2 bottom-6 z-[60] pointer-events-none transition-all duration-200 ease-out"
         classList={{
@@ -1388,398 +1389,408 @@ export function MessageTimeline(props: {
           </div>
         </button>
       </div>
-      <ScrollView
-        viewportRef={bindListRoot}
-        onWheel={handleListWheel}
-        onTouchStart={handleListTouchStart}
-        onTouchMove={handleListTouchMove}
-        onTouchEnd={handleListTouchEnd}
-        onTouchCancel={handleListTouchEnd}
-        onPointerDown={handleListPointerDown}
-        onScroll={handleListScroll}
-        onClick={props.onAutoScrollInteraction}
-        class="relative min-w-0 w-full h-full"
-        style={{
-          "--sticky-accordion-top": showHeader() ? "48px" : "0px",
-        }}
-      >
-        <Show when={showHeader()}>
-          <div
-            ref={(el) => {
-              head = el
-              updateTitleMetrics()
-            }}
-            data-session-title
-            classList={{
-              // glass sweep (#56): the sticky title band converts its hand-rolled
-              // chrome (opaque --background-stronger gradient + 10px blur) to the
-              // glass recipe's own terms — the derived tint fading to transparent
-              // over the shared blur+brightness. Band form (no border/radius), so
-              // the vars are used directly rather than the card hook.
-              "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--glass-standard-bg)_48px,transparent)] [backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))]": true,
-              "w-full": true,
-              "pb-4": true,
-              "pl-2 pr-3 md:pl-4 md:pr-3": true,
-              "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
-            }}
-          >
-            <Show when={workingStatus() !== "hidden" && settings.general.showSessionProgressBar()}>
-              <div data-component="session-progress" data-state={workingStatus()} aria-hidden="true">
-                <div
-                  data-component="session-progress-bar"
-                  style={{
-                    background: tint() ?? "var(--icon-interactive-base)",
-                    animation: `session-progress-whip ${bar.ms}ms infinite`,
-                  }}
-                />
-              </div>
-            </Show>
-            <div class="h-12 w-full flex items-center justify-between gap-2">
-              <div class="flex items-center gap-1 min-w-0 flex-1 pr-3">
-                <div class="flex items-center min-w-0 grow-1">
-                  <Show when={parentID()}>
-                    <button
-                      type="button"
-                      data-slot="session-title-parent"
-                      class="min-w-0 max-w-[40%] truncate text-14-medium text-text-weak transition-colors hover:text-text-base"
-                      onClick={navigateParent}
-                    >
-                      {parentTitle()}
-                    </button>
-                    <span
-                      data-slot="session-title-separator"
-                      class="px-2 text-14-medium text-text-weak"
-                      aria-hidden="true"
-                    >
-                      /
-                    </span>
-                  </Show>
-                  <div
-                    class="shrink-0 flex items-center justify-center overflow-hidden transition-[width,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                    style={{
-                      width: working() ? "16px" : "0px",
-                      "margin-right": working() ? "8px" : "0px",
-                    }}
+      <Show when={showHeader()}>
+        <div
+          ref={(el) => {
+            head = el
+            updateTitleMetrics()
+          }}
+          data-session-title
+          classList={{
+            // glass sweep (#56): the title band rides the glass recipe's own
+            // terms — the derived tint fading to transparent over the shared
+            // blur+brightness. Kate 2026-07-26: the band lives OUTSIDE the
+            // scroller (a plain block pinned at the pane top) so the message
+            // flow can bottom-anchor independently beneath it.
+            "shrink-0 z-30 bg-[linear-gradient(to_bottom,var(--glass-standard-bg)_48px,transparent)] [backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur,8px))_brightness(var(--glass-brightness,1))]": true,
+            // Kate 2026-07-26: the band spans the FULL pane width (no centered
+            // column cap), and the bottom padding is tight unless the entity
+            // chips rail actually rendered content below the title row.
+            "w-full": true,
+            "pb-1 [&:has([data-component=amicode-entity-rail])]:pb-4": true,
+            "pl-2 pr-3 md:pl-4 md:pr-3": true,
+          }}
+        >
+        <Show when={workingStatus() !== "hidden" && settings.general.showSessionProgressBar()}>
+            <div data-component="session-progress" data-state={workingStatus()} aria-hidden="true">
+              <div
+                data-component="session-progress-bar"
+                style={{
+                  background: tint() ?? "var(--icon-interactive-base)",
+                  animation: `session-progress-whip ${bar.ms}ms infinite`,
+                }}
+              />
+            </div>
+          </Show>
+          <div class="h-12 w-full flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1 min-w-0 flex-1 pr-3">
+              <div class="flex items-center min-w-0 grow-1">
+              <Show when={parentID()}>
+                  <button
+                    type="button"
+                    data-slot="session-title-parent"
+                    class="min-w-0 max-w-[40%] truncate text-14-medium text-text-weak transition-colors hover:text-text-base"
+                    onClick={navigateParent}
+                  >
+                    {parentTitle()}
+                  </button>
+                  <span
+                    data-slot="session-title-separator"
+                    class="px-2 text-14-medium text-text-weak"
                     aria-hidden="true"
                   >
-                    <Show when={workingStatus() !== "hidden"}>
-                      <div
-                        class="transition-opacity duration-200 ease-out"
-                        classList={{ "opacity-0": workingStatus() === "hiding" }}
-                      >
-                        {/* amicode: H-glyph working spinner (stock Spinner import kept for other sites) */}
-                        <AmicoSpinner class="size-4" style={{ color: tint() ?? "var(--icon-interactive-base)" }} />
-                      </div>
-                    </Show>
-                  </div>
-                  <Show when={childTitle() || title.editing}>
-                    <Show
-                      when={title.editing}
-                      fallback={
-                        <h1
-                          data-slot="session-title-child"
-                          class="text-14-medium text-text-strong truncate grow-1 min-w-0"
-                          onDblClick={openTitleEditor}
-                        >
-                          {childTitle()}
-                        </h1>
-                      }
+                    /
+                  </span>
+                </Show>
+                <div
+                  class="shrink-0 flex items-center justify-center overflow-hidden transition-[width,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    width: working() ? "16px" : "0px",
+                    "margin-right": working() ? "8px" : "0px",
+                  }}
+                  aria-hidden="true"
+                >
+                <Show when={workingStatus() !== "hidden"}>
+                    <div
+                      class="transition-opacity duration-200 ease-out"
+                      classList={{ "opacity-0": workingStatus() === "hiding" }}
                     >
-                      <InlineInput
-                        ref={(el) => {
-                          titleRef = el
-                        }}
-                        data-slot="session-title-child"
-                        value={title.draft}
-                        disabled={titleMutation.isPending}
-                        class="text-14-medium text-text-strong grow-1 min-w-0 rounded-[6px] pl-1 -ml-1"
-                        style={{ "--inline-input-shadow": "var(--shadow-xs-border-select)" }}
-                        onInput={(event) => setTitle("draft", event.currentTarget.value)}
-                        onKeyDown={(event) => {
-                          event.stopPropagation()
-                          if (event.key === "Enter") {
-                            event.preventDefault()
-                            void saveTitleEditor()
-                            return
-                          }
-                          if (event.key === "Escape") {
-                            event.preventDefault()
-                            closeTitleEditor()
-                          }
-                        }}
-                        onBlur={closeTitleEditor}
-                      />
-                    </Show>
+                      {/* amicode: H-glyph working spinner (stock Spinner import kept for other sites) */}
+                      <AmicoSpinner class="size-4" style={{ color: tint() ?? "var(--icon-interactive-base)" }} />
+                    </div>
                   </Show>
                 </div>
-              </div>
-              <Show when={sessionID()} keyed>
-                {(id) => (
-                  <div class="shrink-0 flex items-center gap-3">
-                    <SessionContextUsage placement="bottom" />
-                    <Show when={!parentID()}>
-                      <DropdownMenu
-                        gutter={4}
-                        placement="bottom-end"
-                        open={title.menuOpen}
-                        onOpenChange={(open) => {
-                          setTitle("menuOpen", open)
-                          if (open) return
-                        }}
+              <Show when={childTitle() || title.editing}>
+                <Show
+                    when={title.editing}
+                    fallback={
+                      <h1
+                        data-slot="session-title-child"
+                        class="text-14-medium text-text-strong truncate grow-1 min-w-0"
+                        onDblClick={openTitleEditor}
                       >
-                        <DropdownMenu.Trigger
-                          as={IconButton}
-                          icon="dot-grid"
-                          variant="ghost"
-                          class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
-                          classList={{
-                            "bg-surface-base-active": share.open || title.pendingShare,
+                        {childTitle()}
+                      </h1>
+                    }
+                  >
+                    <InlineInput
+                      ref={(el) => {
+                        titleRef = el
+                      }}
+                      data-slot="session-title-child"
+                      value={title.draft}
+                      disabled={titleMutation.isPending}
+                      class="text-14-medium text-text-strong grow-1 min-w-0 rounded-[6px] pl-1 -ml-1"
+                      style={{ "--inline-input-shadow": "var(--shadow-xs-border-select)" }}
+                      onInput={(event) => setTitle("draft", event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        event.stopPropagation()
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void saveTitleEditor()
+                          return
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault()
+                          closeTitleEditor()
+                        }
+                      }}
+                      onBlur={closeTitleEditor}
+                    />
+                  </Show>
+                </Show>
+              </div>
+            </div>
+          <Show when={sessionID()} keyed>
+              {(id) => (
+                <div class="shrink-0 flex items-center gap-3">
+                  <SessionContextUsage placement="bottom" />
+                <Show when={!parentID()}>
+                    <DropdownMenu
+                      gutter={4}
+                      placement="bottom-end"
+                      open={title.menuOpen}
+                      onOpenChange={(open) => {
+                        setTitle("menuOpen", open)
+                        if (open) return
+                      }}
+                    >
+                      <DropdownMenu.Trigger
+                        as={IconButton}
+                        icon="dot-grid"
+                        variant="ghost"
+                        class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
+                        classList={{
+                          "bg-surface-base-active": share.open || title.pendingShare,
+                        }}
+                        aria-label={language.t("common.moreOptions")}
+                        aria-expanded={title.menuOpen || share.open || title.pendingShare}
+                        ref={(el: HTMLButtonElement) => {
+                          more = el
+                        }}
+                      />
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          style={{ "min-width": "104px" }}
+                          onCloseAutoFocus={(event) => {
+                            if (title.pendingRename) {
+                              event.preventDefault()
+                              setTitle("pendingRename", false)
+                              openTitleEditor()
+                              return
+                            }
+                            if (title.pendingShare) {
+                              event.preventDefault()
+                              requestAnimationFrame(() => {
+                                setShare({ open: true, dismiss: null })
+                                setTitle("pendingShare", false)
+                              })
+                            }
                           }}
-                          aria-label={language.t("common.moreOptions")}
-                          aria-expanded={title.menuOpen || share.open || title.pendingShare}
-                          ref={(el: HTMLButtonElement) => {
-                            more = el
-                          }}
-                        />
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.Content
-                            style={{ "min-width": "104px" }}
-                            onCloseAutoFocus={(event) => {
-                              if (title.pendingRename) {
-                                event.preventDefault()
-                                setTitle("pendingRename", false)
-                                openTitleEditor()
-                                return
-                              }
-                              if (title.pendingShare) {
-                                event.preventDefault()
-                                requestAnimationFrame(() => {
-                                  setShare({ open: true, dismiss: null })
-                                  setTitle("pendingShare", false)
-                                })
-                              }
+                        >
+                          <DropdownMenu.Item
+                            onSelect={() => {
+                              setTitle("pendingRename", true)
+                              setTitle("menuOpen", false)
                             }}
                           >
+                            <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
+                          </DropdownMenu.Item>
+                        <Show when={shareEnabled()}>
                             <DropdownMenu.Item
                               onSelect={() => {
-                                setTitle("pendingRename", true)
-                                setTitle("menuOpen", false)
+                                setTitle({ pendingShare: true, menuOpen: false })
                               }}
                             >
-                              <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
+                              <DropdownMenu.ItemLabel>
+                                {language.t("session.share.action.share")}
+                              </DropdownMenu.ItemLabel>
                             </DropdownMenu.Item>
-                            <Show when={shareEnabled()}>
-                              <DropdownMenu.Item
-                                onSelect={() => {
-                                  setTitle({ pendingShare: true, menuOpen: false })
-                                }}
-                              >
-                                <DropdownMenu.ItemLabel>
-                                  {language.t("session.share.action.share")}
-                                </DropdownMenu.ItemLabel>
-                              </DropdownMenu.Item>
-                            </Show>
-                            <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
-                              <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Separator />
-                            <DropdownMenu.Item
-                              onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
-                            >
-                              <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Content>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu>
-
-                      <KobaltePopover
-                        open={share.open}
-                        anchorRef={() => more}
-                        placement="bottom-end"
-                        gutter={4}
-                        modal={false}
-                        onOpenChange={(open) => {
-                          if (open) setShare("dismiss", null)
-                          setShare("open", open)
-                        }}
-                      >
-                        <KobaltePopover.Portal>
-                          <KobaltePopover.Content
-                            data-component="popover-content"
-                            style={{ "min-width": "320px" }}
-                            onEscapeKeyDown={(event) => {
-                              setShare({ dismiss: "escape", open: false })
-                              event.preventDefault()
-                              event.stopPropagation()
-                            }}
-                            onPointerDownOutside={() => {
-                              setShare({ dismiss: "outside", open: false })
-                            }}
-                            onFocusOutside={() => {
-                              setShare({ dismiss: "outside", open: false })
-                            }}
-                            onCloseAutoFocus={(event) => {
-                              if (share.dismiss === "outside") event.preventDefault()
-                              setShare("dismiss", null)
-                            }}
+                          </Show>
+                          <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
+                            <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Separator />
+                          <DropdownMenu.Item
+                            onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
                           >
-                            <div class="flex flex-col p-3">
-                              <div class="flex flex-col gap-1">
-                                <div class="text-13-medium text-text-strong">
-                                  {language.t("session.share.popover.title")}
-                                </div>
-                                <div class="text-12-regular text-text-weak">
-                                  {shareUrl()
-                                    ? language.t("session.share.popover.description.shared")
-                                    : language.t("session.share.popover.description.unshared")}
-                                </div>
+                            <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu>
+
+                    <KobaltePopover
+                      open={share.open}
+                      anchorRef={() => more}
+                      placement="bottom-end"
+                      gutter={4}
+                      modal={false}
+                      onOpenChange={(open) => {
+                        if (open) setShare("dismiss", null)
+                        setShare("open", open)
+                      }}
+                    >
+                      <KobaltePopover.Portal>
+                        <KobaltePopover.Content
+                          data-component="popover-content"
+                          style={{ "min-width": "320px" }}
+                          onEscapeKeyDown={(event) => {
+                            setShare({ dismiss: "escape", open: false })
+                            event.preventDefault()
+                            event.stopPropagation()
+                          }}
+                          onPointerDownOutside={() => {
+                            setShare({ dismiss: "outside", open: false })
+                          }}
+                          onFocusOutside={() => {
+                            setShare({ dismiss: "outside", open: false })
+                          }}
+                          onCloseAutoFocus={(event) => {
+                            if (share.dismiss === "outside") event.preventDefault()
+                            setShare("dismiss", null)
+                          }}
+                        >
+                          <div class="flex flex-col p-3">
+                            <div class="flex flex-col gap-1">
+                              <div class="text-13-medium text-text-strong">
+                                {language.t("session.share.popover.title")}
                               </div>
-                              <div class="mt-3 flex flex-col gap-2">
-                                <Show
-                                  when={shareUrl()}
-                                  fallback={
+                              <div class="text-12-regular text-text-weak">
+                                {shareUrl()
+                                  ? language.t("session.share.popover.description.shared")
+                                  : language.t("session.share.popover.description.unshared")}
+                              </div>
+                            </div>
+                            <div class="mt-3 flex flex-col gap-2">
+                            <Show
+                                when={shareUrl()}
+                                fallback={
+                                  <Button
+                                    size="large"
+                                    variant="primary"
+                                    class="w-full"
+                                    onClick={shareSession}
+                                    disabled={shareMutation.isPending}
+                                  >
+                                    {shareMutation.isPending
+                                      ? language.t("session.share.action.publishing")
+                                      : language.t("session.share.action.publish")}
+                                  </Button>
+                                }
+                              >
+                                <div class="flex flex-col gap-2">
+                                  <TextField
+                                    value={shareUrl() ?? ""}
+                                    readOnly
+                                    copyable
+                                    copyKind="link"
+                                    tabIndex={-1}
+                                    class="w-full"
+                                  />
+                                  <div class="grid grid-cols-2 gap-2">
+                                    <Button
+                                      size="large"
+                                      variant="secondary"
+                                      class="w-full shadow-none border border-border-weak-base"
+                                      onClick={unshareSession}
+                                      disabled={unshareMutation.isPending}
+                                    >
+                                      {unshareMutation.isPending
+                                        ? language.t("session.share.action.unpublishing")
+                                        : language.t("session.share.action.unpublish")}
+                                    </Button>
                                     <Button
                                       size="large"
                                       variant="primary"
                                       class="w-full"
-                                      onClick={shareSession}
-                                      disabled={shareMutation.isPending}
+                                      onClick={viewShare}
+                                      disabled={unshareMutation.isPending}
                                     >
-                                      {shareMutation.isPending
-                                        ? language.t("session.share.action.publishing")
-                                        : language.t("session.share.action.publish")}
+                                      {language.t("session.share.action.view")}
                                     </Button>
-                                  }
-                                >
-                                  <div class="flex flex-col gap-2">
-                                    <TextField
-                                      value={shareUrl() ?? ""}
-                                      readOnly
-                                      copyable
-                                      copyKind="link"
-                                      tabIndex={-1}
-                                      class="w-full"
-                                    />
-                                    <div class="grid grid-cols-2 gap-2">
-                                      <Button
-                                        size="large"
-                                        variant="secondary"
-                                        class="w-full shadow-none border border-border-weak-base"
-                                        onClick={unshareSession}
-                                        disabled={unshareMutation.isPending}
-                                      >
-                                        {unshareMutation.isPending
-                                          ? language.t("session.share.action.unpublishing")
-                                          : language.t("session.share.action.unpublish")}
-                                      </Button>
-                                      <Button
-                                        size="large"
-                                        variant="primary"
-                                        class="w-full"
-                                        onClick={viewShare}
-                                        disabled={unshareMutation.isPending}
-                                      >
-                                        {language.t("session.share.action.view")}
-                                      </Button>
-                                    </div>
                                   </div>
-                                </Show>
-                              </div>
+                                </div>
+                              </Show>
                             </div>
-                          </KobaltePopover.Content>
-                        </KobaltePopover.Portal>
-                      </KobaltePopover>
-                    </Show>
-                  </div>
-                )}
-              </Show>
-            </div>
-            {/* amicode: problem-header rail (renders only when the session has amicode_* parts) + ask/ui bridges */}
-            <AmicodeEntityRail
-              messages={sessionMessages()}
-              partsFor={getMsgParts}
-              fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
-              fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
-              fetchRunSeries={(run, lab) =>
-                amicodeGet(
-                  server.current,
-                  `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
-                )
-              }
-              widgetHost={{
-                // Stage 2: the in-chat widget preview reuses the home grid's
-                // frame kernel; server context is resolved live per call.
-                frameSrc: (id, hash) => {
-                  const url = server.current?.http.url
-                  return url
-                    ? new URL(
-                        `/amicode/widget-frame?id=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`,
-                        url,
-                      ).toString()
-                    : ""
-                },
-                callbacks: {
-                  fetch: (path) => amicodeGet(server.current, path),
-                  action: async () => ({ ok: true }),
-                  prompt: (text) => {
-                    const id = sessionID()
-                    if (id) void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
-                  },
-                  open: () => {},
-                },
-                // pin = GET current dashboard, append this widget if absent, POST
-                // the full state back (applySave treats the body as the whole
-                // state, so a partial POST would wipe other tiles).
-                pin: async (id) => {
-                  const raw = await amicodeGet(server.current, "/amicode/dashboard")
-                  const state: DashboardState = parseDashboardResponse(raw) ?? { version: 1, widget: [] }
-                  if (!state.widget.some((e) => e.id === id))
-                    state.widget = [...state.widget, { key: id, id, hidden: false, config: {} }]
-                  return amicodePost(server.current, "/amicode/dashboard", state)
-                },
-              }}
-              onOpenEntity={openEntityView}
-              onDraftPrompt={(text) => draftPrompt(prompt, text)}
-              editLabel={language.t("amicode.editInChat")}
-              onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
-              retryLabel={language.t("amicode.retry")}
-              unavailableLabel={language.t("amicode.unavailable")}
-              onAsk={(text) => {
-                const id = sessionID()
-                if (!id) return
-                void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
-              }}
-            />
+                          </div>
+                        </KobaltePopover.Content>
+                      </KobaltePopover.Portal>
+                    </KobaltePopover>
+                  </Show>
+                </div>
+              )}
+            </Show>
           </div>
-        </Show>
+          {/* amicode: problem-header rail (renders only when the session has amicode_* parts) + ask/ui bridges */}
+          <AmicodeEntityRail
+            messages={sessionMessages()}
+            partsFor={getMsgParts}
+            fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
+            fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
+            fetchRunSeries={(run, lab) =>
+              amicodeGet(
+                server.current,
+                `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
+              )
+            }
+            widgetHost={{
+              // Stage 2: the in-chat widget preview reuses the home grid's
+              // frame kernel; server context is resolved live per call.
+              frameSrc: (id, hash) => {
+                const url = server.current?.http.url
+                return url
+                  ? new URL(
+                      `/amicode/widget-frame?id=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`,
+                      url,
+                    ).toString()
+                  : ""
+              },
+              callbacks: {
+                fetch: (path) => amicodeGet(server.current, path),
+                action: async () => ({ ok: true }),
+                prompt: (text) => {
+                  const id = sessionID()
+                  if (id) void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+                },
+                open: () => {},
+              },
+              // pin = GET current dashboard, append this widget if absent, POST
+              // the full state back (applySave treats the body as the whole
+              // state, so a partial POST would wipe other tiles).
+              pin: async (id) => {
+                const raw = await amicodeGet(server.current, "/amicode/dashboard")
+                const state: DashboardState = parseDashboardResponse(raw) ?? { version: 1, widget: [] }
+                if (!state.widget.some((e) => e.id === id))
+                  state.widget = [...state.widget, { key: id, id, hidden: false, config: {} }]
+                return amicodePost(server.current, "/amicode/dashboard", state)
+              },
+            }}
+            onOpenEntity={openEntityView}
+            onDraftPrompt={(text) => draftPrompt(prompt, text)}
+            editLabel={language.t("amicode.editInChat")}
+            onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
+            retryLabel={language.t("amicode.retry")}
+            unavailableLabel={language.t("amicode.unavailable")}
+            onAsk={(text) => {
+              const id = sessionID()
+              if (!id) return
+              void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+            }}
+          />
+        </div>
+      </Show>
+      {/* Kate 2026-07-26: the SCROLLER hugs the bottom (messenger law) — its
+          height is content-driven up to the space the header leaves, so a
+          short thread sits just above the composer while virtua's world stays
+          classic top-anchored (no offset trickery inside the scroller). */}
+      <div data-slot="timeline-anchor" class="flex-1 min-h-0 flex flex-col justify-end">
+        <ScrollView
+          viewportRef={bindListRoot}
+          onWheel={handleListWheel}
+          onTouchStart={handleListTouchStart}
+          onTouchMove={handleListTouchMove}
+          onTouchEnd={handleListTouchEnd}
+          onTouchCancel={handleListTouchEnd}
+          onPointerDown={handleListPointerDown}
+          onScroll={handleListScroll}
+          onClick={props.onAutoScrollInteraction}
+          class="relative min-w-0 w-full max-h-full min-h-0"
+          style={{
+            "--sticky-accordion-top": "0px",
+          }}
+        >
         <Show when={scrollRoot()}>
           {(root) => (
-            <Virtualizer
-              data={timelineRows()}
-              cache={virtualCache()}
-              itemSize={virtualCache() ? undefined : timelineFallbackItemSize}
-              scrollRef={root()}
-              shift={props.historyShift}
-              keepMounted={keepMounted()}
-              startMargin={64}
-              ref={(handle) => {
-                if (!handle) {
-                  writeTimelineCache(virtualizerSessionKey, virtualizerRowKeys, virtualizer)
-                  virtualizer = undefined
-                  return
-                }
-                virtualizer = handle
-                virtualizerSessionKey = cacheSessionKey
-                virtualizerRowKeys = cacheRowKeys
-                maybeAnchorBottom()
-                scheduleContentRoot(root())
-              }}
-            >
-              {(row) => <TimelineRowView row={row} />}
-            </Virtualizer>
+            <div data-slot="timeline-rows">
+              <Virtualizer
+                data={timelineRows()}
+                cache={virtualCache()}
+                itemSize={virtualCache() ? undefined : timelineFallbackItemSize}
+                scrollRef={root()}
+                shift={props.historyShift}
+                keepMounted={keepMounted()}
+                startMargin={0} // the header lives outside the scroller now
+                ref={(handle) => {
+                  if (!handle) {
+                    writeTimelineCache(virtualizerSessionKey, virtualizerRowKeys, virtualizer)
+                    virtualizer = undefined
+                    return
+                  }
+                  virtualizer = handle
+                  virtualizerSessionKey = cacheSessionKey
+                  virtualizerRowKeys = cacheRowKeys
+                  maybeAnchorBottom()
+                  scheduleContentRoot(root())
+                }}
+              >
+                {(row) => <TimelineRowView row={row} />}
+              </Virtualizer>
+            </div>
           )}
         </Show>
-      </ScrollView>
+        </ScrollView>
+      </div>
     </div>
   )
 }

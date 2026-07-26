@@ -120,6 +120,9 @@ export interface BrainEngineStats {
   latent: number
   /** live-thought flares currently lit over the latent web (0 in live mode) */
   latentPulses: number
+  /** thought-tracking camera zoom (1 = ambient; ~1.6 while following thought;
+      0 in live mode) */
+  latentZoom: number
 }
 
 export interface BrainEngine {
@@ -424,8 +427,15 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   let motionQuery: MediaQueryList | null = null
   const onMotionChange = (e: MediaQueryListEvent) => {
     reduceMotion = e.matches
-    if (e.matches) unfurl = 1 // never animate the unfurl under reduced motion
+    if (e.matches) {
+      unfurl = 1 // never animate the unfurl under reduced motion
+      // a mid-track OS toggle must land on the canonical tableau, not a
+      // half-zoomed mid-glide frame (review finding, 2026-07-26): snap the
+      // thought-tracking camera home — easing is motion, so no easing here
+      snapCameraHome()
+    }
     nudge() // one bounded repaint burst either way (both fns bind later in this closure; events fire after construction)
+    requestRender() // the snapped pose must paint now, not wait out a throttle
   }
   if (opts.reduceMotion === undefined && typeof matchMedia !== "undefined") {
     motionQuery = matchMedia("(prefers-reduced-motion: reduce)")
@@ -655,7 +665,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
      code lobe, skills the skills lobe…), so the same label always flares the
      same node and re-touches read as the same concept firing again. Replays
      (history restored on mount) stay silent, per the touch contract. */
-  type ConPulse = { ix: number; t0: number; gain: number; label: string }
+  type ConPulse = { ix: number; t0: number; gain: number; label: string; held?: number }
   const conPulses: ConPulse[] = []
   const CON_PULSE_MS = 1600
   const CON_PULSE_RISE_MS = 150
@@ -671,6 +681,29 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true
     }
     return false
+  }
+  /* thought-tracking camera (Kate 2026-07-26): while flares are alive the
+     ambient rotation eases to a STOP and the view glides + zooms so the newest
+     lit node arrives at the CENTER of the frame (Kate: "the current node
+     should be at the center"). Thought quiet → everything eases home and the
+     rotation resumes. Recency law: conPulses is kept in RECENCY order (a
+     re-touch is spliced to the end), so array-last IS the newest thought —
+     the camera target and the busy-hold both read it. All state advances by
+     dt in the draw loop, so driven clocks stay deterministic; reduced motion
+     never tracks (and an OS-level flip mid-track snaps the camera home). */
+  const CON_TRACK_ZOOM = 1.6
+  const CON_F = 3.2 // perspective camera distance (world units)
+  let conRotK = 1 // rotation velocity multiplier, eases 1 ↔ 0
+  let conCamX = 0 // camera focus in pre-scale projection space (x3·persp units)
+  let conCamY = 0
+  let conCamZ = 1 // zoom multiplier
+  function snapCameraHome() {
+    // instant, no easing — the reduced-motion tableau's pose (hoisted: the
+    // motion-change handler above binds it before these lets initialize)
+    conRotK = 1
+    conCamX = 0
+    conCamY = 0
+    conCamZ = 1
   }
   function conNodeFor(label: string, type?: string): number {
     const c = con!
@@ -690,18 +723,30 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // the overfilled cloud projects many nodes outside the pane, and the UI's
     // glass (message column, composer dock) covers more — a flare the user
     // can't see isn't thought. From the hashed seat, walk the pool (in
-    // deterministic order, last-drawn projection) to the first node that is
-    // BOTH in the viewport AND clear of the occlusion rects; if the gutters
-    // hold none, fall back to merely-visible (a glow through the glass beats
-    // nothing); same label at the same pose always lands the same seat.
+    // deterministic order) to the first node in the viewport and clear of
+    // the occlusion rects; the gutters empty → merely-visible beats nothing.
+    // Candidates are projected in AMBIENT space (no tracking camera): the
+    // zoomed viewport must not funnel every subsequent flare into the same
+    // slice of nodes (review finding, 2026-07-26) — the camera glides to
+    // wherever thought lands. Same label at the same pose → the same seat.
     const size = pool ? pool.length : c.count
     const at = (k: number) => (pool ? pool[(h + k) % size] : (h + k) % size)
+    const kAmb = Math.hypot(W, H) * 0.42
+    const cosY = Math.cos(conAngle)
+    const sinY = Math.sin(conAngle)
     const margin = 24
     let firstVisible = -1
     for (let k = 0; k < Math.min(size, 160); k++) {
       const ix = at(k)
-      const x = conPx![ix]
-      const y = conPy![ix]
+      const x1 = c.x[ix] * cosY + c.z[ix] * sinY
+      const z1 = -c.x[ix] * sinY + c.z[ix] * cosY
+      const y2 = c.y[ix] * conTiltCosX - z1 * conTiltSinX
+      const z2 = c.y[ix] * conTiltSinX + z1 * conTiltCosX
+      const x3 = x1 * conTiltCosZ - y2 * conTiltSinZ
+      const y3 = x1 * conTiltSinZ + y2 * conTiltCosZ
+      const persp = CON_F / (CON_F - z2)
+      const x = W / 2 + x3 * persp * kAmb
+      const y = H / 2 + y3 * persp * kAmb
       if (x < margin || x > W - margin || y < margin || y > H - margin) continue
       if (!conCovered(x, y)) return ix
       if (firstVisible < 0) firstVisible = ix
@@ -715,10 +760,16 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     if (!label) return
     const ix = conNodeFor(label, ev.type)
     const gain = ev.consider ? 0.55 : 1 // scouts glow, real work flares
-    const existing = conPulses.find((p) => p.ix === ix)
-    if (existing) {
-      existing.t0 = conT // a re-touch refreshes the flare instead of stacking a twin
+    const existingIx = conPulses.findIndex((p) => p.ix === ix)
+    if (existingIx >= 0) {
+      // a re-touch refreshes the flare instead of stacking a twin — and moves
+      // it to the END: the array is RECENCY-ordered, so the camera and the
+      // busy-hold retarget to the re-fired concept (review finding, 2026-07-26)
+      const existing = conPulses.splice(existingIx, 1)[0]
+      existing.t0 = conT
       existing.gain = Math.max(existing.gain, gain)
+      existing.held = undefined // a re-fire restarts the hold budget
+      conPulses.push(existing)
     } else {
       if (reduceMotion) conPulses.length = 0 // tableau: one lit node — where amico is now
       conPulses.push({ ix, t0: conT, gain, label: label.slice(0, 24) })
@@ -743,9 +794,16 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       exitConstellation()
       return true
     }
+    // thought-tracking (Kate 2026-07-26): live flares stop the spin and take
+    // the camera; quiet resumes the ambient rotation. During the ignition
+    // dissolve conRotK freezes (the `rot` decay alone owns the stop) so a
+    // tracked dead-stop never spins back up mid-handoff, and the camera eases
+    // home FAST (τ≈200ms) so the live layer co-paints in a settled frame.
+    const tracking = !reduceMotion && it < 0 && conPulses.length > 0
+    if (it < 0) conRotK += ((tracking ? 0 : 1) - conRotK) * Math.min(dt / 450, 1)
     // rotation eases to a stop over ~1s once the handoff lands
     const rot = it < 0 ? 1 : Math.pow(Math.max(1 - it / IGNITE_EASE_MS, 0), 2)
-    if (!reduceMotion) conAngle += (((dt / 1000) * (Math.PI * 2)) / conTuning.speedSec) * rot
+    if (!reduceMotion) conAngle += (((dt / 1000) * (Math.PI * 2)) / conTuning.speedSec) * rot * conRotK
     const showLive = it >= IGNITE_EASE_MS
     if (showLive && !coreIgnited) {
       // the live graph's first node ignites — this is live thought beginning,
@@ -758,10 +816,33 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     const breath = reduceMotion ? 1 : 1 + 0.01 * Math.sin((Math.PI * 2 * conT) / 10000) // ±1% @ ~10s
     const cosY = Math.cos(conAngle)
     const sinY = Math.sin(conAngle)
-    const F = 3.2 // perspective camera distance (world units)
+    const F = CON_F // perspective camera distance (world units)
     const k = Math.hypot(W, H) * 0.42 * breath // full-bleed: the cloud overfills the pane
     const cx = W / 2
     const cy = H / 2
+    // camera: ease the focus point + zoom so the newest thought arrives at the
+    // CENTER of the frame — or home when quiet. The focus is measured in
+    // pre-scale projection space so it composes with breath/zoom scaling.
+    let camXGoal = 0
+    let camYGoal = 0
+    let camZGoal = 1
+    if (tracking) {
+      const ti = conPulses[conPulses.length - 1].ix // recency-ordered: the newest thought
+      const x1 = c.x[ti] * cosY + c.z[ti] * sinY
+      const z1 = -c.x[ti] * sinY + c.z[ti] * cosY
+      const y2 = c.y[ti] * conTiltCosX - z1 * conTiltSinX
+      const z2 = c.y[ti] * conTiltSinX + z1 * conTiltCosX
+      const x3 = x1 * conTiltCosZ - y2 * conTiltSinZ
+      const y3 = x1 * conTiltSinZ + y2 * conTiltCosZ
+      const persp = F / (F - z2)
+      camXGoal = x3 * persp
+      camYGoal = y3 * persp
+      camZGoal = CON_TRACK_ZOOM
+    }
+    const camEase = Math.min(dt / (it < 0 ? 500 : 200), 1)
+    conCamX += (camXGoal - conCamX) * camEase
+    conCamY += (camYGoal - conCamY) * camEase
+    conCamZ += (camZGoal - conCamZ) * camEase
     const px = conPx!
     const py = conPy!
     const rz = conRz!
@@ -774,17 +855,19 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       const x3 = x1 * conTiltCosZ - y2 * conTiltSinZ
       const y3 = x1 * conTiltSinZ + y2 * conTiltCosZ
       const persp = F / (F - z2)
-      px[i] = cx + x3 * k * persp
-      py[i] = cy + y3 * k * persp
+      px[i] = cx + (x3 * persp - conCamX) * k * conCamZ
+      py[i] = cy + (y3 * persp - conCamY) * k * conCamZ
       rz[i] = z2
     }
     const inks = conInks()
     const edgeK = it < 0 ? 1 : Math.max(1 - Math.max(it - IGNITE_EASE_MS, 0) / IGNITE_EDGE_MS, 0)
     const near = (i: number) => Math.min(Math.max((rz[i] / 1.4 + 1) / 2, 0), 1)
     const fogMul = (i: number) => 1 - conTuning.fog * (1 - near(i))
-    // ---- edges first: the dim web (no pulses, no traveling signals)
+    // ---- edges first: the dim web (no pulses, no traveling signals).
+    // strokes scale with the zoom like node radii do — a camera dolly, not
+    // dots inflating over a hairline web (review finding, 2026-07-26)
     if (edgeK > 0.01) {
-      ctx.lineWidth = 1
+      ctx.lineWidth = conCamZ
       const e = c.edges
       for (let i = 0; i < e.length; i += 2) {
         const p = e[i]
@@ -825,7 +908,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       const alpha = Math.min(1, c.a[i] * 1.4) * fogMul(i) * tw * nodeK
       if (alpha < 0.015) continue
       const persp = F / (F - rz[i])
-      const half = c.r[i] * persp * (0.75 + 0.25 * near(i))
+      const half = c.r[i] * persp * (0.75 + 0.25 * near(i)) * conCamZ
       ctx.fillStyle = conRgba(inks[c.catIx[i]], alpha)
       ctx.beginPath()
       ctx.arc(x, y, half, 0, Math.PI * 2)
@@ -840,12 +923,16 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       const thought = hexToRgb(css.thought)
       // while the session works, the NEWEST flare never finishes decaying —
       // it holds as a sustained glow ("amico is HERE"), the constellation's
-      // where-we-are cursor; when the turn ends it decays out normally
+      // where-we-are cursor; when the turn ends it decays out normally. The
+      // hold is BUDGETED (~30s): a wedged busy signal (or ?brainForceActive)
+      // must not freeze the rotation and zoom forever (review, 2026-07-26).
       const HOLD_AGE = CON_PULSE_RISE_MS + 500
+      const HOLD_MAX_MS = 30_000
       for (let pi = conPulses.length - 1; pi >= 0; pi--) {
         const p = conPulses[pi]
         if (pi === conPulses.length - 1 && active && !reduceMotion && conT - p.t0 > HOLD_AGE) {
-          p.t0 = conT - HOLD_AGE // hold: decay resumes from here once idle
+          if (p.held === undefined) p.held = conT
+          if (conT - p.held < HOLD_MAX_MS) p.t0 = conT - HOLD_AGE // decay resumes from here once idle
         }
         const age = reduceMotion ? CON_PULSE_RISE_MS : conT - p.t0
         if (age >= CON_PULSE_MS) {
@@ -862,7 +949,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
         if (env < 0.02) continue
         const persp = F / (F - rz[i])
         // size floor: a satellite's thought flares as visibly as a concept's
-        const base = Math.max(c.r[i] * persp * (0.75 + 0.25 * near(i)), 2.6)
+        const base = Math.max(c.r[i] * persp * (0.75 + 0.25 * near(i)) * conCamZ, 2.6)
         if (conIncident === null) {
           conIncident = new Map()
           const e = c.edges
@@ -874,7 +961,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
             }
           }
         }
-        ctx.lineWidth = 1
+        ctx.lineWidth = conCamZ
         for (const k of conIncident.get(i) ?? []) {
           const q = c.edges[k] === i ? c.edges[k + 1] : c.edges[k]
           ctx.strokeStyle = conRgba(thought, 0.2 * env)
@@ -884,12 +971,14 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
           ctx.stroke()
         }
         // soft bloom under the core: the flare must read instantly against
-        // ~500 latent nodes — a thought is unmistakable, never a twinkle
+        // ~500 latent nodes — a thought is unmistakable, never a twinkle.
+        // bloom pad + ring travel scale with the zoom so the flare keeps its
+        // proportions when the camera is close (review finding, 2026-07-26)
         ctx.fillStyle = conRgba(thought, 0.12 * env)
         ctx.beginPath()
-        ctx.arc(x, y, base + 9, 0, Math.PI * 2)
+        ctx.arc(x, y, base + 9 * conCamZ, 0, Math.PI * 2)
         ctx.fill()
-        const ringR = base + 3 + (1 - fall) * 14 // names the touch, then lets go
+        const ringR = base + (3 + (1 - fall) * 14) * conCamZ // names the touch, then lets go
         ctx.strokeStyle = conRgba(thought, 0.55 * env * fall)
         ctx.beginPath()
         ctx.arc(x, y, ringR, 0, Math.PI * 2)
@@ -1667,6 +1756,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       mode: con ? "constellation" : "live",
       latent: con ? con.count : 0,
       latentPulses: con ? conPulses.length : 0,
+      latentZoom: con ? conCamZ : 0,
     }),
   }
 }

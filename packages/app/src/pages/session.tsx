@@ -1816,17 +1816,13 @@ export default function Page() {
                   events={brain.events()}
                   active={brain.active()}
                   occlusion={() => {
+                    // Kate 2026-07-26: messages justify to the pane edges and
+                    // the tracked thought comes to CENTER, so the only region
+                    // flares should avoid seating under is the composer dock.
                     const pane = brainPane
                     if (!pane) return []
                     const base = pane.getBoundingClientRect()
                     const rects: { x: number; y: number; w: number; h: number }[] = []
-                    // the message column: one row's x-band, extended full height
-                    const row = pane.querySelector("[data-timeline-row]")
-                    if (row) {
-                      const r = row.getBoundingClientRect()
-                      rects.push({ x: r.left - base.left, y: 0, w: r.width, h: base.height })
-                    }
-                    // the composer dock band (session and landing variants)
                     const dock = pane.querySelector(
                       '[data-slot="session-composer-dock"], [data-slot="new-session-composer-dock"]',
                     )
