@@ -7,6 +7,11 @@
 [data-component="card"][data-kind="tool-error-card"] {
   --card-pad-y: 8px;
   --card-line-pad: 12px;
+  /* Kate 2026-07-26: every chat card is only as wide as its content — the
+     collapsed "edit · Failed" chip must never band across the pane */
+  width: fit-content;
+  min-width: 0;
+  max-width: min(88%, 72ch);
 
   > [data-component="collapsible"].tool-collapsible {
     gap: 0px;
