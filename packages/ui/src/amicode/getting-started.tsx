@@ -69,11 +69,14 @@ export function AmicodeStarterChips(props: {
       class="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2"
     >
       <For each={AMICODE_STARTERS}>
-        {(starter) => (
+        {(starter, i) => (
           <button
             type="button"
             data-slot="amicode-gs-starter"
             class={pill}
+            // Kate 2026-07-25: staggered fade+rise reveal (amicode.css) — the
+            // constellation + composer land first, then the chips stagger in.
+            style={{ "--chip-i": i() }}
             onClick={() => props.onStart(starter.prompt)}
           >
             {starter.label}
@@ -81,7 +84,13 @@ export function AmicodeStarterChips(props: {
         )}
       </For>
       <Show when={props.resumeName && props.onResume}>
-        <button type="button" data-slot="amicode-gs-resume" class={pill} onClick={() => props.onResume?.()}>
+        <button
+          type="button"
+          data-slot="amicode-gs-resume"
+          class={pill}
+          style={{ "--chip-i": AMICODE_STARTERS.length }}
+          onClick={() => props.onResume?.()}
+        >
           Resume {props.resumeName}
         </button>
       </Show>
@@ -181,7 +190,7 @@ export function AmicodeGettingStarted(props: {
         }}
       >
         <For each={AMICODE_STARTERS}>
-          {(starter) => (
+          {(starter, i) => (
             <button
               type="button"
               data-slot="amicode-gs-starter"
@@ -190,6 +199,7 @@ export function AmicodeGettingStarted(props: {
               // light, yellow on dark) — never an opaque layer or a yellow
               // foreground on light (design-system accent law).
               style={{
+                "--chip-i": i(), // staggered reveal (amicode.css)
                 // latent-constellation: glass, not an opaque layer fill
                 border: "1px solid var(--glass-edge)",
                 "border-radius": "var(--radius-md)",

@@ -145,17 +145,21 @@ export function SessionComposerRegion(props: {
       ref={props.setPromptDockRef}
       data-component="session-prompt-dock"
       classList={{
-        "w-full flex flex-col justify-center items-center pointer-events-none": true,
+        "w-full flex flex-col pointer-events-none": true,
         // amicode #61: the dock band stays transparent — an opaque fill here
         // would tile the Brain away behind the floating composer (ADR 0002)
-        "shrink-0 pb-3": props.placement !== "inline",
+        "shrink-0 pb-3 justify-center items-center": props.placement !== "inline",
+        // Kate 2026-07-25: inline = the full-bleed bottom dock — fill the height
+        // and stretch edge-to-edge (no centered max-width column)
+        "h-full justify-end items-stretch": props.placement === "inline",
       }}
     >
       <div
         classList={{
-          "w-full pointer-events-auto": true,
-          "px-3": props.placement !== "inline",
-          [NEW_SESSION_CONTENT_WIDTH]: props.placement === "inline",
+          "pointer-events-auto": true,
+          "w-full px-3": props.placement !== "inline",
+          // full-width + fill height for the docked composer
+          "w-full h-full flex flex-col": props.placement === "inline",
           "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
         }}
       >
@@ -252,6 +256,10 @@ export function SessionComposerRegion(props: {
             <div
               classList={{
                 "relative z-10": true,
+                // Kate 2026-07-25: on the landing this wrapper fills the dock so
+                // the composer reaches the bottom of the screen (natural height
+                // elsewhere)
+                "flex-1 min-h-0 flex flex-col": props.placement === "inline",
               }}
               style={{
                 "margin-top": `${-lift()}px`,

@@ -76,6 +76,7 @@ import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
+import { AMICODE_STARTERS } from "@opencode-ai/ui/amicode-getting-started"
 import { useDirectoryPicker } from "./directory-picker"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
@@ -568,12 +569,54 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onCleanup(() => clearInterval(interval))
   })
 
+  // Kate 2026-07-25: cycle the starter prompts as the composer placeholder on
+  // the empty landing. Pauses when focused (freeze so Tab can accept it) or
+  // under reduced motion; only while empty (suggest()). Each label holds long
+  // enough to type out + read before the next.
+  createEffect(() => {
+    if (params.id) return
+    if (props.variant !== "new-session") return
+    if (focused() || reduceMotionPref() || !suggest()) return
+    const interval = setInterval(() => {
+      setStarterIx((prev) => (prev + 1) % AMICODE_STARTERS.length)
+    }, 4200)
+    onCleanup(() => clearInterval(interval))
+  })
+
+  // Kate 2026-07-25: TYPEWRITER — type the active starter label out letter by
+  // letter (~34ms/char). Re-runs when starterIx changes; idle when focused /
+  // reduced-motion / non-empty (designPlaceholder shows the full label then).
+  createEffect(() => {
+    if (props.variant !== "new-session") return
+    if (focused() || reduceMotionPref() || !suggest()) return
+    const label = AMICODE_STARTERS[starterIx() % AMICODE_STARTERS.length]?.label ?? ""
+    setTyped("")
+    let i = 0
+    const timer = setInterval(() => {
+      i += 1
+      setTyped(label.slice(0, i))
+      if (i >= label.length) clearInterval(timer)
+    }, 34)
+    onCleanup(() => clearInterval(timer))
+  })
+
   const [composing, setComposing] = createSignal(false)
   const isImeComposing = (event: KeyboardEvent) => event.isComposing || composing() || event.keyCode === 229
+
+  // Kate 2026-07-25: rotating starter placeholder (replaces the chip wall).
+  // The composer cycles the real starter prompts while empty + unfocused; on
+  // focus the current one freezes (Tab accepts it); reduced-motion is static.
+  const [focused, setFocused] = createSignal(false)
+  const [starterIx, setStarterIx] = createSignal(0)
+  const [typed, setTyped] = createSignal("") // the currently typed-out substring
+  const reducedMotionQuery = typeof window !== "undefined" ? window.matchMedia?.("(prefers-reduced-motion: reduce)") : undefined
+  const [reduceMotionPref, setReduceMotionPref] = createSignal(reducedMotionQuery?.matches ?? false)
+  reducedMotionQuery?.addEventListener?.("change", (e) => setReduceMotionPref(e.matches))
 
   const handleBlur = () => {
     closePopover()
     setComposing(false)
+    setFocused(false)
   }
 
   const handleCompositionStart = () => {
@@ -1144,6 +1187,26 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    // Kate 2026-07-25: Tab accepts the shown rotating starter suggestion (fills
+    // the composer, does not submit — the user can edit or send).
+    if (
+      event.key === "Tab" &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      props.variant === "new-session" &&
+      !reduceMotionPref() &&
+      suggest() &&
+      blank()
+    ) {
+      const starter = AMICODE_STARTERS[starterIx() % AMICODE_STARTERS.length]
+      if (starter) {
+        event.preventDefault()
+        prompt.set([{ type: "text", content: starter.prompt, start: 0, end: starter.prompt.length }], starter.prompt.length)
+        return
+      }
+    }
     // Amicode webview: the framed app has no clipboard-read permission, so the
     // browser dispatches no usable paste event on ⌘V (unlike plain web/desktop,
     // where onPaste handles it). Intercept the keystroke and read the OS
@@ -1348,9 +1411,21 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     (p) => p,
   )
 
+  const GENERIC_PLACEHOLDER = "Ask Amico anything, / for commands, @ for context..."
+  // the composer is actively typing a starter suggestion (empty landing, not
+  // focused, motion allowed) — drives the typewriter caret.
+  const typewriterActive = createMemo(
+    () => props.variant === "new-session" && !reduceMotionPref() && suggest() && !focused(),
+  )
   const designPlaceholder = () => {
     if (store.mode === "shell") return placeholder()
-    return "Ask Amico anything, / for commands, @ for context..."
+    if (props.variant === "new-session" && !reduceMotionPref() && suggest()) {
+      const label = AMICODE_STARTERS[starterIx() % AMICODE_STARTERS.length]?.label ?? GENERIC_PLACEHOLDER
+      // typewriter substring while rotating; the full frozen label while focused
+      // (so Tab accepts a complete, readable suggestion)
+      return focused() ? label : typed()
+    }
+    return GENERIC_PLACEHOLDER
   }
 
   const modelControlState = createMemo<ComposerModelControlState>(() => ({
@@ -1507,7 +1582,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       />
       <Switch>
         <Match when={settings.general.newLayoutDesigns()}>
-          <div class="flex flex-col gap-3">
+          {/* Kate 2026-07-25: on the landing this wrapper must fill the composer
+              dock's height so the composer reaches the bottom of the screen. */}
+          <div
+            classList={{
+              "flex flex-col gap-3": true,
+              "flex-1 min-h-0": newSession(),
+            }}
+          >
             <DockShellForm
               data-component={newSession() ? "session-new-composer" : "session-composer"}
               // amicode #61: the composer floats on the STANDARD glass tier over
@@ -1517,7 +1599,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               data-glass="standard"
               onSubmit={handleSubmit}
               classList={{
-                "group/prompt-input min-h-[96px] w-full": true,
+                "group/prompt-input w-full": true,
+                "min-h-[96px]": !newSession(),
+                // Kate 2026-07-25: the landing composer is a full-bleed bottom
+                // dock — fill the 40vh frame, edge-to-edge, no radius/ring/shadow
+                // (the data-glass blur stays; only the frame geometry is zeroed)
+                "h-full flex flex-col !rounded-none !border-0 !shadow-none": newSession(),
                 // dashed drop affordance still wins over the glass edge while dragging
                 "border-icon-info-active border-dashed": store.draggingType !== null,
                 [props.class ?? ""]: !!props.class,
@@ -1551,7 +1638,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 removeLabel={language.t("prompt.attachment.remove")}
               />
               <div
-                class="relative min-h-[52px]"
+                classList={{
+                  "relative min-h-[52px]": true,
+                  // Kate 2026-07-25: fill the full-bleed landing dock
+                  "flex-1 flex flex-col min-h-0": newSession(),
+                }}
                 onMouseDown={(e) => {
                   const target = e.target
                   if (!(target instanceof HTMLElement)) return
@@ -1559,7 +1650,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   editorRef?.focus()
                 }}
               >
-                <div class="relative max-h-[180px] overflow-y-auto no-scrollbar" ref={(el) => (scrollRef = el)}>
+                <div
+                  classList={{
+                    "relative overflow-y-auto no-scrollbar": true,
+                    "max-h-[180px]": !newSession(),
+                    "flex-1 min-h-0": newSession(),
+                  }}
+                  ref={(el) => (scrollRef = el)}
+                >
                   <div
                     data-component="prompt-input"
                     // Owns its own bridged ⌘V (handleKeyDown + the image pipeline) —
@@ -1584,6 +1682,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     onPaste={handlePaste}
                     onCompositionStart={handleCompositionStart}
                     onCompositionEnd={handleCompositionEnd}
+                    onFocus={() => setFocused(true)}
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
                     classList={{
@@ -1600,13 +1699,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     classList={{ "font-mono!": store.mode === "shell", hidden: prompt.dirty() }}
                   >
                     {designPlaceholder()}
+                    {/* typewriter caret — blinks while a starter is being typed */}
+                    <Show when={typewriterActive()}>
+                      <span class="amc-ph-caret" aria-hidden="true" />
+                    </Show>
                   </div>
                 </div>
               </div>
-              {/* amicode #61: the footer's muted picker/control text rides a
-                  dense-backed zone (slice #60's token) — muted ink on the
-                  standard tint fails AA over the reference frame. */}
-              <div class="mx-1 mb-1 flex h-11 items-center rounded-md bg-[var(--glass-dense-bg)] px-2">
+              {/* Kate 2026-07-25: the footer shares the composer's ONE glass
+                  surface — no separate inset fill (that read as a second
+                  background). */}
+              <div class="mx-1 mb-1 flex h-11 items-center px-2">
                 <div class="flex min-w-0 flex-1 items-center gap-0">
                   {fileAttachmentInput()}
                   <TooltipKeybind
@@ -1630,9 +1733,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Show when={showAgentControl()}>
                     <ComposerAgentControl state={agentControlState()} />
                   </Show>
-                  <Show when={newSession() && !selectedProject()}>
-                    <ComposerPickerTrigger state={newProjectTriggerState()} />
-                  </Show>
+                  {/* Kate 2026-07-25: the project/folder picker is removed from the
+                      composer entirely (always, even orphan sessions). */}
                 </div>
                 {/* amicode chat-redesign (Kate): model + speed live on the RIGHT,
                     clustered with the submit arrow (Kimi-style). */}
@@ -1691,11 +1793,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </div>
               </div>
             </DockShellForm>
-            <Show when={newSession() && selectedProject()}>
-              <div class="flex h-7 min-w-0 items-center gap-0 px-2">
-                <ComposerPicker state={projectPickerState()} />
-              </div>
-            </Show>
           </div>
         </Match>
         <Match when>

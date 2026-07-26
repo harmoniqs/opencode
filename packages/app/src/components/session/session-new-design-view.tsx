@@ -1,35 +1,26 @@
 import { Show, type JSX } from "solid-js"
-import { Logo, MarkDetailed } from "@opencode-ai/ui/logo"
-import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
 
-// amicode#chat-redesign (Kate): composer-as-hero, Kimi-style. Vertically
-// centered column — brand mark + wordmark (tight), then the composer as the
-// dominant element, then a quiet row of starter chips BELOW it. No tagline /
-// how-it-works block: the chips carry that story, everything else is air.
+// amicode#chat-redesign (Kate 2026-07-25): the composer is a full-bleed dock
+// stuck to the BOTTOM of the screen, ~40% of the viewport tall, edge-to-edge
+// (no radius, no border). The rotating latent constellation fills the space
+// above it; the starter chips sit just above the dock. No brand mark/wordmark.
 export function NewSessionDesignView(props: { children: JSX.Element; gettingStarted?: JSX.Element }) {
-  // amicode latent-constellation: NO opaque fill here — a full-bleed
-  // background would occlude the Brain entirely (the pane's base coat lives
-  // below the canvas in the host page). Content floats on its own glass.
+  // amicode latent-constellation: NO opaque fill here — a full-bleed background
+  // would occlude the Brain entirely (the pane's base coat lives below the
+  // canvas in the host page). Content floats on its own glass.
   return (
-    <div data-component="session-new-design" class="relative size-full overflow-y-auto">
-      <div class="min-h-full flex items-center justify-center px-6 py-16">
-        <div class={`${NEW_SESSION_CONTENT_WIDTH} flex flex-col items-center`}>
-          {/* Kimi-style hero: the low-contrast mark + the AMICODE wordmark
-              (Logo), full-ink in the neutral text color. */}
-          {/* mark + wordmark share one ink (Kate 2026-07-23): the Logo wordmark
-              fills with var(--icon-base) in logo.tsx, so the mark matches it. */}
-          {/* latent-constellation: the brand block floats on its own glass
-              above the rotating web (glass vars — the #60 recipe) */}
-          <div class="flex flex-col items-center rounded-xl border border-[var(--glass-edge)] bg-[var(--glass-standard-bg)] shadow-[var(--glass-shadow)] [backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] [-webkit-backdrop-filter:blur(var(--glass-blur))_brightness(var(--glass-brightness,1))] px-10 py-6 mb-8">
-            <MarkDetailed class="w-24 h-auto mb-4" style={{ color: "var(--icon-base)" }} />
-            <Logo class="w-52 max-w-full h-auto" />
-          </div>
-          {/* chips sit directly below the mark, above the composer (Kate) */}
-          <Show when={props.gettingStarted}>
-            <div class="w-full flex justify-center mb-6">{props.gettingStarted}</div>
-          </Show>
-          <div class="w-full">{props.children}</div>
-        </div>
+    <div data-component="session-new-design" class="relative size-full overflow-hidden flex flex-col">
+      {/* upper region: the constellation shows through; chips anchor just above
+          the docked composer */}
+      <div class="flex-1 min-h-0 flex items-end justify-center px-6 pb-8">
+        <Show when={props.gettingStarted}>
+          <div class="flex justify-center">{props.gettingStarted}</div>
+        </Show>
+      </div>
+      {/* composer: full-width, bottom-stuck, ~35% of the viewport height,
+          edge-to-edge (radius/border zeroed on the composer itself) */}
+      <div data-slot="new-session-composer-dock" class="h-[35%] shrink-0 w-full flex flex-col">
+        {props.children}
       </div>
     </div>
   )

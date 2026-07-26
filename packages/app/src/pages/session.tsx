@@ -1797,16 +1797,16 @@ export default function Page() {
               "shadow-[var(--v2-elevation-raised)]": settings.general.newLayoutDesigns() && !!params.id,
             }}
           >
-            {/* amicode: ONE full-bleed Brain per Chat window, behind timeline +
-                landing + composer; keyed on the active session so a tab swap
-                remounts to that session's atlas (one engine alive at a time).
-                The landing key mounts the latent constellation; session keys
-                mount the live graph (untouched). */}
+            {/* amicode (Kate 2026-07-25): ONE full-bleed 3D constellation per
+                Chat window everywhere — the launch and the session are one
+                surface. Live session activity pulses through the constellation's
+                nodes (data-true thought over the shared 3D network). Keyed on the
+                active session so a tab swap remounts that session's pulses. */}
             <Show when={params.id ?? "landing"} keyed>
               {(_key) => (
                 <BrainAtmosphere
                   class="-z-10"
-                  mode={params.id ? "live" : "constellation"}
+                  mode="constellation"
                   ignite={!params.id && brainIgnited()}
                   events={brain.events()}
                   active={brain.active()}

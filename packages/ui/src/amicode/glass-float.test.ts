@@ -44,6 +44,11 @@ import {
 type Mode = "light" | "dark"
 const MODES: Mode[] = ["light", "dark"]
 
+// Kate 2026-07-25: the AA guarantee is retained for LIGHT and waived (recorded,
+// not certified) for DARK standard — dark went fully transparent for maximum
+// glass over the (yellow-free) landing constellation. See GLASS_BRIGHTNESS.
+const AA_CERTIFIED: Record<Mode, boolean> = { light: true, dark: false }
+
 type Tier = "standard" | "dense"
 type Role = "body" | "code" | "mark"
 
@@ -152,18 +157,27 @@ describe("glass float — the tier map is the contract", () => {
 
 describe("glass float — archetype contrast over the reference frame", () => {
   for (const mode of MODES) {
-    test(`oc-2 ${mode}: body text on every standard archetype clears AA with the derivation margin`, () => {
+    test(`oc-2 ${mode}: body text on standard — AA on light; recorded (not certified) on dark`, () => {
       for (const row of TIER_MAP.filter((r) => r.tier === "standard")) {
         const ratio = tierContrast(mode, row.tier, "text-strong")
-        expect(ratio).toBeGreaterThanOrEqual(4.5)
-        expect(ratio).toBeGreaterThanOrEqual(CONTRAST.bodyTarget) // same safety margin as #60
+        if (AA_CERTIFIED[mode]) {
+          expect(ratio).toBeGreaterThanOrEqual(4.5)
+          expect(ratio).toBeGreaterThanOrEqual(CONTRAST.bodyTarget) // same safety margin as #60
+        } else {
+          // Kate 2026-07-25: dark went fully transparent (brightness 0.8, max
+          // transparency — owner's call). Over the worst-case bright SESSION
+          // frame body text no longer clears AA; recorded, not certified. The
+          // landing constellation paints no bright yellow, so it reads there.
+          expect(ratio).toBeGreaterThan(1)
+        }
       }
     })
 
-    test(`oc-2 ${mode}: code/diff/tool text on the dense tier clears AA`, () => {
+    test(`oc-2 ${mode}: code/diff/tool text on dense — AA on light; recorded on dark`, () => {
       for (const row of TIER_MAP.filter((r) => r.tier === "dense" && r.role !== "mark")) {
         const ratio = tierContrast(mode, row.tier, "text-strong")
-        expect(ratio).toBeGreaterThanOrEqual(4.5)
+        if (AA_CERTIFIED[mode]) expect(ratio).toBeGreaterThanOrEqual(4.5)
+        else expect(ratio).toBeGreaterThan(1)
       }
     })
 
@@ -198,12 +212,13 @@ describe("glass float — archetype contrast over the reference frame", () => {
 
 describe("glass float — nothing bare, nothing opaque (token level)", () => {
   for (const mode of MODES) {
-    test(`oc-2 ${mode}: the standard tint is translucent (0 < alpha < 1), dense at least as opaque`, () => {
+    test(`oc-2 ${mode}: the standard tint is transparent-to-translucent (0 <= alpha < 1); dense == standard`, () => {
       const glass = derive(mode)
-      expect(glass.standard.alpha).toBeGreaterThan(0)
+      // dark derives to alpha 0 (fully transparent — max-transparency call);
+      // light stays a faint surface tint. Never fully opaque.
+      expect(glass.standard.alpha).toBeGreaterThanOrEqual(0)
       expect(glass.standard.alpha).toBeLessThan(1)
-      expect(glass.dense.alpha).toBeGreaterThanOrEqual(glass.standard.alpha)
-      expect(glass.dense.alpha).toBeLessThanOrEqual(1)
+      expect(glass.dense.alpha).toBe(glass.standard.alpha) // single tier
     })
   }
 
@@ -609,6 +624,9 @@ describe("glass float — chrome untouched, no third tier anywhere", () => {
       "pages/new-session.tsx",
       "components/session/session-new-design-view.tsx",
       "components/session/session-new-view.tsx",
+      // Kate 2026-07-25: dock-surface scopes its opaque fill to :not([data-glass])
+      // so the composer's glass wins as ONE surface (no two-tone).
+      "components/dock-surface.css",
     ])
     const glob = new Bun.Glob("**/*.{ts,tsx,css}")
     const values = new Set<string>()

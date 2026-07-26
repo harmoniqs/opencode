@@ -66,9 +66,15 @@ describe("glass float — the composer floats on standard", () => {
     expect(card).not.toContain("bg-background-base")
   })
 
-  test("the composer footer's muted controls ride a dense-backed zone (slice #60 token)", async () => {
+  test("the composer footer shares the ONE glass surface — no separate inset fill (Kate 2026-07-25)", async () => {
+    // The footer used to ride its own dense-backed zone; that read as a second
+    // background (dark text area / lighter footer). It now shares the composer's
+    // single glass surface — the footer row carries no bg fill of its own.
     const src = await read("components/prompt-input.tsx")
-    expect(src).toContain("bg-[var(--glass-dense-bg)]")
+    const footerIdx = src.indexOf("the footer shares the composer's ONE glass")
+    expect(footerIdx).toBeGreaterThan(-1)
+    const footerTag = src.slice(footerIdx, src.indexOf(">", footerIdx))
+    expect(footerTag).not.toContain("bg-[var(--glass-dense-bg)]")
   })
 
   test("the dock band no longer tiles the Brain away behind the composer", async () => {

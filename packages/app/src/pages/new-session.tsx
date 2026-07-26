@@ -87,31 +87,23 @@ export default function NewSessionPage() {
 
   return (
     <div class="relative size-full overflow-hidden flex flex-col">
-      <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
+      {/* Kate 2026-07-25: no bottom padding on the landing — the composer dock
+          reaches the very bottom of the screen (top corners stay rounded). */}
+      <div class="flex-1 min-h-0 flex flex-col gap-2 p-2 pb-0">
         <div class="@container relative flex flex-col min-h-0 h-full bg-background-stronger flex-1">
           {/* relative isolate: own stacking context so the brain layer (-z-10)
               sits above this card's surface but beneath the draft content */}
-          <div class="relative isolate flex-1 min-h-0 overflow-hidden rounded-[10px]">
+          <div class="relative isolate flex-1 min-h-0 overflow-hidden rounded-t-[10px]">
             {/* amicode: the draft page's Brain background — the EMPTY landing
                 shows the full latent constellation ("everything amico could
                 think") rotating at rest; the first prompt send ignites the
                 handoff and the promoted session mounts its live graph */}
             <BrainAtmosphere class="-z-10" mode="constellation" ignite={ignited()} />
-            <NewSessionDesignView
-              gettingStarted={
-                // Chips persist while typing (Kate: no jump). They disappear on
-                // submit, when this page navigates to the real session — so no
-                // dirty()-gated fade that yanks the layout mid-keystroke.
-                <AmicodeStarterChips
-                  onStart={startPrompt}
-                  resumeName={resumeProblem()?.name}
-                  onResume={() => {
-                    const name = resumeProblem()?.name
-                    if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
-                  }}
-                />
-              }
-            >
+            {/* Kate 2026-07-25: the starter-chip wall is removed — it competed
+                with the constellation + composer. Discovery now lives inside the
+                composer as a rotating placeholder that cycles the starter prompts
+                (prompt-input.tsx), so the resting landing is just hero + CTA. */}
+            <NewSessionDesignView>
               <SessionComposerRegion
                 state={composer}
                 ready

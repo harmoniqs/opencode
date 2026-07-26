@@ -62,11 +62,17 @@ describe("glass standard tier — body text over the reference frame", () => {
       const backdrop = { rgb: effectiveBackdrop(mode) } // frame × modeled brightness()
       const surface = composite(glass.standard.tint, glass.standard.alpha, backdrop.rgb)
       const ratio = contrast(body.rgb, surface)
-      // AA floor for body text
-      expect(ratio).toBeGreaterThanOrEqual(4.5)
-      // the derivation targeted a real safety margin, not the 4.5 cliff
-      expect(CONTRAST.bodyTarget).toBeGreaterThanOrEqual(4.8)
-      expect(ratio).toBeGreaterThanOrEqual(CONTRAST.bodyTarget)
+      if (mode === "light") {
+        // AA floor + safety margin retained for light
+        expect(ratio).toBeGreaterThanOrEqual(4.5)
+        expect(CONTRAST.bodyTarget).toBeGreaterThanOrEqual(4.8)
+        expect(ratio).toBeGreaterThanOrEqual(CONTRAST.bodyTarget)
+      } else {
+        // Kate 2026-07-25: dark went fully transparent (brightness 0.8). Over
+        // the worst-case bright session frame AA is waived (recorded) — the
+        // landing constellation is yellow-free, so it reads there.
+        expect(ratio).toBeGreaterThan(1)
+      }
       // the derivation reports the same arithmetic it certified
       expect(glass.standard.bodyContrast).toBeCloseTo(ratio, 6)
     })
@@ -81,10 +87,15 @@ describe("glass single tier — the marks law is WAIVED (design decision, Kate 2
       expect(glass.dense.alpha).toBe(glass.standard.alpha)
     })
 
-    test(`oc-2 ${mode}: code/diff text (text-strong) still clears AA with margin on the single tier`, () => {
+    test(`oc-2 ${mode}: code/diff text on the single tier — AA on light; recorded on dark`, () => {
       const glass = derive(mode)
-      expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(4.5)
-      expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(CONTRAST.bodyTarget)
+      if (mode === "light") {
+        expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(4.5)
+        expect(glass.dense.bodyContrast).toBeGreaterThanOrEqual(CONTRAST.bodyTarget)
+      } else {
+        // dark fully transparent — AA waived (recorded) per the max-transparency call
+        expect(glass.dense.bodyContrast).toBeGreaterThan(1)
+      }
     })
   }
 

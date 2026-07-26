@@ -66,8 +66,16 @@ export const GLASS_BLUR_PX = 8
     neighborhood values, never exceed that bound. Dark mode darkens the bloom
     (structure survives where a heavier tint would paint it out); light mode
     needs none. NEVER touched by the perf governor or any runtime code. */
+// Kate 2026-07-25: pushed for a MORE TRANSPARENT card and less backdrop
+// darkening globally. On dark, brightness() is raised 0.4 → 0.8 so the
+// constellation reads through the card almost fully — the card is glass (blur
+// only), not a dark panel; the derived frost fill is fully transparent.
+// Trade (accepted, owner's call, recorded not hidden): dark body text over the
+// worst-case bright *session* frame no longer clears the 4.5 AA line — the
+// landing constellation paints no bright yellow, so it is legible there; the
+// AA guarantee is retained for LIGHT and waived (recorded) for DARK standard.
 export const GLASS_BRIGHTNESS: Record<"light" | "dark", number> = {
-  dark: 0.4,
+  dark: 0.8,
   light: 1,
 }
 
@@ -284,9 +292,12 @@ export function deriveGlassTiers(tokens: Record<string, string>, referenceFrame:
 
 /** hairline edge + elevation are neutral and mode-keyed: light hairline on
     dark, dark hairline on light — never yellow (brand law). */
+// Kate 2026-07-25: NO hard border outline AND no top sheen/inset line — the
+// glass is JUST the blur + a soft drop shadow for lift (the top edge is clean).
+// Edge kept as a token for any component that still wants a hairline.
 const MODE_CHROME = {
-  dark: { edge: "rgba(255, 255, 255, 0.1)", shadow: "0 2px 8px rgba(0, 0, 0, 0.38)" },
-  light: { edge: "rgba(0, 0, 0, 0.1)", shadow: "0 2px 8px rgba(0, 0, 0, 0.1)" },
+  dark: { edge: "rgba(255, 255, 255, 0.1)", shadow: "0 10px 30px rgba(0, 0, 0, 0.26)" },
+  light: { edge: "rgba(0, 0, 0, 0.1)", shadow: "0 10px 30px rgba(0, 0, 0, 0.08)" },
 } as const
 
 function rgba([r, g, b]: Rgb, alpha: number): string {
@@ -363,17 +374,13 @@ ${blocks.join("\n\n")}
   background: var(--glass-standard-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
-  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--glass-shadow);
 }
 [data-glass="dense"] {
   background: var(--glass-dense-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
   backdrop-filter: blur(var(--glass-blur)) brightness(var(--glass-brightness, 1));
-  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--glass-shadow);
 }
 /* backdrop-filter unsupported: fall back to a near-opaque tint so text never
    lands on the bare animated canvas. */

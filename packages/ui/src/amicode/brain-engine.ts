@@ -709,7 +709,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
         const y2 = py[q]
         if ((x1 < -40 && x2 < -40) || (x1 > W + 40 && x2 > W + 40) || (y1 < -40 && y2 < -40) || (y1 > H + 40 && y2 > H + 40))
           continue
-        const alpha = 0.1 * Math.min(fogMul(p), fogMul(q)) * edgeK
+        // Kate 2026-07-25: more contrast against the background — brighter web
+        const alpha = 0.17 * Math.min(fogMul(p), fogMul(q)) * edgeK
         if (alpha < 0.012) continue
         ctx.strokeStyle = conRgba(inks[c.catIx[p]], alpha)
         ctx.beginPath()
@@ -734,7 +735,8 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       }
       // seeded slow twinkle — per-node phase, no edge pulses
       const tw = reduceMotion ? 1 : 0.78 + 0.22 * Math.sin(conT * c.twSpeed[i] + c.twPhase[i])
-      const alpha = c.a[i] * fogMul(i) * tw * nodeK
+      // Kate 2026-07-25: brighter nodes for contrast against the background
+      const alpha = Math.min(1, c.a[i] * 1.4) * fogMul(i) * tw * nodeK
       if (alpha < 0.015) continue
       const persp = F / (F - rz[i])
       const half = c.r[i] * persp * (0.75 + 0.25 * near(i))
