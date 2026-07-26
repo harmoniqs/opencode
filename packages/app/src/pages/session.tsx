@@ -625,6 +625,7 @@ export default function Page() {
   }
 
   let inputRef!: HTMLDivElement
+  let brainPane: HTMLDivElement | undefined // the Brain's host pane — occlusion rects are measured against it
   let promptDock: HTMLDivElement | undefined
   let dockHeight = 0
   let scroller: HTMLDivElement | undefined
@@ -1789,6 +1790,7 @@ export default function Page() {
           }}
         >
           <div
+            ref={(el) => (brainPane = el)}
             classList={{
               // relative isolate: own stacking context so the brain layer
               // (-z-10) sits above this card's surface but beneath all content
@@ -1801,7 +1803,10 @@ export default function Page() {
                 Chat window everywhere — the launch and the session are one
                 surface. Live session activity pulses through the constellation's
                 nodes (data-true thought over the shared 3D network). Keyed on the
-                active session so a tab swap remounts that session's pulses. */}
+                active session so a tab swap remounts that session's pulses.
+                Kate 2026-07-26: flares must land where they can be SEEN — the
+                occlusion fn reports the glass-covered regions (message column +
+                composer dock) so thought lands in the visible gutters. */}
             <Show when={params.id ?? "landing"} keyed>
               {(_key) => (
                 <BrainAtmosphere
@@ -1810,6 +1815,27 @@ export default function Page() {
                   ignite={!params.id && brainIgnited()}
                   events={brain.events()}
                   active={brain.active()}
+                  occlusion={() => {
+                    const pane = brainPane
+                    if (!pane) return []
+                    const base = pane.getBoundingClientRect()
+                    const rects: { x: number; y: number; w: number; h: number }[] = []
+                    // the message column: one row's x-band, extended full height
+                    const row = pane.querySelector("[data-timeline-row]")
+                    if (row) {
+                      const r = row.getBoundingClientRect()
+                      rects.push({ x: r.left - base.left, y: 0, w: r.width, h: base.height })
+                    }
+                    // the composer dock band (session and landing variants)
+                    const dock = pane.querySelector(
+                      '[data-slot="session-composer-dock"], [data-slot="new-session-composer-dock"]',
+                    )
+                    if (dock) {
+                      const r = dock.getBoundingClientRect()
+                      rects.push({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height })
+                    }
+                    return rects
+                  }}
                 />
               )}
             </Show>
@@ -1869,7 +1895,17 @@ export default function Page() {
               </Switch>
             </div>
 
-            <Show when={params.id || !newSessionDesign()}>{composerRegion("dock")}</Show>
+            {/* Kate 2026-07-26: the session composer IS the launch composer —
+                the same full-bleed bottom dock (~35% of the pane, edge-to-edge
+                one-surface glass, no radius/ring). Legacy layout keeps the
+                floating column card. */}
+            <Show when={params.id || !newSessionDesign()}>
+              <Show when={params.id && newSessionDesign()} fallback={composerRegion("dock")}>
+                <div data-slot="session-composer-dock" class="h-[35%] shrink-0 w-full flex flex-col">
+                  {composerRegion("inline")}
+                </div>
+              </Show>
+            </Show>
           </div>
 
           <Show when={desktopReviewOpen()}>

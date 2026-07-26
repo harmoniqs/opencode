@@ -133,6 +133,10 @@ export interface BrainEngine {
       last), then exit constellation mode. Instant swap under reduced motion.
       No-op in live mode or while a dissolve is already running. */
   ignite(): void
+  /** regions of the canvas (px) currently covered by UI glass — live-thought
+      flares avoid landing under them, so thought stays where the user can SEE
+      it (Kate 2026-07-26). null clears. Inert in live mode. */
+  occlude(rects: Array<{ x: number; y: number; w: number; h: number }> | null): void
   /** a glance from the log: ring the node and turn the camera to it */
   highlight(label: string): void
   /** lossless: swaps the palette and repaints — the atlas persists */
@@ -658,6 +662,16 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
   const CON_PULSE_CAP = 24 // a torrent of touches stays a shimmer, not a floodlight
   let conCatNodes: number[][] | null = null // node indices per CONSTELLATION_CATS lobe
   let conIncident: Map<number, number[]> | null = null // node ix → flat-edge offsets
+  // UI-covered canvas regions (message column, composer dock) — the host feeds
+  // these so flares land in the GUTTERS where the Brain is actually visible
+  let conOcclusion: Array<{ x: number; y: number; w: number; h: number }> | null = null
+  function conCovered(x: number, y: number): boolean {
+    if (!conOcclusion) return false
+    for (const r of conOcclusion) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true
+    }
+    return false
+  }
   function conNodeFor(label: string, type?: string): number {
     const c = con!
     if (!conCatNodes) {
@@ -673,20 +687,26 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     h >>>= 0
     const catIx = CONSTELLATION_CATS.indexOf((CAT_OF_TYPE[type || ""] ?? "") as (typeof CONSTELLATION_CATS)[number])
     const pool = catIx >= 0 && conCatNodes[catIx].length ? conCatNodes[catIx] : null
-    // the overfilled cloud projects many nodes outside the pane — a flare the
-    // user can't see isn't thought. From the hashed seat, walk the pool (in
-    // deterministic order, last-drawn projection) to the first VISIBLE node;
-    // same label at the same pose always lands the same seat.
+    // the overfilled cloud projects many nodes outside the pane, and the UI's
+    // glass (message column, composer dock) covers more — a flare the user
+    // can't see isn't thought. From the hashed seat, walk the pool (in
+    // deterministic order, last-drawn projection) to the first node that is
+    // BOTH in the viewport AND clear of the occlusion rects; if the gutters
+    // hold none, fall back to merely-visible (a glow through the glass beats
+    // nothing); same label at the same pose always lands the same seat.
     const size = pool ? pool.length : c.count
     const at = (k: number) => (pool ? pool[(h + k) % size] : (h + k) % size)
     const margin = 24
-    for (let k = 0; k < Math.min(size, 96); k++) {
+    let firstVisible = -1
+    for (let k = 0; k < Math.min(size, 160); k++) {
       const ix = at(k)
       const x = conPx![ix]
       const y = conPy![ix]
-      if (x >= margin && x <= W - margin && y >= margin && y <= H - margin) return ix
+      if (x < margin || x > W - margin || y < margin || y > H - margin) continue
+      if (!conCovered(x, y)) return ix
+      if (firstVisible < 0) firstVisible = ix
     }
-    return at(0)
+    return firstVisible >= 0 ? firstVisible : at(0)
   }
   function conFlare(ev: BrainTouchEvent) {
     if (!con || igniteAt >= 0) return // dissolving or live: the live graph owns thought
@@ -818,8 +838,15 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     // so the latest touch holds as a single statically lit node in the tableau.
     if (conPulses.length && it < 0) {
       const thought = hexToRgb(css.thought)
+      // while the session works, the NEWEST flare never finishes decaying —
+      // it holds as a sustained glow ("amico is HERE"), the constellation's
+      // where-we-are cursor; when the turn ends it decays out normally
+      const HOLD_AGE = CON_PULSE_RISE_MS + 500
       for (let pi = conPulses.length - 1; pi >= 0; pi--) {
         const p = conPulses[pi]
+        if (pi === conPulses.length - 1 && active && !reduceMotion && conT - p.t0 > HOLD_AGE) {
+          p.t0 = conT - HOLD_AGE // hold: decay resumes from here once idle
+        }
         const age = reduceMotion ? CON_PULSE_RISE_MS : conT - p.t0
         if (age >= CON_PULSE_MS) {
           conPulses.splice(pi, 1)
@@ -1558,6 +1585,10 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     setActive: (a) => {
       if (destroyed) return
       active = a
+    },
+    occlude: (rects) => {
+      if (destroyed) return
+      conOcclusion = rects && rects.length ? rects : null
     },
     ignite: () => {
       if (destroyed || !con) return // live mode / already handed off: no-op

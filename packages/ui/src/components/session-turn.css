@@ -104,10 +104,11 @@
 
   /* amicode #61: the diff card floats on the DENSE glass tier — the tier
      token owns fill/edge/radius/shadow; on-grid padding clears the edge.
-     Kate 2026-07-25 (launch-composer feel): shares the prose measure — a
-     floating card on the Brain, never a full-width band. */
+     Kate 2026-07-26: hugs its content up to the prose measure ("match it
+     to the contents") — never a padded-out band. */
   [data-component="session-turn-diffs-group"][data-glass="dense"] {
     padding: 0 12px 8px;
+    width: fit-content;
     max-width: min(88%, 72ch);
   }
 

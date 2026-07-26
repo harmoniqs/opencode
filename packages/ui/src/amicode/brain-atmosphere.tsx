@@ -58,6 +58,10 @@ export function BrainAtmosphere(props: {
   mode?: BrainMode
   /** first prompt sent: flipping true runs the ignition handoff dissolve */
   ignite?: boolean
+  /** host-measured UI-covered regions (px, host-relative) — live-thought
+      flares avoid landing under glass. Called lazily: on resize and right
+      before each event flush, so the rects are fresh when a flare lands. */
+  occlusion?: () => Array<{ x: number; y: number; w: number; h: number }>
   class?: string
 }) {
   let host!: HTMLDivElement
@@ -110,14 +114,20 @@ export function BrainAtmosphere(props: {
         __amicoBrainTouch?: (ev: { label: string; type?: string; consider?: boolean; replay?: boolean }) => void
       }
       devWindow.__amicoBrainStats = () => eng.stats()
-      devWindow.__amicoBrainTouch = (ev) => eng.touch(ev)
+      devWindow.__amicoBrainTouch = (ev) => {
+        if (props.occlusion) eng.occlude(props.occlusion()) // console demos land in real gutters too
+        eng.touch(ev)
+      }
       onCleanup(() => {
         if (devWindow.__amicoBrainStats) delete devWindow.__amicoBrainStats
         if (devWindow.__amicoBrainTouch) delete devWindow.__amicoBrainTouch
       })
     }
 
-    const ro = new ResizeObserver(() => eng.resize(host.clientWidth, host.clientHeight))
+    const ro = new ResizeObserver(() => {
+      eng.resize(host.clientWidth, host.clientHeight)
+      if (props.occlusion) eng.occlude(props.occlusion())
+    })
     ro.observe(host)
     onCleanup(() => ro.disconnect())
 
@@ -186,6 +196,9 @@ export function BrainAtmosphere(props: {
     const evs = props.events ?? []
     if (!eng) return
     const replayCharts = initialFlush // charts already on the atlas restore silently
+    // fresh occlusion rects right before the flush — flares land in the
+    // gutters the CURRENT layout actually leaves clear
+    if (props.occlusion && evs.some((ev) => !sent.has(ev.id))) eng.occlude(props.occlusion())
     let flushed = false
     for (const ev of evs) {
       if (sent.has(ev.id)) continue

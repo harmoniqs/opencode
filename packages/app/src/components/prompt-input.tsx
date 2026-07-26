@@ -585,6 +585,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   // letter (~34ms/char). Re-runs when starterIx changes; idle when focused /
   // reduced-motion / non-empty (designPlaceholder shows the full label then).
   createEffect(() => {
+    if (params.id) return // starters are the EMPTY LANDING's — never in-session
     if (props.variant !== "new-session") return
     if (focused() || reduceMotionPref() || !suggest()) return
     const label = AMICODE_STARTERS[starterIx() % AMICODE_STARTERS.length]?.label ?? ""
@@ -1191,6 +1192,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       !event.ctrlKey &&
       !event.altKey &&
       props.variant === "new-session" &&
+      !params.id && // starters are the empty landing's — never in-session
       !reduceMotionPref() &&
       suggest() &&
       blank()
@@ -1407,14 +1409,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   const GENERIC_PLACEHOLDER = "Ask Amico anything, / for commands, @ for context..."
+  // Kate 2026-07-26: the session composer shares variant="new-session" (one
+  // dock, one look) — but starter suggestions belong to the EMPTY LANDING
+  // alone, so every starter gate also requires no session id.
+  const starterStage = createMemo(() => props.variant === "new-session" && !params.id)
   // the composer is actively typing a starter suggestion (empty landing, not
   // focused, motion allowed) — drives the typewriter caret.
-  const typewriterActive = createMemo(
-    () => props.variant === "new-session" && !reduceMotionPref() && suggest() && !focused(),
-  )
+  const typewriterActive = createMemo(() => starterStage() && !reduceMotionPref() && suggest() && !focused())
   const designPlaceholder = () => {
     if (store.mode === "shell") return placeholder()
-    if (props.variant === "new-session" && !reduceMotionPref() && suggest()) {
+    if (starterStage() && !reduceMotionPref() && suggest()) {
       const label = AMICODE_STARTERS[starterIx() % AMICODE_STARTERS.length]?.label ?? GENERIC_PLACEHOLDER
       // typewriter substring while rotating; the full frozen label while focused
       // (so Tab accepts a complete, readable suggestion)

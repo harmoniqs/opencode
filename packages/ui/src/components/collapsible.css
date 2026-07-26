@@ -16,10 +16,11 @@
   /* amicode #61: the tool card floats on the DENSE glass tier — the tier
      token (glass.css) owns fill/edge/radius/shadow; only on-grid breathing
      room is added here so content clears the card edge.
-     Kate 2026-07-25 (launch-composer feel): tool cards share the prose
-     measure — floating cards on the Brain, never full-width bands. */
+     Kate 2026-07-26: the card HUGS its content ("match it to the contents")
+     — fit-content up to the prose measure, never a padded-out band. */
   &.tool-collapsible[data-glass="dense"] {
     padding: 4px 12px;
+    width: fit-content;
     max-width: min(88%, 72ch);
   }
 

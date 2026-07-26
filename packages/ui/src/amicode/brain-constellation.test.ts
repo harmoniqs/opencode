@@ -276,6 +276,48 @@ describe("constellation mode — live thought", () => {
     expect(paintedThoughtInk(ctx)).toBe(true)
   })
 
+  test("while the session works, the latest flare holds lit; idle lets it decay out", () => {
+    const { engine } = makeEngine()
+    engine.setActive(true)
+    drive(engine, 0, 100)
+    engine.touch({ label: "session.tsx", type: "resource" })
+    drive(engine, 116, 6000) // far past the ~1.6s pulse life
+    expect(engine.stats().latentPulses).toBe(1) // held: amico is HERE
+    engine.setActive(false)
+    drive(engine, 6016, 9000)
+    expect(engine.stats().latentPulses).toBe(0) // idle: decays out normally
+  })
+
+  test("flares avoid occluded regions: thought lands in the gutters beside the column", () => {
+    const { engine, ctx } = makeEngine({ scheme: "dark" })
+    drive(engine, 0, 100)
+    // the real session geometry: a centered message column covers the middle
+    // band; the Brain stays visible in the gutters on BOTH sides
+    engine.occlude([{ x: 250, y: 0, w: 300, h: 480 }])
+    for (const t of TURN_TOUCHES) engine.touch(t)
+    drive(engine, 116, 400)
+    // every thought-colored arc must land clear of the covered band
+    let sawThought = false
+    let fill = ""
+    for (const call of ctx.calls) {
+      if (call.method === "set:fillStyle") fill = String(call.args[0])
+      if (call.method === "arc" && /255,246,118/.test(fill)) {
+        sawThought = true
+        const x = call.args[0] as number
+        expect(x < 250 || x > 550).toBe(true)
+      }
+    }
+    expect(sawThought).toBe(true)
+  })
+
+  test("fully occluded canvas: flares fall back to visible seats rather than vanishing", () => {
+    const { engine } = makeEngine()
+    drive(engine, 0, 100)
+    engine.occlude([{ x: 0, y: 0, w: 800, h: 480 }])
+    for (const t of TURN_TOUCHES) engine.touch(t)
+    expect(engine.stats().latentPulses).toBe(TURN_TOUCHES.length)
+  })
+
   test("determinism holds under touches: same clock + same touches ⇒ byte-identical frames", () => {
     const a = makeEngine()
     const b = makeEngine()
