@@ -253,11 +253,14 @@
   gap: 24px;
 }
 
-/* glass sweep (#56): assistant-error and retry cards keep their semantic
-   rail + critical ink but ride a danger TINT over the derived glass tint —
-   never a bare (or opaque) surface floating on the Brain. */
+/* glass sweep (#56): assistant-error and retry cards ride a danger TINT over
+   the derived glass tint — never a bare (or opaque) surface floating on the
+   Brain. Kate 2026-07-26: no accent rail — the tint + ink carry severity. */
 .error-card[data-glass] {
   background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--glass-standard-bg));
+}
+.error-card[data-glass]::before {
+  content: none;
 }
 
 /* Kate 2026-07-26: the conversation stacks from the BOTTOM (messenger law) —

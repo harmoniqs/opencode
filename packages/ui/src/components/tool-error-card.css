@@ -1,7 +1,12 @@
 /* glass sweep (#56): the semantic hue rides as a danger TINT over the derived
-   glass tint — the rail/ink stay, the surface never goes opaque or bare. */
+   glass tint — the surface never goes opaque or bare. Kate 2026-07-26: the
+   accent rail is gone too — the tint + icon + ink carry the severity alone
+   (glass = no borders, and the rail read as one). */
 [data-component="card"][data-kind="tool-error-card"][data-glass] {
   background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--glass-standard-bg));
+}
+[data-component="card"][data-kind="tool-error-card"]::before {
+  content: none;
 }
 
 [data-component="card"][data-kind="tool-error-card"] {
