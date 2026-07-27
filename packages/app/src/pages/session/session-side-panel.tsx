@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createMemo, onCleanup, type JSX } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Tabs } from "@opencode-ai/ui/tabs"
@@ -63,9 +63,11 @@ export function SessionSidePanel(props: { size: Sizing }) {
       }),
   )
   const open = createMemo(() => tabsOpen() || fileOpen())
+  // the tabs column owns its width (never flex-fills the window) and can be
+  // dragged much narrower — Kate 2026-07-27
   const panelWidth = createMemo(() => {
     if (!open()) return "0px"
-    if (tabsOpen()) return "auto"
+    if (tabsOpen()) return `${layout.panelColumn.width()}px`
     return `${layout.fileTree.width()}px`
   })
   const treeWidth = createMemo(() => (fileOpen() ? `${layout.fileTree.width()}px` : "0px"))
@@ -107,16 +109,38 @@ export function SessionSidePanel(props: { size: Sizing }) {
   // command, and context-tree deep-links open the store; inside a session THIS
   // is the host, so mirror store state into a "vault" tab (and back on close)
   const vaultOpen = createMemo(() => vaultPanel.opened())
-  createEffect(() => {
-    if (!isDesktop()) return
-    if (vaultPanel.opened()) {
-      if (!view().reviewPanel.opened()) view().reviewPanel.open()
-      tabs().open("vault")
-      tabs().setActive("vault")
-    } else {
-      tabs().close("vault")
-    }
-  })
+  // on() scopes tracking to the STORE signal alone — the tab reads/writes in
+  // the callback are untracked. Tracking them looped: tabs().open() writes
+  // the same store the effect would re-read, and Solid spins the effect
+  // until the stack blows (found via Playwright pageerror stack).
+  createEffect(
+    on(
+      () => vaultPanel.opened(),
+      (openNow) => {
+        if (!isDesktop()) return
+        if (openNow) {
+          if (!view().reviewPanel.opened()) view().reviewPanel.open()
+          if (!tabs().all().includes("vault")) tabs().open("vault")
+          if (tabs().active() !== "vault") tabs().setActive("vault")
+        } else if (tabs().all().includes("vault")) {
+          tabs().close("vault")
+        }
+      },
+    ),
+  )
+  // column closed (panel toggle) → the store must follow, or the titlebar
+  // button's next press toggles an invisible state and "does nothing"
+  createEffect(
+    on(
+      tabsOpen,
+      (openNow, wasOpen) => {
+        if (wasOpen && !openNow && vaultPanel.opened()) vaultPanel.close()
+        // a column with nothing to show fills with the vault by default
+        if (!wasOpen && openNow && tabState.activeTab() === "empty") vaultPanel.open()
+      },
+      { defer: true },
+    ),
+  )
 
   const tabState = createSessionTabs({
     tabs,
@@ -187,10 +211,24 @@ export function SessionSidePanel(props: { size: Sizing }) {
           "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
             !props.size.active(),
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
-          "flex-1": tabsOpen(),
         }}
         style={{ width: panelWidth() }}
       >
+        <Show when={tabsOpen()}>
+          <div onPointerDown={() => props.size.start()}>
+            <ResizeHandle
+              direction="horizontal"
+              edge="start"
+              size={layout.panelColumn.width()}
+              min={240}
+              max={typeof window === "undefined" ? 900 : window.innerWidth * 0.6}
+              onResize={(width) => {
+                props.size.touch()
+                layout.panelColumn.resize(width)
+              }}
+            />
+          </div>
+        </Show>
         <Show when={open()}>
           <div
             class="size-full flex"
@@ -231,12 +269,19 @@ export function SessionSidePanel(props: { size: Sizing }) {
                                 icon="close-small"
                                 variant="ghost"
                                 class="h-5 w-5"
-                                onClick={() => vaultPanel.close()}
+                                onClick={() => {
+                                  vaultPanel.close()
+                                  // nothing else to show → the column goes too
+                                  if (openedTabs().length === 0 && !contextOpen()) view().reviewPanel.close()
+                                }}
                                 aria-label={language.t("amicode.vault.close")}
                               />
                             }
                             hideCloseButton
-                            onMiddleClick={() => vaultPanel.close()}
+                            onMiddleClick={() => {
+                              vaultPanel.close()
+                              if (openedTabs().length === 0 && !contextOpen()) view().reviewPanel.close()
+                            }}
                           >
                             <div>{language.t("amicode.vault.title")}</div>
                           </Tabs.Trigger>

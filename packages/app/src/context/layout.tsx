@@ -24,6 +24,7 @@ export type { ProjectAvatarVariant }
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 const DEFAULT_SIDEBAR_WIDTH = 344
 const DEFAULT_FILE_TREE_WIDTH = 200
+const DEFAULT_PANEL_COLUMN_WIDTH = 400
 const DEFAULT_SESSION_WIDTH = 600
 const DEFAULT_TERMINAL_HEIGHT = 280
 export type AvatarColorKey = (typeof AVATAR_COLOR_KEYS)[number]
@@ -268,6 +269,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
           width: DEFAULT_FILE_TREE_WIDTH,
           tab: "changes" as "changes" | "all",
+        },
+        panelColumn: {
+          width: DEFAULT_PANEL_COLUMN_WIDTH,
         },
         session: {
           width: DEFAULT_SESSION_WIDTH,
@@ -640,6 +644,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             return
           }
           setStore("review", "diffStyle", diffStyle)
+        },
+      },
+      // the session side panel's tabs column (vault + file tabs) — its OWN
+      // width, so the panel never flex-fills the window (Kate 2026-07-27)
+      panelColumn: {
+        width: createMemo(() => store.panelColumn?.width ?? DEFAULT_PANEL_COLUMN_WIDTH),
+        resize(width: number) {
+          setStore("panelColumn", { width })
         },
       },
       fileTree: {

@@ -67,6 +67,25 @@ interface RailPart {
 
 const RUN_POLL_MS = 2500
 
+// Pending chips are placeholders, not buttons — say WHY they aren't clickable
+// (Kate 2026-07-27: an unexplained dead chip reads as a bug).
+function pendingHint(kind: string): string {
+  switch (kind) {
+    case "pulse":
+      return "No pulse banked yet — a completed run produces one"
+    case "device_session":
+      return "No device session yet — appears when a pulse targets hardware"
+    case "run":
+      return "No run yet — solve the formulation to create one"
+    case "formulation":
+      return "No formulation yet — amico writes one from the problem"
+    case "system":
+      return "No system picked yet"
+    default:
+      return "Not created yet"
+  }
+}
+
 // One line-icon per entity kind (glyphs live in the shared family — icon.tsx).
 function chipIcon(kind: string) {
   switch (kind) {
@@ -235,6 +254,8 @@ export function AmicodeEntityRail(props: {
                       data-slot="amicode-rail-chip"
                       data-stage={chip.kind}
                       data-pending="true"
+                      title={pendingHint(chip.kind)}
+                      aria-label={`${chip.label} — ${pendingHint(chip.kind)}`}
                     >
                       <Icon name={chipIcon(chip.kind)} size="small" />
                       {chip.label}
