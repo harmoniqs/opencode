@@ -40,6 +40,14 @@ describe("mountDir", () => {
   test("unknown mount / missing root → undefined", () => {
     expect(mountDir("nope", "/does/not/exist")).toBeUndefined()
   })
+  test("duplicate marker names: the dir actually named like the id wins", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vault-browser-root-"))
+    for (const base of ["alpha", "dup"]) {
+      mkdirSync(path.join(root, base))
+      writeFileSync(path.join(root, base, ".amico-vault.toml"), 'kind = "personal"\nname = "dup"\n')
+    }
+    expect(mountDir("dup", root)).toBe(path.join(root, "dup"))
+  })
 })
 
 describe("vaultFilesBody", () => {
@@ -57,6 +65,22 @@ describe("vaultFilesBody", () => {
     expect(bin.readable).toBe(false)
     const md = out.files.find((f: { path: string }) => f.path === "STRATEGY.md")
     expect(md.readable).toBe(true)
+  })
+  test("a symlinked dir escaping the mount is not listed (no metadata leak)", () => {
+    const { root, mount } = fixtureRoot()
+    const outside = mkdtempSync(path.join(tmpdir(), "outside-"))
+    writeFileSync(path.join(outside, "secret-notes.md"), "outside")
+    symlinkSync(outside, path.join(mount, "escape"))
+    const out = JSON.parse(vaultFilesBody("armonia-test", root))
+    const paths = out.files.map((f: { path: string }) => f.path)
+    expect(paths.some((p: string) => p.startsWith("escape/"))).toBe(false)
+  })
+  test("a symlink staying inside the mount is still listed", () => {
+    const { root, mount } = fixtureRoot()
+    symlinkSync(path.join(mount, "insights"), path.join(mount, "insights-link"))
+    const out = JSON.parse(vaultFilesBody("armonia-test", root))
+    const paths = out.files.map((f: { path: string }) => f.path)
+    expect(paths).toContain("insights-link/gate-fidelity.md")
   })
   test("missing mount param / unknown mount → ok:false", () => {
     const { root } = fixtureRoot()
@@ -89,7 +113,7 @@ describe("vaultFileBody", () => {
     expect(out.error).toMatch(/^forbidden:/)
   })
   test("symlinked MOUNT still reads its own files (attachVault symlinks local vaults)", () => {
-    const { root, mount } = fixtureRoot()
+    const { mount } = fixtureRoot()
     const root2 = mkdtempSync(path.join(tmpdir(), "vault-browser-root2-"))
     symlinkSync(mount, path.join(root2, "linked"))
     const out = JSON.parse(vaultFileBody("armonia-test", "STRATEGY.md", root2))

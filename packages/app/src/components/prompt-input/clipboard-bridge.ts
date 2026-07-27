@@ -26,6 +26,23 @@ export function writeClipboardViaBridge(text: string, win: Window = window): boo
   return true
 }
 
+// The bridge only answers inside the AMICODE webview — its parent runs the
+// relay. Every OTHER framed host (VS Code Simple Browser pointed at :3002, any
+// plain iframe embed) posts into the void, times out, and — because the ⌘V
+// handlers preventDefault before asking — pastes NOTHING, silently. So an
+// empty/timed-out bridge reply falls through to navigator.clipboard.readText():
+// dead in the VS Code webview (no permission to lose), but it restores paste in
+// every framed host that grants clipboard-read. API-key entry was the reported
+// casualty (credential fields are exactly what you paste into an embedded app).
+async function readTextDirect(win: Window): Promise<string> {
+  try {
+    const text = await win.navigator?.clipboard?.readText?.()
+    return typeof text === "string" ? text : ""
+  } catch {
+    return "" // no permission / no API — the caller's no-op stands
+  }
+}
+
 export function readClipboardViaBridge(win: Window = window, timeoutMs = BRIDGE_TIMEOUT_MS): Promise<string> {
   return new Promise<string>((resolve) => {
     // Unframed: native paste works — don't post into the void or wait out the timeout.
@@ -40,7 +57,11 @@ export function readClipboardViaBridge(win: Window = window, timeoutMs = BRIDGE_
     const finish = (text: string) => {
       win.removeEventListener("message", onMessage)
       if (timer !== undefined) clearTimeout(timer)
-      resolve(text)
+      if (text) {
+        resolve(text)
+        return
+      }
+      void readTextDirect(win).then(resolve)
     }
 
     const onMessage = (event: MessageEvent) => {

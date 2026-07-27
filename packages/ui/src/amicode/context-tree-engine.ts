@@ -391,7 +391,13 @@ export function createContextTreeEngine(
     lastPY = 0
   const local = (e: MouseEvent) => {
     const rect = typeof canvas.getBoundingClientRect === "function" ? canvas.getBoundingClientRect() : undefined
-    return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+    if (!rect) return { x: e.clientX, y: e.clientY }
+    // the rect is post-zoom/post-transform (CSS zoom on the root scales it)
+    // while W/H are the engine's pre-zoom CSS px — normalize so hit-testing
+    // stays true at any app zoom level
+    const kx = rect.width > 0 && W > 0 ? rect.width / W : 1
+    const ky = rect.height > 0 && H > 0 ? rect.height / H : 1
+    return { x: (e.clientX - rect.left) / kx, y: (e.clientY - rect.top) / ky }
   }
   const onPointerDown = (e: PointerEvent) => {
     dragging = true

@@ -3,7 +3,7 @@
 // browse the knowledge base the agent works from. Strictly read-only. Contract
 // (same as vaults.ts): every builder returns a JSON string and never throws —
 // failures come back as `{ok:false, error}` bodies the panel renders inline.
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 
@@ -35,7 +35,10 @@ export function isTextFile(name: string): boolean {
 
 /** Resolve a mount id (the `name` in its .amico-vault.toml marker, falling back
  *  to the directory basename — parity with vaults.ts scanMounts) to its real
- *  directory. Returns undefined when no such mount exists. */
+ *  directory. When two mounts declare the same marker name, the one whose
+ *  DIRECTORY is also named `id` wins, so a duplicate can't silently shadow a
+ *  vault the researcher can see in the mount list. Returns undefined when no
+ *  such mount exists. */
 export function mountDir(id: string, root: string = vaultsRoot()): string | undefined {
   let entries: string[]
   try {
@@ -43,6 +46,7 @@ export function mountDir(id: string, root: string = vaultsRoot()): string | unde
   } catch {
     return undefined
   }
+  let byName: string | undefined
   for (const base of entries) {
     let text: string
     try {
@@ -51,9 +55,11 @@ export function mountDir(id: string, root: string = vaultsRoot()): string | unde
       continue
     }
     const name = text.match(/^\s*name\s*=\s*"([^"]*)"/m)?.[1] || base
-    if (name === id) return path.join(root, base)
+    if (name !== id) continue
+    if (base === id) return path.join(root, base)
+    byName ??= path.join(root, base)
   }
-  return undefined
+  return byName
 }
 
 export type VaultFileEntry = { path: string; name: string; size: number; readable: boolean }
@@ -65,6 +71,12 @@ export function vaultFilesBody(mountId: string | undefined, root: string = vault
   if (!mountId) return err("bad_request", "mount is required")
   const dir = mountDir(mountId, root)
   if (!dir) return err("not_found", `no attached vault named "${mountId}"`)
+  let realRoot: string
+  try {
+    realRoot = realpathSync(dir)
+  } catch {
+    return err("not_found", `no attached vault named "${mountId}"`)
+  }
   const files: VaultFileEntry[] = []
   let truncated = false
   const walk = (abs: string, rel: string, depth: number) => {
@@ -89,7 +101,16 @@ export function vaultFilesBody(mountId: string | undefined, root: string = vault
       const relChild = rel ? `${rel}/${name}` : name
       let st
       try {
-        st = statSync(absChild)
+        // lstat, not stat: a symlink inside the mount may point ANYWHERE, and
+        // a listing that follows it would enumerate names/sizes outside the
+        // vault (vaultFileBody blocks the read, but the metadata leaks). Only
+        // symlinks whose real target stays inside the mount are walked.
+        st = lstatSync(absChild)
+        if (st.isSymbolicLink()) {
+          const real = realpathSync(absChild)
+          if (real !== realRoot && !real.startsWith(realRoot + path.sep)) continue
+          st = statSync(real)
+        }
       } catch {
         continue
       }

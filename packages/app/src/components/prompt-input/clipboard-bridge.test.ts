@@ -4,13 +4,16 @@ import { readClipboardViaBridge, writeClipboardViaBridge } from "./clipboard-bri
 type Listener = (event: MessageEvent) => void
 
 // A stand-in for a framed window (parent !== self) that records outgoing
-// clipboard-requests and lets a test play back the host's reply.
-function fakeFramedWindow() {
+// clipboard-requests and lets a test play back the host's reply. `readText`
+// simulates the host's navigator.clipboard grant: a function to grant it,
+// absent to model the VS Code webview iframe (no permission).
+function fakeFramedWindow(readText?: () => Promise<string>) {
   const listeners = new Set<Listener>()
   const posted: Array<Record<string, unknown>> = []
   const win = {
     addEventListener: (_type: string, fn: Listener) => listeners.add(fn),
     removeEventListener: (_type: string, fn: Listener) => listeners.delete(fn),
+    navigator: readText ? { clipboard: { readText } } : {},
     parent: {
       postMessage: (message: Record<string, unknown>) => posted.push(message),
     },
@@ -58,6 +61,28 @@ describe("readClipboardViaBridge", () => {
     bridge.reply({ source: "amicode", kind: "clipboard", nonce: request.nonce }) // no text field
 
     expect(await pending).toBe("")
+  })
+
+  test("framed host WITHOUT the amicode relay (Simple Browser, plain embeds) falls back to navigator.clipboard", async () => {
+    // No reply ever comes — the request went into the void. The API key being
+    // pasted must still arrive via the host's own clipboard-read grant.
+    const bridge = fakeFramedWindow(() => Promise.resolve("sk-cloud-key-123"))
+    expect(await readClipboardViaBridge(bridge.win, 15)).toBe("sk-cloud-key-123")
+  })
+
+  test("a live bridge reply wins — navigator.clipboard is not consulted", async () => {
+    const bridge = fakeFramedWindow(() => {
+      throw new Error("must not be called when the bridge answered")
+    })
+    const pending = readClipboardViaBridge(bridge.win)
+    const request = bridge.posted[0]
+    bridge.reply({ source: "amicode", kind: "clipboard", nonce: request.nonce, text: "from the bridge" })
+    expect(await pending).toBe("from the bridge")
+  })
+
+  test("no relay AND no clipboard permission resolves empty (the caller's no-op stands)", async () => {
+    const bridge = fakeFramedWindow(() => Promise.reject(new Error("NotAllowedError")))
+    expect(await readClipboardViaBridge(bridge.win, 15)).toBe("")
   })
 
   test("resolves empty without posting when the app is not framed", async () => {
