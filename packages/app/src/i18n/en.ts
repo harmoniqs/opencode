@@ -735,7 +735,7 @@ export const dict = {
   "amicode.contextTree.collapse": "Collapse context tree",
   "amicode.contextTree.expand": "Expand context tree",
   "amicode.contextTree.canvasLabel":
-    "The agent's context tree — turns branch from amico; click a file node to open it",
+    "The agent's context tree — turns branch from amico. Click a file node to open it; arrow keys walk the nodes and Enter opens the focused one",
   "amicode.vault.title": "Vault",
   "amicode.vault.open": "Open vault",
   "amicode.vault.close": "Close vault panel",

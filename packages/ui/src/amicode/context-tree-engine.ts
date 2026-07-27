@@ -84,6 +84,8 @@ export interface ContextTreeEngine {
   setTheme(scheme: ContextTreeScheme): void
   /** a glance from the log: ring the node whose label matches */
   highlight(label: string): void
+  /** keyboard focus: ring + camera-glance a node by ID (host-driven nav) */
+  focus(id: string): void
   /** re-fit the camera to the whole tree (also clears manual pan/zoom) */
   fit(): void
   /** omit both to re-measure from the canvas box */
@@ -608,8 +610,10 @@ export function createContextTreeEngine(
           ctx.stroke()
         } else if (rt >= 1) n.ringT = -1
       }
-      // labels: turns + root always; leaves at rest tone, raised on hover
-      const la = isRoot || n.kind === "turn" ? 0.85 : hoveredNow || n.active ? 1 : 0.6
+      // labels: turns + root always; leaves at rest tone, raised on hover,
+      // keyboard focus, or a log glance
+      const glancedNow = glance !== null && glance.id === n.id
+      const la = isRoot || n.kind === "turn" ? 0.85 : hoveredNow || glancedNow || n.active ? 1 : 0.6
       ctx.font = `${n.kind === "turn" || isRoot ? "600 " : ""}10px JuliaMono, ui-monospace, SFMono-Regular, Menlo, monospace`
       const text = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label
       const tw = ctx.measureText(text).width
@@ -647,6 +651,13 @@ export function createContextTreeEngine(
         n.ringT = beatNow
         glance = { id: n.id, until: beatNow + 3 }
       }
+    },
+    focus: (id) => {
+      if (destroyed) return
+      const n = byId.get(id)
+      if (!n) return
+      n.ringT = beatNow
+      glance = { id: n.id, until: beatNow + 3 }
     },
     fit: () => {
       userCam = false

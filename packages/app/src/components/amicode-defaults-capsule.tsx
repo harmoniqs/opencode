@@ -184,11 +184,11 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   const radio = (active: boolean): Record<string, string> => ({
     display: "flex",
     "align-items": "center",
-    gap: "7px",
+    gap: "8px",
     width: "100%",
     padding: "6px 10px",
     "font-size": "12px",
-    "font-weight": active ? "650" : "450",
+    "font-weight": active ? "650" : "400",
     "text-align": "left",
     border: active ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-base)",
     "border-radius": "var(--radius-md)",
@@ -208,7 +208,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
         style={{
           display: "inline-flex",
           "align-items": "center",
-          gap: "7px",
+          gap: "8px",
           "max-width": "100%",
           "min-width": "0",
           border: hp()
@@ -227,7 +227,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
         <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap", "min-width": "0" }}>
           {modelName()} · {hp() ? "Piccolissimo+Altissimo" : "Piccolo"}
         </span>
-        <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)", "flex-shrink": "0" }}>
+        <span aria-hidden="true" style={{ "font-size": "10px", color: "var(--v2-text-text-muted)", "flex-shrink": "0" }}>
           ▾
         </span>
       </button>
@@ -246,7 +246,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
             border: "1px solid var(--v2-border-border-base)",
             "border-radius": "var(--radius-lg)",
             "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
-            padding: "14px",
+            padding: "16px",
             display: "flex",
             "flex-direction": "column",
             gap: "12px",
@@ -306,7 +306,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                   "align-items": "stretch",
                   gap: "0",
                   "font-size": "12px",
-                  "font-weight": hp() ? "650" : "450",
+                  "font-weight": hp() ? "650" : "400",
                   background: hp() ? "var(--accent-fill-soft)" : "transparent",
                   color: hp() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
                 }}
@@ -321,7 +321,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 style={{
                   display: "flex",
                   "align-items": "center",
-                  gap: "7px",
+                  gap: "8px",
                   flex: "1 1 0",
                   "min-width": "0",
                   padding: "6px 10px",
@@ -356,10 +356,10 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     border, 10% currentColor tint — state lives in the text color. */}
                 <span
                   style={{
-                    "font-size": "9px",
+                    "font-size": "10px",
                     "font-weight": "600",
                     "letter-spacing": "0.5px",
-                    padding: "4px 7px",
+                    padding: "4px 8px",
                     "line-height": "1",
                     "border-radius": "var(--radius-full)",
                     border: "none",
@@ -384,7 +384,7 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                     display: "flex",
                     "align-items": "center",
                     "justify-content": "center",
-                    padding: "0 9px",
+                    padding: "0 8px",
                     border: "none",
                     background: "transparent",
                     color: computeOpen() ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",

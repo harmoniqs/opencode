@@ -61,7 +61,7 @@ export function AmicodeStarterChips(props: {
   // The chips' OWN wrapping row (Kate: separate container from the folder
   // picker) — centered, quiet pills. Class-based styling so hover works.
   const pill =
-    "rounded-full border border-[var(--v2-border-border-strong)] bg-[var(--v2-background-bg-layer-02)] px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-120 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-03)]"
+    "rounded-full border border-[var(--v2-border-border-strong)] bg-[var(--v2-background-bg-layer-02)] px-3 py-1 text-[12px] leading-4 whitespace-nowrap text-[var(--v2-text-text-muted)] cursor-pointer transition-colors duration-150 hover:text-[var(--v2-text-text-base)] hover:bg-[var(--v2-background-bg-layer-03)]"
   return (
     <div
       data-component="amicode-starter-chips"
@@ -152,9 +152,10 @@ export function AmicodeGettingStarted(props: {
             <button
               type="button"
               data-slot="amicode-gs-starter"
+              data-component="amc-secondary-btn"
               onClick={() => props.onStart(starter.prompt)}
               style={{
-                border: "1px solid var(--v2-icon-icon-accent)",
+                border: "1px solid var(--accent-edge)",
                 "border-radius": "var(--radius-md)",
                 background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
