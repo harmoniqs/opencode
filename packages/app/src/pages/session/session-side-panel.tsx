@@ -109,16 +109,25 @@ export function SessionSidePanel(props: { size: Sizing }) {
   // command, and context-tree deep-links open the store; inside a session THIS
   // is the host, so mirror store state into a "vault" tab (and back on close)
   const vaultOpen = createMemo(() => vaultPanel.opened())
-  createEffect(() => {
-    if (!isDesktop()) return
-    if (vaultPanel.opened()) {
-      if (!view().reviewPanel.opened()) view().reviewPanel.open()
-      tabs().open("vault")
-      tabs().setActive("vault")
-    } else {
-      tabs().close("vault")
-    }
-  })
+  // on() scopes tracking to the STORE signal alone — the tab reads/writes in
+  // the callback are untracked. Tracking them looped: tabs().open() writes
+  // the same store the effect would re-read, and Solid spins the effect
+  // until the stack blows (found via Playwright pageerror stack).
+  createEffect(
+    on(
+      () => vaultPanel.opened(),
+      (openNow) => {
+        if (!isDesktop()) return
+        if (openNow) {
+          if (!view().reviewPanel.opened()) view().reviewPanel.open()
+          if (!tabs().all().includes("vault")) tabs().open("vault")
+          if (tabs().active() !== "vault") tabs().setActive("vault")
+        } else if (tabs().all().includes("vault")) {
+          tabs().close("vault")
+        }
+      },
+    ),
+  )
   // column closed (panel toggle) → the store must follow, or the titlebar
   // button's next press toggles an invisible state and "does nothing"
   createEffect(
