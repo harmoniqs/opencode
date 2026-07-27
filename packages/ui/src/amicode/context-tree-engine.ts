@@ -1,13 +1,15 @@
 /* ================================================================
    the context tree — what amico is holding in mind (native engine)
 
-   The knowledge graph, moved to the top panel and redesigned around the
-   session instead of the vault sample: a left-to-right tidy tree of the
-   agent's ACTUAL context. Root = amico; branches = the session's turns;
-   leaves = the markdown, source, skills, agents and web references each
-   turn pulled into context. A leaf touched again by a later turn is not
-   duplicated — the later turn draws a thin recall link back to it, so
-   the tree stays a map of distinct context, not a log.
+   The knowledge graph, moved to the header panel and redesigned around
+   the session instead of the vault sample — laid out as an ORGANIC,
+   Obsidian-like graph (Kate 2026-07-27): root = amico pinned at center,
+   the session's turns orbiting it, and each turn's context — markdown,
+   source, skills, agents, web references — clustering around its turn
+   under a deterministic force settle. A leaf touched again by a later
+   turn is not duplicated — the later turn draws a recall link back to
+   it, and the springs pull shared context between its turns, so the
+   cloud's SHAPE shows what the session keeps returning to.
 
    Unlike the ambient brain (brain-engine.ts), this surface is
    INTERACTIVE: nodes hit-test, hover raises their label, and clicking a
@@ -198,9 +200,13 @@ interface TEdge {
   recall: boolean
 }
 
-const COL = 168 // world px between depths
-const ROW = 30 // world px between leaf rows
+const TURN_RING = 170 // rest distance root -> turn
+const LEAF_REST = 80 // rest distance turn -> leaf
+const RECALL_REST = 200 // weak spring across recall links
+const SETTLE_STEPS = 240
 const HALF: Record<string, number> = { root: 8, turn: 5.5, agent: 5 }
+// deterministic jitter — no Math.random (identical trees settle identically)
+const jitter = (i: number) => Math.sin(i * 12.9898) * 0.5
 
 export function createContextTreeEngine(
   canvas: HTMLCanvasElement,
@@ -279,8 +285,8 @@ export function createContextTreeEngine(
       minY = Math.min(minY, n.ty)
       maxY = Math.max(maxY, n.ty)
     }
-    const padX = 90, // room for labels to the right of leaves
-      padY = 26
+    const padX = 56, // room for centered labels at the cloud's edges
+      padY = 32
     const spanX = Math.max(maxX - minX, 1)
     const spanY = Math.max(maxY - minY, 1)
     cam.tk = Math.min((W - padX * 2) / spanX, (H - padY * 2) / spanY, 1.6)
@@ -291,13 +297,18 @@ export function createContextTreeEngine(
   const sx = (wx: number) => (wx - cam.x) * cam.k + W / 2
   const sy = (wy: number) => (wy - cam.y) * cam.k + H / 2
 
-  /* ---------- tidy layout ---------- */
+  /* ---------- organic layout: deterministic force settle ----------
+     Root pinned at center, turns seeded on a ring in session order, leaves
+     fanned outward from their turn — then a fixed number of repel+spring
+     iterations (no randomness, so the same tree always settles the same
+     way). The settle runs synchronously here; the render loop only LERPS
+     nodes toward their new equilibrium, which is what gives the cloud its
+     Obsidian-like drift when context arrives. */
   function layout(root: ContextTreeNodeInput) {
     const nextNodes: TNode[] = []
     const nextById = new Map<string, TNode>()
     const nextEdges: TEdge[] = []
     const recallPairs: [string, string][] = []
-    let row = 0
     maxDepth = 0
     const visit = (input: ContextTreeNodeInput, depth: number, parent?: TNode): TNode => {
       maxDepth = Math.max(maxDepth, depth)
@@ -328,25 +339,14 @@ export function createContextTreeEngine(
       n.parent = parent
       nextNodes.push(n)
       nextById.set(n.id, n)
-      const children = input.children ?? []
-      if (!children.length) {
-        n.tx = depth * COL
-        n.ty = row * ROW
-        row++
-      } else {
-        let sum = 0
-        for (const c of children) {
-          const cn = visit(c, depth + 1, n)
-          nextEdges.push({ s: n, t: cn, recall: false })
-          sum += cn.ty
-        }
-        n.tx = depth * COL
-        n.ty = sum / children.length
+      for (const c of input.children ?? []) {
+        const cn = visit(c, depth + 1, n)
+        nextEdges.push({ s: n, t: cn, recall: false })
       }
       for (const r of input.recalls ?? []) recallPairs.push([input.id, r])
       return n
     }
-    visit(root, 0, undefined)
+    const rootNode = visit(root, 0, undefined)
     recallCount = 0
     for (const [from, to] of recallPairs) {
       const s = nextById.get(from)
@@ -355,6 +355,74 @@ export function createContextTreeEngine(
       nextEdges.push({ s, t, recall: true })
       recallCount++
     }
+
+    // --- seed (deterministic): root center; turns on the ring; leaves fanned
+    const turns = nextNodes.filter((n) => n.depth === 1)
+    rootNode.tx = 0
+    rootNode.ty = 0
+    turns.forEach((t, i) => {
+      const ang = -Math.PI / 2 + (i * Math.PI * 2) / Math.max(turns.length, 3)
+      t.tx = Math.cos(ang) * TURN_RING
+      t.ty = Math.sin(ang) * TURN_RING
+      const leaves = nextNodes.filter((n) => n.parent === t)
+      leaves.forEach((l, j) => {
+        const spread = Math.min(Math.PI * 0.9, 0.5 * Math.max(leaves.length - 1, 1))
+        const la = ang - spread / 2 + (leaves.length > 1 ? (j * spread) / (leaves.length - 1) : 0)
+        l.tx = t.tx + Math.cos(la) * (LEAF_REST + jitter(i * 31 + j) * 14)
+        l.ty = t.ty + Math.sin(la) * (LEAF_REST + jitter(i * 17 + j * 3) * 14)
+      })
+    })
+
+    // --- settle: pairwise repulsion + edge springs + weak center gravity
+    const index = new Map<TNode, number>()
+    nextNodes.forEach((n, i) => index.set(n, i))
+    for (let it = 0; it < SETTLE_STEPS; it++) {
+      const fx = new Array<number>(nextNodes.length).fill(0)
+      const fy = new Array<number>(nextNodes.length).fill(0)
+      for (let a = 0; a < nextNodes.length; a++) {
+        for (let b = a + 1; b < nextNodes.length; b++) {
+          const A = nextNodes[a]
+          const B = nextNodes[b]
+          let dx = A.tx - B.tx
+          let dy = A.ty - B.ty
+          let d2 = dx * dx + dy * dy
+          if (d2 < 1) {
+            d2 = 1
+            dx = jitter(a * 7 + b) || 0.5
+            dy = jitter(a - b * 3) || -0.5
+          }
+          const f = Math.min(2600 / d2, 8)
+          const d = Math.sqrt(d2)
+          fx[a] += (dx / d) * f
+          fy[a] += (dy / d) * f
+          fx[b] -= (dx / d) * f
+          fy[b] -= (dy / d) * f
+        }
+      }
+      for (const e of nextEdges) {
+        const ai = index.get(e.s)!
+        const bi = index.get(e.t)!
+        const dx = e.t.tx - e.s.tx
+        const dy = e.t.ty - e.s.ty
+        const d = Math.max(Math.sqrt(dx * dx + dy * dy), 0.01)
+        const rest = e.recall ? RECALL_REST : e.s.depth === 0 ? TURN_RING : LEAF_REST
+        const k = e.recall ? 0.004 : 0.02
+        const f = (d - rest) * k
+        fx[ai] += (dx / d) * f
+        fy[ai] += (dy / d) * f
+        fx[bi] -= (dx / d) * f
+        fy[bi] -= (dy / d) * f
+      }
+      for (let i = 0; i < nextNodes.length; i++) {
+        const n = nextNodes[i]
+        if (n.depth === 0) continue // the root IS the world origin
+        fx[i] += -n.tx * 0.001
+        fy[i] += -n.ty * 0.001
+        n.tx += Math.max(-7, Math.min(7, fx[i]))
+        n.ty += Math.max(-7, Math.min(7, fy[i]))
+      }
+    }
+
     nodes = nextNodes
     byId = nextById
     edges = nextEdges
@@ -525,7 +593,8 @@ export function createContextTreeEngine(
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
     ctx.clearRect(0, 0, W, H) // transparent ground — the panel surface shows through
 
-    // ---- edges: horizontal S-curves parent→child; recall links dashed
+    // ---- edges: straight lines (the Obsidian idiom); recall links dashed;
+    // the hovered node's edges brighten so its neighborhood reads at a glance
     for (const e of edges) {
       const x1 = sx(e.s.x),
         y1 = sy(e.s.y),
@@ -535,17 +604,17 @@ export function createContextTreeEngine(
         continue
       const a = Math.min(e.s.alpha, e.t.alpha)
       if (a <= 0.02) continue
+      const near = hovered !== null && (e.s === hovered || e.t === hovered)
       ctx.beginPath()
       ctx.moveTo(x1, y1)
-      const mid = (x2 - x1) * 0.5
-      ctx.bezierCurveTo(x1 + mid, y1, x2 - mid, y2, x2, y2)
+      ctx.lineTo(x2, y2)
       if (e.recall) {
-        ctx.strokeStyle = rgba(css.fg, 0.1 * a)
+        ctx.strokeStyle = rgba(css.fg, (near ? 0.3 : 0.1) * a)
         ctx.setLineDash([3, 4])
       } else {
-        ctx.strokeStyle = rgba(css.fg, 0.16 * a)
+        ctx.strokeStyle = rgba(css.fg, (near ? 0.42 : 0.16) * a)
       }
-      ctx.lineWidth = 1
+      ctx.lineWidth = near ? 1.5 : 1
       ctx.stroke()
       ctx.setLineDash([])
     }
@@ -610,18 +679,21 @@ export function createContextTreeEngine(
           ctx.stroke()
         } else if (rt >= 1) n.ringT = -1
       }
-      // labels: turns + root always; leaves at rest tone, raised on hover,
-      // keyboard focus, or a log glance
+      // labels: centered under the node (the Obsidian idiom); turns + root
+      // always readable, leaves at rest tone — raised on hover, keyboard
+      // focus, a log glance, or being the hovered node's neighbor
       const glancedNow = glance !== null && glance.id === n.id
-      const la = isRoot || n.kind === "turn" ? 0.85 : hoveredNow || glancedNow || n.active ? 1 : 0.6
+      const nearHover = hovered !== null && (n.parent === hovered || hovered.parent === n)
+      const la =
+        isRoot || n.kind === "turn" ? 0.85 : hoveredNow || glancedNow || n.active ? 1 : nearHover ? 0.85 : 0.6
       ctx.font = `${n.kind === "turn" || isRoot ? "600 " : ""}10px JuliaMono, ui-monospace, SFMono-Regular, Menlo, monospace`
       const text = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label
       const tw = ctx.measureText(text).width
-      const lx = x + half + 6,
-        ly = y
+      const lx = x - tw / 2,
+        ly = y + half + 10
       ctx.fillStyle = css.labelHalo
       ctx.fillRect(lx - 2, ly - 7, tw + 4, 14)
-      ctx.fillStyle = rgba(hoveredNow ? css.fg : css.fg, Math.min(la, 1) * n.alpha)
+      ctx.fillStyle = rgba(css.fg, Math.min(la, 1) * n.alpha)
       ctx.fillText(text, lx, ly)
       ctx.globalAlpha = 1
     }

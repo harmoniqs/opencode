@@ -98,8 +98,10 @@ describe("setTree", () => {
     grown.children![1].children!.push({ id: "f-new", label: "new.md", kind: "note", path: "new.md" })
     engine.setTree(grown)
     expect(engine.stats().nodes).toBe(8)
-    // under reduced motion positions land instantly, so a known leaf stays put
-    expect(engine.locate("f-solve")).toEqual(before!)
+    // the force settle re-equilibrates around the newcomer — known ids
+    // persist (locate resolves), exact positions legitimately shift
+    expect(before).toBeDefined()
+    expect(engine.locate("f-solve")).toBeDefined()
     expect(engine.locate("f-new")).toBeDefined()
   })
   test("recall to an unknown id is dropped, not fatal", () => {
@@ -128,14 +130,14 @@ describe("pick / locate", () => {
 })
 
 describe("render", () => {
-  test("a tick paints the frame: transform, clear, curves, circles, labels", () => {
+  test("a tick paints the frame: transform, clear, edges, circles, labels", () => {
     const { engine, ctx } = makeEngine()
     engine.setTree(TREE)
     engine.tick(16)
     const methods = new Set(ctx.calls.map((c) => c.method))
     expect(methods.has("setTransform")).toBe(true)
     expect(methods.has("clearRect")).toBe(true)
-    expect(methods.has("bezierCurveTo")).toBe(true)
+    expect(methods.has("lineTo")).toBe(true) // straight Obsidian-style edges
     expect(methods.has("arc")).toBe(true)
     expect(methods.has("fillText")).toBe(true)
   })
