@@ -43,6 +43,24 @@ const Cost = Schema.Struct({
   ),
 })
 
+// How a model exposes its reasoning control in the models.dev catalog. Ported
+// from upstream alongside provider/transform.ts — the transform derives thinking
+// variants from this instead of pattern-matching model IDs. See AMICODE-PATCHES.md.
+const ReasoningOption = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("effort"),
+    values: Schema.Array(Schema.NullOr(Schema.String)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("toggle"),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("budget_tokens"),
+    min: Schema.optional(Schema.Finite),
+    max: Schema.optional(Schema.Finite),
+  }),
+])
+
 export const Model = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -52,6 +70,7 @@ export const Model = Schema.Struct({
   reasoning: Schema.Boolean,
   temperature: Schema.Boolean,
   tool_call: Schema.Boolean,
+  reasoning_options: Schema.optional(Schema.Array(ReasoningOption)),
   interleaved: Schema.optional(
     Schema.Union([
       Schema.Literal(true),
