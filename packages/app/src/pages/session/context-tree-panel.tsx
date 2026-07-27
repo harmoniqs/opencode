@@ -18,6 +18,7 @@ import {
   contextTreeKindColor,
   type ContextTreeEngine,
   type ContextTreeKind,
+  type ContextTreeNodeInput,
   type ContextTreeScheme,
   type ContextTreeSelection,
 } from "@opencode-ai/ui/context-tree-engine"
@@ -168,11 +169,66 @@ function ContextTreeFrame(props: { sessionID: string }) {
   window.addEventListener("amicode:brain-hover", onToolHover)
   onCleanup(() => window.removeEventListener("amicode:brain-hover", onToolHover))
 
+  const tree = createMemo(() => buildContextTree(turns()))
   createEffect(() => {
     const brain = engine()
     if (!brain) return
-    brain.setTree(buildContextTree(turns()))
+    brain.setTree(tree())
   })
+
+  // keyboard navigation: a flat traversal of the same tree the canvas draws
+  // (turns then their leaves, in order); arrows walk it, Enter/Space opens
+  const flatNodes = createMemo(() => {
+    const out: ContextTreeSelection[] = []
+    const walk = (n: ContextTreeNodeInput) => {
+      if (n.kind !== "root") out.push({ id: n.id, label: n.label, kind: n.kind, path: n.path, vault: n.vault })
+      for (const c of n.children ?? []) walk(c)
+    }
+    walk(tree())
+    return out
+  })
+  const [kbIndex, setKbIndex] = createSignal(-1)
+  const [announce, setAnnounce] = createSignal("")
+  const kbFocus = (index: number) => {
+    const list = flatNodes()
+    if (!list.length) return
+    const next = Math.min(Math.max(index, 0), list.length - 1)
+    setKbIndex(next)
+    const node = list[next]
+    engine()?.focus(node.id)
+    setAnnounce(`${node.label} — ${node.kind}${node.path ? ", press Enter to open" : ""}`)
+  }
+  const onCanvasKeyDown = (e: KeyboardEvent) => {
+    const list = flatNodes()
+    if (!list.length) return
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        e.preventDefault()
+        kbFocus(kbIndex() + 1)
+        return
+      case "ArrowLeft":
+      case "ArrowUp":
+        e.preventDefault()
+        kbFocus(kbIndex() - 1)
+        return
+      case "Home":
+        e.preventDefault()
+        kbFocus(0)
+        return
+      case "End":
+        e.preventDefault()
+        kbFocus(list.length - 1)
+        return
+      case "Enter":
+      case " ": {
+        if (kbIndex() < 0) return
+        e.preventDefault()
+        onSelect(list[kbIndex()])
+        return
+      }
+    }
+  }
   // folded away — stop burning frames
   createEffect(() => {
     const brain = engine()
@@ -244,10 +300,17 @@ function ContextTreeFrame(props: { sessionID: string }) {
               }),
             )
           }
-          role="img"
+          role="application"
+          aria-roledescription="context tree"
           aria-label={language.t("amicode.contextTree.canvasLabel")}
-          class="block h-full w-full"
+          tabIndex={0}
+          onKeyDown={onCanvasKeyDown}
+          onBlur={() => setKbIndex(-1)}
+          class="block h-full w-full focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-border-focus-base"
         />
+      </div>
+      <div aria-live="polite" class="sr-only">
+        {announce()}
       </div>
       </div>
     </Show>

@@ -167,6 +167,57 @@ function Bullet(props: { children: JSX.Element; title?: string }) {
   )
 }
 
+/** One "Amico remembers" line. The detail used to live only in a title
+ *  tooltip — hover-only, invisible to keyboard and touch. Now a disclosure:
+ *  the row is a button that unfolds its detail inline. */
+function RememberRow(props: { title: string; detail: string }) {
+  const [open, setOpen] = createSignal(false)
+  const hasDetail = () => props.detail.trim() !== "" && props.detail.trim() !== props.title.trim()
+  return (
+    <div style={{ "min-width": "0" }}>
+      <button
+        type="button"
+        data-slot="amicode-you-remember"
+        aria-expanded={hasDetail() ? open() : undefined}
+        onClick={() => hasDetail() && setOpen(!open())}
+        style={{
+          display: "flex",
+          gap: "6px",
+          "align-items": "baseline",
+          "min-width": "0",
+          "max-width": "100%",
+          background: "none",
+          border: "none",
+          padding: "0",
+          "font-size": "12px",
+          "line-height": "18px",
+          "text-align": "left",
+          color: "var(--v2-text-text-base)",
+          cursor: hasDetail() ? "pointer" : "default",
+        }}
+      >
+        <span style={{ color: "var(--v2-text-text-accent)", "flex-shrink": "0" }} aria-hidden="true">
+          ›
+        </span>
+        <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>{props.title}</span>
+      </button>
+      <Show when={open() && hasDetail()}>
+        <div
+          data-slot="amicode-you-remember-detail"
+          style={{
+            "font-size": "11px",
+            "line-height": "16px",
+            color: "var(--v2-text-text-muted)",
+            padding: "0 0 4px 12px",
+          }}
+        >
+          {props.detail}
+        </div>
+      </Show>
+    </div>
+  )
+}
+
 function PrimaryButton(props: { children: JSX.Element; onClick: () => void; slot?: string }) {
   return (
     <button
@@ -406,6 +457,8 @@ function AboutYouCard(props: {
   const [saving, setSaving] = createSignal(false)
   const [draft, setDraft] = createSignal({ name: "", affiliation: "", focus: "", scholar: "", affiliation_logo: "" })
   const [suggestions, setSuggestions] = createSignal<{ name: string; domain: string; logo: string }[]>([])
+  // combobox keyboard state: the highlighted suggestion (-1 = none)
+  const [activeSug, setActiveSug] = createSignal(-1)
   const beginEdit = () => {
     setSuggestions([]) // a dropdown left open at cancel must not haunt the next edit
     const y = you()
@@ -523,16 +576,6 @@ function AboutYouCard(props: {
     apply(el.value.slice(0, start) + clip + el.value.slice(end))
   }
 
-  const FIELD: JSX.CSSProperties = {
-    width: "100%",
-    "box-sizing": "border-box",
-    background: "var(--v2-background-bg-layer-02, transparent)",
-    border: "1px solid var(--v2-border-border-base)",
-    "border-radius": "var(--radius-md)",
-    padding: "4px 8px",
-    "font-size": "12px",
-    color: "var(--v2-text-text-base)",
-  }
   const focusLine = createMemo(() => {
     const y = you()
     if (!y) return ""
@@ -689,7 +732,7 @@ function AboutYouCard(props: {
                       <input
                         data-slot="amicode-you-name"
                         data-amc-clipboard="self"
-                        style={FIELD}
+                        class="amc-input amc-input--compact"
                         value={draft().name}
                         placeholder="Name"
                         aria-label="Name"
@@ -756,22 +799,56 @@ function AboutYouCard(props: {
                             <input
                               data-slot="amicode-you-affiliation"
                               data-amc-clipboard="self"
-                              style={{ ...FIELD, flex: "1" }}
+                              class="amc-input amc-input--compact" style={{ flex: "1" }}
                               value={draft().affiliation}
                               placeholder="University or company — search like LinkedIn"
                               aria-label="Affiliation"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={suggestions().length > 0}
+                              aria-controls="amc-inst-listbox"
+                              aria-activedescendant={activeSug() >= 0 ? `amc-inst-option-${activeSug()}` : undefined}
                               onInput={(e) => {
                                 setDraft({ ...draft(), affiliation: e.currentTarget.value })
+                                setActiveSug(-1)
                                 searchInstitutions(e.currentTarget.value)
                               }}
-                              onKeyDown={pasteFallback((v) => {
-                                setDraft({ ...draft(), affiliation: v })
-                                searchInstitutions(v)
-                              })}
+                              onKeyDown={(e) => {
+                                const open = suggestions().length > 0
+                                if (open && e.key === "ArrowDown") {
+                                  e.preventDefault()
+                                  setActiveSug((activeSug() + 1) % suggestions().length)
+                                  return
+                                }
+                                if (open && e.key === "ArrowUp") {
+                                  e.preventDefault()
+                                  setActiveSug((activeSug() - 1 + suggestions().length) % suggestions().length)
+                                  return
+                                }
+                                if (open && e.key === "Enter" && activeSug() >= 0) {
+                                  e.preventDefault()
+                                  void pickInstitution(suggestions()[activeSug()])
+                                  setActiveSug(-1)
+                                  return
+                                }
+                                if (open && e.key === "Escape") {
+                                  e.preventDefault()
+                                  setSuggestions([])
+                                  setActiveSug(-1)
+                                  return
+                                }
+                                void pasteFallback((v) => {
+                                  setDraft({ ...draft(), affiliation: v })
+                                  searchInstitutions(v)
+                                })(e)
+                              }}
                             />
                           </div>
                           <Show when={suggestions().length > 0}>
                             <div
+                              id="amc-inst-listbox"
+                              role="listbox"
+                              aria-label="Institution suggestions"
                               style={{
                                 position: "absolute",
                                 top: "100%",
@@ -787,10 +864,15 @@ function AboutYouCard(props: {
                               }}
                             >
                               <For each={suggestions()}>
-                                {(sug) => (
+                                {(sug, i) => (
                                   <button
                                     type="button"
+                                    id={`amc-inst-option-${i()}`}
+                                    role="option"
+                                    aria-selected={activeSug() === i()}
+                                    data-active={activeSug() === i() ? "true" : undefined}
                                     data-slot="amicode-you-suggestion"
+                                    tabIndex={-1}
                                     onClick={() => pickInstitution(sug)}
                                     style={{
                                       display: "flex",
@@ -840,7 +922,7 @@ function AboutYouCard(props: {
                         <input
                           data-slot="amicode-you-focus"
                           data-amc-clipboard="self"
-                          style={FIELD}
+                          class="amc-input amc-input--compact"
                           value={draft().focus}
                           placeholder="What you work on"
                           aria-label="Research focus"
@@ -850,7 +932,7 @@ function AboutYouCard(props: {
                         <input
                           data-slot="amicode-you-scholar-input"
                           data-amc-clipboard="self"
-                          style={FIELD}
+                          class="amc-input amc-input--compact"
                           value={draft().scholar}
                           placeholder="Google Scholar URL (optional)"
                           aria-label="Google Scholar URL"
@@ -946,7 +1028,7 @@ function AboutYouCard(props: {
                   Amico remembers
                 </div>
                 <div style={{ display: "flex", "flex-direction": "column", gap: "3px" }}>
-                  <For each={y().remembers}>{(m) => <Bullet title={m.detail}>{m.title}</Bullet>}</For>
+                  <For each={y().remembers}>{(m) => <RememberRow title={m.title} detail={m.detail} />}</For>
                 </div>
               </Show>
 

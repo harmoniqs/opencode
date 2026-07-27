@@ -987,6 +987,37 @@
   background: var(--accent-fill-hover);
 }
 
+/* THE text input recipe — one geometry for every amicode text field (the
+ * onboarding wizard, the About-You profile editor, the Connections credential
+ * forms). Compact modifier for dense in-card forms. Focus ring included so no
+ * caller ever strips an outline again. */
+.amc-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--v2-background-bg-layer-02, transparent);
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--v2-text-text-base);
+}
+.amc-input--compact {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.amc-input::placeholder {
+  color: var(--v2-text-text-faint);
+}
+.amc-input:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: -1px;
+}
+.amc-input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* home cards: interaction states the inline styles can't express. The yellow
  * CTA's feedback is elevation + opacity — the fill itself never changes hue. */
 [data-slot="amicode-card-meet-cta"]:hover {
@@ -1022,8 +1053,9 @@
   outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;
 }
-[data-slot="amicode-you-suggestion"]:hover {
-  background: var(--v2-background-bg-layer-02);
+[data-slot="amicode-you-suggestion"]:hover,
+[data-slot="amicode-you-suggestion"][data-active="true"] {
+  background: var(--v2-background-bg-layer-03, var(--v2-background-bg-layer-02));
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {

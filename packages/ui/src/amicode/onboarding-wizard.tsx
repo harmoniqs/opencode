@@ -33,16 +33,6 @@ export function shouldShowWizard(
   return !profile.affiliation && !profile.scholar && !profile.focus
 }
 
-const FIELD: Record<string, string> = {
-  width: "100%",
-  "box-sizing": "border-box",
-  background: "var(--v2-background-bg-layer-02, transparent)",
-  border: "1px solid var(--v2-border-border-base)",
-  "border-radius": "var(--radius-md)",
-  padding: "8px 12px",
-  "font-size": "13px",
-  color: "var(--v2-text-text-base)",
-}
 const LABEL: Record<string, string> = {
   "font-size": "11px",
   "font-weight": "650",
@@ -307,7 +297,7 @@ export function AmicodeOnboardingWizard(props: {
             <div>
               <div style={LABEL}>Name</div>
               <input
-                style={FIELD}
+                class="amc-input"
                 value={fields().name}
                 onInput={(e) => setFields({ ...fields(), name: e.currentTarget.value })}
                 placeholder="Ada Lovelace"
@@ -333,7 +323,7 @@ export function AmicodeOnboardingWizard(props: {
                   />
                 </Show>
                 <input
-                  style={FIELD}
+                  class="amc-input"
                   value={fields().affiliation}
                   onInput={(e) => {
                     setFields({ ...fields(), affiliation: e.currentTarget.value })
@@ -405,7 +395,7 @@ export function AmicodeOnboardingWizard(props: {
             <div>
               <div style={LABEL}>What you work on</div>
               <input
-                style={FIELD}
+                class="amc-input"
                 value={fields().focus}
                 onInput={(e) => setFields({ ...fields(), focus: e.currentTarget.value })}
                 placeholder="e.g. high-fidelity gates on transmons"
@@ -414,7 +404,7 @@ export function AmicodeOnboardingWizard(props: {
             <div>
               <div style={LABEL}>Google Scholar (optional)</div>
               <input
-                style={FIELD}
+                class="amc-input"
                 value={fields().scholar}
                 onInput={(e) => setFields({ ...fields(), scholar: e.currentTarget.value })}
                 placeholder="https://scholar.google.com/…"
@@ -567,7 +557,7 @@ export function AmicodeOnboardingWizard(props: {
                     <div style={LABEL}>Attach a vault</div>
                     <div style={{ display: "flex", gap: "6px", "align-items": "stretch" }}>
                       <input
-                        style={FIELD}
+                        class="amc-input"
                         value={attachRef()}
                         onInput={(e) => setAttachRef(e.currentTarget.value)}
                         onKeyDown={(e) => {
