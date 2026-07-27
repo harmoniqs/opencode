@@ -200,8 +200,8 @@ interface TEdge {
   recall: boolean
 }
 
-const TURN_RING = 170 // rest distance root -> turn
-const LEAF_REST = 80 // rest distance turn -> leaf
+const TURN_RING = 150 // base rest distance root -> turn (grows with turn count)
+const LEAF_REST = 70 // rest distance turn -> leaf
 const RECALL_REST = 200 // weak spring across recall links
 const SETTLE_STEPS = 240
 const HALF: Record<string, number> = { root: 8, turn: 5.5, agent: 5 }
@@ -290,7 +290,7 @@ export function createContextTreeEngine(
     const spanX = Math.max(maxX - minX, 1)
     const spanY = Math.max(maxY - minY, 1)
     cam.tk = Math.min((W - padX * 2) / spanX, (H - padY * 2) / spanY, 1.6)
-    cam.tk = Math.max(cam.tk, 0.25)
+    cam.tk = Math.max(cam.tk, 0.04)
     cam.tx = (minX + maxX) / 2
     cam.ty = (minY + maxY) / 2
   }
@@ -358,12 +358,14 @@ export function createContextTreeEngine(
 
     // --- seed (deterministic): root center; turns on the ring; leaves fanned
     const turns = nextNodes.filter((n) => n.depth === 1)
+    // busy sessions need a wider orbit or the clusters shove each other apart
+    const ring = Math.min(TURN_RING + turns.length * 12, 320)
     rootNode.tx = 0
     rootNode.ty = 0
     turns.forEach((t, i) => {
       const ang = -Math.PI / 2 + (i * Math.PI * 2) / Math.max(turns.length, 3)
-      t.tx = Math.cos(ang) * TURN_RING
-      t.ty = Math.sin(ang) * TURN_RING
+      t.tx = Math.cos(ang) * ring
+      t.ty = Math.sin(ang) * ring
       const leaves = nextNodes.filter((n) => n.parent === t)
       leaves.forEach((l, j) => {
         const spread = Math.min(Math.PI * 0.9, 0.5 * Math.max(leaves.length - 1, 1))
@@ -391,7 +393,7 @@ export function createContextTreeEngine(
             dx = jitter(a * 7 + b) || 0.5
             dy = jitter(a - b * 3) || -0.5
           }
-          const f = Math.min(2600 / d2, 8)
+          const f = Math.min(1400 / d2, 6)
           const d = Math.sqrt(d2)
           fx[a] += (dx / d) * f
           fy[a] += (dy / d) * f
@@ -405,7 +407,7 @@ export function createContextTreeEngine(
         const dx = e.t.tx - e.s.tx
         const dy = e.t.ty - e.s.ty
         const d = Math.max(Math.sqrt(dx * dx + dy * dy), 0.01)
-        const rest = e.recall ? RECALL_REST : e.s.depth === 0 ? TURN_RING : LEAF_REST
+        const rest = e.recall ? RECALL_REST : e.s.depth === 0 ? ring : LEAF_REST
         const k = e.recall ? 0.004 : 0.02
         const f = (d - rest) * k
         fx[ai] += (dx / d) * f
@@ -416,8 +418,8 @@ export function createContextTreeEngine(
       for (let i = 0; i < nextNodes.length; i++) {
         const n = nextNodes[i]
         if (n.depth === 0) continue // the root IS the world origin
-        fx[i] += -n.tx * 0.001
-        fy[i] += -n.ty * 0.001
+        fx[i] += -n.tx * 0.004
+        fy[i] += -n.ty * 0.004
         n.tx += Math.max(-7, Math.min(7, fx[i]))
         n.ty += Math.max(-7, Math.min(7, fy[i]))
       }
