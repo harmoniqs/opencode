@@ -30,10 +30,12 @@ header and the chat, collapsible, one per session view. The inline brain strip r
 removed from the timeline (`TimelineRow.Brain` deleted); the ambient background direction
 of ADR 0002 is not pursued.
 
-**2. The graph is redesigned as the agent's context tree.** A left-to-right tidy tree:
-root = amico; branches = the session's turns (roman-numeral plates carrying the prompt
-excerpt — the atlas idea, restructured); leaves = the distinct markdown, source, skills,
-agents, and web references each turn pulled into context. Commits only — searches/globs
+**2. The graph is redesigned as the agent's context tree.** An organic, Obsidian-like
+graph (layout updated from the initial tidy tree — Kate, 2026-07-27): root = amico pinned
+at center; the session's turns orbit it (roman-numeral plates carrying the prompt
+excerpt — the atlas idea, restructured); the distinct markdown, source, skills,
+agents, and web references each turn pulled into context cluster around their turn
+under a deterministic force settle. Commits only — searches/globs
 are transient scouting and never enter the tree. A leaf re-touched by a later turn is
 **deduplicated into a thin recall link** back to the existing node, so the tree stays a map
 of distinct context, not a log. Marathon sessions fold their oldest turns into one
@@ -58,7 +60,8 @@ Entry points: a titlebar vault button (both titlebar variants), the command pale
 
 - `brain-engine.ts` stays as-is (the ambient engine remains a library; the strip component
   is deleted). The context tree is a **separate, purpose-built engine**
-  (`context-tree-engine.ts`): declarative `setTree`, tidy layout, pointer interaction,
+  (`context-tree-engine.ts`): declarative `setTree`, deterministic force-settle layout,
+  pointer interaction,
   DPR-change-aware canvas. Both engines remain exempt from the single-yellow accent rule as
   data visualizations; `#fff676` still marks only the live position.
 - The tree derivation is pure and headless (`context-tree-data.ts`), unit-tested without

@@ -24,9 +24,10 @@ _Avoid_: Main view, editor, session pane (as the whole hub)
 
 **Context tree**:
 The collapsible band folded into the session header, beneath the title row and entity
-chips — a left-to-right tree of what the agent is actually holding in mind: root = amico,
-branches = the session's turns (one per user prompt, however many assistant messages it
-spans), leaves = the markdown, source, skills, and agents each turn pulled into context.
+chips — an organic graph of what the agent is actually holding in mind: root = amico at
+center, the session's turns orbiting it (one per user prompt, however many assistant
+messages it spans), and the markdown, source, skills, and agents each turn pulled into
+context clustering around their turn. Shared context sits between the turns that recall it.
 Interactive: clicking a file node opens the real file (project files as a session tab,
 vault files in the **Vault panel**). One per session view; absent until the session holds
 context, and absent on the Landing. See ADR 0003.
