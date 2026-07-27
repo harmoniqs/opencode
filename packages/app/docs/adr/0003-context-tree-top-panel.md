@@ -68,7 +68,10 @@ Entry points: a titlebar vault button (both titlebar variants), the command pale
 - Vault contents are proprietary knowledge, so browsing is a **local-researcher
   capability, not a server API**: the routes refuse on any non-loopback bind (same
   signal as the credential-mutation guard; `AMICO_VAULT_BROWSER=1` opts a shared
-  deployment in, `=0` forces off), and a mount can go fully dark with
-  `browse = false` in its `.amico-vault.toml` — the agent's read grants are unaffected.
+  deployment in, `=0` forces off, `=public` serves only public vaults — the
+  hackathon-box mode). Per-mount browsability is **fail-closed by kind** (Aaron
+  2026-07-27): personal and public browse by default; team/project/engagement —
+  and unknown kinds — ship dark until their marker says `browse = true`;
+  `browse = false` darkens any kind. The agent's read grants are unaffected.
 - Keyboard reachability of individual canvas nodes is an open follow-up; every action the
   canvas offers also exists via keyboard-reachable surfaces (file tree, Vault panel).
