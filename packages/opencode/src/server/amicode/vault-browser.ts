@@ -6,6 +6,7 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
+import { getBindHostname, isLoopbackHostname } from "./connections"
 
 const MAX_FILES = 5_000
 const MAX_DEPTH = 12
@@ -27,6 +28,35 @@ function vaultsRoot(): string {
 }
 
 const err = (code: string, detail: string) => JSON.stringify({ ok: false, error: `${code}: ${detail}` })
+
+/** Vault contents are proprietary knowledge (team mounts hold unpublished
+ *  results); browsing is a LOCAL-researcher capability, not a server API. Same
+ *  loopback family + bind signal as the credential-mutation guard
+ *  (connections.ts) — a 0.0.0.0 / LAN-bound server refuses these routes even
+ *  to authed callers, unless AMICO_VAULT_BROWSER=1 explicitly opts a shared
+ *  deployment in (=0 forces off everywhere). */
+export function browseAllowed(env: Record<string, string | undefined> = process.env): boolean {
+  const flag = env.AMICO_VAULT_BROWSER
+  if (flag === "1" || flag === "true") return true
+  if (flag === "0" || flag === "false") return false
+  return isLoopbackHostname(getBindHostname())
+}
+
+const browseRefusal = () =>
+  err("forbidden", "vault browsing serves loopback servers only (set AMICO_VAULT_BROWSER=1 to override)")
+
+/** A vault opts out of the browser entirely with `browse = false` in its
+ *  .amico-vault.toml marker — the agent's read grants are unaffected, but the
+ *  panel will not list or serve a byte of it. */
+export function browseOptedOut(dir: string): boolean {
+  try {
+    return /^\s*browse\s*=\s*false\s*$/m.test(readFileSync(path.join(dir, ".amico-vault.toml"), "utf8"))
+  } catch {
+    return false
+  }
+}
+
+const optOutRefusal = (mountId: string) => err("forbidden", `vault "${mountId}" opts out of browsing (browse = false)`)
 
 export function isTextFile(name: string): boolean {
   const ext = path.extname(name).toLowerCase()
@@ -68,9 +98,11 @@ export type VaultFileEntry = { path: string; name: string; size: number; readabl
  *  folds it into a tree). Dotfiles and machinery dirs are skipped; the vault's
  *  own `.amico-vault.toml` marker is machinery too. */
 export function vaultFilesBody(mountId: string | undefined, root: string = vaultsRoot()): string {
+  if (!browseAllowed()) return browseRefusal()
   if (!mountId) return err("bad_request", "mount is required")
   const dir = mountDir(mountId, root)
   if (!dir) return err("not_found", `no attached vault named "${mountId}"`)
+  if (browseOptedOut(dir)) return optOutRefusal(mountId)
   let realRoot: string
   try {
     realRoot = realpathSync(dir)
@@ -127,10 +159,12 @@ export function vaultFilesBody(mountId: string | undefined, root: string = vault
  *  both sides — mounts may themselves be symlinks (attachVault symlinks local
  *  vault dirs), so the containment check runs on resolved locations. */
 export function vaultFileBody(mountId: string | undefined, relPath: string | undefined, root: string = vaultsRoot()): string {
+  if (!browseAllowed()) return browseRefusal()
   if (!mountId) return err("bad_request", "mount is required")
   if (!relPath) return err("bad_request", "path is required")
   const dir = mountDir(mountId, root)
   if (!dir) return err("not_found", `no attached vault named "${mountId}"`)
+  if (browseOptedOut(dir)) return optOutRefusal(mountId)
   let realRoot: string
   let realTarget: string
   try {

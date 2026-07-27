@@ -65,5 +65,10 @@ Entry points: a titlebar vault button (both titlebar variants), the command pale
   the sync store; `brain-ref` now carries the full file path so nodes can open files.
 - The vault routes are read-only and refuse path escapes even through symlinks; binaries
   are listed but marked unreadable, so the tree still shows the vault's true shape.
+- Vault contents are proprietary knowledge, so browsing is a **local-researcher
+  capability, not a server API**: the routes refuse on any non-loopback bind (same
+  signal as the credential-mutation guard; `AMICO_VAULT_BROWSER=1` opts a shared
+  deployment in, `=0` forces off), and a mount can go fully dark with
+  `browse = false` in its `.amico-vault.toml` — the agent's read grants are unaffected.
 - Keyboard reachability of individual canvas nodes is an open follow-up; every action the
   canvas offers also exists via keyboard-reachable surfaces (file tree, Vault panel).

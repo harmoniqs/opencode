@@ -1,8 +1,14 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { isTextFile, mountDir, vaultFileBody, vaultFilesBody } from "@/server/amicode/vault-browser"
+import { browseAllowed, browseOptedOut, isTextFile, mountDir, vaultFileBody, vaultFilesBody } from "@/server/amicode/vault-browser"
+import { setBindHostname } from "@/server/amicode/connections"
+
+// The suite runs with no listener bound (bindHostname undefined = in-process,
+// loopback-equivalent), so the browse gate is open by default; gate tests
+// simulate exposed binds explicitly and restore after.
+afterEach(() => setBindHostname(undefined))
 
 /** A vaults root with one mount ("armonia-test") holding a small vault. */
 function fixtureRoot() {
@@ -19,6 +25,37 @@ function fixtureRoot() {
   writeFileSync(path.join(mount, "node_modules", "junk", "x.js"), "junk")
   return { root, mount }
 }
+
+describe("browse gates (proprietary vaults never serve off-box)", () => {
+  test("loopback / in-process binds may browse; exposed binds may not", () => {
+    expect(browseAllowed({})).toBe(true) // undefined bind = in-process
+    setBindHostname("127.0.0.1")
+    expect(browseAllowed({})).toBe(true)
+    setBindHostname("0.0.0.0")
+    expect(browseAllowed({})).toBe(false)
+    setBindHostname("192.168.1.20")
+    expect(browseAllowed({})).toBe(false)
+  })
+  test("AMICO_VAULT_BROWSER overrides in both directions", () => {
+    setBindHostname("0.0.0.0")
+    expect(browseAllowed({ AMICO_VAULT_BROWSER: "1" })).toBe(true)
+    setBindHostname("127.0.0.1")
+    expect(browseAllowed({ AMICO_VAULT_BROWSER: "0" })).toBe(false)
+  })
+  test("an exposed bind refuses both routes with the forbidden body", () => {
+    const { root } = fixtureRoot()
+    setBindHostname("0.0.0.0")
+    expect(JSON.parse(vaultFilesBody("armonia-test", root)).error).toMatch(/^forbidden: vault browsing/)
+    expect(JSON.parse(vaultFileBody("armonia-test", "STRATEGY.md", root)).error).toMatch(/^forbidden: vault browsing/)
+  })
+  test("browse = false in the marker darkens the mount for listing AND reads", () => {
+    const { root, mount } = fixtureRoot()
+    writeFileSync(path.join(mount, ".amico-vault.toml"), 'kind = "team"\nname = "armonia-test"\nbrowse = false\n')
+    expect(browseOptedOut(mount)).toBe(true)
+    expect(JSON.parse(vaultFilesBody("armonia-test", root)).error).toMatch(/^forbidden: vault "armonia-test" opts out/)
+    expect(JSON.parse(vaultFileBody("armonia-test", "STRATEGY.md", root)).error).toMatch(/^forbidden:/)
+  })
+})
 
 describe("isTextFile", () => {
   test("markdown and source are text; binaries are not", () => {
