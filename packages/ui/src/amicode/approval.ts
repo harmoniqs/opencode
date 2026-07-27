@@ -1,0 +1,112 @@
+// AMICODE: approval-card logic (spec-20260727-164748 §9.5). Pure — no transport,
+// no rendering — mirroring ./ask.ts beside ./ask-card.tsx and ./ask-bridge.ts.
+//
+// A capability warrant is what lets a gated launch through amico-run's --spec gate.
+// The card is where a human mints one. Two properties are inherited from the ask
+// card deliberately, and one is deliberately NOT:
+//
+//   INHERITED — the read-only interlock. ask-bridge renders buttons disabled when
+//   no bridge is registered ("questions never submit from read-only surfaces"), so
+//   an approval is non-actionable on a share page or headless host by construction
+//   rather than by a check someone has to remember.
+//
+//   INHERITED — state derived from the durable log, never stored in the UI. The ask
+//   card computes answered-ness from message order (hasUserReplyAfter) instead of
+//   holding a flag, which makes it replay-correct. Here the durable log is the
+//   ledger: the card's state is a function of the approval records that exist.
+//
+//   NOT INHERITED — the transport. The ask card submits the chosen option as the
+//   user's next CHAT MESSAGE. An approval delivered that way would be interpreted
+//   by the agent, which would then write the ledger row, making the provenance read
+//   "the agent says the user approved". Approvals go straight to the ledger via
+//   ./approval-bridge.ts (→ `amico ledger approve`).
+
+/** What a warrant may authorise — the fleet spec §2.1 vocabulary for `device`. */
+export interface WarrantBounds {
+  max_solves?: number;
+  tier?: string;
+  max_duration_s?: number;
+  device?: "none" | "ro" | "rw";
+}
+
+/** The agent's ask: "approve this plan, with these bounds, for this reason." */
+export interface ApprovalRequest {
+  plan_hash: string;
+  bounds: WarrantBounds;
+  rationale?: string;
+}
+
+/** An `approval` ledger row, as surfaced to the UI. */
+export interface Warrant {
+  plan_hash: string;
+  bounds: WarrantBounds;
+  expires_at: string;
+  issued_by: string;
+}
+
+export type ApprovalState =
+  /** No transport registered — share page, headless embed. Never actionable. */
+  | { kind: "unavailable" }
+  /** No live warrant for this plan. The one actionable state. */
+  | { kind: "pending" }
+  /** A live warrant exists. Locked; `warrant` carries what was ACTUALLY granted,
+   *  which may be narrower than what was requested. */
+  | { kind: "granted"; warrant: Warrant }
+  /** A warrant existed and lapsed. Actionable again — re-approving is a new bet. */
+  | { kind: "expired"; warrant: Warrant };
+
+function expiryMs(w: Warrant): number {
+  const t = Date.parse(w.expires_at);
+  // An unparseable expiry is treated as ALREADY EXPIRED: a warrant whose lifetime
+  // cannot be established must not read as live. Same fail-closed direction the
+  // gate applies to an unresolved estimate (spec §4.4).
+  return Number.isNaN(t) ? -Infinity : t;
+}
+
+/** The newest live warrant for `planHash`, else the newest lapsed one, else none. */
+export function warrantFor(planHash: string, warrants: readonly Warrant[], now: number): Warrant | undefined {
+  let live: Warrant | undefined;
+  let lapsed: Warrant | undefined;
+  for (const w of warrants) {
+    if (w.plan_hash !== planHash) continue;
+    const exp = expiryMs(w);
+    if (exp > now) {
+      if (!live || exp > expiryMs(live)) live = w;
+    } else if (!lapsed || exp > expiryMs(lapsed)) lapsed = w;
+  }
+  return live ?? lapsed;
+}
+
+/** Derive the card's state. Deliberately does NOT check whether the warrant's
+ *  bounds COVER the request — that verdict belongs to the gate (spec §5.1 rule 2),
+ *  and a card that second-guessed it would either contradict the gate or imply an
+ *  authority it does not have. The card reports what was granted; the gate decides
+ *  what that permits. */
+export function approvalState(
+  request: ApprovalRequest,
+  warrants: readonly Warrant[],
+  now: number,
+  hasBridge: boolean,
+): ApprovalState {
+  if (!hasBridge) return { kind: "unavailable" };
+  const w = warrantFor(request.plan_hash, warrants, now);
+  if (!w) return { kind: "pending" };
+  return expiryMs(w) > now ? { kind: "granted", warrant: w } : { kind: "expired", warrant: w };
+}
+
+/** True when the approve control may be pressed. */
+export function isActionable(state: ApprovalState): boolean {
+  return state.kind === "pending" || state.kind === "expired";
+}
+
+/** One-line summary of bounds for the card and the rail. Renders only DECLARED
+ *  bounds — an absent bound is not "unlimited" (the gate refuses a launch needing a
+ *  bound the warrant omits), so inventing a word for absence would mislead. */
+export function boundsText(bounds: WarrantBounds): string {
+  const parts: string[] = [];
+  if (bounds.max_solves !== undefined) parts.push(`${bounds.max_solves} solve${bounds.max_solves === 1 ? "" : "s"}`);
+  if (bounds.tier !== undefined) parts.push(`tier ${bounds.tier}`);
+  if (bounds.max_duration_s !== undefined) parts.push(`${Math.round(bounds.max_duration_s / 60)} min`);
+  if (bounds.device !== undefined) parts.push(`device ${bounds.device}`);
+  return parts.length ? parts.join(" · ") : "no bounds declared";
+}
