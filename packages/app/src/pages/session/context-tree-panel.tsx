@@ -27,6 +27,24 @@ import { createOpenSessionFileTab } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
 
 const OPEN_KEY = "amicode-context-tree-open"
+
+/** The panel's session gate, shared with the timeline header so its bottom
+ *  padding can defer to the tree block when the tree will render: ≥1 commit
+ *  touch anywhere in the session (same refs the tree charts). */
+export function sessionHasContextItems(
+  messages: readonly { id: string; role?: string }[],
+  partsFor: (messageID: string) => readonly { type?: string; tool?: string; state?: { input?: unknown } }[],
+): boolean {
+  for (const m of messages) {
+    if (m.role !== "assistant") continue
+    for (const p of partsFor(m.id) ?? []) {
+      if (p?.type !== "tool" || typeof p.tool !== "string") continue
+      const ref = amicoBrainRef(p.tool, (p.state?.input as Record<string, unknown>) ?? {})
+      if (ref && !ref.consider) return true
+    }
+  }
+  return false
+}
 const LEGEND: { kind: ContextTreeKind; label: string }[] = [
   { kind: "note", label: "notes" },
   { kind: "source", label: "source" },
@@ -62,23 +80,31 @@ function ContextTreeFrame(props: { sessionID: string }) {
     return ""
   }
 
-  // the session's turns: every assistant message that committed ≥1 touch
+  // the session's turns: ONE branch per user prompt. A single ask can span
+  // several assistant messages (continuation steps), and charting per
+  // assistant message drew duplicate roman-numeral branches carrying the
+  // same prompt excerpt — group by the parent user message instead.
   const turns = createMemo<ContextTurn[]>(() => {
+    const byPrompt = new Map<string, ContextTurn>()
     const out: ContextTurn[] = []
     for (const m of messages()) {
       if (m.role !== "assistant") continue
-      const refs: ContextTurn["refs"] = []
+      const key = m.parentID ?? m.id
+      let turn = byPrompt.get(key)
+      if (!turn) {
+        turn = { id: key, title: turnTitle(m.parentID), refs: [], busy: false }
+        byPrompt.set(key, turn)
+        out.push(turn)
+      }
       for (const p of getParts(m.id)) {
         if (p.type !== "tool") continue
         const ref = amicoBrainRef(p.tool, p.state.input ?? {})
         if (!ref || ref.consider) continue
-        refs.push(ref)
+        turn.refs.push(ref)
       }
-      if (!refs.length) continue
-      const done = typeof m.time?.completed === "number"
-      out.push({ id: m.id, title: turnTitle(m.parentID), refs, busy: !done && busy() })
+      if (typeof m.time?.completed !== "number" && busy()) turn.busy = true
     }
-    return out
+    return out.filter((t) => t.refs.length > 0)
   })
 
   const itemCount = createMemo(() => {
@@ -155,12 +181,19 @@ function ContextTreeFrame(props: { sessionID: string }) {
     else brain.pause()
   })
 
+  const hasItems = createMemo(() => itemCount() > 0)
+
   return (
-    <div
-      data-component="amico-context-tree"
-      class="mx-2 mt-2 shrink-0 overflow-hidden rounded-xl border border-border-weaker-base bg-background-base"
-    >
-      <div class="flex h-8 items-center gap-2 px-3">
+    // folded into the sticky session header (Kate, 2026-07-27): no card
+    // chrome of its own — a hairline seam + the header's solid ground (the
+    // canvas must not sit on the header's fade-to-transparent gradient).
+    // Absent entirely until the session holds ≥1 context item.
+    <Show when={hasItems()}>
+      <div
+        data-component="amico-context-tree"
+        class="mt-1 overflow-hidden border-t border-border-weaker-base bg-background-stronger"
+      >
+        <div class="flex h-8 items-center gap-2 px-3">
         <div class="text-12-medium text-text-base">{language.t("amicode.contextTree.title")}</div>
         <div class="text-12-regular text-text-weak">
           {language.t("amicode.contextTree.count", { count: itemCount() })}
@@ -216,6 +249,7 @@ function ContextTreeFrame(props: { sessionID: string }) {
           class="block h-full w-full"
         />
       </div>
-    </div>
+      </div>
+    </Show>
   )
 }

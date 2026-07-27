@@ -23,12 +23,13 @@ another surface, only overlaid. There is no view in which the Chat is absent.
 _Avoid_: Main view, editor, session pane (as the whole hub)
 
 **Context tree**:
-The pinned, collapsible top panel between the session header and the **Chat** — a
-left-to-right tree of what the agent is actually holding in mind: root = amico, branches =
-the session's turns, leaves = the markdown, source, skills, and agents each turn pulled
-into context. Interactive: clicking a file node opens the real file (project files as a
-session tab, vault files in the **Vault panel**). One per session view; absent on the
-Landing. See ADR 0003.
+The collapsible band folded into the session header, beneath the title row and entity
+chips — a left-to-right tree of what the agent is actually holding in mind: root = amico,
+branches = the session's turns (one per user prompt, however many assistant messages it
+spans), leaves = the markdown, source, skills, and agents each turn pulled into context.
+Interactive: clicking a file node opens the real file (project files as a session tab,
+vault files in the **Vault panel**). One per session view; absent until the session holds
+context, and absent on the Landing. See ADR 0003.
 _Avoid_: Brain (that was the ambient, non-interactive strip), knowledge graph, minimap
 
 **Vault panel**:

@@ -20,6 +20,7 @@ import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { AmicodeEntityRail, sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-entity-rail"
+import { ContextTreePanel, sessionHasContextItems } from "@/pages/session/context-tree-panel"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -455,9 +456,11 @@ export function MessageTimeline(props: {
   })
   const parentTitle = createMemo(() => sessionTitle(parent()?.title) ?? language.t("command.session.new"))
   const getMsgParts = (msgId: string) => sync.data.part[msgId] ?? emptyParts
-  // the same session gate the entity rail applies internally — drives the
-  // header's chip padding so it collapses when no rail will render
+  // the same session gates the rail and context tree apply internally — they
+  // drive the header's bottom padding: the tree block closes the header when
+  // present, chips need their seat otherwise
   const entityRailVisible = createMemo(() => sessionHasAmicodeParts(sessionMessages(), getMsgParts))
+  const contextTreeVisible = createMemo(() => sessionHasContextItems(sessionMessages(), getMsgParts))
   const childTaskDescription = createMemo(() => {
     const id = sessionID()
     if (!id) return
@@ -1408,10 +1411,11 @@ export function MessageTimeline(props: {
             classList={{
               "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)] backdrop-blur-[10px]": true,
               "w-full": true,
-              // the tall padding exists to seat the entity-chip rail; a session
-              // that will never render chips keeps only a slim fade tail
-              "pb-4": entityRailVisible(),
-              "pb-2": !entityRailVisible(),
+              // the tall padding exists to seat the entity-chip rail; the
+              // context-tree block closes the header itself when it renders,
+              // and a session with neither keeps only a slim fade tail
+              "pb-4": entityRailVisible() && !contextTreeVisible(),
+              "pb-2": !entityRailVisible() && !contextTreeVisible(),
               "pl-2 pr-3 md:pl-4 md:pr-3": true,
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
             }}
@@ -1743,6 +1747,9 @@ export function MessageTimeline(props: {
                 void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
               }}
             />
+            {/* amicode: the context tree, folded into the header (ADR 0003) —
+                closes the sticky block beneath the title row + chip rail */}
+            <ContextTreePanel sessionID={sessionID()} />
           </div>
         </Show>
         <Show when={scrollRoot()}>
