@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { browseAllowed, browseOptedOut, isTextFile, mountDir, vaultFileBody, vaultFilesBody } from "@/server/amicode/vault-browser"
+import { browseAllowed, mountBrowseRefusal, mountMeta, isTextFile, mountDir, vaultFileBody, vaultFilesBody } from "@/server/amicode/vault-browser"
 import { setBindHostname } from "@/server/amicode/connections"
 
 // The suite runs with no listener bound (bindHostname undefined = in-process,
@@ -50,10 +50,45 @@ describe("browse gates (proprietary vaults never serve off-box)", () => {
   })
   test("browse = false in the marker darkens the mount for listing AND reads", () => {
     const { root, mount } = fixtureRoot()
-    writeFileSync(path.join(mount, ".amico-vault.toml"), 'kind = "team"\nname = "armonia-test"\nbrowse = false\n')
-    expect(browseOptedOut(mount)).toBe(true)
+    writeFileSync(path.join(mount, ".amico-vault.toml"), 'kind = "personal"\nname = "armonia-test"\nbrowse = false\n')
+    expect(mountMeta(mount).browse).toBe(false)
     expect(JSON.parse(vaultFilesBody("armonia-test", root)).error).toMatch(/^forbidden: vault "armonia-test" opts out/)
     expect(JSON.parse(vaultFileBody("armonia-test", "STRATEGY.md", root)).error).toMatch(/^forbidden:/)
+  })
+})
+
+describe("fail-closed by kind (Aaron 2026-07-27): shared vaults ship dark", () => {
+  const marker = (mount: string, body: string) => writeFileSync(path.join(mount, ".amico-vault.toml"), body)
+  test("team/project/engagement/unknown kinds refuse by default; browse = true is the opt-in", () => {
+    const { root, mount } = fixtureRoot()
+    for (const kind of ["team", "project", "engagement", "restricted", ""]) {
+      marker(mount, `kind = "${kind}"\nname = "armonia-test"\n`)
+      const out = JSON.parse(vaultFilesBody("armonia-test", root))
+      expect(out.ok).toBe(false)
+      expect(out.error).toMatch(/browsing is opt-in for shared vaults/)
+    }
+    marker(mount, 'kind = "team"\nname = "armonia-test"\nbrowse = true\n')
+    expect(JSON.parse(vaultFilesBody("armonia-test", root)).ok).toBe(true)
+  })
+  test("personal and public stay browsable by default", () => {
+    const { root, mount } = fixtureRoot()
+    for (const kind of ["personal", "public"]) {
+      marker(mount, `kind = "${kind}"\nname = "armonia-test"\n`)
+      expect(JSON.parse(vaultFilesBody("armonia-test", root)).ok).toBe(true)
+    }
+  })
+  test("AMICO_VAULT_BROWSER=public serves ONLY public mounts, markers ignored (hackathon boxes)", () => {
+    const { mount } = fixtureRoot()
+    const env = { AMICO_VAULT_BROWSER: "public" }
+    marker(mount, 'kind = "team"\nname = "armonia-test"\nbrowse = true\n')
+    expect(mountBrowseRefusal("armonia-test", mount, env)).toMatch(/serves public vaults only/)
+    marker(mount, 'kind = "personal"\nname = "armonia-test"\n')
+    expect(mountBrowseRefusal("armonia-test", mount, env)).toMatch(/serves public vaults only/)
+    marker(mount, 'kind = "public"\nname = "armonia-test"\n')
+    expect(mountBrowseRefusal("armonia-test", mount, env)).toBeUndefined()
+    // and =public also opens the deployment gate (the boxes are exposed binds)
+    setBindHostname("0.0.0.0")
+    expect(browseAllowed(env)).toBe(true)
   })
 })
 

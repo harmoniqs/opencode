@@ -33,11 +33,13 @@ const err = (code: string, detail: string) => JSON.stringify({ ok: false, error:
  *  results); browsing is a LOCAL-researcher capability, not a server API. Same
  *  loopback family + bind signal as the credential-mutation guard
  *  (connections.ts) — a 0.0.0.0 / LAN-bound server refuses these routes even
- *  to authed callers, unless AMICO_VAULT_BROWSER=1 explicitly opts a shared
- *  deployment in (=0 forces off everywhere). */
+ *  to authed callers, unless AMICO_VAULT_BROWSER explicitly opts the
+ *  deployment in: =1 opens the deployment gate (per-mount rules still apply),
+ *  =0 forces off everywhere, =public serves ONLY kind="public" mounts
+ *  regardless of markers (the hackathon-box mode — Aaron 2026-07-27). */
 export function browseAllowed(env: Record<string, string | undefined> = process.env): boolean {
   const flag = env.AMICO_VAULT_BROWSER
-  if (flag === "1" || flag === "true") return true
+  if (flag === "1" || flag === "true" || flag === "public") return true
   if (flag === "0" || flag === "false") return false
   return isLoopbackHostname(getBindHostname())
 }
@@ -45,18 +47,49 @@ export function browseAllowed(env: Record<string, string | undefined> = process.
 const browseRefusal = () =>
   err("forbidden", "vault browsing serves loopback servers only (set AMICO_VAULT_BROWSER=1 to override)")
 
-/** A vault opts out of the browser entirely with `browse = false` in its
- *  .amico-vault.toml marker — the agent's read grants are unaffected, but the
- *  panel will not list or serve a byte of it. */
-export function browseOptedOut(dir: string): boolean {
+/** The mount's marker taxonomy: kind plus the explicit browse override. */
+export function mountMeta(dir: string): { kind: string; browse: boolean | undefined } {
   try {
-    return /^\s*browse\s*=\s*false\s*$/m.test(readFileSync(path.join(dir, ".amico-vault.toml"), "utf8"))
+    const text = readFileSync(path.join(dir, ".amico-vault.toml"), "utf8")
+    const kind = text.match(/^\s*kind\s*=\s*"([^"]*)"/m)?.[1] ?? ""
+    const browse = /^\s*browse\s*=\s*false\s*$/m.test(text)
+      ? false
+      : /^\s*browse\s*=\s*true\s*$/m.test(text)
+        ? true
+        : undefined
+    return { kind, browse }
   } catch {
-    return false
+    return { kind: "", browse: undefined }
   }
 }
 
-const optOutRefusal = (mountId: string) => err("forbidden", `vault "${mountId}" opts out of browsing (browse = false)`)
+/** Browsability is FAIL-CLOSED BY KIND (Aaron 2026-07-27): the marker already
+ *  carries the taxonomy, so team/project/engagement/restricted — and anything
+ *  with an unknown kind — ship dark by default; `browse = true` is the
+ *  deliberate opt-in. Personal stays browsable (it is the operator's own
+ *  machine) and public is browsable by definition. `browse = false` darkens
+ *  any kind. Under AMICO_VAULT_BROWSER=public, ONLY public mounts serve,
+ *  markers ignored. Returns a refusal body, or undefined when browsable.
+ *  The agent's read grants are unaffected either way. */
+export function mountBrowseRefusal(
+  mountId: string,
+  dir: string,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const meta = mountMeta(dir)
+  if (env.AMICO_VAULT_BROWSER === "public") {
+    if (meta.kind !== "public")
+      return err("forbidden", `vault "${mountId}" is not public — this deployment serves public vaults only`)
+    return undefined
+  }
+  if (meta.browse === false) return err("forbidden", `vault "${mountId}" opts out of browsing (browse = false)`)
+  if (meta.browse === true) return undefined
+  if (meta.kind === "personal" || meta.kind === "public") return undefined
+  return err(
+    "forbidden",
+    `vault "${mountId}" is kind "${meta.kind || "unknown"}" — browsing is opt-in for shared vaults (browse = true in its marker)`,
+  )
+}
 
 export function isTextFile(name: string): boolean {
   const ext = path.extname(name).toLowerCase()
@@ -102,7 +135,8 @@ export function vaultFilesBody(mountId: string | undefined, root: string = vault
   if (!mountId) return err("bad_request", "mount is required")
   const dir = mountDir(mountId, root)
   if (!dir) return err("not_found", `no attached vault named "${mountId}"`)
-  if (browseOptedOut(dir)) return optOutRefusal(mountId)
+  const refusal = mountBrowseRefusal(mountId, dir)
+  if (refusal) return refusal
   let realRoot: string
   try {
     realRoot = realpathSync(dir)
@@ -164,7 +198,8 @@ export function vaultFileBody(mountId: string | undefined, relPath: string | und
   if (!relPath) return err("bad_request", "path is required")
   const dir = mountDir(mountId, root)
   if (!dir) return err("not_found", `no attached vault named "${mountId}"`)
-  if (browseOptedOut(dir)) return optOutRefusal(mountId)
+  const refusal = mountBrowseRefusal(mountId, dir)
+  if (refusal) return refusal
   let realRoot: string
   let realTarget: string
   try {
