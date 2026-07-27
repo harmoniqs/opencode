@@ -19,7 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
-import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { AmicodeEntityRail, sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-entity-rail"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -455,6 +455,9 @@ export function MessageTimeline(props: {
   })
   const parentTitle = createMemo(() => sessionTitle(parent()?.title) ?? language.t("command.session.new"))
   const getMsgParts = (msgId: string) => sync.data.part[msgId] ?? emptyParts
+  // the same session gate the entity rail applies internally — drives the
+  // header's chip padding so it collapses when no rail will render
+  const entityRailVisible = createMemo(() => sessionHasAmicodeParts(sessionMessages(), getMsgParts))
   const childTaskDescription = createMemo(() => {
     const id = sessionID()
     if (!id) return
@@ -1405,7 +1408,10 @@ export function MessageTimeline(props: {
             classList={{
               "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)] backdrop-blur-[10px]": true,
               "w-full": true,
-              "pb-4": true,
+              // the tall padding exists to seat the entity-chip rail; a session
+              // that will never render chips keeps only a slim fade tail
+              "pb-4": entityRailVisible(),
+              "pb-2": !entityRailVisible(),
               "pl-2 pr-3 md:pl-4 md:pr-3": true,
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
             }}

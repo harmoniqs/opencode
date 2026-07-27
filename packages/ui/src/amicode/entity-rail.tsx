@@ -32,6 +32,33 @@ interface RailPartState {
   output?: string
 }
 
+function countAmicodeParts(
+  messages: readonly { id: string }[],
+  partsFor: (messageID: string) => readonly RailPart[] | undefined,
+): { any: number; completed: number } {
+  let any = 0
+  let completed = 0
+  for (const message of messages) {
+    for (const part of partsFor(message.id) ?? []) {
+      if (part?.type !== "tool" || typeof part.tool !== "string") continue
+      if (!part.tool.startsWith("amicode_")) continue
+      any++
+      if (part.state?.status === "completed") completed++
+    }
+  }
+  return { any, completed }
+}
+
+/** The rail's session gate, exported so the host chrome can collapse the
+ *  header's chip padding when the rail will not render (no amicode parts —
+ *  the title otherwise sits over an empty reserved band). */
+export function sessionHasAmicodeParts(
+  messages: readonly { id: string }[],
+  partsFor: (messageID: string) => readonly RailPart[] | undefined,
+): boolean {
+  return countAmicodeParts(messages, partsFor).any > 0
+}
+
 interface RailPart {
   type?: string
   tool?: string
@@ -92,19 +119,7 @@ export function AmicodeEntityRail(props: {
   // exposes are all in scope.
 
   // Session gate + refetch key: completed amicode parts bump the counter → refetch.
-  const amicodeParts = createMemo(() => {
-    let any = 0
-    let completed = 0
-    for (const message of props.messages) {
-      for (const part of props.partsFor(message.id) ?? []) {
-        if (part?.type !== "tool" || typeof part.tool !== "string") continue
-        if (!part.tool.startsWith("amicode_")) continue
-        any++
-        if (part.state?.status === "completed") completed++
-      }
-    }
-    return { any, completed }
-  })
+  const amicodeParts = createMemo(() => countAmicodeParts(props.messages, props.partsFor))
 
   const [problemRaw, { refetch }] = createResource(
     () => (amicodeParts().any > 0 ? amicodeParts().completed + 1 : undefined),
