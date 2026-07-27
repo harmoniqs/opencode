@@ -1065,7 +1065,7 @@ function LibraryCard(props: {
           : "Make Amico smarter"}
       </div>
       <div style={CARD_SUB}>{error() ?? props.library?.latestName ?? "upload papers — Amico learns your work"}</div>
-      <div style={{ display: "flex", gap: "10px", "align-items": "center", "margin-top": "auto" }}>
+      <div style={{ display: "flex", "flex-direction": "column", gap: "8px", "align-items": "flex-start", "margin-top": "auto" }}>
         <button
           type="button"
           data-slot="amicode-card-library-upload"
