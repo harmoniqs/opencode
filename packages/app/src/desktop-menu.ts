@@ -148,15 +148,19 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       { type: "item", label: "Reload", action: "view.reload", role: "reload" },
       { type: "item", label: "Toggle Developer Tools", action: "view.toggleDevTools", role: "toggleDevTools" },
       { type: "separator" },
+      // action-only, no native role: on macOS a role becomes Electron's own
+      // zoom (multiplicative levels, no zoom-factor-changed event) while the
+      // renderer keydown ALSO handles Cmd+=/-/0 — two systems fighting over
+      // one chord, with the titlebar/terminal reading a stale factor. The
+      // action path is the single implementation on every platform.
       {
         type: "item",
         label: "Actual Size",
         action: "view.resetZoom",
-        role: "resetZoom",
-        accelerator: { windows: "Ctrl+0" },
+        accelerator: { macos: "Cmd+0", windows: "Ctrl+0" },
       },
-      { type: "item", label: "Zoom In", action: "view.zoomIn", role: "zoomIn", accelerator: { windows: "Ctrl++" } },
-      { type: "item", label: "Zoom Out", action: "view.zoomOut", role: "zoomOut", accelerator: { windows: "Ctrl+-" } },
+      { type: "item", label: "Zoom In", action: "view.zoomIn", accelerator: { macos: "Cmd+=", windows: "Ctrl++" } },
+      { type: "item", label: "Zoom Out", action: "view.zoomOut", accelerator: { macos: "Cmd+-", windows: "Ctrl+-" } },
       { type: "separator" },
       { type: "item", label: "Toggle Full Screen", action: "view.toggleFullscreen", role: "togglefullscreen" },
     ],

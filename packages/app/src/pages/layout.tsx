@@ -15,6 +15,8 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
+import { VaultPanel } from "@/components/vault-panel"
+import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -1001,6 +1003,34 @@ export default function Layout(props: ParentProps) {
         keybind: "mod+comma",
         onSelect: () => openSettings(),
       },
+      // web host only: the desktop build zooms through Electron (menu roles
+      // were retired for the action path), and registering the same chords
+      // here would double-fire against its renderer keydown handler
+      ...(platform.platform === "web"
+        ? [
+            {
+              id: "view.zoomIn",
+              title: language.t("amicode.zoomIn"),
+              category: language.t("command.category.view"),
+              keybind: "mod+=",
+              onSelect: () => webZoomIn(),
+            },
+            {
+              id: "view.zoomOut",
+              title: language.t("amicode.zoomOut"),
+              category: language.t("command.category.view"),
+              keybind: "mod+-",
+              onSelect: () => webZoomOut(),
+            },
+            {
+              id: "view.zoomReset",
+              title: language.t("amicode.zoomReset"),
+              category: language.t("command.category.view"),
+              keybind: "mod+0",
+              onSelect: () => webZoomReset(),
+            },
+          ]
+        : []),
       ...(platform.platform === "desktop" && platform.exportDebugLogs
         ? [
             {
@@ -2285,6 +2315,7 @@ export default function Layout(props: ParentProps) {
               {props.children}
             </Show>
           </main>
+          <VaultPanel />
           <ToastRegion v2={newDesign()} />
         </div>
       }
@@ -2437,6 +2468,7 @@ export default function Layout(props: ParentProps) {
             </div>
           </div>
         </div>
+        <VaultPanel />
         <ToastRegion v2={newDesign()} />
       </div>
     </Show>

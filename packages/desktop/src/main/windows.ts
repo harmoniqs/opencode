@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import type { TitlebarTheme } from "../preload/types"
 import { exportDebugLogs, write as writeLog } from "./logging"
 import { getStore } from "./store"
-import { PINCH_ZOOM_ENABLED_KEY } from "./store-keys"
+import { PINCH_ZOOM_ENABLED_KEY, ZOOM_FACTOR_KEY } from "./store-keys"
 import { createUnresponsiveSampler } from "./unresponsive"
 
 const root = dirname(fileURLToPath(import.meta.url))
@@ -390,7 +390,10 @@ function isRendererUrl(value?: string, html = false) {
 
 function wireZoom(win: BrowserWindow) {
   pinchZoomEnabled.set(win, getPinchZoomEnabled())
-  win.webContents.setZoomFactor(1)
+  // restore the saved zoom instead of hard-resetting to 100% — losing the
+  // zoom level on every relaunch/new window was the "my zoom keeps
+  // resetting" report
+  win.webContents.setZoomFactor(getSavedZoom())
   win.webContents.on("zoom-changed", (event, zoomDirection) => {
     event.preventDefault()
     if (pinchZoomEnabled.get(win)) {
@@ -407,9 +410,17 @@ function clampZoom(value: number) {
   return Math.min(Math.max(value, minZoomLevel), maxZoomLevel)
 }
 
-function updateZoom(win: BrowserWindow) {
+function getSavedZoom(): number {
+  const saved = getStore().get(ZOOM_FACTOR_KEY)
+  return typeof saved === "number" && Number.isFinite(saved) ? clampZoom(saved) : 1
+}
+
+/** The single choke point after a zoom change: titlebar overlay, the
+ *  renderer's zoom signal, and persistence all stay in sync through here. */
+export function updateZoom(win: BrowserWindow) {
   updateTitlebar(win)
   win.webContents.send("zoom-factor-changed", win.webContents.getZoomFactor())
+  getStore().set(ZOOM_FACTOR_KEY, win.webContents.getZoomFactor())
 }
 
 function upsertKeyValue(obj: Record<string, any>, keyToChange: string, value: any) {

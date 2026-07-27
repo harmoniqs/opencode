@@ -22,17 +22,21 @@ other surface opens beside or in front of the Chat; the Chat is never replaced b
 another surface, only overlaid. There is no view in which the Chat is absent.
 _Avoid_: Main view, editor, session pane (as the whole hub)
 
-**Brain**:
-The data-true living background of the **Chat** — a map of the current session's thought that
-fills the Chat behind every component and is never interactive. One per window, present wherever
-the Chat is (Landing included) and nowhere else.
-_Avoid_: Background, wallpaper, atmosphere, brain strip, canvas
+**Context tree**:
+The pinned, collapsible top panel between the session header and the **Chat** — a
+left-to-right tree of what the agent is actually holding in mind: root = amico, branches =
+the session's turns, leaves = the markdown, source, skills, and agents each turn pulled
+into context. Interactive: clicking a file node opens the real file (project files as a
+session tab, vault files in the **Vault panel**). One per session view; absent on the
+Landing. See ADR 0003.
+_Avoid_: Brain (that was the ambient, non-interactive strip), knowledge graph, minimap
 
-**Glass**:
-The frosted, translucent surface every chat component floats on above the **Brain** — tinted
-just enough that text stays legible over the moving graph. (How the blur and tint are derived
-is an ADR-0002 concern, not a glossary one.)
-_Avoid_: Card background, frosted panel, blur layer, tier
+**Vault panel**:
+The dismissible drawer that puts the vault — every attached mount and every file inside
+it — in the interface. Read-only browsing with inline markdown/source rendering; opened
+from the titlebar vault button, the command palette, or a **Context tree** click on a
+vault node.
+_Avoid_: Vaults tab (that is the mount *list* in status), file manager, explorer
 
 **Rail**:
 The one narrow vertical strip of icons along the window's leading edge. Collapsed to
@@ -80,9 +84,10 @@ only surfaces its state), setup wall
 ## Relationships
 
 - The **Landing** is a **Chat**; the window never opens on anything else.
-- The **Brain** is the background of the **Chat** and only the Chat; every chat component
-  floats on **Glass** above it, while the **Rail**, titlebar, and **Panels** stay solid and
-  frame the living pane.
+- The **Context tree** sits above the **Chat** and belongs to one session; the **Vault
+  panel** belongs to the window and opens beside whatever Chat is showing. A Context-tree
+  click on a vault node opens the Vault panel on that file — the two surfaces reference
+  each other but neither owns the other.
 - Every **Rail surface** opens as a **Panel** beside the **Chat**; the Chat is never
   replaced, only overlaid, and at most one Panel is open at a time.
 - The **Rail** carries navigation surfaces above and the **Account zone** below; both
@@ -115,6 +120,8 @@ reader meeting them in older code or notes should map them forward:
   a possible future, not part of this redesign. See ADR 0001.
 - **Home cards** "Meet Amico" and "Jump back in" → folded into the first-run Landing and
   the Chats surface respectively; they are no longer standalone surfaces.
-- **Inline brain strip** (the Brain as a single row inside the message timeline) → absorbed
-  into the **Brain** background. One render loop, promoted from a timeline row to the room;
-  the timeline keeps only its text shimmer. See ADR 0002.
+- **Brain** (the ambient session map — first an inline timeline strip, then ADR 0002's
+  proposed chat-wide background) → superseded by the **Context tree** top panel. The
+  background direction was parked (ADR 0003); the strip row is deleted; the ambient engine
+  survives as a library only. **Glass** (the frosted card surface of the background design)
+  retires with it.

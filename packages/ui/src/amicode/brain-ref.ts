@@ -5,7 +5,13 @@
 // (message-part) and the brain strip's touch stream (packages/app
 // brain-strip.tsx). Labels must match the brain page's node ids — skills map
 // by bare name; unknown files graft new nodes.
-export type AmicoBrainRef = { label: string; type: string; consider: boolean }
+export type AmicoBrainRef = {
+  label: string
+  type: string
+  consider: boolean
+  /** full file path when the touch IS a file — lets the context tree open it */
+  path?: string
+}
 
 export function amicoBrainRef(tool: string, input: Record<string, unknown> = {}): AmicoBrainRef | undefined {
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
@@ -19,7 +25,7 @@ export function amicoBrainRef(tool: string, input: Record<string, unknown> = {})
       if (!fp) return undefined
       const label = base(fp)
       const type = /\.(md|txt)$/i.test(label) ? "note" : /\.jl$/i.test(label) ? "package" : "resource"
-      return { label, type, consider: false }
+      return { label, type, consider: false, path: fp }
     }
     case "grep":
     case "glob": {

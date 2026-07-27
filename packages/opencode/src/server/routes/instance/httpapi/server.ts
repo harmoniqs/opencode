@@ -59,6 +59,7 @@ import { Workspace } from "@/control-plane/workspace"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
+import * as AmicodeVaultBrowser from "@/server/amicode/vault-browser"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeWidgets from "@/server/amicode/widgets"
 import * as AmicodeDashboard from "@/server/amicode/dashboard"
@@ -201,6 +202,25 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
         const body = yield* Effect.orDie(request.text)
         const out = yield* Effect.promise(() => AmicodeVaults.attachVault(body))
         return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+    // Vault browser (the app's Vault panel): recursive read-only listing of one
+    // mount, and single-file reads with a real-path traversal guard. Builders
+    // never reject — failures come back as ok:false JSON bodies.
+    yield* router.add("GET", "/amicode/vault-files", (request) =>
+      Effect.sync(() => {
+        const mount = new URL(request.url, "http://localhost").searchParams.get("mount") ?? undefined
+        return HttpServerResponse.text(AmicodeVaultBrowser.vaultFilesBody(mount), { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("GET", "/amicode/vault-file", (request) =>
+      Effect.sync(() => {
+        const params = new URL(request.url, "http://localhost").searchParams
+        const mount = params.get("mount") ?? undefined
+        const file = params.get("path") ?? undefined
+        return HttpServerResponse.text(AmicodeVaultBrowser.vaultFileBody(mount, file), {
+          contentType: "application/json",
+        })
       }),
     )
     // amicode#203: New-project creation — mkdir + best-effort git init. JSON

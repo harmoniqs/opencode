@@ -1,6 +1,7 @@
 # 0002 — The Brain becomes the Chat's living background; components float on legibility-floored glass
 
-- Status: Proposed
+- Status: Superseded by ADR 0003 (direction parked 2026-07-26; the Brain moved to the
+  context-tree top panel instead of becoming the chat background)
 - Date: 2026-07-24
 - Deciders: Kate Bonner (Head of Product)
 - Tracking: harmoniqs/opencode#56

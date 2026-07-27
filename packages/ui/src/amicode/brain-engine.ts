@@ -519,6 +519,22 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
     ro = new ResizeObserver(() => resize())
     ro.observe(canvas)
   }
+  // webview/app zoom changes devicePixelRatio WITHOUT changing the CSS box —
+  // ResizeObserver stays silent and the backing store goes stale (blurry
+  // graph until an unrelated layout resize). Watch the dppx itself and re-arm
+  // after every change, since the query is pinned to one exact ratio.
+  let dprQuery: MediaQueryList | null = null
+  const onDprChange = () => {
+    resize()
+    armDprWatch()
+  }
+  function armDprWatch() {
+    if (typeof matchMedia === "undefined" || typeof devicePixelRatio === "undefined") return
+    dprQuery?.removeEventListener("change", onDprChange)
+    dprQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+    dprQuery.addEventListener("change", onDprChange)
+  }
+  armDprWatch()
 
   const cam = { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1 }
   function nx(n: BNode) {
@@ -1152,6 +1168,7 @@ export function createBrainEngine(canvas: HTMLCanvasElement, opts: BrainEngineOp
       if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafId)
       ro?.disconnect()
       motionQuery?.removeEventListener("change", onMotionChange)
+      dprQuery?.removeEventListener("change", onDprChange)
     },
     stats: () => ({
       scheme,

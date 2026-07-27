@@ -32,6 +32,7 @@ import { showToast } from "@/utils/toast"
 import { checksum } from "@opencode-ai/core/util/encode"
 import { useLocation, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
+import { ContextTreePanel } from "@/pages/session/context-tree-panel"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
 import { useServerSync } from "@/context/server-sync"
@@ -1731,6 +1732,9 @@ export default function Page() {
     <div class="relative size-full overflow-hidden flex flex-col">
       {sessionSync() ?? ""}
       <SessionHeader />
+      <Show when={params.id}>
+        <ContextTreePanel sessionID={params.id} />
+      </Show>
       <div
         class="flex-1 min-h-0 flex flex-col md:flex-row "
         classList={{

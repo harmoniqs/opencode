@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
-import { createMainWindow, updateTitlebar } from "./windows"
+import { createMainWindow, updateZoom } from "./windows"
 
 export type DesktopMenuActionHandlers = Partial<{
   checkForUpdates: () => void
@@ -80,5 +80,7 @@ export function runDesktopMenuAction(
 function setZoom(win: BrowserWindow | null, value: number) {
   if (!win) return
   win.webContents.setZoomFactor(Math.min(Math.max(value, 0.2), 10))
-  updateTitlebar(win)
+  // updateZoom, not just updateTitlebar: the renderer's webviewZoom signal
+  // (titlebar counter-scale, terminal refit) must hear about menu-driven zoom
+  updateZoom(win)
 }
