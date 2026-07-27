@@ -19,7 +19,8 @@ import { useMutation } from "@tanstack/solid-query"
 import { Virtualizer, type VirtualizerHandle } from "virtua/solid"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
-import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { AmicodeEntityRail, sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-entity-rail"
+import { ContextTreePanel, sessionHasContextItems } from "@/pages/session/context-tree-panel"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -85,7 +86,6 @@ import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { makeTimer } from "@solid-primitives/timer"
 import { MessageComment, SummaryDiff, Timeline, TimelineRow, TimelineRowMap } from "./message-timeline.data"
-import { BrainStrip } from "./brain-strip"
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -93,7 +93,7 @@ const emptyTools: ToolPart[] = []
 const emptyAssistantMessages: AssistantMessage[] = []
 const idle = { type: "idle" as const }
 
-type FramedTimelineRow = Exclude<TimelineRow.TimelineRow, { _tag: "BottomSpacer" } | { _tag: "Brain" }>
+type FramedTimelineRow = Exclude<TimelineRow.TimelineRow, { _tag: "BottomSpacer" }>
 type TimelineRowByTag<T extends TimelineRow.TimelineRow["_tag"]> = Extract<TimelineRow.TimelineRow, { _tag: T }>
 
 function sameKeys(a: readonly string[] | undefined, b: readonly string[] | undefined) {
@@ -456,6 +456,11 @@ export function MessageTimeline(props: {
   })
   const parentTitle = createMemo(() => sessionTitle(parent()?.title) ?? language.t("command.session.new"))
   const getMsgParts = (msgId: string) => sync.data.part[msgId] ?? emptyParts
+  // the same session gates the rail and context tree apply internally — they
+  // drive the header's bottom padding: the tree block closes the header when
+  // present, chips need their seat otherwise
+  const entityRailVisible = createMemo(() => sessionHasAmicodeParts(sessionMessages(), getMsgParts))
+  const contextTreeVisible = createMemo(() => sessionHasContextItems(sessionMessages(), getMsgParts))
   const childTaskDescription = createMemo(() => {
     const id = sessionID()
     if (!id) return
@@ -497,7 +502,7 @@ export function MessageTimeline(props: {
   const timelineRows = createMemo((previous: TimelineRow.TimelineRow[] | undefined) => {
     const rows = messageRowMemos().flatMap((memo) => memo())
     if (rows.length === 0) return rows
-    return reuseTimelineRows(previous, [...rows, new TimelineRow.Brain(), new TimelineRow.BottomSpacer()])
+    return reuseTimelineRows(previous, [...rows, new TimelineRow.BottomSpacer()])
   })
   const timelineRowKeys = createMemo(() => timelineRows().map(TimelineRow.key), [] as string[], { equals: sameKeys })
   const virtualCache = createMemo(() => readTimelineCache(sessionKey(), timelineRowKeys()))
@@ -521,10 +526,6 @@ export function MessageTimeline(props: {
   const keepMounted = createMemo(() => {
     const rows = timelineRows()
     const out: number[] = []
-    // amicode: the brain row stays mounted even when scrolled out of range —
-    // its iframe must never be torn down mid-session
-    const brainIndex = rows.findIndex((row) => row._tag === "Brain")
-    if (brainIndex >= 0) out.push(brainIndex)
     const id = activeMessageID()
     if (id) {
       const index = rows.findLastIndex((row) => "userMessageID" in row && row.userMessageID === id)
@@ -1352,22 +1353,6 @@ export function MessageTimeline(props: {
           </TimelineRowFrame>
         )
       }
-      case "Brain":
-        // amicode: the session's living map — in the flow, right beneath the
-        // thinking shimmer while a turn works, after the last message at rest.
-        // Same column constraint as framed rows: without it the card overshoots
-        // the centered content container.
-        return (
-          <div
-            data-timeline-row="brain"
-            classList={{
-              "min-w-0 w-full max-w-full px-4 md:px-5": true,
-              "md:max-w-200 2xl:max-w-[1000px] md:mx-auto": props.centered,
-            }}
-          >
-            <BrainStrip sessionID={sessionID()} />
-          </div>
-        )
       case "BottomSpacer":
         return <div data-timeline-row="bottom-spacer" aria-hidden="true" class="h-16" />
     }
@@ -1426,7 +1411,11 @@ export function MessageTimeline(props: {
             classList={{
               "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)] backdrop-blur-[10px]": true,
               "w-full": true,
-              "pb-4": true,
+              // the tall padding exists to seat the entity-chip rail; the
+              // context-tree block closes the header itself when it renders,
+              // and a session with neither keeps only a slim fade tail
+              "pb-4": entityRailVisible() && !contextTreeVisible(),
+              "pb-2": !entityRailVisible() && !contextTreeVisible(),
               "pl-2 pr-3 md:pl-4 md:pr-3": true,
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered,
             }}
@@ -1758,6 +1747,9 @@ export function MessageTimeline(props: {
                 void sdk.client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
               }}
             />
+            {/* amicode: the context tree, folded into the header (ADR 0003) —
+                closes the sticky block beneath the title row + chip rail */}
+            <ContextTreePanel sessionID={sessionID()} />
           </div>
         </Show>
         <Show when={scrollRoot()}>

@@ -25,6 +25,7 @@ import { getProjectAvatarVariant, LayoutRoute, useLayout, type LocalProject } fr
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
+import { vaultPanel } from "@/context/vault-panel"
 import { useSettings } from "@/context/settings"
 import { WindowsAppMenu } from "./windows-app-menu"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
@@ -698,6 +699,16 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               data-tauri-drag-region
               onMouseDown={drag}
             >
+              <Tooltip placement="bottom" value={language.t(vaultPanel.opened() ? "amicode.vault.close" : "amicode.vault.open")}>
+                <IconButton
+                  icon="archive"
+                  variant="ghost"
+                  class="titlebar-icon rounded-md"
+                  onClick={vaultPanel.toggle}
+                  aria-label={language.t(vaultPanel.opened() ? "amicode.vault.close" : "amicode.vault.open")}
+                  aria-expanded={vaultPanel.opened()}
+                />
+              </Tooltip>
               <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
               <Show when={windows()}>
                 {!tauriApi() && <div class="shrink-0" style={{ width: windowsControlsWidth() }} />}
@@ -725,11 +736,23 @@ type TitlebarV2RightState = {
 }
 
 function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
+  const language = useLanguage()
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
       <Show when={props.state.update.visible}>
         <TitlebarUpdateIconButton state={props.state.update} />
       </Show>
+      <IconButtonV2
+        type="button"
+        variant="ghost-muted"
+        size="large"
+        class="shrink-0"
+        icon={<IconV2 name="vault" />}
+        state={vaultPanel.opened() ? "pressed" : undefined}
+        onClick={vaultPanel.toggle}
+        aria-label={language.t(vaultPanel.opened() ? "amicode.vault.close" : "amicode.vault.open")}
+        aria-expanded={vaultPanel.opened()}
+      />
       <div id="opencode-titlebar-right" class="flex shrink-0 items-center justify-end gap-0" />
     </div>
   )

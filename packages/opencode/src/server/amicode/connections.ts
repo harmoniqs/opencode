@@ -766,6 +766,12 @@ export function setBindHostname(hostname: string | undefined): string | undefine
   return previous
 }
 
+/** The current bind hostname — shared with the vault-browser routes, whose
+ *  loopback gate rides the same signal as the credential-mutation guard. */
+export function getBindHostname(): string | undefined {
+  return bindHostname
+}
+
 /** Same loopback family the mdns gate recognizes (server.ts), widened to the
  *  whole 127/8 block and the v4-mapped form. undefined = in-process handler. */
 export function isLoopbackHostname(hostname: string | undefined): boolean {

@@ -25,6 +25,19 @@ export function useAmicodeCommands() {
   const command = useCommand()
   const amico = (option: Omit<CommandOption, "category">): CommandOption => ({ ...option, category: "Amico" })
 
+  // Not gated on inAmicode: the Vault panel talks straight to the server's
+  // /amicode/vault-* routes, so it works in any host.
+  command.register("amicode-vault", () => [
+    amico({
+      id: "vault.toggle",
+      title: "Toggle vault panel",
+      description: "Browse the attached vault mounts and read notes inline",
+      onSelect: () => {
+        void import("@/context/vault-panel").then((m) => m.vaultPanel.toggle())
+      },
+    }),
+  ])
+
   command.register("amicode", () =>
     inAmicode()
       ? [

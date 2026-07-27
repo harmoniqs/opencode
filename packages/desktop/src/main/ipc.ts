@@ -9,7 +9,7 @@ import type { FatalRendererError, ServerReadyData, TitlebarTheme } from "../prel
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { assertAttachmentBudget, createPickedFileAuthorizations } from "./attachment-picker"
 import { getStore } from "./store"
-import { getPinchZoomEnabled, setPinchZoomEnabled, setTitlebar, updateTitlebar } from "./windows"
+import { getPinchZoomEnabled, setPinchZoomEnabled, setTitlebar, updateZoom } from "./windows"
 import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 
@@ -214,7 +214,7 @@ export function registerIpcHandlers(deps: Deps) {
     event.sender.setZoomFactor(factor)
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return
-    updateTitlebar(win)
+    updateZoom(win)
   })
   ipcMain.handle("get-pinch-zoom-enabled", () => getPinchZoomEnabled())
   ipcMain.handle("set-pinch-zoom-enabled", (_event: IpcMainInvokeEvent, enabled: boolean) => {
