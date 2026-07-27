@@ -49,15 +49,19 @@
 :root,
 [data-color-scheme="light"] {
   --accent-fill-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  /* one step past soft — the hover of an already-soft-filled control */
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 26%, transparent);
   --accent-edge: var(--v2-border-border-strong);
 }
 [data-color-scheme="dark"] {
   --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--v2-border-border-base));
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
     --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+    --accent-fill-hover: color-mix(in srgb, var(--accent) 16%, transparent);
     --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--v2-border-border-base));
   }
 }

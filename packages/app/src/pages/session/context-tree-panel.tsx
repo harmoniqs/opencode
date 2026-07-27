@@ -199,7 +199,7 @@ function ContextTreeFrame(props: { sessionID: string }) {
           {language.t("amicode.contextTree.count", { count: itemCount() })}
         </div>
         <Show when={open()}>
-          <div class="ml-2 hidden items-center gap-3 sm:flex" aria-hidden="true">
+          <div class="ml-2 hidden items-center gap-3 sm:flex">
             <For each={LEGEND}>
               {(item) => (
                 <div class="flex items-center gap-1.5">

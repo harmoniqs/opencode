@@ -39,10 +39,9 @@ const FIELD: Record<string, string> = {
   background: "var(--v2-background-bg-layer-02, transparent)",
   border: "1px solid var(--v2-border-border-base)",
   "border-radius": "var(--radius-md)",
-  padding: "9px 12px",
+  padding: "8px 12px",
   "font-size": "13px",
   color: "var(--v2-text-text-base)",
-  outline: "none",
 }
 const LABEL: Record<string, string> = {
   "font-size": "11px",

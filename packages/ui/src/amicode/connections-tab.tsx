@@ -318,8 +318,8 @@ export function ConnectionCard(props: {
                   data-slot="amicode-connection-project"
                   data-selected={selected()}
                   style={{
-                    "border-color": selected() ? "var(--accent-edge)" : "var(--border-weak-base)",
-                    "background-color": selected() ? "var(--accent-fill-soft)" : "var(--surface-base)",
+                    "border-color": selected() ? "var(--accent-edge)" : "var(--v2-border-border-base)",
+                    "background-color": selected() ? "var(--accent-fill-soft)" : "var(--v2-background-bg-layer-01)",
                   }}
                 >
                   <input

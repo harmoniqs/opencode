@@ -133,6 +133,10 @@ const CARD: JSX.CSSProperties = {
   background: "var(--v2-background-bg-layer-01)",
   padding: "14px 16px",
 }
+// inline styles can't express @media — read the preference once; a mid-session
+// OS toggle settles on next mount, which is fine for decorative motion
+const reduceMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches
+
 const HERO_CARD: JSX.CSSProperties = { ...CARD }
 const EYEBROW: JSX.CSSProperties = {
   "font-size": "10px",
@@ -168,14 +172,15 @@ function PrimaryButton(props: { children: JSX.Element; onClick: () => void; slot
     <button
       type="button"
       data-slot={props.slot}
+      data-component="amc-secondary-btn"
       onClick={() => props.onClick()}
       style={{
         "align-self": "flex-start",
-        border: "1px solid var(--v2-icon-icon-accent)",
+        border: "1px solid var(--accent-edge)",
         "border-radius": "var(--radius-md)",
         background: "var(--v2-background-bg-layer-02)",
         color: "var(--v2-text-text-base)",
-        padding: "5px 12px",
+        padding: "4px 12px",
         "font-size": "12px",
         "line-height": "16px",
         cursor: "pointer",
@@ -212,16 +217,19 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
         props.onStart("")
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && !(e.target as HTMLElement).closest("button")) props.onStart("")
+        if ((e.key === "Enter" || e.key === " ") && !(e.target as HTMLElement).closest("button")) {
+          e.preventDefault()
+          props.onStart("")
+        }
       }}
       style={{
         ...HERO_CARD,
         position: "relative",
         overflow: "hidden",
         cursor: "pointer",
-        transform: hover() ? "translateY(-3px)" : "none",
+        // hover = elevation only — a bounds-moving lift jitters the grid
         "box-shadow": hover() ? "var(--v2-elevation-raised, 0 6px 20px rgba(0,0,0,0.18))" : "none",
-        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+        transition: reduceMotion ? "none" : "box-shadow 0.18s ease",
       }}
     >
       {/* gold shine: sweeps on hover-in; opacity-fades + snaps back (transform
@@ -234,10 +242,10 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           "pointer-events": "none",
           width: "55%",
           background:
-            "linear-gradient(105deg, transparent 0%, color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent) 50%, transparent 100%)",
-          opacity: hover() ? "1" : "0",
-          transform: hover() ? "translateX(280%)" : "translateX(-160%)",
-          transition: hover() ? "transform 0.85s ease, opacity 0.12s ease" : "opacity 0.3s ease",
+            "linear-gradient(105deg, transparent 0%, var(--accent-fill-hover) 50%, transparent 100%)",
+          opacity: hover() && !reduceMotion ? "1" : "0",
+          transform: hover() && !reduceMotion ? "translateX(280%)" : "translateX(-160%)",
+          transition: reduceMotion ? "none" : hover() ? "transform 0.85s ease, opacity 0.12s ease" : "opacity 0.3s ease",
         }}
       />
       <div style={EYEBROW}>Meet Amico</div>
@@ -295,9 +303,9 @@ function MeetAmicoCard(props: { onStart: (prompt: string) => void }) {
           cursor: "pointer",
           background: "var(--accent, #fff676)",
           color: "var(--accent-ink, #111214)",
-          "font-size": "15px",
+          "font-size": "16px",
           "font-weight": "650",
-          "box-shadow": "0 2px 10px color-mix(in srgb, var(--v2-icon-icon-accent) 35%, transparent)",
+          "box-shadow": "0 2px 10px var(--accent-fill-hover)",
         }}
       >
         Open chat
@@ -550,6 +558,8 @@ function AboutYouCard(props: {
             type="button"
             data-slot="amicode-card-you-edit"
             title={props.onSave ? (editing() ? "Cancel editing" : "Edit profile") : "Edit profile in chat"}
+            aria-label={props.onSave ? (editing() ? "Cancel editing" : "Edit profile") : "Edit profile in chat"}
+            aria-expanded={editing()}
             onClick={() =>
               props.onSave ? (editing() ? (setEditing(false), setSuggestions([])) : beginEdit()) : props.onEdit()
             }
@@ -682,6 +692,7 @@ function AboutYouCard(props: {
                         style={FIELD}
                         value={draft().name}
                         placeholder="Name"
+                        aria-label="Name"
                         onInput={(e) => setDraft({ ...draft(), name: e.currentTarget.value })}
                         onKeyDown={pasteFallback((v) => setDraft({ ...draft(), name: v }))}
                       />
@@ -748,6 +759,7 @@ function AboutYouCard(props: {
                               style={{ ...FIELD, flex: "1" }}
                               value={draft().affiliation}
                               placeholder="University or company — search like LinkedIn"
+                              aria-label="Affiliation"
                               onInput={(e) => {
                                 setDraft({ ...draft(), affiliation: e.currentTarget.value })
                                 searchInstitutions(e.currentTarget.value)
@@ -778,6 +790,7 @@ function AboutYouCard(props: {
                                 {(sug) => (
                                   <button
                                     type="button"
+                                    data-slot="amicode-you-suggestion"
                                     onClick={() => pickInstitution(sug)}
                                     style={{
                                       display: "flex",
@@ -830,6 +843,7 @@ function AboutYouCard(props: {
                           style={FIELD}
                           value={draft().focus}
                           placeholder="What you work on"
+                          aria-label="Research focus"
                           onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
                           onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
                         />
@@ -839,6 +853,7 @@ function AboutYouCard(props: {
                           style={FIELD}
                           value={draft().scholar}
                           placeholder="Google Scholar URL (optional)"
+                          aria-label="Google Scholar URL"
                           onInput={(e) => setDraft({ ...draft(), scholar: e.currentTarget.value })}
                           onKeyDown={pasteFallback((v) => setDraft({ ...draft(), scholar: v }))}
                         />
@@ -853,10 +868,11 @@ function AboutYouCard(props: {
                               color: "var(--accent-ink, #111214)",
                               border: "none",
                               "border-radius": "var(--radius-md)",
-                              padding: "4px 10px",
+                              padding: "4px 8px",
                               "font-size": "12px",
                               "font-weight": "600",
-                              cursor: saving() ? "wait" : "pointer",
+                              cursor: saving() || resolvingLogo() > 0 ? "wait" : "pointer",
+                              opacity: saving() || resolvingLogo() > 0 ? "0.6" : "1",
                             }}
                           >
                             {saving() ? "Saving…" : resolvingLogo() > 0 ? "Finding logo…" : "Save"}
@@ -957,7 +973,17 @@ function ActionCard(props: { eyebrow: string; slot: string; onClick?: () => void
     <div
       data-component="amicode-action-card"
       data-slot={props.slot}
+      data-clickable={props.onClick ? "true" : undefined}
+      role={props.onClick ? "button" : undefined}
+      tabIndex={props.onClick ? 0 : undefined}
       onClick={() => props.onClick?.()}
+      onKeyDown={(e) => {
+        if (!props.onClick) return
+        if ((e.key === "Enter" || e.key === " ") && !(e.target as HTMLElement).closest("button, input, a")) {
+          e.preventDefault()
+          props.onClick()
+        }
+      }}
       style={{
         ...CARD,
         gap: "6px",

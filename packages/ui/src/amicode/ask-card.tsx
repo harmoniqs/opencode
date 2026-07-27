@@ -74,13 +74,11 @@ export function AmicodeAskCard(props: { ask: AskInput; messageID?: string; sessi
                 gap: "2px",
                 "text-align": "left",
                 border:
-                  picked() === option
-                    ? "1px solid var(--v2-icon-icon-accent)"
-                    : "1px solid var(--v2-border-border-strong)",
+                  picked() === option ? "1px solid var(--accent-edge)" : "1px solid var(--v2-border-border-strong)",
                 "border-radius": "var(--radius-md)",
                 background: "var(--v2-background-bg-layer-02)",
                 color: "var(--v2-text-text-base)",
-                padding: "3px 10px",
+                padding: "4px 8px",
                 "font-size": "12px",
                 "line-height": "16px",
                 cursor: active() ? "pointer" : "default",

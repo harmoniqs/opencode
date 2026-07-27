@@ -40,7 +40,7 @@
 }
 .amc-wordmark {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.11em;
   color: var(--v2-text-text-accent);
 }
@@ -130,15 +130,14 @@
   border-radius: var(--radius-md);
   background: var(--v2-background-bg-layer-01);
   padding: 4px 8px;
-  font-size: 12.5px;
-  line-height: 17px;
+  font-size: 12px;
+  line-height: 16px;
   color: var(--v2-text-text-base);
   box-shadow: var(--v2-elevation-elements, 0 0.5px 0.5px rgba(0, 0, 0, 0.2));
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.12s ease;
+    box-shadow 0.16s ease;
 }
 [data-component="amicode-card"][data-clickable="true"] {
   cursor: pointer;
@@ -149,7 +148,8 @@
   box-shadow: var(--v2-elevation-raised, 0 1px 2px rgba(0, 0, 0, 0.25));
 }
 [data-component="amicode-card"][data-clickable="true"]:active {
-  transform: translateY(0.5px);
+  /* pressed = elevation drop, never a bounds-moving transform */
+  box-shadow: none;
 }
 [data-component="amicode-card"]:focus-visible {
   outline: 1px solid var(--v2-border-border-focus);
@@ -176,7 +176,7 @@
   overflow: hidden;
 }
 [data-component="amicode-card"] .amc-label {
-  font-weight: 640;
+  font-weight: 650;
   color: var(--v2-text-text-base);
   white-space: nowrap;
   flex-shrink: 0;
@@ -210,7 +210,7 @@
 [data-component="amicode-card"] .amc-diff .k { color: var(--v2-text-text-muted); }
 [data-component="amicode-card"] .amc-diff .v {
   font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--v2-text-text-base);
 }
 [data-component="amicode-card"] .amc-diff .v.from { color: var(--v2-text-text-faint); }
@@ -283,7 +283,7 @@
 }
 [data-component="amicode-entity-view"] .amc-tier {
   font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 600;
@@ -312,7 +312,7 @@
   gap: 10px;
   margin: 12px 4px 8px;
   font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--v2-text-text-faint);
@@ -430,7 +430,7 @@
 [data-component="amicode-entity-view"] .amc-ev-hist-summary {
   flex: 1;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--v2-text-text-faint);
   overflow-wrap: anywhere;
 }
@@ -439,8 +439,8 @@
   background: none;
   border: none;
   padding: 2px 4px;
-  font-size: 11.5px;
-  font-weight: 550;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--v2-text-text-accent);
   cursor: pointer;
 }
@@ -679,6 +679,20 @@
   height: 14px;
   flex-shrink: 0;
 }
+[data-slot="amicode-rail-inspect"],
+[data-slot="amicode-rail-retry"] {
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+[data-slot="amicode-rail-inspect"]:hover,
+[data-slot="amicode-rail-retry"]:hover {
+  background: var(--v2-background-bg-layer-02);
+  border-color: var(--v2-border-border-strong);
+}
+[data-slot="amicode-rail-inspect"]:focus-visible,
+[data-slot="amicode-rail-retry"]:focus-visible {
+  outline: 1px solid var(--v2-border-border-focus);
+  outline-offset: 1px;
+}
 [data-component="amicode-entity-rail"] button.amc-rail-chip:hover {
   border-color: var(--v2-border-border-strong);
   background: var(--v2-background-bg-layer-02);
@@ -707,7 +721,7 @@
   background: var(--v2-background-bg-layer-03) !important;
 }
 [data-component="amicode-ask-card"] [data-slot="amicode-ask-option"]:not(:disabled):active {
-  transform: translateY(0.5px);
+  background: var(--accent-fill-soft) !important;
 }
 
 /* run window: subtle hover to signal it opens the Run entity */
@@ -970,7 +984,46 @@
   color: var(--v2-text-text-base); font-size: 11px; font-weight: 600; padding: 4px 12px; cursor: pointer;
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 20%, var(--v2-background-bg-layer-02));
+  background: var(--accent-fill-hover);
+}
+
+/* home cards: interaction states the inline styles can't express. The yellow
+ * CTA's feedback is elevation + opacity — the fill itself never changes hue. */
+[data-slot="amicode-card-meet-cta"]:hover {
+  box-shadow: 0 3px 14px var(--accent-fill-hover);
+}
+[data-slot="amicode-card-meet-cta"]:active {
+  opacity: 0.9;
+}
+[data-slot="amicode-card-meet-cta"]:focus-visible,
+[data-component="amicode-card-meet"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: 2px;
+}
+[data-component="amicode-action-card"][data-clickable="true"] {
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+[data-component="amicode-action-card"][data-clickable="true"]:hover {
+  background: var(--v2-background-bg-layer-02);
+  border-color: var(--v2-border-border-strong);
+}
+[data-component="amicode-action-card"][data-clickable="true"]:focus-visible {
+  outline: 1px solid var(--v2-border-border-focus);
+  outline-offset: 2px;
+}
+[data-component="amc-secondary-btn"] {
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+[data-component="amc-secondary-btn"]:hover {
+  background: var(--accent-fill-soft);
+}
+[data-component="amc-secondary-btn"]:focus-visible,
+[data-slot="amicode-you-suggestion"]:focus-visible {
+  outline: 1px solid var(--v2-border-border-focus);
+  outline-offset: 1px;
+}
+[data-slot="amicode-you-suggestion"]:hover {
+  background: var(--v2-background-bg-layer-02);
 }
 [data-component="amicode-widget-preview"] .amc-wp-pin:disabled { cursor: default; }
 [data-component="amicode-widget-preview"] .amc-wp-pin[data-state="pinned"] {

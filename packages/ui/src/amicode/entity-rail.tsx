@@ -268,7 +268,7 @@ export function AmicodeEntityRail(props: {
                   "border-radius": "var(--radius-md)",
                   background: "none",
                   color: "var(--v2-text-text-accent)",
-                  padding: "1px 8px",
+                  padding: "2px 8px",
                   font: "inherit",
                   "font-weight": "600",
                   cursor: "pointer",

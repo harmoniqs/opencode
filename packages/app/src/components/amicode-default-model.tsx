@@ -85,8 +85,8 @@ export function AmicodeDefaultModel() {
             color: "var(--v2-text-text-base)",
             background: "var(--v2-background-bg-layer-01)",
             border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "6px",
-            padding: "3px 6px",
+            "border-radius": "var(--radius-md)",
+            padding: "4px 8px",
             "max-width": "220px",
             cursor: "pointer",
           }}

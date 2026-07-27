@@ -38,7 +38,7 @@ export function AmicodeRunGallery(props: {
         position: "fixed",
         inset: "0",
         "z-index": "60",
-        background: "color-mix(in srgb, #000 62%, transparent)",
+        background: "color-mix(in srgb, #000 50%, transparent)",
         display: "flex",
         "flex-direction": "column",
       }}

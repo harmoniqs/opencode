@@ -7,6 +7,7 @@
 // Opened by the rail's vault button, the command palette, or a context-tree
 // click on a vault node (which lands directly on that file).
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
+import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import { useLanguage } from "@/context/language"
@@ -135,9 +136,12 @@ export function VaultPanel() {
               aria-expanded={expanded().has(sub.path)}
               onClick={() => toggleDir(sub.path)}
             >
-              <span class="inline-block w-3 text-text-weak" aria-hidden="true">
-                {expanded().has(sub.path) ? "▾" : "▸"}
-              </span>
+              <Icon
+                name={expanded().has(sub.path) ? "chevron-down" : "chevron-right"}
+                size="small"
+                class="shrink-0 text-text-weak"
+                aria-hidden="true"
+              />
               <span class="truncate">{sub.name}</span>
             </button>
             <Show when={expanded().has(sub.path)}>{renderDir(sub, depth + 1)}</Show>
@@ -204,7 +208,7 @@ export function VaultPanel() {
                     type="button"
                     class="cursor-pointer rounded-md border px-2 py-0.5 text-12-regular focus-visible:outline focus-visible:outline-1 focus-visible:outline-border-focus-base"
                     classList={{
-                      "border-border-strong-base text-text-base bg-background-stronger": mount() === m.id,
+                      "border-[var(--accent-edge)] text-text-base bg-[var(--accent-fill-soft)]": mount() === m.id,
                       "border-border-weaker-base text-text-weak hover:bg-background-stronger": mount() !== m.id,
                     }}
                     aria-pressed={mount() === m.id}

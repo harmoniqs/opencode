@@ -72,9 +72,9 @@ export function AmicodeSolverToggle() {
     display: "inline-flex",
     "align-items": "center",
     gap: "6px",
-    padding: "5px 12px",
+    padding: "4px 12px",
     "font-size": "12px",
-    "font-weight": active ? "650" : "450",
+    "font-weight": active ? "650" : "400",
     border: "none",
     cursor: "pointer",
     background: active ? "var(--accent-fill-soft)" : "transparent",
@@ -84,7 +84,7 @@ export function AmicodeSolverToggle() {
     <div
       data-component="amicode-solver-toggle"
       title="Solver — High-Performance runs in the cloud with your API key"
-      style={{ display: "flex", "align-items": "center", gap: "10px" }}
+      style={{ display: "flex", "align-items": "center", gap: "8px" }}
     >
       <span
         style={{
@@ -119,10 +119,10 @@ export function AmicodeSolverToggle() {
           Piccolissimo + Altissimo
           <span
             style={{
-              "font-size": "9px",
-              "font-weight": "750",
+              "font-size": "10px",
+              "font-weight": "700",
               "letter-spacing": "0.06em",
-              padding: "1px 5px",
+              padding: "0 4px",
               "border-radius": "var(--radius-sm)",
               background: "var(--accent, #fff676)",
               color: "var(--accent-ink, #111214)",
