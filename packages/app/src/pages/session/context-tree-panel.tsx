@@ -72,19 +72,11 @@ function ContextTreeFrame(props: { sessionID: string }) {
   const getParts = (msgId: string) => sync.data.part[msgId] ?? []
   const busy = createMemo(() => (sync.data.session_status[props.sessionID]?.type ?? "idle") !== "idle")
 
-  const turnTitle = (parentID: string | undefined) => {
-    const parent = parentID ? messages().find((m) => m.id === parentID) : undefined
-    if (!parent) return ""
-    for (const p of getParts(parent.id)) {
-      if (p.type === "text" && typeof p.text === "string" && p.text.trim()) return p.text.trim()
-    }
-    return ""
-  }
-
   // the session's turns: ONE branch per user prompt. A single ask can span
   // several assistant messages (continuation steps), and charting per
-  // assistant message drew duplicate roman-numeral branches carrying the
-  // same prompt excerpt — group by the parent user message instead.
+  // assistant message drew duplicate roman-numeral branches — group by the
+  // parent user message instead. Prompt text stays out of the turn entirely
+  // (the tree charts context, not conversation).
   const turns = createMemo<ContextTurn[]>(() => {
     const byPrompt = new Map<string, ContextTurn>()
     const out: ContextTurn[] = []
@@ -93,7 +85,7 @@ function ContextTreeFrame(props: { sessionID: string }) {
       const key = m.parentID ?? m.id
       let turn = byPrompt.get(key)
       if (!turn) {
-        turn = { id: key, title: turnTitle(m.parentID), refs: [], busy: false }
+        turn = { id: key, refs: [], busy: false }
         byPrompt.set(key, turn)
         out.push(turn)
       }

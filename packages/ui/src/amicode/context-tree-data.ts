@@ -19,8 +19,6 @@ export type ContextRef = {
 
 export type ContextTurn = {
   id: string
-  /** first line of the user prompt that opened the turn (may be empty) */
-  title: string
   refs: ContextRef[]
   /** the turn is still running — its newest touch wears the live cursor */
   busy?: boolean
@@ -104,10 +102,12 @@ export function buildContextTree(turns: ContextTurn[], opts: { rootLabel?: strin
   let lastLeaf: ContextTreeNodeInput | undefined
   visible.forEach((turn, i) => {
     const n = offset + i
-    const excerpt = turn.title.trim().slice(0, 26)
+    // turn branches are anonymous roman numerals BY DESIGN (Kate, 2026-07-28):
+    // the tree surfaces only the context amico checks and the scripts it
+    // writes — user prompt text must never enter it. Don't re-add excerpts.
     const node: ContextTreeNodeInput = {
       id: `turn-${turn.id}`,
-      label: excerpt ? `${roman(n)} · ${excerpt}` : roman(n),
+      label: roman(n),
       kind: "turn",
       children: [],
       recalls: [],
