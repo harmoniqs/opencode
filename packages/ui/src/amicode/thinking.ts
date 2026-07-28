@@ -5,8 +5,10 @@
 
 // Whimsical-but-tasteful gerunds shown while Amico works, in the spirit of the
 // Claude Code CLI. Kept lightly on-brand — quantum-control and music nods among
-// the playful ones (Kate's list, 2026-07-28). No trailing ellipsis here — the
-// component appends the "…".
+// the playful ones (Kate's list, 2026-07-28). NO solver-progress words
+// (Converging / Regularizing / Warm-starting): they read as "a solve is
+// running" when none is. No trailing ellipsis here — the component appends
+// the "…".
 export const THINKING_WORDS = [
   "Thinking",
   "Pondering",
@@ -28,13 +30,17 @@ export const THINKING_WORDS = [
   "Propagating",
   "Splining",
   "Bending",
-  "Converging",
-  "Warm-starting",
-  "Regularizing",
   "Trotting",
   "Strumming",
   "Resonating",
   "Hyperfining",
+  "Evolving",
+  "ψing",
+  "Spinning",
+  "Fluxing",
+  "Phasing",
+  "Charging",
+  "Emitting",
 ] as const
 
 /** Word for a given tick, cycling through THINKING_WORDS (wraps, incl. negatives). */
