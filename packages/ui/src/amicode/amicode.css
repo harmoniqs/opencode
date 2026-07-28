@@ -79,6 +79,8 @@
 }
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
+/* The glyph is a block, not text — baseline alignment would sit it high. */
+.amc-thinking .amc-wave { align-self: center; }
 
 /* ---- the harmonic working indicator (amico-wave.tsx) --------------------- */
 /* A standing wave in quadrature: two identical curves, the companion a quarter period out
