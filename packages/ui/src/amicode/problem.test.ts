@@ -118,6 +118,20 @@ describe("runChipText", () => {
   test("solving f outside [0,1] renders no F readout (objective ≠ fidelity)", () => {
     expect(runChipText([{ runId: "r", status: "solving", fidelity: 79.3, iteration: 0 }])).toBe("solving…")
   })
+  test("near-unity fidelity never rounds to a bare 1 — precision extends until the gap shows", () => {
+    expect(runChipText([{ runId: "r", status: "finished", fidelity: 0.99997, iteration: 60 }])).toBe(
+      "F=0.99997 · 60 iter",
+    )
+    expect(runChipText([{ runId: "r", status: "finished", fidelity: 0.99999997, iteration: 60 }])).toBe(
+      "F=0.99999997 · 60 iter",
+    )
+    // solving mirror: a tiny live objective is a near-unity F
+    expect(runChipText([{ runId: "r", status: "solving", fidelity: 0.00003, iteration: 12 }])).toBe(
+      "solving… F=0.99997",
+    )
+    // a true 1 (and only a true 1) still renders bare
+    expect(runChipText([{ runId: "r", status: "finished", fidelity: 1, iteration: 60 }])).toBe("F=1 · 60 iter")
+  })
 })
 
 describe("railState", () => {
