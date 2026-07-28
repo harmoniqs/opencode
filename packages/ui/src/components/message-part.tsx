@@ -2642,7 +2642,11 @@ ToolRegistry.register({
     return (
       <BasicTool icon="brain" status={props.status} trigger={trigger()}>
         <Show when={body()}>
-          <div data-component="tool-output" data-scrollable>
+          {/* AMICODE: an opened skill is a FILE, not more conversation. tool-output carries no
+              surface of its own, so the instructions flowed as bare prose; amc-skill-file gives
+              them a bounded, tinted panel. The chip above stays flush with the other Amico chips
+              — shared left alignment is the transcript's spine, and indenting the row broke it. */}
+          <div class="amc-skill-file" data-component="tool-output" data-scrollable>
             <Markdown text={body()} />
           </div>
         </Show>

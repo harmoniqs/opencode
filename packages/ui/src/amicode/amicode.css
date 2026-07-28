@@ -82,6 +82,31 @@
 /* The glyph is a block, not text — baseline alignment would sit it high. */
 .amc-thinking .amc-wave { align-self: center; }
 
+/* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
+/* Expanding a skill used to dump its instructions as bare markdown straight into the
+ * transcript, because [data-component="tool-output"] carries no surface of its own — no
+ * border, no background, no padding. So an opened skill read as more conversation. It is a
+ * FILE, so it gets a file's surface: hairline, tint, padding, and a bounded height that
+ * scrolls rather than pushing the transcript around.
+ *
+ * Scoped to skills — every other tool's output keeps the plain treatment. The chip ABOVE this
+ * stays flush left with the other Amico chips; an earlier attempt indented the whole
+ * activation behind an accent spine and broke the shared left edge the chips read along.
+ *
+ * Compound selector, not a bare class: `[data-component="tool-output"]` is also (0,1,0), so a
+ * lone `.amc-skill-file` would tie on specificity and be decided by stylesheet order. */
+[data-component="tool-output"].amc-skill-file {
+  margin-top: 6px;
+  padding: 10px 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md);
+  background: var(--v2-background-bg-layer-01);
+  /* tool-output sets `white-space: pre` for raw command output; rendered markdown must wrap. */
+  white-space: normal;
+}
+
 /* ---- the harmonic working indicator (amico-wave.tsx) --------------------- */
 /* A standing wave in quadrature: two identical curves, the companion a quarter period out
  * of phase, so one is at full swing whenever the other crosses zero.
