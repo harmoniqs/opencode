@@ -12,6 +12,11 @@
     "isolatedModules": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // amico-wave.ts (pure module) and amico-wave.tsx (component) share a stem; under
+    // "bundler" resolution an extensionless "./amico-wave" resolves to the .tsx sibling,
+    // not the .ts module, so the import needs an explicit ".ts" extension to disambiguate.
+    // Requires noEmit (already set) per the TS5097 diagnostic this silences.
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "lib": ["es2023", "dom", "dom.iterable"],
     // Type Checking & Safety
