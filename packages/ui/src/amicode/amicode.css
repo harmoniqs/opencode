@@ -650,10 +650,11 @@
   padding: 0;
 }
 
-/* Rail entity chips (Kate 2026-07-24): STATIC label only — no value, no chevron
-   or + icon. A recorded (clickable) chip carries the soft-yellow fill as its
-   affordance and opens the current version; a not-yet-recorded chip is inert
-   with a dotted border. Focus ring comes from the shared rail button rule below. */
+/* Rail entity chips (Kate 2026-07-24): STATIC label only — no value, no + icon.
+   A recorded (clickable) chip is a solid-bordered pill on the layer-01 surface
+   (the yellow fill was retired 2026-07-24 — neutral surface, hover carries the
+   feedback) and opens the current version; a not-yet-recorded chip is inert with
+   a dotted border. Focus ring comes from the shared rail button rule below. */
 [data-component="amicode-entity-rail"] .amc-rail-chip {
   display: inline-flex;
   align-items: center;
@@ -707,16 +708,27 @@
 }
 /* …except a not-recorded chip that IS a button (the pulse chip, which opens the
    Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
-   must feel clickable. Hover feedback already comes from button.amc-rail-chip.
-   It also carries the recorded chips' ink — full-strength colour at weight 600 —
-   so its glyph and label read as bold as its neighbours instead of dimming out;
-   faint ink is how a chip says "inert", and this one isn't. The glyph inherits
-   currentColor, so the colour bump bolds the icon along with the label. The
+   must READ clickable at rest — hover feedback alone failed the glance test
+   (Kate 2026-07-28: "doesn't appear clickable"). Three signals: full-strength
+   ink at weight 600 (faint ink is how a chip says "inert", and this one isn't;
+   the glyph inherits currentColor so it bolds with the label), an always-visible
+   trailing chevron (the shape says "this goes somewhere" — same glyph family as
+   the receipt card's, but never hover-gated here), and the pointer cursor. The
    dotted border still carries the not-yet-banked state on its own. */
 [data-component="amicode-entity-rail"] button.amc-rail-chip.is-empty {
   cursor: pointer;
   color: var(--v2-text-text-base);
   font-weight: 600;
+}
+[data-component="amicode-entity-rail"] .amc-rail-chip .amc-chev {
+  color: var(--v2-text-text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1;
+  transition: color 0.16s ease;
+}
+[data-component="amicode-entity-rail"] button.amc-rail-chip:hover .amc-chev,
+[data-component="amicode-entity-rail"] button.amc-rail-chip:focus-visible .amc-chev {
+  color: var(--v2-text-text-base);
 }
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,

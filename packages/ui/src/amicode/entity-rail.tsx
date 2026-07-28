@@ -296,6 +296,15 @@ export function AmicodeEntityRail(props: {
                   >
                     <Icon name={chipIcon(chip.kind)} size="small" />
                     {chip.label}
+                    {/* At-rest chevron on the pending-but-clickable chip: the dotted
+                        border alone reads "inert" (that's what it means on every
+                        other pending chip), so the shape — not hover — carries the
+                        "this goes somewhere" signal (Kate 2026-07-28). */}
+                    <Show when={chip.pending}>
+                      <span class="amc-chev" aria-hidden="true">
+                        ›
+                      </span>
+                    </Show>
                   </button>
                 </Show>
               )}
