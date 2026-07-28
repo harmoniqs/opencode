@@ -560,6 +560,7 @@ import {
 } from "./message-part-groups"
 import { parseDiffSentinel } from "../amicode/receipt"
 import { collapseReceiptRuns, receiptRunKey, type ReceiptCandidate, type ReceiptKey } from "../amicode/receipt-runs"
+import { amicoSpan, isAmicoTool, spanMarkAt } from "../amicode/turn-span"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
@@ -594,7 +595,7 @@ function sameAmicodeCounts(a: Map<string, number>, b: Map<string, number>) {
 function collapseAmicodeGroups(
   groups: readonly PartGroup[],
   resolvePart: (ref: PartRef) => PartType | undefined,
-): { groups: PartGroup[]; counts: Map<string, number> } {
+): { groups: PartGroup[]; counts: Map<string, number>; span: { start: number; end: number } | undefined } {
   const candidates: ReceiptCandidate<PartGroup>[] = groups.map((group) => {
     if (group.type !== "part") return { ref: group }
     const { key, seq } = amicodeReceiptCandidateKey(resolvePart(group.ref))
@@ -606,7 +607,15 @@ function collapseAmicodeGroups(
     if (run.count > 1) counts.set(run.latestRef.key, run.count)
     return run.latestRef
   })
-  return { groups: survivors, counts }
+  // amicode: Amico's span for the transcript spine, computed over the SURVIVORS because those
+  // are the rows that actually render. Folded in here rather than as a second memo so the
+  // parts list is walked once and the span can never disagree with what was rendered.
+  const isAmico = survivors.map((group) => {
+    if (group.type !== "part") return false
+    const resolved = resolvePart(group.ref)
+    return !!resolved && resolved.type === "tool" && isAmicoTool(resolved.tool)
+  })
+  return { groups: survivors, counts, span: amicoSpan(isAmico) }
 }
 
 export function renderable(part: PartType, showReasoningSummaries = true) {
@@ -676,8 +685,17 @@ export function AssistantParts(props: {
   // latest receipt, which is the only case that indicator cares about).
   const collapsed = createMemo(
     () => collapseAmicodeGroups(grouped(), (ref) => part().get(ref.messageID)?.get(ref.partID)),
-    { groups: [] as PartGroup[], counts: new Map<string, number>() },
-    { equals: (a, b) => sameGroups(a.groups, b.groups) && sameAmicodeCounts(a.counts, b.counts) },
+    { groups: [] as PartGroup[], counts: new Map<string, number>(), span: undefined },
+    {
+      // The span MUST participate in equality: a turn whose group list and counts are unchanged
+      // can still extend Amico's span (a new receipt collapsing into an existing run moves `end`),
+      // and without this the memo would report equal and the spine would not redraw.
+      equals: (a, b) =>
+        sameGroups(a.groups, b.groups) &&
+        sameAmicodeCounts(a.counts, b.counts) &&
+        a.span?.start === b.span?.start &&
+        a.span?.end === b.span?.end,
+    },
   )
 
   // amicode: tokens generated so far this turn (output + reasoning across the
@@ -706,10 +724,13 @@ export function AssistantParts(props: {
           lane BELOW the streamed parts (see the lane after </Index>).
           spec-20260712-amico-third-actor. */}
       <Index each={collapsed().groups}>
-        {(entryAccessor) => {
+        {(entryAccessor, entryIndex) => {
           const entryType = createMemo(() => entryAccessor().type)
+          // amicode: Amico's transcript spine — same treatment as AssistantMessageDisplay below.
+          // Only rows inside the span are wrapped; every other row's DOM is unchanged.
+          const spanMark = createMemo(() => spanMarkAt(entryIndex, collapsed().span))
 
-          return (
+          const row = () => (
             <Switch>
               <Match when={entryType() === "context"}>
                 {(() => {
@@ -788,6 +809,14 @@ export function AssistantParts(props: {
                 })()}
               </Match>
             </Switch>
+          )
+
+          return (
+            <Show when={spanMark()} fallback={row()}>
+              <div class="amc-turn-span" data-amico-span={spanMark()}>
+                {row()}
+              </div>
+            </Show>
           )
         }}
       </Index>
@@ -973,16 +1002,31 @@ export function AssistantMessageDisplay(props: {
   // ../amicode/receipt-runs.ts.
   const collapsed = createMemo(
     () => collapseAmicodeGroups(grouped(), (ref) => part().get(ref.partID)),
-    { groups: [] as PartGroup[], counts: new Map<string, number>() },
-    { equals: (a, b) => sameGroups(a.groups, b.groups) && sameAmicodeCounts(a.counts, b.counts) },
+    { groups: [] as PartGroup[], counts: new Map<string, number>(), span: undefined },
+    {
+      // The span MUST participate in equality: a turn whose group list and counts are unchanged
+      // can still extend Amico's span (a new receipt collapsing into an existing run moves `end`),
+      // and without this the memo would report equal and the spine would not redraw.
+      equals: (a, b) =>
+        sameGroups(a.groups, b.groups) &&
+        sameAmicodeCounts(a.counts, b.counts) &&
+        a.span?.start === b.span?.start &&
+        a.span?.end === b.span?.end,
+    },
   )
 
   return (
     <Index each={collapsed().groups}>
-      {(entryAccessor) => {
+      {(entryAccessor, entryIndex) => {
         const entryType = createMemo(() => entryAccessor().type)
+        // amicode: Amico's transcript spine. Only rows INSIDE the span get a wrapper, so every
+        // other row's DOM is byte-identical to before — this loop is shared by every tool in the
+        // transcript. `:empty` in the CSS hides the wrapper when its row renders nothing (context
+        // and shell groups legitimately render empty), which would otherwise leave a phantom
+        // flex gap. See ../amicode/turn-span.ts.
+        const spanMark = createMemo(() => spanMarkAt(entryIndex, collapsed().span))
 
-        return (
+        const row = () => (
           <Switch>
             <Match when={entryType() === "context"}>
               {(() => {
@@ -1048,6 +1092,14 @@ export function AssistantMessageDisplay(props: {
               })()}
             </Match>
           </Switch>
+        )
+
+        return (
+          <Show when={spanMark()} fallback={row()}>
+            <div class="amc-turn-span" data-amico-span={spanMark()}>
+              {row()}
+            </div>
+          </Show>
         )
       }}
     </Index>

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { amicoSpan, isAmicoTool, spanMarkAt } from "./turn-span"
 
 /** Reads a row layout as a boolean mask. `A` = one of Amico's own rows, `.` = anything else. */
-const mask = (s: string) => [...s].map((c) => c === "A")
+const mask = (s: string) => Array.from(s, (c) => c === "A")
 
 describe("isAmicoTool", () => {
   test("amicode_* tools are Amico's rows", () => {

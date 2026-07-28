@@ -82,6 +82,37 @@
 /* The glyph is a block, not text — baseline alignment would sit it high. */
 .amc-thinking .amc-wave { align-self: center; }
 
+/* ---- Amico's transcript spine (message-part.tsx + turn-span.ts) ---------- */
+/* A hairline bracketing Amico's stretch of a turn: first of its rows to the last, including the
+ * prose between, because that prose is Amico narrating the work it is doing.
+ *
+ * DOTLESS, deliberately (spec §10 G-5). Every Amico chip already leads with an H-mark and ends
+ * with a tick or a live dot, so those are the nodes. A rail dot beside each would put two glyphs
+ * on one row — a mistake already made twice in one session.
+ *
+ * Drawn on EVERY row in the span; adjacent rows' borders join into one continuous spine. That
+ * avoids restructuring the shared ~1800-line render loop to wrap a sub-range.
+ *
+ * Nothing here may move content relative to anything else. Model / Skill / Recommend read down
+ * one shared left edge, and an earlier attempt that indented a single activation behind its own
+ * spine broke that edge and was rejected on sight. So the padding is uniform across every row
+ * in the span, and the border lives in that padding, outside the content box. */
+.amc-turn-span {
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent);
+}
+/* A context or shell group can legitimately render nothing (its <Show> gate is false). Without
+ * this the wrapper would still occupy a flex item and consume one of the parent's gaps —
+ * phantom whitespace with a stub of spine beside it. */
+.amc-turn-span:empty {
+  display: none;
+}
+/* A one-row span has nothing to connect, and a lone stub beside a single chip reads as an
+ * artefact — so it keeps the uniform padding (alignment is preserved) but draws no line. */
+.amc-turn-span[data-amico-span="only"] {
+  border-left-color: transparent;
+}
+
 /* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
 /* Expanding a skill used to dump its instructions as bare markdown straight into the
  * transcript, because [data-component="tool-output"] carries no surface of its own — no
