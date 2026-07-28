@@ -39,7 +39,7 @@ import { useFileComponent } from "../context/file"
 import { useDialog } from "../context/dialog"
 import { type UiI18n, useI18n } from "../context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
-import { AmicodeToolCard } from "../amicode/card"
+import { AmicodeToolCard, AmicoSkillChip } from "../amicode/card"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
 import { Collapsible } from "./collapsible"
@@ -2634,16 +2634,7 @@ ToolRegistry.register({
     const trigger = () => (
       <div data-slot="basic-tool-tool-info-structured">
         <div data-slot="basic-tool-tool-info-main">
-          <span data-slot="basic-tool-tool-title" class="agent-title">
-            <span data-slot="skill-kind" class="amc-skill-kind">
-              {i18n.t("ui.tool.skill")}
-            </span>
-            <Show when={name()}>
-              <span data-slot="skill-name" class="capitalize">
-                {name()}
-              </span>
-            </Show>
-          </span>
+          <AmicoSkillChip kind={i18n.t("ui.tool.skill")} name={name()} status={props.status} />
         </div>
       </div>
     )
