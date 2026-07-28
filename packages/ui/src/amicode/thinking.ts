@@ -4,35 +4,27 @@
 // test the pure bits — see run-series.ts / run-series.test.ts).
 
 // Whimsical-but-tasteful gerunds shown while Amico works, in the spirit of the
-// Claude Code CLI. Kept lightly on-brand — quantum-control and music nods among
-// the playful ones (Kate's list, 2026-07-28). NO solver-progress words
-// (Converging / Regularizing / Warm-starting): they read as "a solve is
-// running" when none is. No trailing ellipsis here — the component appends
-// the "…".
+// Claude Code CLI. Quantum-control domain (pulses, ions, gates), then a run of
+// verbed physicist names, closing on a couple of house in-jokes (Ann's list,
+// 2026-07-28). NO solver-progress words (Converging / Regularizing /
+// Warm-starting): they read as "a solve is running" when none is. No trailing
+// ellipsis here — the component appends the "…".
 export const THINKING_WORDS = [
-  "Thinking",
-  "Pondering",
-  "Ruminating",
-  "Percolating",
-  "Composing",
-  "Harmonizing",
-  "Tuning",
-  "Noodling",
-  "Conjuring",
-  "Synthesizing",
-  "Reticulating",
-  "Optimizing",
   "Oscillating",
+  "Harmonizing",
   "Wiggling",
+  "Noodling",
+  "Tuning",
   "Entangling",
   "Superposing",
   "Tunneling",
   "Propagating",
   "Splining",
   "Bending",
-  "Trotting",
+  "Trotterizing",
   "Strumming",
   "Resonating",
+  "Percolating",
   "Hyperfining",
   "Evolving",
   "ψing",
@@ -41,6 +33,31 @@ export const THINKING_WORDS = [
   "Phasing",
   "Charging",
   "Emitting",
+  "Not-leaking",
+  "Undecohering",
+  "Schröding",
+  "Transporting",
+  "Routing",
+  "Teleporting",
+  "Optimizing",
+  "Bohring",
+  "Noethering",
+  "Plancking",
+  "Skłodowskaing",
+  "Fermiing",
+  "Amplituding",
+  "Braiding",
+  "Unfrustrating",
+  "Chirping",
+  "Dzhanibekoving",
+  "Pauliing",
+  "Cating",
+  "Bogoliuboving",
+  "Hamiltonianing",
+  "Piccoloing",
+  "Fidelitymaxxing",
+  "Ionizing",
+  "Unionizing",
 ] as const
 
 /** Word for a given tick, cycling through THINKING_WORDS (wraps, incl. negatives). */
