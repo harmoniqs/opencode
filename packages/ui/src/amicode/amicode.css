@@ -707,9 +707,16 @@
 }
 /* …except a not-recorded chip that IS a button (the pulse chip, which opens the
    Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
-   must feel clickable. Hover feedback already comes from button.amc-rail-chip. */
+   must feel clickable. Hover feedback already comes from button.amc-rail-chip.
+   It also carries the recorded chips' ink — full-strength colour at weight 600 —
+   so its glyph and label read as bold as its neighbours instead of dimming out;
+   faint ink is how a chip says "inert", and this one isn't. The glyph inherits
+   currentColor, so the colour bump bolds the icon along with the label. The
+   dotted border still carries the not-yet-banked state on its own. */
 [data-component="amicode-entity-rail"] button.amc-rail-chip.is-empty {
   cursor: pointer;
+  color: var(--v2-text-text-base);
+  font-weight: 600;
 }
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
