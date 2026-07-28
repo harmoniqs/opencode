@@ -97,10 +97,10 @@ amicode-branded surfaces only exist in a compiled build).
   downloads the pinned, gate-ON release asset. Teammates need no clone/bun. Changing this fork is
   an explicit command, never a lock edit.
 - **Iterate:** clone this fork beside amicode (`../opencode`), then from amicode run
-  `pnpm --filter amicode-v2 opencode:build` → invokes `script/build.ts` with `OPENCODE_CHANNEL=dev`
+  `pnpm --filter amicode opencode:build` → invokes `script/build.ts` with `OPENCODE_CHANNEL=dev`
   (gotcha 2) and re-vendors the binary. Reload the Extension Dev Host to pick it up.
 - **Publish:** push a branch here, tag a release (the release workflow builds both targets with
-  `dev` and asserts the gate ON), then from amicode `pnpm --filter amicode-v2 opencode:pin <tag>`
+  `dev` and asserts the gate ON), then from amicode `pnpm --filter amicode opencode:pin <tag>`
   to rewrite amicode's lock (downloads + sha256-verifies both assets).
 - amicode's `packages/extension/scripts/assert_ui_gate.sh` reds CI/release if any vendored binary
   ships with the gate OFF — the automated form of gotcha 2's grep.
