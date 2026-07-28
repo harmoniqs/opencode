@@ -4,7 +4,7 @@ import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseApprovalInput } from "./approval"
 import { AmicodeApprovalCard } from "./approval-card"
-import { parseDiffSentinel, receiptParts } from "./receipt"
+import { parseDiffSentinel, receiptParts, INLINE_KINDS } from "./receipt"
 import { receiptIsCurrent } from "./receipt-currency"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
 import { compositeChip, chipText } from "./problem"
@@ -57,7 +57,7 @@ function runRefFromOutput(output: unknown): { run: string; lab?: string } | unde
 
 type DiffPiece = { key: string; from?: string; to?: string }
 
-function Chip(props: { tool: string; status?: string; output?: string }) {
+function Chip(props: { tool: string; status?: string; output?: string; count?: number }) {
   const stage = createMemo(() => amicodeStage(props.tool))
   const running = () => props.status === "pending" || props.status === "running"
   const errored = () => props.status === "error" || props.status === "failed"
@@ -188,6 +188,15 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
               )}
             </Show>
           </Show>
+          {/* amicode: a run of N consecutive receipts sharing (problem, entity,
+              action) collapses to this one card (../components/message-part.tsx,
+              ../amicode/receipt-runs.ts) — shown only when N > 1 so a lone
+              receipt renders exactly as it always has. */}
+          <Show when={(props.count ?? 1) > 1}>
+            <span class="amc-detail amc-count" data-slot="amicode-card-count">
+              ×{props.count}
+            </span>
+          </Show>
         </span>
       )}
     </Show>
@@ -262,8 +271,6 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
 // switching problems mid-chat retroactively rewrote earlier receipts. Only the
 // CURRENT receipt for the ACTIVE problem may render live (./receipt-currency.ts);
 // the rest fall through to the Chip, which renders from their own captured diff.
-const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
-
 function InlineEntityView(props: { kind: string; seq?: number }) {
   const labels = createMemo(() => amicodeEntityLabels())
   return (
@@ -289,6 +296,14 @@ export function AmicodeToolCard(props: {
   output?: string // passed by message-part.tsx's Dynamic (already wired)
   messageID?: string
   sessionID?: string
+  // amicode: set by message-part.tsx when this part is the surviving (latest)
+  // member of a collapsed run of ≥2 identical (problem, entity, action)
+  // receipts (../receipt-runs.ts). Only the Chip fallback below reads it —
+  // every collapse-eligible receipt renders through Chip by construction
+  // (receipt-runs.ts excludes anything that could route elsewhere), so a
+  // count reaching ask/approval/run/widget/inline-entity render is not
+  // expected; those paths simply ignore the prop.
+  count?: number
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   // §9.5: the warrant card, same tool-input pattern as the ask card.
@@ -322,7 +337,7 @@ export function AmicodeToolCard(props: {
   })
 
   return (
-    <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
+    <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} count={props.count} />}>
       <Match when={ask()}>
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>
