@@ -82,6 +82,26 @@
 /* The glyph is a block, not text — baseline alignment would sit it high. */
 .amc-thinking .amc-wave { align-self: center; }
 
+/* ---- skill activation label (message-part.tsx, ToolRegistry "skill") ----- */
+/* An activated skill used to render as a bare name ("brainstorming"), because
+ * `ui.tool.skill` was reachable only as a fallback for a missing input.name — which never
+ * happens. The kind now always renders in front of the name.
+ *
+ * Deliberately NOT an amicode receipt card: those carry an AMICODE_DIFF sentinel
+ * ({problem, entity, action, seq, diff}) and clicking one opens an entity view. A skill has
+ * none of that, and spending the H-mark card on generic agent mechanics would dilute what the
+ * mark means — it should say "Amico did something in your problem domain", not "something
+ * happened". BasicTool already renders a `brain` icon for skills, which carries the kind
+ * visually; this supplies the word. */
+.amc-skill-kind {
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-muted);
+}
+
 /* ---- the harmonic working indicator (amico-wave.tsx) --------------------- */
 /* A standing wave in quadrature: two identical curves, the companion a quarter period out
  * of phase, so one is at full swing whenever the other crosses zero.

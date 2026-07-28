@@ -472,7 +472,9 @@ export function getToolInfo(
     case "skill":
       return {
         icon: "brain",
-        title: input.name || i18n.t("ui.tool.skill"),
+        // AMICODE: name the kind here too. This is the compact/summary path, where the
+        // fallback-only use of ui.tool.skill left an activated skill looking like a bare tool.
+        title: input.name ? `${i18n.t("ui.tool.skill")} · ${input.name}` : i18n.t("ui.tool.skill"),
       }
     default:
       return {
@@ -2622,17 +2624,25 @@ ToolRegistry.register({
   name: "skill",
   render(props) {
     const i18n = useI18n()
-    const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
-    const running = createMemo(() => props.status === "pending" || props.status === "running")
+    // AMICODE: label the kind, then name it. `ui.tool.skill` used to be reachable only as a
+    // fallback for a missing input.name — which never happens — so an activated skill rendered
+    // as a bare word ("brainstorming") indistinguishable from any other tool. The kind now
+    // always renders, with the skill's own name beside it.
+    const name = createMemo(() => props.input.name?.trim() || "")
     const body = createMemo(() => skillBody(props.output))
-
-    const titleContent = () => <TextShimmer text={title()} active={running()} />
 
     const trigger = () => (
       <div data-slot="basic-tool-tool-info-structured">
         <div data-slot="basic-tool-tool-info-main">
-          <span data-slot="basic-tool-tool-title" class="capitalize agent-title">
-            {titleContent()}
+          <span data-slot="basic-tool-tool-title" class="agent-title">
+            <span data-slot="skill-kind" class="amc-skill-kind">
+              {i18n.t("ui.tool.skill")}
+            </span>
+            <Show when={name()}>
+              <span data-slot="skill-name" class="capitalize">
+                {name()}
+              </span>
+            </Show>
           </span>
         </div>
       </div>
