@@ -13,7 +13,10 @@ export function systemCountLabel(proj: SystemProjection): string | undefined {
   if (comps.length === 0) return undefined
   const roles = new Set(comps.map((c) => c.role))
   const levels = new Set(comps.map((c) => c.levels).filter((l): l is number => typeof l === "number"))
-  const role = roles.size === 1 ? [...roles][0] : "component"
+  // "other" is the honest role for an unclassified subsystem, but "3 others"
+  // reads as a bug — say what it is structurally instead.
+  const only = roles.size === 1 ? [...roles][0] : undefined
+  const role = only === undefined || only === "other" || only === "?" ? "component" : only
   const seg = `${comps.length} ${comps.length === 1 ? role : `${role}s`}`
   return levels.size === 1 ? `${seg} × ${[...levels][0]} levels` : seg
 }
@@ -86,16 +89,35 @@ const LADDER_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h"]
 const KERR_KEYS = ["K", "K_c", "K_c_Hz", "kerr"]
 const MODE_ROLES = new Set(["cavity", "resonator", "mode"])
 
+/** The ONLY platforms whose `qubit` role is an anharmonic ladder. Nothing else
+ *  may assume one — not the role (the plugin's platformDefaultRole maps every
+ *  unfamiliar platform to "qubit"), and not the level count (three levels is a
+ *  dimension, not an oscillator). Both of those leaks put the transmon
+ *  Hamiltonian, and the transmon's anharmonicity row, on a spin qubit.
+ *  A bosonic MODE is classified by its role instead, so it needs no entry here;
+ *  "bosonic" covers a platform that calls its computational element a qubit. */
+const LADDER_PLATFORMS = new Set(["transmon", "bosonic"])
+
 /** The term shape a component contributes; `key` groups sites that share one
- *  (two linear cavities are one group, a Kerr cavity is its own). */
-function classify(c: ComponentRow): { kind: SiteKind; key: string } {
+ *  (two linear cavities are one group, a Kerr cavity is its own) and selects the
+ *  physics rows, so the equation and the table can never disagree. */
+function classify(c: ComponentRow, platform?: string): { kind: SiteKind; key: string } {
   switch (c.role) {
     case "atom":
       return { kind: "rydberg", key: "rydberg" }
     case "qubit":
-      // Levels, not param presence: a 3-level transmon with empty params is
-      // still an anharmonic ladder, and a spin is never one.
-      return c.levels === 2 ? { kind: "spin", key: "spin" } : { kind: "ladder", key: "qubit" }
+      // Two levels is a generic two-level system on ANY platform — every one of
+      // them has an ω σ_z/2 splitting and σ_x/σ_y control, so that much is safe.
+      //
+      // MORE than two levels is NOT evidence of an anharmonic oscillator. It is
+      // evidence of a Hilbert-space dimension and nothing else: an exchange-only
+      // spin qubit at levels=3 is three dots, a spin-1 defect is three Zeeman
+      // sublevels, and neither is a ladder. Only a platform that comes with a
+      // ladder model may claim one.
+      if (c.levels === 2) return { kind: "spin", key: "spin" }
+      return LADDER_PLATFORMS.has((platform ?? "").toLowerCase())
+        ? { kind: "ladder", key: "qubit" }
+        : { kind: "opaque", key: `opaque:${c.role}` }
     case "cavity":
     case "resonator":
     case "mode":
@@ -112,12 +134,17 @@ const num = (i: string) => (i ? `\\hat n_{${i}}` : "\\hat n")
 const pauli = (axis: string, i: string) => (i ? `\\hat\\sigma_${axis}^{(${i})}` : `\\hat\\sigma_${axis}`)
 const sub = (sym: string, i: string) => (i ? `${sym}_{${i}}` : sym)
 
-/** Whether a control carries a site index: a GLOBAL drive is one knob shared by
- *  every site, per-component is an independent knob each, zoned is one per zone.
- *  That distinction is the whole difference between a global-drive CZ and a
- *  locally-addressed one, and the card claims it in a badge. */
-const control = (i: string, arch?: string) =>
-  !i || arch === "global" ? "" : arch === "zoned" ? `_{z(${i})}` : `_{${i}}`
+/** The index a CONTROL carries, bare: "" when one knob is shared by every site
+ *  (a global drive, or a single-component system), the site index when each has
+ *  its own, the zone when they are zoned. That distinction is the whole
+ *  difference between a global-drive CZ and a locally-addressed one, and the
+ *  card claims it in a badge. Bare so callers can compose it either as a
+ *  subscript (`\Omega_{i}`) or into an existing one (`u_{1,i}`). */
+const controlIdx = (i: string, arch?: string) => (!i || arch === "global" ? "" : arch === "zoned" ? `z(${i})` : i)
+const control = (i: string, arch?: string) => {
+  const c = controlIdx(i, arch)
+  return c ? `_{${c}}` : ""
+}
 
 /** Sum prefix + index token for a group: no index at all in a single-component
  *  system, a literal site number for a lone member, `\sum_i` when the group is
@@ -180,8 +207,17 @@ function driveLatex(g: Site[], total: number, arch?: string): string {
       return wrap(sum, `\\tfrac{\\Omega${c}(t)}{2}\\,(|r\\rangle\\langle 1|${i ? `_{${i}}` : ""} + \\mathrm{h.c.})`)
     case "spin":
       return wrap(sum, `u^x${c}(t)\\,${pauli("x", i)} + u^y${c}(t)\\,${pauli("y", i)}`)
-    case "ladder":
-      return wrap(sum, `\\varepsilon${c}(t)\\,(${ann(g[0].letter, i)} + ${cre(g[0].letter, i)})`)
+    case "ladder": {
+      // TWO quadratures. Piccolo drives a transmon with n_drives = 2, and the
+      // plugin's TRANSMON_LATEX (what the agent shows in chat) always said so —
+      // this table used to say `ε(t)(â+â†)`, one control, and nobody noticed the
+      // card and the chat disagreeing about the same device.
+      const q = controlIdx(i, arch)
+      const u = (n: number) => `u_{${n}${q ? `,${q}` : ""}}(t)`
+      const A = ann(g[0].letter, i)
+      const Ad = cre(g[0].letter, i)
+      return wrap(sum, `${u(1)}\\,(${A} + ${Ad}) + i\\,${u(2)}\\,(${A} - ${Ad})`)
+    }
     default:
       return `${sum}\\hat H_{\\mathrm{c}}${i ? `^{(${i})}` : ""}(t)`
   }
@@ -263,14 +299,51 @@ function joinTerms(terms: string[]): string {
   return terms.reduce((acc, t) => (!acc ? t : t.startsWith("-") ? `${acc} - ${t.slice(1).trimStart()}` : `${acc} + ${t}`), "")
 }
 
-/** Compose an illustrative Hamiltonian for ANY composite system: one drift and
- *  one drive per component GROUP (summed over the group's sites) plus one term
- *  per set of like edges. undefined when there are no components. Never throws. */
+export type SystemHamiltonian = {
+  latex: string
+  /** recorded = the researcher confirmed these exact terms · inferred = the
+   *  canonical form for the platform, which the card must SAY it is guessing. */
+  source: "recorded" | "inferred"
+  /** Conventions the recorded terms assume (frame, units, basis). */
+  notes?: string
+}
+
+/** What the card should show. Recorded terms win outright: they are the model
+ *  the researcher confirmed, and the fallback below can only ever be right for
+ *  platforms someone hardcoded. undefined = say nothing, which is the honest
+ *  answer for an off-template platform nobody has described yet. */
+export function systemHamiltonian(proj: SystemProjection): SystemHamiltonian | undefined {
+  const recorded = proj.hamiltonian
+  if (recorded && recorded.terms.length > 0) {
+    // Ordered drift → coupling → drive regardless of the order they were
+    // recorded in, so the equation reads the way a physicist writes one.
+    const rank = { drift: 0, coupling: 1, drive: 2 } as Record<string, number>
+    const terms = [...recorded.terms].sort((a, b) => (rank[a.kind] ?? 0) - (rank[b.kind] ?? 0))
+    return {
+      latex: "\\hat H/\\hbar = " + joinTerms(terms.map((t) => t.latex.trim())),
+      source: "recorded",
+      ...(recorded.notes ? { notes: recorded.notes } : {}),
+    }
+  }
+  const latex = systemHamiltonianLatex(proj)
+  return latex ? { latex, source: "inferred" } : undefined
+}
+
+/** The canonical form for a platform we model, composed from the structure:
+ *  one drift and one drive per component GROUP (summed over the group's sites)
+ *  plus one term per set of like edges. This is a FALLBACK — it is a guess about
+ *  physics nobody stated, and every caller must present it as one. undefined
+ *  when there is nothing to say. Never throws. */
 export function systemHamiltonianLatex(proj: SystemProjection): string | undefined {
   const total = proj.components.length
   if (total === 0) return undefined
 
-  const sites: Site[] = proj.components.map((c, k) => ({ idx: k + 1, role: c.role, letter: "", ...classify(c) }))
+  const sites: Site[] = proj.components.map((c, k) => ({
+    idx: k + 1,
+    role: c.role,
+    letter: "",
+    ...classify(c, proj.platform),
+  }))
   const byKey = new Map<string, Site[]>()
   for (const s of sites) (byKey.get(s.key) ?? byKey.set(s.key, []).get(s.key)!).push(s)
   const groups = [...byKey.values()]
@@ -296,6 +369,12 @@ export function systemHamiltonianLatex(proj: SystemProjection): string | undefin
     const key = `${cp.kind}|${edge.a.kind}|${edge.b.kind}`
     ;(edges.get(key) ?? edges.set(key, []).get(key)!).push(edge)
   }
+
+  // Nothing to say: every component is a model we don't have, so the only
+  // "Hamiltonian" we could compose is `Ĥ_drift + Ĥ_c(t)` — true of literally
+  // every control problem, and it would occupy the slot where the real model
+  // belongs. Silence here is what makes the agent record one.
+  if (groups.every((g) => g[0].kind === "opaque")) return undefined
 
   const terms = groups.map((g) => driftLatex(g, total, proj.driveArch))
   for (const [key, group] of edges) terms.push(couplingLatex(key.split("|")[0], group))
@@ -344,9 +423,6 @@ type ParamSpec = {
   sym: string
   /** Rendered before the number ("≤ " for a bound). */
   prefix?: string
-  /** False → the param does not exist in THIS component; the row is dropped
-   *  entirely rather than shown as an unanswered question. */
-  applies?: (c: ComponentRow) => boolean
 }
 
 /** Units are never assumed: transmon params are GHz, the Rydberg templates work
@@ -360,33 +436,34 @@ const MODE_PARAMS: ParamSpec[] = [
   { keys: ["kappa"], label: "linewidth", sym: "κ" },
 ]
 
-/** Params each ROLE actually has, in card order. An unrecognized role expects
- *  NOTHING — it shows only what was recorded, which is the honest floor for a
- *  platform we have no model for. */
-const ROLE_PARAMS: Record<string, ParamSpec[]> = {
-  qubit: [
+/** Params each MODEL has, in card order — keyed by the same `classify` result
+ *  that picks the Hamiltonian terms, so the equation and the table are always
+ *  describing the same physics. A model we don't have (`opaque:*`) expects
+ *  NOTHING and shows only what was recorded: that is the honest floor for a
+ *  platform outside the templated set.  */
+const MODEL_PARAMS: Record<string, ParamSpec[]> = {
+  spin: [
+    // A two-level system has a splitting and a drive bound — and no third level
+    // to be anharmonic against.
     { keys: ["omega", "frequency", "f01"], label: "frequency", sym: "ω" },
-    {
-      keys: ["delta", "alpha", "anharmonicity"],
-      label: "anharmonicity",
-      sym: "δ",
-      // A two-level qubit has no third level to be anharmonic against.
-      applies: (c) => c.levels === undefined || c.levels > 2,
-    },
     { keys: ["drive_max"], label: "drive bound", sym: "|u|", prefix: "≤ " },
   ],
-  atom: [
+  qubit: [
+    { keys: ["omega", "frequency", "f01"], label: "frequency", sym: "ω" },
+    { keys: ["delta", "alpha", "anharmonicity"], label: "anharmonicity", sym: "δ" },
+    { keys: ["drive_max"], label: "drive bound", sym: "|u|", prefix: "≤ " },
+  ],
+  rydberg: [
     // Lowercase `delta_max`/`omega_max` are what the Rydberg template and the
     // interview actually record (Δ_max, Ω_max). They are safe to claim here and
-    // ONLY here: the spec is keyed by role, so a transmon's δ can never reach
+    // ONLY here: the spec is keyed by model, so a transmon's δ can never reach
     // this row. A bare `delta` on an atom stays deliberately unclaimed — it is
     // far more likely a misfiled anharmonicity than a detuning.
     { keys: ["Delta", "Delta_max", "delta_max", "detuning"], label: "detuning", sym: "Δ", prefix: "≤ " },
     { keys: ["Omega", "Omega_max", "omega_max", "rabi_max", "rabi", "drive_max"], label: "rabi drive", sym: "Ω", prefix: "≤ " },
   ],
-  cavity: MODE_PARAMS,
-  resonator: MODE_PARAMS,
   mode: MODE_PARAMS,
+  "mode-kerr": MODE_PARAMS,
 }
 
 /** First recorded key matching any alias. A zero keeps the old "0 means unset"
@@ -403,18 +480,18 @@ function matchParam(params: Record<string, number>, keys: string[]) {
   return undefined
 }
 
-/** Rows for ONE component: levels, the params its role actually has (unanswered
+/** Rows for ONE component: levels, the params its MODEL actually has (unanswered
  *  ones read "not set" — that list doubles as the interview's to-do), then
- *  anything else recorded, so nothing on file is dropped. Never throws. */
-export function componentPhysicsRows(c: ComponentRow): PhysicsRow[] {
-  const spec = ROLE_PARAMS[c.role] ?? []
+ *  anything else recorded, so nothing on file is dropped. `platform` is what
+ *  separates a transmon from a qubit we have no model for. Never throws. */
+export function componentPhysicsRows(c: ComponentRow, platform?: string): PhysicsRow[] {
+  const spec = MODEL_PARAMS[classify(c, platform).key] ?? []
   const claimed = new Set<string>()
   const rows: PhysicsRow[] =
     c.levels === undefined
       ? [{ label: "levels", value: "not set", state: "missing" }]
       : [{ label: "levels", value: String(c.levels), state: "recorded" }]
   for (const s of spec) {
-    if (s.applies && !s.applies(c)) continue
     const hit = matchParam(c.params, s.keys)
     if (hit) claimed.add(hit.key)
     rows.push({
