@@ -1,5 +1,5 @@
-// packages/ui/src/amicode/amico-wave.test.ts
-import { readFileSync } from "node:fs"
+// packages/ui/src/amicode/wave-geometry.test.ts
+import { readdirSync, readFileSync } from "node:fs"
 import { describe, expect, test } from "bun:test"
 import {
   WAVE_BOX,
@@ -16,11 +16,7 @@ import {
   modeDelaysMs,
   visibleModesAt,
   samplePoints,
-  // Explicit extension — see the comment in amico-wave.tsx: this directory now has both
-  // amico-wave.ts and amico-wave.tsx sharing a stem, and an extensionless "./amico-wave"
-  // resolves to the .tsx sibling under this package's bundler resolution, not the .ts module
-  // these names actually live in.
-} from "./amico-wave.ts"
+} from "./wave-geometry"
 
 describe("quadrature", () => {
   test("companion delay is exactly a quarter period, derived from the period", () => {
@@ -135,5 +131,16 @@ describe("CSS/TS drift guard", () => {
     expect(start).toBeGreaterThan(-1)
     const block = css.slice(start, css.indexOf("}", css.indexOf("opacity: 0", start)))
     expect(block).toContain(MODE_VISIBLE_PCT)
+  })
+})
+
+describe("module/component naming", () => {
+  test("no same-stem .ts/.tsx pair in this directory — bun resolves such imports to the .tsx", () => {
+    const dir = new URL(".", import.meta.url)
+    const names = readdirSync(dir)
+    const stem = (f: string) => f.replace(/\.(tsx?|test\.ts)$/, "")
+    const ts = new Set(names.filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")).map(stem))
+    const collisions = names.filter((f) => f.endsWith(".tsx") && ts.has(stem(f)))
+    expect(collisions).toEqual([])
   })
 })

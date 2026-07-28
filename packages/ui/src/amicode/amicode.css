@@ -84,7 +84,7 @@
 /* A standing wave in quadrature: two identical curves, the companion a quarter period out
  * of phase, so one is at full swing whenever the other crosses zero.
  *
- * Every duration, delay and opacity here comes from amico-wave.ts via a custom property
+ * Every duration, delay and opacity here comes from wave-geometry.ts via a custom property
  * set inline by the component — do NOT restate those numbers in this file.
  *
  * Colour follows the `ink` role from brand_accent.ts: the brand lemon is a FILL, never an
@@ -119,10 +119,10 @@
 .amc-wave-mode {
   animation: amc-wave-mode var(--amc-wave-cadence) steps(1) infinite;
 }
-/* THE ONE UNAVOIDABLE DUPLICATION. 33.3333% is MODE_VISIBLE_PCT from amico-wave.ts, and it
+/* THE ONE UNAVOIDABLE DUPLICATION. 33.3333% is MODE_VISIBLE_PCT from wave-geometry.ts, and it
  * cannot be a var(): @keyframes selectors are not a property-value context, so custom
  * properties are invalid there. Writing 33% instead would leave a ~23ms window each cadence
- * with NO mode visible — a per-cycle flicker. A test in amico-wave.test.ts reads this file
+ * with NO mode visible — a per-cycle flicker. A test in wave-geometry.test.ts reads this file
  * and asserts this literal still matches the constant, so the two cannot drift. */
 @keyframes amc-wave-mode {
   0%, 33.3333%   { opacity: 1; }

@@ -1,4 +1,4 @@
-// packages/ui/src/amicode/amico-wave.ts
+// packages/ui/src/amicode/wave-geometry.ts
 // AMICODE: pure geometry + timing for the harmonic working indicator (amico-wave.tsx).
 // Spec: spec-20260728-104232-amicode-working-indicator-harmonic-wave.
 //
