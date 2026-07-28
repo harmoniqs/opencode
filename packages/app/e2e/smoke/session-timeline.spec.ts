@@ -412,13 +412,12 @@ function expectCompleteScroll(
 
 async function selectHomeProject(page: Page, projectName: string) {
   await page.goto("/")
-  const row = page
-    .locator('[data-component="home-project-row"]')
-    .filter({ hasText: new RegExp(projectName, "i") })
-    .first()
-  await expectAppVisible(row)
-  await row.click()
-  await expect(row).toHaveAttribute("data-selected", "", { timeout: APP_READY_TIMEOUT })
+  // amicode home: a single seeded project is auto-focused and its row is
+  // deliberately NOT rendered (HomeProjectList shows rows only when there is
+  // an actual choice, i.e. >1 projects). The home-cards strip is the stable
+  // "home ready" signal; the focused project's sessions render alongside it.
+  await expectAppVisible(page.locator('[data-component="amicode-home-cards"]'))
+  await expect(page.getByText(new RegExp(projectName, "i")).first()).toBeVisible({ timeout: APP_READY_TIMEOUT })
   await expect(page).toHaveURL(/\/$/)
 }
 
