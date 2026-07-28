@@ -99,7 +99,8 @@
  * in the span, and the border lives in that padding, outside the content box. */
 .amc-turn-span {
   padding-left: 10px;
-  border-left: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent);
+  /* 45%, not 30%: at 1px the fainter value was near-invisible against the transcript. */
+  border-left: 1px solid color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent);
 }
 /* A context or shell group can legitimately render nothing (its <Show> gate is false). Without
  * this the wrapper would still occupy a flex item and consume one of the parent's gaps —
@@ -107,6 +108,9 @@
 .amc-turn-span:empty {
   display: none;
 }
+/* A context or shell group can legitimately render nothing (its <Show> gate is false). Without
+ * this the wrapper would still occupy a flex item and consume one of the parent's gaps —
+ * phantom whitespace with a stub of spine beside it. */
 /* A one-row span has nothing to connect, and a lone stub beside a single chip reads as an
  * artefact — so it keeps the uniform padding (alignment is preserved) but draws no line. */
 .amc-turn-span[data-amico-span="only"] {
