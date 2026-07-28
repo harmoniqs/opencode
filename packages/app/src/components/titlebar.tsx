@@ -1038,8 +1038,12 @@ function ChannelIndicator() {
   return (
     <>
       {["beta", "dev"].includes(import.meta.env.VITE_OPENCODE_CHANNEL) && (
-        <div class="bg-icon-interactive-base text-white font-medium px-2 rounded-sm uppercase font-mono">
-          {import.meta.env.VITE_OPENCODE_CHANNEL.toUpperCase()}
+        // amicode: always reads BETA, in the brand gold. "DEV" is build plumbing
+        // (the channel a local build happens to compile under); BETA is the
+        // product state users should see. Gold ties it to the Amico wordmark
+        // instead of the generic interactive blue.
+        <div data-slot="amicode-beta-tag" class="font-medium px-2 rounded-sm uppercase font-mono">
+          BETA
         </div>
       )}
     </>

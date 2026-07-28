@@ -2,6 +2,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import path from "path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { producedUserVisibleOutput } from "./turn-output"
 import os from "os"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -1140,6 +1141,11 @@ export const layer = Layer.effect(
         // via the `question` tool, so a stubborn turn is nudged at most once
         // (the Assistant info schema has no metadata field to persist this on).
         const amicoNudged = new Set<string>()
+        // Consecutive assistant turns that produced NO user-visible output. See
+        // the silent-turn guard below; capped so a model that only ever returns
+        // silence still terminates instead of spinning.
+        let silentTurns = 0
+        const SILENT_TURN_LIMIT = 3
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
@@ -1165,12 +1171,78 @@ export const layer = Layer.effect(
               (part) => part.type === "tool" && !part.metadata?.providerExecuted && !isOrphanedInterruptedTool(part),
             ) ?? false
 
+          // Did this turn actually SAY or DO anything the user can see? A
+          // reasoning part is the model thinking, not output — it doesn't count.
+          // (Rule lives in turn-output.ts so it is unit-testable.)
+          const producedOutput = producedUserVisibleOutput(lastAssistantMsg?.parts, (part) =>
+            part.type === "tool" ? isOrphanedInterruptedTool(part as SessionV1.ToolPart) : false,
+          )
+          if (producedOutput) silentTurns = 0
+
           if (
             lastAssistant?.finish &&
             !["tool-calls"].includes(lastAssistant.finish) &&
             !hasToolCalls &&
             lastUser.id < lastAssistant.id
           ) {
+            // ── silent-turn guard (amicode) ──────────────────────────────────
+            // Some models — open-weight ones especially — emit a REASONING-ONLY
+            // step: step-start, reasoning, step-finish, with no text, no tool
+            // calls, and a finish reason the SDK maps to "unknown". The test
+            // above whitelists only "tool-calls", so such a turn reads as "the
+            // model is done" and the turn ends MID-THOUGHT.
+            //
+            // Observed live on deepseek-v4-flash-free: the pulse-designer
+            // interview stalled right after amicode_pick_system recorded the
+            // platform, and the abandoned message's own reasoning read "The
+            // system has been recorded…" — the model was about to ask question 2.
+            // The user saw the interview die and had to send another message to
+            // resume, once per question.
+            //
+            // A turn that produced NO user-visible output has NOT answered the
+            // user, whatever the finish reason claims — so re-invoke rather than
+            // ending the turn. Bounded by SILENT_TURN_LIMIT so a model that only
+            // ever returns silence still terminates.
+            if (!producedOutput && silentTurns < SILENT_TURN_LIMIT) {
+              silentTurns++
+              yield* Effect.logWarning("silent assistant turn — re-invoking instead of ending the turn", {
+                "session.id": sessionID,
+                messageID: lastAssistant.id,
+                finish: lastAssistant.finish,
+                attempt: silentTurns,
+                limit: SILENT_TURN_LIMIT,
+              })
+              // A bare `continue` does NOT re-invoke the model: the loop re-reads
+              // the same messages, the exit test's `lastUser.id < lastAssistant.id`
+              // still holds, and it lands right back here — spinning to the limit
+              // in microseconds (observed). Appending a synthetic user turn is what
+              // actually hands control back to the model (the same mechanism the
+              // prose guard below relies on), and it doubles as the instruction.
+              const continueMsg: SessionV1.User = {
+                id: MessageID.ascending(),
+                sessionID,
+                role: "user",
+                time: { created: Date.now() },
+                agent: lastUser.agent,
+                model: lastUser.model,
+              }
+              yield* sessions.updateMessage(continueMsg)
+              yield* sessions.updatePart({
+                id: PartID.ascending(),
+                messageID: continueMsg.id,
+                sessionID,
+                type: "text",
+                text:
+                  "[system] Your last turn produced no visible output — only internal " +
+                  "reasoning, so the user saw nothing. Continue from where you left off " +
+                  "now: take the next action directly (if the next step is a question, " +
+                  "call the `question` tool). Do not restate your reasoning.",
+                synthetic: true,
+              } satisfies SessionV1.TextPart)
+              step++
+              continue
+            }
+
             // Amico interview guard: the pulse-designer interview must ask every
             // question via the `question` tool (it renders the clickable card).
             // Models intermittently drift and ask in PROSE instead, which leaves
