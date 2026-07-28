@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test"
+import katex from "katex"
 import { systemProjection } from "./problem"
 import {
   systemSchematicModel,
@@ -71,7 +72,9 @@ describe("systemHamiltonianLatex", () => {
     const h = systemHamiltonianLatex(systemProjection(cavQubit))!
     expect(h).toContain("\\hat H/\\hbar")
     expect(h).toContain("\\chi") // the dispersive interaction term
-    expect(h).toContain("\\varepsilon(t)") // drive term
+    // per-component drive → one independently indexed control per subsystem
+    expect(h).toContain("\\varepsilon_{1}(t)")
+    expect(h).toContain("\\varepsilon_{2}(t)")
   })
   it("returns undefined for a system with no components", () => {
     expect(systemHamiltonianLatex(systemProjection({ platform: "x", components: [], couplings: [] }))).toBeUndefined()
@@ -84,25 +87,96 @@ describe("systemHamiltonianLatex", () => {
       couplings: [],
     }
     const h = systemHamiltonianLatex(systemProjection(rydberg))!
-    expect(h).toContain("-\\Delta\\,|r\\rangle\\langle r|") // detuning on the Rydberg level, not -Δ n̂
+    // n̂ = |r⟩⟨r|, the same operator the vdW term uses — one notation per operator
+    expect(h).toContain("-\\Delta\\,\\hat n")
     expect(h).toContain("\\Omega(t)") // laser Rabi drive
     expect(h).toContain("|r\\rangle\\langle 1|")
     expect(h).not.toContain("\\varepsilon(t)") // no cavity-style drive on a bare atom
     expect(h).not.toContain("\\hat a") // no bosonic ladder operators at all
+    expect(h).not.toContain("\\sum") // N=1 carries no index clutter
   })
-  it("two rydberg atoms + vdW → single deduped drift/drive pair + blockade term", () => {
-    const pair = {
+  it("N atoms sum over sites — the register size is IN the equation", () => {
+    const atoms = (n: number) => ({
       platform: "rydberg",
       drive: { arch: "global" },
+      components: Array.from({ length: n }, (_, i) => ({ id: `q${i + 1}`, role: "atom", levels: 3, params: {} })),
+      couplings: Array.from({ length: n - 1 }, (_, i) => ({
+        between: [`q${i + 1}`, `q${i + 2}`],
+        kind: "vdW",
+        params: {},
+      })),
+    })
+    const two = systemHamiltonianLatex(systemProjection(atoms(2)))!
+    const three = systemHamiltonianLatex(systemProjection(atoms(3)))!
+    // the bug this replaces: 1, 2 and 20 atoms all rendered the same string
+    expect(two).not.toBe(systemHamiltonianLatex(systemProjection(atoms(1)))!)
+    expect(two).toContain("-\\Delta\\,\\sum_i \\hat n_{i}")
+    expect(two).toContain("\\tfrac{C_6}{r_{12}^6}\\,\\hat n_{1} \\hat n_{2}") // one edge → real site ids
+    expect(three).toContain("\\sum_{\\langle ij\\rangle} \\tfrac{C_6}{r_{ij}^6}") // two edges → sum over pairs
+    expect(two.split("\\Omega(t)")).toHaveLength(2) // one global control, applied to every site
+  })
+  it("drive architecture reaches the equation: global shares one control, per-site indexes it", () => {
+    const pair = (arch: string) => ({
+      platform: "rydberg",
+      drive: { arch },
       components: [
         { id: "q1", role: "atom", levels: 3, params: {} },
         { id: "q2", role: "atom", levels: 3, params: {} },
       ],
       couplings: [{ between: ["q1", "q2"], kind: "vdW", params: {} }],
-    }
-    const h = systemHamiltonianLatex(systemProjection(pair))!
-    expect(h).toContain("C_6") // blockade interaction
-    expect(h.split("\\Omega(t)")).toHaveLength(2) // drive appears exactly once
+    })
+    const global = systemHamiltonianLatex(systemProjection(pair("global")))!
+    const per = systemHamiltonianLatex(systemProjection(pair("per-component")))!
+    const zoned = systemHamiltonianLatex(systemProjection(pair("zoned")))!
+    expect(global).toContain("\\Omega(t)") // one knob for the whole register
+    expect(per).toContain("\\Omega_{i}(t)") // one knob per atom
+    expect(zoned).toContain("\\Omega_{z(i)}(t)") // one knob per zone
+    expect(new Set([global, per, zoned]).size).toBe(3) // the badge is not decoration
+    expect(global).toContain("-\\Delta\\,\\sum_i") // Δ is the laser's, so it follows the drive
+    expect(per).toContain("\\Delta_{i}")
+  })
+  it("a qubit and a cavity never share an operator symbol", () => {
+    const h = systemHamiltonianLatex(
+      systemProjection({
+        platform: "transmon",
+        drive: { arch: "per-component" },
+        components: [
+          { id: "q1", role: "qubit", levels: 3, params: {} },
+          { id: "c1", role: "cavity", levels: 10, params: {} },
+        ],
+        couplings: [{ between: ["q1", "c1"], kind: "dispersive-chi", params: {} }],
+      }),
+    )!
+    expect(h).toContain("\\hat a^\\dagger_{1} \\hat a_{1}") // qubit ladder
+    expect(h).toContain("\\hat b^\\dagger_{2} \\hat b_{2}") // cavity gets its OWN letter
+    expect(h).toContain("\\chi\\,\\hat b^\\dagger_{2} \\hat b_{2}\\,\\hat n_{1}")
+  })
+  it("a role we have no model for gets a named drift and control, not invented algebra", () => {
+    const h = systemHamiltonianLatex(
+      systemProjection({
+        platform: "spin",
+        drive: { arch: "per-component" },
+        components: [{ id: "s1", role: "spin-qudit", levels: 4, params: {} }],
+        couplings: [],
+      }),
+    )!
+    expect(h).toBe("\\hat H/\\hbar = \\hat H_{\\mathrm{drift}} + \\hat H_{\\mathrm{c}}(t)")
+    expect(h).not.toContain("\\hat a") // no bosonic quadrature drive conjured for it
+  })
+  it("a term carrying its own minus sign is joined with −, not '+ -'", () => {
+    const h = systemHamiltonianLatex(
+      systemProjection({
+        platform: "hybrid",
+        drive: { arch: "per-component" },
+        components: [
+          { id: "c1", role: "cavity", levels: 10, params: {} },
+          { id: "a1", role: "atom", levels: 3, params: {} },
+        ],
+        couplings: [],
+      }),
+    )!
+    expect(h).not.toContain("+ -")
+    expect(h).toContain(" - \\Delta_{2}")
   })
   it("levels, not param presence, picks the qubit model: 3-level ladder vs 2-level spin", () => {
     const ladder = {
@@ -134,8 +208,83 @@ describe("systemHamiltonianLatex", () => {
       couplings: [],
     }
     const h = systemHamiltonianLatex(systemProjection(mixed))!
-    expect(h).toContain("\\Omega(t)")
-    expect(h).toContain("\\varepsilon(t)")
+    expect(h).toContain("\\Omega_{1}(t)") // laser Rabi on the atom
+    expect(h).toContain("\\varepsilon_{2}(t)") // quadrature drive on the cavity
+  })
+})
+
+describe("systemHamiltonianLatex — exhaustive sweep", () => {
+  // Every role × every coupling kind × every drive arch × N ∈ {2,3}. The card
+  // renders this straight into KaTeX, so an unparseable string is a visible
+  // error box in the transcript; a composer that special-cases roles and edge
+  // shapes needs the whole product space swept, not a handful of examples.
+  const ROLES = ["qubit2", "qubit3", "atom", "cavity", "cavityK", "resonator", "mode", "unmodeled"]
+  const KINDS = ["exchange", "ZZ", "cross-resonance", "dispersive-chi", "vdW", "mode-mediated", "not-a-kind"]
+  const ARCHES = ["global", "per-component", "zoned", undefined]
+  const mk = (r: string, i: number) =>
+    r === "qubit2" ? { id: `q${i}`, role: "qubit", levels: 2, params: {} }
+    : r === "qubit3" ? { id: `q${i}`, role: "qubit", levels: 3, params: {} }
+    : r === "atom" ? { id: `q${i}`, role: "atom", levels: 3, params: {} }
+    : r === "cavityK" ? { id: `q${i}`, role: "cavity", levels: 10, params: { K_c_Hz: 3 } }
+    : r === "unmodeled" ? { id: `q${i}`, role: "flux-tunable-thingy", levels: 4, params: { foo: 1 } }
+    : { id: `q${i}`, role: r, levels: 10, params: {} }
+
+  it("every expressible system renders parseable KaTeX", () => {
+    const broken: string[] = []
+    let checked = 0
+    for (const a of ROLES)
+      for (const b of ROLES)
+        for (const kind of KINDS)
+          for (const arch of ARCHES)
+            for (const third of [false, true]) {
+              const components = [mk(a, 1), mk(b, 2), ...(third ? [mk(b, 3)] : [])]
+              const latex = systemHamiltonianLatex(
+                systemProjection({
+                  platform: "x",
+                  ...(arch ? { drive: { arch } } : {}),
+                  components,
+                  couplings: [
+                    { between: ["q1", "q2"], kind, params: {} },
+                    ...(third ? [{ between: ["q2", "q3"], kind, params: {} }] : []),
+                  ],
+                }),
+              )
+              if (!latex) { broken.push(`no output: ${a}/${b}/${kind}`); continue }
+              checked++
+              try {
+                katex.renderToString(latex, { throwOnError: true })
+              } catch (err) {
+                broken.push(`${a}/${b}/${kind}/${arch}/N${components.length}: ${(err as Error).message}\n  ${latex}`)
+              }
+            }
+    expect(checked).toBeGreaterThan(3000)
+    expect(broken).toEqual([])
+  })
+
+  it("survives malformed input without throwing", () => {
+    const cases = [
+      // coupling naming a component that doesn't exist
+      { platform: "x", components: [{ id: "q1", role: "atom", levels: 3, params: {} }],
+        couplings: [{ between: ["q1", "GHOST"], kind: "vdW", params: {} }] },
+      // a one-ended coupling
+      { platform: "x", components: [{ id: "q1", role: "qubit", levels: 3, params: {} }],
+        couplings: [{ between: ["q1"], kind: "ZZ", params: {} }] },
+      // no levels recorded anywhere
+      { platform: "x", components: [{ id: "q1", role: "qubit", params: {} }], couplings: [] },
+      // a mode-mediated hyperedge across three different roles
+      { platform: "x",
+        components: [
+          { id: "q1", role: "qubit", levels: 3, params: {} },
+          { id: "a1", role: "atom", levels: 3, params: {} },
+          { id: "m1", role: "mode", levels: 8, params: {} },
+        ],
+        couplings: [{ between: ["q1", "a1", "m1"], kind: "mode-mediated", params: {} }] },
+    ]
+    for (const c of cases) {
+      const latex = systemHamiltonianLatex(systemProjection(c as any))!
+      expect(latex).toContain("\\hat H/\\hbar")
+      expect(() => katex.renderToString(latex, { throwOnError: true })).not.toThrow()
+    }
   })
 })
 
