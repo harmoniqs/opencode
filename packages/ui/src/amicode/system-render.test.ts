@@ -1,6 +1,13 @@
 import { describe, it, expect } from "bun:test"
 import { systemProjection } from "./problem"
-import { systemSchematicModel, systemTableModel, systemHamiltonianLatex, systemIdentityLine } from "./system-render"
+import {
+  systemSchematicModel,
+  systemTableModel,
+  systemHamiltonianLatex,
+  systemIdentityLine,
+  systemCountLabel,
+  componentPhysicsRows,
+} from "./system-render"
 
 const twoTransmon = {
   platform: "transmon",
@@ -97,6 +104,25 @@ describe("systemHamiltonianLatex", () => {
     expect(h).toContain("C_6") // blockade interaction
     expect(h.split("\\Omega(t)")).toHaveLength(2) // drive appears exactly once
   })
+  it("levels, not param presence, picks the qubit model: 3-level ladder vs 2-level spin", () => {
+    const ladder = {
+      platform: "transmon",
+      drive: { arch: "per-component" },
+      // params still empty — the model is a 3-level ladder regardless
+      components: [{ id: "q1", role: "qubit", levels: 3, params: {} }],
+      couplings: [],
+    }
+    const h = systemHamiltonianLatex(systemProjection(ladder))!
+    expect(h).toContain("\\tfrac{\\delta}{2}")
+    expect(h).not.toContain("\\hat\\sigma_z")
+
+    const spin = systemHamiltonianLatex(
+      systemProjection({ ...ladder, components: [{ id: "q1", role: "qubit", levels: 2, params: {} }] }),
+    )!
+    expect(spin).toContain("\\hat\\sigma_z")
+    expect(spin).toContain("\\hat\\sigma_x") // driven in the Pauli basis…
+    expect(spin).not.toContain("\\hat a") // …not on a bosonic quadrature
+  })
   it("mixed atom + cavity → both drive flavors", () => {
     const mixed = {
       platform: "hybrid",
@@ -120,6 +146,76 @@ describe("systemTableModel", () => {
     expect(t.components[0]).toMatchObject({ id: "q1", role: "qubit", levels: 3 })
     expect(t.components[0].params).toMatchObject({ omega: 4.0, delta: -0.2 })
     expect(t.couplings[0]).toMatchObject({ between: ["q1", "q2"], kind: "ZZ" })
+  })
+})
+
+describe("componentPhysicsRows", () => {
+  const labels = (c: any) => componentPhysicsRows(c).map((r) => r.label)
+  const row = (c: any, label: string) => componentPhysicsRows(c).find((r) => r.label === label)
+
+  it("a rydberg atom is never asked for an anharmonicity — it gets detuning + Rabi", () => {
+    const atom = { id: "q1", role: "atom", levels: 3, params: {} }
+    expect(labels(atom)).not.toContain("anharmonicity")
+    expect(labels(atom)).not.toContain("frequency")
+    expect(labels(atom)).toEqual(["levels", "detuning", "rabi drive", "decay"])
+    expect(row(atom, "detuning")!.state).toBe("missing")
+  })
+
+  it("a transmon keeps the frequency/anharmonicity/drive-bound spec", () => {
+    const q = { id: "q1", role: "qubit", levels: 3, params: { omega: 4.8, delta: -0.2 } }
+    expect(labels(q)).toEqual(["levels", "frequency", "anharmonicity", "drive bound", "decay"])
+    expect(row(q, "frequency")).toMatchObject({ value: "4.8", state: "recorded" })
+    expect(row(q, "drive bound")).toMatchObject({ value: "not set", state: "missing" })
+  })
+
+  it("a TWO-level qubit has no anharmonicity row at all", () => {
+    expect(labels({ id: "q1", role: "qubit", levels: 2, params: {} })).not.toContain("anharmonicity")
+  })
+
+  it("an unrecognized role expects nothing — only what was recorded shows", () => {
+    const spin = { id: "s1", role: "spin", params: { J_MHz: 12 } }
+    expect(labels(spin)).toEqual(["levels", "J"])
+    expect(row(spin, "levels")!.state).toBe("missing")
+    expect(row(spin, "J")).toMatchObject({ value: "12 MHz", state: "recorded" })
+  })
+
+  it("unit-suffixed keys render their unit; bare keys never get an assumed one", () => {
+    const c = { id: "q1", role: "qubit", levels: 3, params: { omega_GHz: 4.8, drive_max: 0.2 } }
+    expect(row(c, "frequency")!.value).toBe("4.8 GHz")
+    expect(row(c, "drive bound")!.value).toBe("≤ 0.2")
+  })
+
+  it("an atom's Δ does not absorb a transmon's δ — a stray delta stays unclaimed", () => {
+    const atom = { id: "q1", role: "atom", levels: 3, params: { delta: 0.2 } }
+    expect(row(atom, "detuning")!.state).toBe("missing")
+    expect(row(atom, "delta")).toMatchObject({ sym: "δ", value: "0.2", state: "recorded" })
+  })
+
+  it("levels reads 'not set' rather than being silently omitted", () => {
+    expect(row({ id: "q1", role: "qubit", params: {} }, "levels")).toMatchObject({
+      value: "not set",
+      state: "missing",
+    })
+  })
+
+  it("a cavity gets frequency/kerr/linewidth, not a drive bound", () => {
+    const cav = { id: "c1", role: "cavity", levels: 10, params: { K_c_Hz: 3.25 } }
+    expect(labels(cav)).toEqual(["levels", "frequency", "kerr", "linewidth", "decay"])
+    expect(row(cav, "kerr")!.value).toBe("3.25 Hz")
+  })
+
+  it("zero still reads as unset, and recorded T₁/T₂ collapse into one decay row", () => {
+    const c = { id: "q1", role: "qubit", levels: 3, params: { omega: 0, T1: 30, T2: 20 } }
+    expect(row(c, "frequency")!.state).toBe("missing")
+    expect(row(c, "decay")).toMatchObject({ value: "T₁ 30 · T₂ 20", state: "recorded" })
+  })
+})
+
+describe("systemCountLabel", () => {
+  it("names N so an unanswered structure question can't read as 'one'", () => {
+    expect(systemCountLabel(systemProjection(twoTransmon))).toBe("2 qubits × 3 levels")
+    expect(systemCountLabel(systemProjection({ platform: "rydberg", params: {} }))).toBe("1 atom")
+    expect(systemCountLabel(systemProjection({ platform: "x", components: [], couplings: [] }))).toBeUndefined()
   })
 })
 
