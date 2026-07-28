@@ -32,10 +32,15 @@ export const MODE_HOLD_MS = 2300
 /** Modes 1, 2, 3 across the 30px box. */
 export const MODE_WAVELENGTHS = [30, 15, 10] as const
 
+/** Fraction of the cadence for which one mode is opaque. */
+export const MODE_VISIBLE_FRACTION = 1 / MODE_WAVELENGTHS.length
+/** The keyframe breakpoint, pre-formatted so CSS never recomputes it. */
+export const MODE_VISIBLE_PCT = `${(100 / MODE_WAVELENGTHS.length).toFixed(4)}%`
+
 const SAMPLE_STEP = 0.6
 
-/** Quadrature: the companion is a quarter period behind. Derived from the period so the two
- *  numbers can never drift apart. */
+/** Quadrature: the companion is a quarter period out of phase with the lead. Derived from
+ *  the period so the two numbers can never drift apart. */
 export function companionDelayMs(periodMs: number = WAVE_PERIOD_MS): number {
   return -periodMs / 4
 }
@@ -61,8 +66,8 @@ export function modeDelaysMs(
 ): number[] {
   const cadence = modeCadenceMs(holdMs, modeCount)
   return Array.from({ length: modeCount }, (_, i) => {
-    const d = -(cadence - i * holdMs)
-    return d === -cadence ? 0 : d
+    if (i === 0) return 0
+    return -(cadence - i * holdMs)
   })
 }
 
@@ -87,7 +92,11 @@ export function visibleModesAt(
 export function samplePoints(wavelength: number): Array<[number, number]> {
   const pts: Array<[number, number]> = []
   const round = (n: number) => Math.round(n * 100) / 100
-  for (let x = 0; x <= WAVE_BOX.w + 1e-9; x += SAMPLE_STEP) {
+  // Integer-indexed so the box width is always reached exactly — WAVE_BOX.w must divide
+  // evenly by SAMPLE_STEP (30 / 0.6 = 50 steps) or the wave falls short of the right edge.
+  const steps = Math.round(WAVE_BOX.w / SAMPLE_STEP)
+  for (let i = 0; i <= steps; i++) {
+    const x = i * SAMPLE_STEP
     pts.push([round(x), round(WAVE_BOX.mid - WAVE_AMP * Math.sin((2 * Math.PI * x) / wavelength))])
   }
   return pts

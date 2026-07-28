@@ -8,6 +8,8 @@ import {
   MODE_HOLD_MS,
   MODE_WAVELENGTHS,
   MODE_PATHS,
+  MODE_VISIBLE_FRACTION,
+  MODE_VISIBLE_PCT,
   companionDelayMs,
   modeCadenceMs,
   modeDelaysMs,
@@ -51,9 +53,24 @@ describe("harmonic climb", () => {
       expect(visibleModesAt(t)).toHaveLength(1)
     }
   })
+
+  test("window boundaries tile exactly — one mode at every seam", () => {
+    for (const t of [0, 2300, 4600, 6900]) {
+      expect(visibleModesAt(t)).toHaveLength(1)
+    }
+  })
+
+  test("the keyframe fraction matches the hold/cadence ratio exactly", () => {
+    expect(MODE_VISIBLE_FRACTION).toBeCloseTo(MODE_HOLD_MS / modeCadenceMs(), 10)
+    expect(MODE_VISIBLE_PCT).toBe("33.3333%")
+  })
 })
 
 describe("geometry", () => {
+  test("the axis is centred in the box", () => {
+    expect(WAVE_BOX.h / 2).toBe(WAVE_BOX.mid)
+  })
+
   test("one path per mode, mode n has n full wavelengths across the box", () => {
     expect(MODE_PATHS).toHaveLength(MODE_WAVELENGTHS.length)
     MODE_WAVELENGTHS.forEach((lambda, i) => {
@@ -79,11 +96,27 @@ describe("geometry", () => {
     expect(Math.max(...ys)).toBeCloseTo(WAVE_BOX.mid + WAVE_AMP, 1)
   })
 
-  test("paths are well-formed and contain no SVG ids", () => {
+  test("the ~0.95px stroke margin survives — not just box containment", () => {
+    const ys = samplePoints(MODE_WAVELENGTHS[0]).map(([, y]) => y)
+    const margin = Math.min(...ys) - WAVE_LEAD_STROKE / 2
+    expect(margin).toBeGreaterThanOrEqual(0.9)
+  })
+
+  test("every mode has a node at both ends of the box", () => {
+    for (const lambda of MODE_WAVELENGTHS) {
+      const pts = samplePoints(lambda)
+      expect(pts[0]).toEqual([0, WAVE_BOX.mid])
+      expect(pts.at(-1)).toEqual([WAVE_BOX.w, WAVE_BOX.mid])
+    }
+  })
+
+  // Path data's character set is only `,.0123456789LM`, so an id/url() assertion here can
+  // never fail — it would only prove the test file typo-checks itself. The real id-collision
+  // risk (several wave instances mounting at once, SVG ids being document-global) lives at
+  // the component layer (Task 2), not in this pure geometry, so it is not covered here.
+  test("paths are well-formed", () => {
     for (const d of MODE_PATHS) {
       expect(d.startsWith("M")).toBe(true)
-      expect(d).not.toContain("url(")
-      expect(d).not.toContain("id=")
     }
   })
 })
