@@ -2639,21 +2639,14 @@ ToolRegistry.register({
       </div>
     )
 
-    // AMICODE: a skill activation is Amico's aside, not conversation, so it steps out of the
-    // prose flow into an offset lane — indented behind an accent spine, the same idiom
-    // amico-presence.css uses for Amico's in-flow contributions. The whole disclosure sits in
-    // the lane, header and instruction body together, so an expanded skill stays visibly
-    // outside the transcript rather than reflowing into it.
     return (
-      <div class="amc-aside" data-slot="amico-skill-aside">
-        <BasicTool icon="brain" status={props.status} trigger={trigger()}>
-          <Show when={body()}>
-            <div data-component="tool-output" data-scrollable>
-              <Markdown text={body()} />
-            </div>
-          </Show>
-        </BasicTool>
-      </div>
+      <BasicTool icon="brain" status={props.status} trigger={trigger()}>
+        <Show when={body()}>
+          <div data-component="tool-output" data-scrollable>
+            <Markdown text={body()} />
+          </div>
+        </Show>
+      </BasicTool>
     )
   },
 })
