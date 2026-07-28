@@ -267,8 +267,21 @@ export function AmicodeEntityRail(props: {
                     class="amc-rail-chip"
                     data-slot="amicode-rail-chip"
                     data-stage={chip.kind}
-                    aria-label={`Open current ${chip.label}`}
-                    onClick={() => props.onOpenEntity(chip.kind)}
+                    aria-label={
+                      // The pulse chip's subject IS a run's pulse, so it opens the
+                      // Run Inspector — where the pulse is actually plotted — rather
+                      // than the entity dialog. Saves a hop to the thing users click
+                      // it to see. Falls back to the entity dialog if the host didn't
+                      // wire an inspector (standalone opencode).
+                      chip.kind === "pulse" && props.onInspectRun
+                        ? `Open the Run Inspector for ${chip.label}`
+                        : `Open current ${chip.label}`
+                    }
+                    onClick={() =>
+                      chip.kind === "pulse" && props.onInspectRun
+                        ? props.onInspectRun()
+                        : props.onOpenEntity(chip.kind)
+                    }
                   >
                     <Icon name={chipIcon(chip.kind)} size="small" />
                     {chip.label}

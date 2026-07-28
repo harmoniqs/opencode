@@ -1331,3 +1331,17 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* ---- BETA channel tag (titlebar) ---------------------------------------- */
+/* Brand gold rather than the generic interactive blue, so the pre-release
+   marker reads as part of the Amico identity. The amber scale has no
+   theme-switched alias, so both schemes are spelled out: step 11 is the
+   readable text step on each ground, step 9 tints the pill. */
+[data-slot="amicode-beta-tag"] {
+  color: var(--amber-light-11);
+  background: color-mix(in srgb, var(--amber-light-9) 16%, transparent);
+}
+[data-color-scheme="dark"] [data-slot="amicode-beta-tag"] {
+  color: var(--amber-dark-11);
+  background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
+}
