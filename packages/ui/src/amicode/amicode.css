@@ -54,8 +54,8 @@
 
 /* ---- thinking line (Claude-Code-esque working indicator) ----------------- */
 /* Sits after the AMICO wordmark while a reply streams (thinking-line.tsx). The
- * gerund word cycles without shimmer — the wave glyph (amico-wave.tsx) carries
- * the motion now; the meta line ticks elapsed (· tokens · esc). */
+ * gerund word cycles without shimmer — the wave glyph (amico-wave.tsx) will carry
+ * the motion once mounted (a later task); the meta line ticks elapsed (· tokens · esc). */
 .amc-thinking {
   display: inline-flex;
   align-items: baseline;
@@ -85,23 +85,23 @@
  * of phase, so one is at full swing whenever the other crosses zero.
  *
  * Every duration, delay and opacity here comes from wave-geometry.ts via a custom property
- * set inline by the component — do NOT restate those numbers in this file.
- *
- * Colour follows the `ink` role from brand_accent.ts: the brand lemon is a FILL, never an
- * INK (1.1:1 on white), so a stroked glyph carries lemon on dark and a neutral legible
- * foreground on light. It does NOT take the hairline edge that lemon fills get — a 1.5px
- * stroke cannot carry a 1px edge.
- *
- * Theme idiom in this repo: :root is light, :root:not([data-theme="light"]) is dark. */
+ * set inline by the component — do NOT restate those numbers in this file. */
 .amc-wave {
   display: block;
   flex-shrink: 0;
-  color: var(--v2-text-text-base);
-}
-:root:not([data-theme="light"]) .amc-wave {
-  color: var(--accent, #fff676);
+  /* The ink role, already resolved by the active theme: oc-2.json maps
+   * v2-icon-icon-accent to grey-800 on light and #FFF676 on dark. The brand lemon is a
+   * fill, never an ink (1.1:1 on white), and this token is what encodes that — no theme
+   * selector needed here. Same treatment as amico-presence.css. */
+  color: var(--v2-icon-icon-accent);
 }
 
+/* .amc-wave-ln / .amc-wave-mode are component-private — only amico-wave.tsx ever sets the
+ * custom properties these animation shorthands read. Both shorthands carry a var(), which
+ * makes the whole shorthand a pending-substitution value: if any referenced custom property
+ * is ever missing (e.g. someone hand-writes <svg class="amc-wave"> in a fixture without the
+ * component's inline style block), the ENTIRE shorthand goes invalid and silently falls back
+ * to no animation — a static glyph, no console warning. */
 .amc-wave-ln {
   transform-box: view-box;
   transform-origin: 50% 50%;
