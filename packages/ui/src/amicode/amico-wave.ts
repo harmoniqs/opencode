@@ -29,7 +29,16 @@ export const WAVE_PERIOD_MS = 1150
 export const WAVE_EASING = "cubic-bezier(.9,0,.1,1)"
 
 export const MODE_HOLD_MS = 2300
-/** Modes 1, 2, 3 across the 30px box. */
+/**
+ * The climb, indexed by FULL WAVELENGTHS across the box: 1, 2, 3.
+ *
+ * Deliberately not the physical harmonic number. A standing wave on a string of length L
+ * with both ends fixed admits only λₙ = 2L/n, so with L = 30 these three are physically
+ * n = 2, 4, 6 (node counts 3, 5, 7 — consistent with n+1, just even). The physically
+ * consecutive set would be λ = 60/30/20; it was built, compared side by side, and the
+ * current set was chosen on looks. Recording it here because this codebase's readers are
+ * quantum-control physicists who will reach for λₙ = 2L/n and find the labels off by 2×.
+ */
 export const MODE_WAVELENGTHS = [30, 15, 10] as const
 
 /** Fraction of the cadence for which one mode is opaque. */
