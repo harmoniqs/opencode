@@ -705,6 +705,12 @@
   font-weight: 500;
   cursor: default;
 }
+/* …except a not-recorded chip that IS a button (the pulse chip, which opens the
+   Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
+   must feel clickable. Hover feedback already comes from button.amc-rail-chip. */
+[data-component="amicode-entity-rail"] button.amc-rail-chip.is-empty {
+  cursor: pointer;
+}
 [data-component="amicode-entity-rail"] button:focus-visible,
 [data-component="amicode-ask-card"] button:focus-visible,
 [data-component="amicode-run-window"] button:focus-visible {

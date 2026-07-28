@@ -204,6 +204,11 @@ export function AmicodeEntityRail(props: {
     if (snapshot.kind !== "ready") return []
     return mergeChips(snapshot.view.entities, snapshot.view.scoreStages)
   })
+  // Which chips hand off to the Run Inspector instead of the entity dialog.
+  // Only the pulse chip, and only when the host actually wired an inspector —
+  // standalone opencode has none, so there the chip keeps its dialog behavior.
+  const opensInspector = (kind: string) => kind === "pulse" && props.onInspectRun !== undefined
+
   // Whether there is a run to inspect — gates the "Inspect Run" button so it
   // appears alongside the live run chip, not before any solve has started.
   const hasRun = createMemo(() => {
@@ -247,7 +252,13 @@ export function AmicodeEntityRail(props: {
             <For each={chips()}>
               {(chip) => (
                 <Show
-                  when={!chip.pending}
+                  // The pulse chip is the one exception to "pending chips are
+                  // inert": it opens the Run Inspector, which is exactly where a
+                  // not-yet-banked pulse will appear, so the click is useful
+                  // BEFORE the pulse exists. It keeps the dotted not-recorded
+                  // look — the chip still tells the truth about state — and its
+                  // tooltip says both things. Everything else stays a placeholder.
+                  when={!chip.pending || opensInspector(chip.kind)}
                   fallback={
                     <span
                       class="amc-rail-chip is-empty"
@@ -264,23 +275,23 @@ export function AmicodeEntityRail(props: {
                 >
                   <button
                     type="button"
-                    class="amc-rail-chip"
+                    class={chip.pending ? "amc-rail-chip is-empty" : "amc-rail-chip"}
                     data-slot="amicode-rail-chip"
                     data-stage={chip.kind}
+                    data-pending={chip.pending ? "true" : undefined}
+                    title={chip.pending ? `${pendingHint(chip.kind)} — opens the Run Inspector` : undefined}
                     aria-label={
                       // The pulse chip's subject IS a run's pulse, so it opens the
                       // Run Inspector — where the pulse is actually plotted — rather
                       // than the entity dialog. Saves a hop to the thing users click
                       // it to see. Falls back to the entity dialog if the host didn't
                       // wire an inspector (standalone opencode).
-                      chip.kind === "pulse" && props.onInspectRun
+                      opensInspector(chip.kind)
                         ? `Open the Run Inspector for ${chip.label}`
                         : `Open current ${chip.label}`
                     }
                     onClick={() =>
-                      chip.kind === "pulse" && props.onInspectRun
-                        ? props.onInspectRun()
-                        : props.onOpenEntity(chip.kind)
+                      opensInspector(chip.kind) ? props.onInspectRun?.() : props.onOpenEntity(chip.kind)
                     }
                   >
                     <Icon name={chipIcon(chip.kind)} size="small" />
