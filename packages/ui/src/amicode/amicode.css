@@ -680,16 +680,13 @@
   height: 14px;
   flex-shrink: 0;
 }
-[data-slot="amicode-rail-inspect"],
 [data-slot="amicode-rail-retry"] {
   transition: background 0.16s ease, border-color 0.16s ease;
 }
-[data-slot="amicode-rail-inspect"]:hover,
 [data-slot="amicode-rail-retry"]:hover {
   background: var(--v2-background-bg-layer-02);
   border-color: var(--v2-border-border-strong);
 }
-[data-slot="amicode-rail-inspect"]:focus-visible,
 [data-slot="amicode-rail-retry"]:focus-visible {
   outline: 1px solid var(--v2-border-border-focus);
   outline-offset: 1px;

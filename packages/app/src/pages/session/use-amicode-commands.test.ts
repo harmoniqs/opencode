@@ -1,8 +1,8 @@
 import { describe, expect, spyOn, test } from "bun:test"
 import { inAmicode, postAmicode } from "./use-amicode-commands"
 
-// The "Inspect Run" button (entity rail) and the Amico command palette both
-// reach the VS Code extension through postAmicode(). chat_panel.ts relays the
+// The entity rail's pulse chip (its one inspector entry) and the Amico command
+// palette both reach the VS Code extension through postAmicode(). chat_panel.ts relays the
 // envelope to the host and executes ONLY commands on its BRIDGE_ALLOWED_COMMANDS
 // allowlist — so the exact envelope shape and command string are a contract.
 describe("postAmicode bridge envelope", () => {
