@@ -335,18 +335,22 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 }}
                 onClick={onHpClick}
                 aria-label={
+                  // Name the cloud, not just "the cloud": users are picking a
+                  // paid service here, and every refusal they can hit downstream
+                  // (amico-run's local-launch refusal, the hpc gate) calls it
+                  // Harmoniqs Cloud too — one name end to end.
                   dot() === "connected"
-                    ? "Piccolissimo + Altissimo solver — API key connected"
+                    ? "Piccolissimo + Altissimo solver — connected to Harmoniqs Cloud"
                     : dot() === "attention"
-                      ? "Piccolissimo + Altissimo solver — API key needs attention"
-                      : "Piccolissimo + Altissimo solver — add your API key to enable"
+                      ? "Piccolissimo + Altissimo solver — Harmoniqs Cloud key needs attention"
+                      : "Piccolissimo + Altissimo solver — add your Harmoniqs Cloud API key to enable"
                 }
                 title={
                   dot() === "connected"
-                    ? "API key connected"
+                    ? "Connected to Harmoniqs Cloud — every solve on this solver runs there"
                     : dot() === "attention"
-                      ? "API key needs attention — click to fix"
-                      : "Runs in the cloud — click to add your API key"
+                      ? "Harmoniqs Cloud key needs attention — click to fix"
+                      : "Runs in Harmoniqs Cloud — click to add your API key"
                 }
               >
                 <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
