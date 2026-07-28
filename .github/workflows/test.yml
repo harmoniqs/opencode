@@ -27,11 +27,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # linux only. opencode.lock.json ships darwin-arm64 + linux-x64, so a
+        # windows unit lane gates a platform this fork does not distribute, and
+        # it is the ~50min long pole on every run. It was also red on arrival
+        # for a reason unrelated to any change under test (POSIX path separators
+        # hardcoded in amicode-vaults.test.ts — harmoniqs/opencode#76).
         settings:
           - name: linux
             host: ubuntu-latest
-          - name: windows
-            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
@@ -46,6 +49,16 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
+
+      # The pasqal connection-route tests spawn the validator through the REAL
+      # spawn path, with a recording stub standing in for pasqal_validate.py.
+      # In production amicode provisions <opsDir>/venvs/pasqal-connector and
+      # passes it as AMICO_PYTHON (harmoniqs/amicode#189), so the interpreter is
+      # always a real python. The stub needs an interpreter but NOT the SDK.
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
