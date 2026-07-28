@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFil
 import { homedir } from "node:os"
 import path from "node:path"
 import { run } from "@/util/process"
+import { browseAllowed, mountBrowseRefusal, mountDir } from "@/server/amicode/vault-browser"
 
 const TIMEOUT_MS = 8_000
 const CACHE_MS = 10_000
@@ -65,9 +66,34 @@ function resolveCli(): string | undefined {
 
 let cache: { at: number; body: string } | undefined
 
+/** Stamp each mount with `browsable`, computed by the vault-browser's
+ *  fail-closed law (deployment gate + per-mount kind/marker rules), so the
+ *  app can mark proprietary context locked UPFRONT — e.g. grey out context
+ *  tree nodes — instead of discovering the refusal on click. Additive to the
+ *  relayed wire shape; an unparseable body passes through untouched. */
+export function annotateBrowsable(
+  body: string,
+  root: string = vaultsRoot(),
+  env: Record<string, string | undefined> = process.env,
+): string {
+  try {
+    const parsed = JSON.parse(body) as { mounts?: { id?: unknown; browsable?: boolean }[] }
+    if (!Array.isArray(parsed.mounts)) return body
+    const allowed = browseAllowed(env)
+    for (const m of parsed.mounts) {
+      if (typeof m?.id !== "string") continue
+      const dir = allowed ? mountDir(m.id, root) : undefined
+      m.browsable = !!dir && !mountBrowseRefusal(m.id, dir, env)
+    }
+    return JSON.stringify(parsed)
+  } catch {
+    return body
+  }
+}
+
 export async function status(): Promise<string> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.body
-  const body = await statusUncached().catch((err) => synthesize("bad_output", String(err)))
+  const body = annotateBrowsable(await statusUncached().catch((err) => synthesize("bad_output", String(err))))
   cache = { at: Date.now(), body }
   return body
 }

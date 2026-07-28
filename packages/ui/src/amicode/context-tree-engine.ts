@@ -44,6 +44,9 @@ export type ContextTreeNodeInput = {
   path?: string
   /** the file lives in a vault mount (open via the Vault panel, not a tab) */
   vault?: boolean
+  /** the vault refuses browsing (proprietary data/software) — the node renders
+   *  dimmed with a padlock and is NOT openable, path or not */
+  locked?: boolean
   /** where the agent currently works — wears the thought-color cursor */
   active?: boolean
   children?: ContextTreeNodeInput[]
@@ -57,6 +60,7 @@ export type ContextTreeSelection = {
   kind: ContextTreeKind
   path?: string
   vault?: boolean
+  locked?: boolean
 }
 
 export interface ContextTreeEngineOptions {
@@ -181,6 +185,7 @@ interface TNode {
   kind: ContextTreeKind
   path?: string
   vault?: boolean
+  locked?: boolean
   active: boolean
   depth: number
   // world targets (tidy layout) and animated positions
@@ -333,6 +338,7 @@ export function createContextTreeEngine(
       n.kind = input.kind
       n.path = input.path
       n.vault = input.vault
+      n.locked = input.locked
       n.active = !!input.active
       n.depth = depth
       n.half = HALF[input.kind] ?? 4
@@ -456,7 +462,11 @@ export function createContextTreeEngine(
     kind: n.kind,
     path: n.path,
     vault: n.vault,
+    locked: n.locked,
   })
+  // openable = the click actually goes somewhere; everything else (turns,
+  // skills, agents, actions, locked vault files) must not wear the pointer
+  const openable = (n: TNode) => !!n.path && !n.locked
   let dragging = false
   let dragMoved = false
   let lastPX = 0,
@@ -499,7 +509,8 @@ export function createContextTreeEngine(
     const n = id ? (byId.get(id) ?? null) : null
     if (n !== hovered) {
       hovered = n
-      if (canvas.style) canvas.style.cursor = n && (n.path || n.kind === "turn") ? "pointer" : "grab"
+      // pointer only where a click opens something; a locked node says so
+      if (canvas.style) canvas.style.cursor = n && openable(n) ? "pointer" : n?.locked ? "not-allowed" : "grab"
       opts.onHover?.(n ? selection(n) : null)
     }
   }
@@ -510,7 +521,9 @@ export function createContextTreeEngine(
     const p = local(e)
     const id = pick(p.x, p.y)
     const n = id ? byId.get(id) : undefined
-    if (n) {
+    // only openable nodes acknowledge the click — a ring on a dead-end node
+    // would promise an action that never comes
+    if (n && openable(n)) {
       n.ringT = beatNow
       opts.onSelect?.(selection(n))
     }
@@ -647,9 +660,11 @@ export function createContextTreeEngine(
         ctx.lineWidth = 1
         ctx.stroke()
       } else {
-        ctx.fillStyle = rgba(color, hoveredNow ? 0.95 : 0.75)
+        // locked (non-browsable vault) leaves read clearly non-interactive:
+        // reduced emphasis, plus the padlock by the label (shape, not color)
+        ctx.fillStyle = rgba(color, n.locked ? 0.3 : hoveredNow ? 0.95 : 0.75)
         ctx.fill()
-        ctx.strokeStyle = rgba(color, 0.9)
+        ctx.strokeStyle = rgba(color, n.locked ? 0.45 : 0.9)
         ctx.lineWidth = 1
         ctx.stroke()
       }
@@ -690,13 +705,25 @@ export function createContextTreeEngine(
         isRoot || n.kind === "turn" ? 0.85 : hoveredNow || glancedNow || n.active ? 1 : nearHover ? 0.85 : 0.6
       ctx.font = `${n.kind === "turn" || isRoot ? "600 " : ""}10px JuliaMono, ui-monospace, SFMono-Regular, Menlo, monospace`
       const text = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label
+      const lockW = n.locked ? 10 : 0
       const tw = ctx.measureText(text).width
-      const lx = x - tw / 2,
+      const lx = x - (tw + lockW) / 2,
         ly = y + half + 10
       ctx.fillStyle = css.labelHalo
-      ctx.fillRect(lx - 2, ly - 7, tw + 4, 14)
-      ctx.fillStyle = rgba(css.fg, Math.min(la, 1) * n.alpha)
-      ctx.fillText(text, lx, ly)
+      ctx.fillRect(lx - 2, ly - 7, tw + lockW + 4, 14)
+      const inkA = Math.min(la, 1) * n.alpha
+      if (n.locked) {
+        // padlock: shackle arc over a body — the non-color "cannot open" signal
+        ctx.strokeStyle = rgba(css.fg, inkA)
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.arc(lx + 3, ly - 1.5, 2, Math.PI, 0)
+        ctx.stroke()
+        ctx.fillStyle = rgba(css.fg, inkA)
+        ctx.fillRect(lx, ly - 1.5, 6, 5)
+      }
+      ctx.fillStyle = rgba(css.fg, inkA)
+      ctx.fillText(text, lx + lockW, ly)
       ctx.globalAlpha = 1
     }
 
