@@ -12,12 +12,13 @@ export default {
         component: `### Thinking line
 
 The Claude-Code-esque "working" indicator shown beside the AMICO turn signature
-while a reply streams. The H-mark glyph pulses (brand motif); the gerund word
-cycles every ~2s and shimmers; the meta line ticks elapsed time (and, when the
-mount site provides them, token count + an "esc to interrupt" hint).
+while a reply streams. The H-mark glyph is static; the harmonic wave glyph
+carries the motion, the gerund word cycles every ~2s with no shimmer, and the
+meta line ticks elapsed time (and, when the mount site provides them, token
+count + an "esc to interrupt" hint).
 
-Under \`prefers-reduced-motion\` the word is static and un-shimmered; the elapsed
-counter still advances.`,
+Under \`prefers-reduced-motion\` the wave and word are static; the elapsed
+counter still advances (it's information, not decoration).`,
       },
     },
   },
@@ -25,7 +26,7 @@ counter still advances.`,
 
 const Frame = (props) => (
   <span class="amc-sig" style={{ padding: "16px", "font-size": "13px" }}>
-    <AmicoMark running />
+    <AmicoMark />
     <span class="amc-wordmark">AMICO</span>
     {props.children}
   </span>

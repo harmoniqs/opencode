@@ -726,7 +726,9 @@ export function AssistantParts(props: {
       <Show when={inDomainTurn() && props.working && last() === grouped().at(-1)?.key}>
         <div class="amc-lane" data-slot="amico-working">
           <span class="amc-lane-head">
-            <AmicoMark running />
+            {/* static: AmicoWave in the thinking line carries the motion now — two
+                animated brand marks side by side compete with each other */}
+            <AmicoMark />
           </span>
           <ThinkingLine tokens={turnTokenCount() || undefined} />
         </div>

@@ -1,16 +1,19 @@
 import { createSignal, onCleanup, onMount, Show, type ComponentProps } from "solid-js"
 import { wordAt, formatElapsed, formatTokens } from "./thinking"
+import { AmicoWave } from "./amico-wave"
 
 // AMICODE: the "thinking" working indicator — a Claude-Code-esque line shown
 // beside the AMICO turn signature while a reply streams (message-part.tsx). The
-// H-mark glyph (AmicoMark, already in the signature) stays the brand motif; this
-// adds the cycling, shimmering gerund word + a live meta line (elapsed · tokens).
-// Pure bits (word rotation, label formatting) live in ./thinking for testing.
+// H-mark glyph beside this line is now static; motion lives here instead, in the
+// AmicoWave glyph (amico-wave.tsx) plus the cycling gerund word + a live meta
+// line (elapsed · tokens). Pure bits (word rotation, label formatting) live in
+// ./thinking for testing.
 //
-// Motion: the word swaps on a ~2s timer and shimmers via amc-text-shimmer
-// (amicode.css). Under prefers-reduced-motion the word is static ("Thinking…")
-// with no shimmer; the elapsed counter still advances (it's information, not
-// decoration). Timers clear onCleanup so a finished turn stops ticking.
+// Motion: the wave animates continuously (CSS, amicode.css) and the word swaps
+// on a ~2s timer, with no shimmer. Under prefers-reduced-motion the word is
+// static ("Thinking…"); the elapsed counter still advances regardless (it's
+// information, not decoration). Timers clear onCleanup so a finished turn stops
+// ticking.
 
 const WORD_MS = 2000
 const TICK_MS = 1000
@@ -45,11 +48,11 @@ export function ThinkingLine(props: {
   return (
     <span
       class={`amc-thinking${props.class ? " " + props.class : ""}`}
-      classList={{ "is-still": still }}
       data-slot="amc-thinking"
       style={props.style}
       aria-live="polite"
     >
+      <AmicoWave />
       <span class="amc-thinking-word">{word()}…</span>
       <span class="amc-thinking-meta">
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
