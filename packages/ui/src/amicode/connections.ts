@@ -78,20 +78,33 @@ export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; e
 
 export const COMPANY_COMPUTE_ID = "company-compute"
 
-/** amicode#200: Company Compute lives in the solver toggle now — the status
- *  popover's Connections tab shows execution targets (Pasqal, future hardware)
- *  only. The wire still carries every connection; this is a render filter. */
+/** Every connection renders in the Connections tab, Harmoniqs Cloud included.
+ *
+ *  This REVERSES amicode#200's render filter. That change moved Company Compute
+ *  out of the tab, reasoning that it was one credential for one service rather
+ *  than a separate product. The effect, though, was that Pasqal Cloud appeared
+ *  as a connectable service and Harmoniqs Cloud — ours — did not: users went
+ *  looking for it exactly where Pasqal is, found nothing, and had nowhere to
+ *  enter an API key (2026-07-28). A cloud we sell has to be connectable in the
+ *  place that lists clouds.
+ *
+ *  The solver capsule keeps its own connect affordance; both routes write the
+ *  same credential, so connecting in either place shows up in both. Kept as a
+ *  function rather than dropping the call sites, so there is still one obvious
+ *  place to filter if a genuinely internal connection ever appears. */
 export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
-  return connections.filter((c) => c.id !== COMPANY_COMPUTE_ID)
+  return connections
 }
 export const PASQAL_ID = "pasqal-cloud"
 
 /** Product names are not translated; ids without one render verbatim. */
 export function connectionTitle(id: string): string {
-  // amicode#200 (Kate): one credential, one service — present it as what it
-  // is (the API key that unlocks the cloud solvers), not a separate product.
+  // Named as the product, alongside Pasqal Cloud. #200 called this "Solver API
+  // key" to avoid implying a second product, but in a list whose other entry is
+  // "Pasqal Cloud" that reads as a settings field rather than our service — and
+  // it is the name every downstream refusal uses (amico-run, the hpc gate).
   // The wire id stays "company-compute": server contract, not presentation.
-  if (id === COMPANY_COMPUTE_ID) return "Solver API key"
+  if (id === COMPANY_COMPUTE_ID) return "Harmoniqs Cloud"
   if (id === PASQAL_ID) return "Pasqal Cloud"
   return id
 }

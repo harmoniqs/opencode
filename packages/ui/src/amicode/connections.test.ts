@@ -478,7 +478,7 @@ describe("driftCopy (170 AC4)", () => {
 
 describe("connectionTitle", () => {
   test("known products get names; unknown ids render verbatim", () => {
-    expect(connectionTitle("company-compute")).toBe("Solver API key")
+    expect(connectionTitle("company-compute")).toBe("Harmoniqs Cloud")
     expect(connectionTitle("pasqal-cloud")).toBe("Pasqal Cloud")
     expect(connectionTitle("(unknown)")).toBe("(unknown)")
   })
@@ -592,17 +592,25 @@ describe("applyConnectionOverlay", () => {
   })
 })
 
-// ── amicode#200 AC5: Company Compute relocated to the solver toggle ─────────
+// ── Harmoniqs Cloud is connectable in the Connections tab (reverses #200 AC5) ─
 import { statusTabConnections, COMPANY_COMPUTE_ID as COMPUTE_ID } from "./connections"
 
-describe("status-tab connection list (#200 AC5)", () => {
+describe("status-tab connection list", () => {
   const mk = (id: string) => ({ id, state: "connected" as const, rawState: "connected", validatedAt: "—", stale: false })
-  test("excludes company-compute; everything else passes through in order", () => {
+
+  // The regression this pins: #200 filtered company-compute out of this list, so
+  // Pasqal Cloud was connectable here and OUR cloud was not — users looked where
+  // Pasqal is, found nothing, and had nowhere to enter an API key.
+  test("includes company-compute, in wire order alongside the others", () => {
     const list = [mk(COMPUTE_ID), mk("pasqal-cloud"), mk("future-target")]
-    expect(statusTabConnections(list).map((c) => c.id)).toEqual(["pasqal-cloud", "future-target"])
+    expect(statusTabConnections(list).map((c) => c.id)).toEqual([COMPUTE_ID, "pasqal-cloud", "future-target"])
   })
-  test("empty and compute-only lists yield empty", () => {
+
+  test("a compute-only list still renders a card (the empty state must not swallow it)", () => {
+    expect(statusTabConnections([mk(COMPUTE_ID)]).map((c) => c.id)).toEqual([COMPUTE_ID])
+  })
+
+  test("an empty list stays empty", () => {
     expect(statusTabConnections([])).toEqual([])
-    expect(statusTabConnections([mk(COMPUTE_ID)])).toEqual([])
   })
 })
