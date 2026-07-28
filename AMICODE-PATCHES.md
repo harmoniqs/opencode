@@ -87,6 +87,24 @@ PATH="$HOME/.bun/bin:$PATH" OPENCODE_VERSION=1.17.3 OPENCODE_CHANNEL=dev bun run
   serve local app assets; only the compiled binary embeds them. (Env kill-switch:
   `disableEmbeddedWebUi` → proxy mode.)
 
+### 5. How amicode consumes this fork
+
+amicode (`harmoniqs/amicode`, `packages/extension`) vendors a compiled binary of this fork; it
+never runs it from source (per § 4, run-from-source proxies the public `app.opencode.ai`, so the
+amicode-branded surfaces only exist in a compiled build).
+
+- **Default = pinned release.** `opencode.lock.json` `source: release` → a plain `pnpm install`
+  downloads the pinned, gate-ON release asset. Teammates need no clone/bun. Changing this fork is
+  an explicit command, never a lock edit.
+- **Iterate:** clone this fork beside amicode (`../opencode`), then from amicode run
+  `pnpm --filter amicode opencode:build` → invokes `script/build.ts` with `OPENCODE_CHANNEL=dev`
+  (gotcha 2) and re-vendors the binary. Reload the Extension Dev Host to pick it up.
+- **Publish:** push a branch here, tag a release (the release workflow builds both targets with
+  `dev` and asserts the gate ON), then from amicode `pnpm --filter amicode opencode:pin <tag>`
+  to rewrite amicode's lock (downloads + sha256-verifies both assets).
+- amicode's `packages/extension/scripts/assert_ui_gate.sh` reds CI/release if any vendored binary
+  ships with the gate OFF — the automated form of gotcha 2's grep.
+
 ## Branding map (v1.17.3)
 
 User-visible brand sites in the served web app (packages/app + packages/ui), enumerated at tag v1.17.3.
