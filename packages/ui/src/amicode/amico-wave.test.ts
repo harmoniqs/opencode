@@ -1,4 +1,5 @@
 // packages/ui/src/amicode/amico-wave.test.ts
+import { readFileSync } from "node:fs"
 import { describe, expect, test } from "bun:test"
 import {
   WAVE_BOX,
@@ -15,7 +16,11 @@ import {
   modeDelaysMs,
   visibleModesAt,
   samplePoints,
-} from "./amico-wave"
+  // Explicit extension — see the comment in amico-wave.tsx: this directory now has both
+  // amico-wave.ts and amico-wave.tsx sharing a stem, and an extensionless "./amico-wave"
+  // resolves to the .tsx sibling under this package's bundler resolution, not the .ts module
+  // these names actually live in.
+} from "./amico-wave.ts"
 
 describe("quadrature", () => {
   test("companion delay is exactly a quarter period, derived from the period", () => {
@@ -118,5 +123,17 @@ describe("geometry", () => {
     for (const d of MODE_PATHS) {
       expect(d.startsWith("M")).toBe(true)
     }
+  })
+})
+
+describe("CSS/TS drift guard", () => {
+  test("the amc-wave-mode keyframe breakpoint still matches MODE_VISIBLE_PCT", () => {
+    // @keyframes selectors cannot use custom properties, so this one number is duplicated
+    // in amicode.css by necessity. Assert the duplicate rather than trusting it.
+    const css = readFileSync(new URL("./amicode.css", import.meta.url), "utf8")
+    const start = css.indexOf("@keyframes amc-wave-mode")
+    expect(start).toBeGreaterThan(-1)
+    const block = css.slice(start, css.indexOf("}", css.indexOf("opacity: 0", start)))
+    expect(block).toContain(MODE_VISIBLE_PCT)
   })
 })
