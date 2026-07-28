@@ -1,6 +1,5 @@
 import { Show, createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { TextShimmer } from "./text-shimmer"
 
 function common(active: string, done: string) {
   const a = Array.from(active)
@@ -30,7 +29,6 @@ export function ToolStatusTitle(props: {
   const suffix = createMemo(
     () => (props.split ?? true) && split().prefix.length >= 2 && split().active.length > 0 && split().done.length > 0,
   )
-  const prefixLen = createMemo(() => Array.from(split().prefix).length)
   const activeTail = createMemo(() => (suffix() ? split().active : props.activeText))
   const doneTail = createMemo(() => (suffix() ? split().done : props.doneText))
 
@@ -102,12 +100,12 @@ export function ToolStatusTitle(props: {
           <span data-slot="tool-status-swap" ref={widthRef} style={{ width: width() }}>
             <Show when={animating() || active()}>
               <span data-slot="tool-status-active" ref={activeRef}>
-                <TextShimmer text={activeTail()} active={active()} offset={0} />
+                <span>{activeTail()}</span>
               </span>
             </Show>
             <Show when={animating() || !active()}>
               <span data-slot="tool-status-done" ref={doneRef}>
-                <TextShimmer text={doneTail()} active={false} offset={0} />
+                <span>{doneTail()}</span>
               </span>
             </Show>
           </span>
@@ -115,17 +113,17 @@ export function ToolStatusTitle(props: {
       >
         <span data-slot="tool-status-suffix">
           <span data-slot="tool-status-prefix">
-            <TextShimmer text={split().prefix} active={active()} offset={0} />
+            <span>{split().prefix}</span>
           </span>
           <span data-slot="tool-status-tail" ref={widthRef} style={{ width: width() }}>
             <Show when={animating() || active()}>
               <span data-slot="tool-status-active" ref={activeRef}>
-                <TextShimmer text={activeTail()} active={active()} offset={prefixLen()} />
+                <span>{activeTail()}</span>
               </span>
             </Show>
             <Show when={animating() || !active()}>
               <span data-slot="tool-status-done" ref={doneRef}>
-                <TextShimmer text={doneTail()} active={false} offset={prefixLen()} />
+                <span>{doneTail()}</span>
               </span>
             </Show>
           </span>
