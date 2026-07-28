@@ -7,11 +7,13 @@
 // the real file (project files in a session tab, vault files in the Vault
 // panel). Hovering a tool row in the log still glances at its node here via
 // the same amicode:brain-hover event the strip used.
-import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, onCleanup, onMount, For, Show } from "solid-js"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { useSync } from "@/context/sync"
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
+import { useServer } from "@/context/server"
+import { amicodeGet } from "@/utils/amicode-fetch"
 import { amicoBrainRef } from "@opencode-ai/ui/brain-ref"
 import {
   createContextTreeEngine,
@@ -66,7 +68,32 @@ function ContextTreeFrame(props: { sessionID: string }) {
   const sync = useSync()
   const file = useFile()
   const language = useLanguage()
+  const server = useServer()
   const { tabs, view } = useSessionLayout()
+
+  // per-mount browsability from GET /amicode/vaults (`browsable`, stamped by
+  // the server's fail-closed law) — proprietary mounts mark their nodes
+  // locked upfront instead of dead-ending in a Vault-panel refusal on click
+  const [vaultsRaw] = createResource(
+    () => server.current,
+    (conn) => amicodeGet(conn, "/amicode/vaults").catch(() => undefined),
+  )
+  const browsableMounts = createMemo<Map<string, boolean | undefined> | undefined>(() => {
+    const raw = vaultsRaw() as { mounts?: { id?: string; browsable?: boolean }[] } | undefined
+    if (!raw || !Array.isArray(raw.mounts)) return undefined
+    return new Map(
+      raw.mounts.filter((m) => typeof m?.id === "string").map((m) => [m.id as string, m.browsable]),
+    )
+  })
+  const vaultLocked = (mount: string) => {
+    const map = browsableMounts()
+    // list unavailable → status quo (no lock claims we can't back);
+    // a mount the server doesn't list can't be browsed → locked;
+    // `browsable` absent (older server) → unknown, again no lock claim
+    if (!map) return false
+    if (!map.has(mount)) return true
+    return map.get(mount) === false
+  }
 
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
   const getParts = (msgId: string) => sync.data.part[msgId] ?? []
@@ -134,7 +161,7 @@ function ContextTreeFrame(props: { sessionID: string }) {
     setActive: (tab) => tabs().setActive(tab),
   })
   const onSelect = (node: ContextTreeSelection) => {
-    if (!node.path) return
+    if (!node.path || node.locked) return
     const vaultRef = vaultRefFromPath(node.path)
     if (vaultRef) {
       vaultPanel.open({ mount: vaultRef.mount, path: vaultRef.rel })
@@ -161,7 +188,7 @@ function ContextTreeFrame(props: { sessionID: string }) {
   window.addEventListener("amicode:brain-hover", onToolHover)
   onCleanup(() => window.removeEventListener("amicode:brain-hover", onToolHover))
 
-  const tree = createMemo(() => buildContextTree(turns()))
+  const tree = createMemo(() => buildContextTree(turns(), { vaultLocked }))
   createEffect(() => {
     const brain = engine()
     if (!brain) return
@@ -173,7 +200,8 @@ function ContextTreeFrame(props: { sessionID: string }) {
   const flatNodes = createMemo(() => {
     const out: ContextTreeSelection[] = []
     const walk = (n: ContextTreeNodeInput) => {
-      if (n.kind !== "root") out.push({ id: n.id, label: n.label, kind: n.kind, path: n.path, vault: n.vault })
+      if (n.kind !== "root")
+        out.push({ id: n.id, label: n.label, kind: n.kind, path: n.path, vault: n.vault, locked: n.locked })
       for (const c of n.children ?? []) walk(c)
     }
     walk(tree())
@@ -188,7 +216,11 @@ function ContextTreeFrame(props: { sessionID: string }) {
     setKbIndex(next)
     const node = list[next]
     engine()?.focus(node.id)
-    setAnnounce(`${node.label} — ${node.kind}${node.path ? ", press Enter to open" : ""}`)
+    setAnnounce(
+      `${node.label} — ${node.kind}${
+        node.locked ? ", locked — this vault does not allow browsing" : node.path ? ", press Enter to open" : ""
+      }`,
+    )
   }
   const onCanvasKeyDown = (e: KeyboardEvent) => {
     const list = flatNodes()
