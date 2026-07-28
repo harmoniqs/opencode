@@ -45,6 +45,8 @@ export const MODE_WAVELENGTHS = [30, 15, 10] as const
 export const MODE_VISIBLE_FRACTION = 1 / MODE_WAVELENGTHS.length
 /** The keyframe breakpoint, pre-formatted so CSS never recomputes it. */
 export const MODE_VISIBLE_PCT = `${(100 / MODE_WAVELENGTHS.length).toFixed(4)}%`
+/** The OFF breakpoint — one ten-thousandth after the ON edge, so the swap is a hard cut. */
+export const MODE_OFF_PCT = "33.3334%"
 
 const SAMPLE_STEP = 0.6
 

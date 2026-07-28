@@ -11,6 +11,7 @@ import {
   MODE_PATHS,
   MODE_VISIBLE_FRACTION,
   MODE_VISIBLE_PCT,
+  MODE_OFF_PCT,
   companionDelayMs,
   modeCadenceMs,
   modeDelaysMs,
@@ -64,6 +65,13 @@ describe("harmonic climb", () => {
   test("the keyframe fraction matches the hold/cadence ratio exactly", () => {
     expect(MODE_VISIBLE_FRACTION).toBeCloseTo(MODE_HOLD_MS / modeCadenceMs(), 10)
     expect(MODE_VISIBLE_PCT).toBe("33.3333%")
+  })
+
+  test("MODE_HOLD_MS is an exact multiple of WAVE_PERIOD_MS — every swap lands at stand-progress zero", () => {
+    // 2300 = 2 x 1150, so a mode swap always coincides with all curves at full swing — the
+    // cleanest possible cut. Nothing else defends this: changing the period to 1000 would
+    // make swaps land mid-swing and visibly jump, with every other test still green.
+    expect(MODE_HOLD_MS % WAVE_PERIOD_MS).toBe(0)
   })
 })
 
@@ -123,14 +131,30 @@ describe("geometry", () => {
 })
 
 describe("CSS/TS drift guard", () => {
-  test("the amc-wave-mode keyframe breakpoint still matches MODE_VISIBLE_PCT", () => {
-    // @keyframes selectors cannot use custom properties, so this one number is duplicated
-    // in amicode.css by necessity. Assert the duplicate rather than trusting it.
+  test("the amc-wave-mode ON breakpoint still matches MODE_VISIBLE_PCT", () => {
+    // @keyframes selectors cannot use custom properties, so this literal is duplicated in
+    // amicode.css by necessity. A loose toContain() over a wide slice is not enough — it
+    // still passes if the ON edge is mutated to e.g. "0%, 50%" (mode curves permanently
+    // overlaid), because the original percentage string can still appear elsewhere in the
+    // slice. Bind the match to the rule's own selector+brace instead.
     const css = readFileSync(new URL("./amicode.css", import.meta.url), "utf8")
     const start = css.indexOf("@keyframes amc-wave-mode")
     expect(start).toBeGreaterThan(-1)
-    const block = css.slice(start, css.indexOf("}", css.indexOf("opacity: 0", start)))
-    expect(block).toContain(MODE_VISIBLE_PCT)
+    const block = css.slice(start, css.indexOf("}", css.indexOf("{", start) + 1) + 1)
+    expect(block).toMatch(new RegExp(`0%,\\s*${MODE_VISIBLE_PCT.replace(".", "\\.")}\\s*\\{`))
+  })
+
+  test("the amc-wave-mode OFF breakpoint still matches MODE_OFF_PCT", () => {
+    // The OFF edge is the one that actually decides whether two modes ever render
+    // superimposed — a guard that only checks the ON edge would pass with the OFF edge
+    // dragged to e.g. "40%", which shows two wavelengths superimposed for ~460ms of every
+    // transition. Same bounded-match technique, applied to the second rule.
+    const css = readFileSync(new URL("./amicode.css", import.meta.url), "utf8")
+    const start = css.indexOf("@keyframes amc-wave-mode")
+    expect(start).toBeGreaterThan(-1)
+    const onEnd = css.indexOf("}", css.indexOf("{", start) + 1) + 1
+    const block = css.slice(onEnd, css.indexOf("}", css.indexOf("{", onEnd) + 1) + 1)
+    expect(block).toMatch(new RegExp(`${MODE_OFF_PCT.replace(".", "\\.")},\\s*100%\\s*\\{`))
   })
 })
 
