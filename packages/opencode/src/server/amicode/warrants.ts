@@ -21,6 +21,10 @@ export interface WarrantRow {
   bounds: Record<string, unknown>
   expires_at: string
   issued_by: string
+  /** `solve` rows already recorded under this plan — the numerator for a
+   *  max_solves bound. Counted from the SAME ledger pass, so it can never be a
+   *  stale second counter (spec §4.5: the ledger is the count-things store). */
+  solves_used: number
 }
 
 /** $AMICO_LEDGER override, else ~/.amico/ledger/runs.jsonl — must stay identical to
@@ -41,11 +45,17 @@ export function readWarrants(file: string = ledgerPath()): WarrantRow[] {
   } catch {
     return []
   }
-  const out: WarrantRow[] = []
+  const out: Omit<WarrantRow, "solves_used">[] = []
+  const solves = new Map<string, number>()
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue
     try {
       const rec = JSON.parse(line) as Record<string, unknown>
+      // Count solves in the same pass — a second read could disagree with the first.
+      if (rec.type === "solve") {
+        if (typeof rec.plan_hash === "string") solves.set(rec.plan_hash, (solves.get(rec.plan_hash) ?? 0) + 1)
+        continue
+      }
       if (rec.type !== "approval") continue
       if (typeof rec.plan_hash !== "string" || typeof rec.expires_at !== "string") continue
       out.push({
@@ -58,7 +68,7 @@ export function readWarrants(file: string = ledgerPath()): WarrantRow[] {
       /* one unparseable line must not hide the rest */
     }
   }
-  return out
+  return out.map((w) => ({ ...w, solves_used: solves.get(w.plan_hash) ?? 0 }))
 }
 
 export function warrantsBody(file: string = ledgerPath()): string {
