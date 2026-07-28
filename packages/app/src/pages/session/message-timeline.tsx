@@ -1409,7 +1409,15 @@ export function MessageTimeline(props: {
             }}
             data-session-title
             classList={{
-              "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)] backdrop-blur-[10px]": true,
+              "sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--background-stronger)_48px,transparent)]": true,
+              // The frosted fade only while the header is slim. With the
+              // context-tree band open the header is ~300px tall and the band
+              // sits inside the pl-4 gutter — the blur samples transcript
+              // content through that transparent 16px strip and smears it into
+              // a grey streak along the straight left edge (worst on light).
+              // The band is opaque below the 48px title strip anyway, so the
+              // blur buys nothing there.
+              "backdrop-blur-[10px]": !contextTreeVisible(),
               "w-full": true,
               // the tall padding exists to seat the entity-chip rail; the
               // context-tree block closes the header itself when it renders,
