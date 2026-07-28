@@ -62,7 +62,7 @@ const TREE: ContextTreeNodeInput = {
   children: [
     {
       id: "turn-1",
-      label: "I · optimize a CZ gate",
+      label: "I",
       kind: "turn",
       children: [
         { id: "f-strategy", label: "STRATEGY.md", kind: "note", path: "STRATEGY.md", vault: true },
@@ -72,7 +72,7 @@ const TREE: ContextTreeNodeInput = {
     },
     {
       id: "turn-2",
-      label: "II · fix the stagnation",
+      label: "II",
       kind: "turn",
       recalls: ["f-solve"],
       children: [{ id: "a-explore", label: "Explore", kind: "agent", active: true }],
