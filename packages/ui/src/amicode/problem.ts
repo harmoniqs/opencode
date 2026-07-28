@@ -244,8 +244,17 @@ export function mergeChips(entities: Record<string, Record<string, unknown>>, sc
 // --- run chip ----------------------------------------------------------------
 
 function formatFidelity(value: number): string {
-  // up to 4 significant decimals, trailing zeros trimmed
-  return String(Number(value.toFixed(4)))
+  // 4 decimals for ordinary values (trailing zeros trimmed) — but NEVER let
+  // rounding collapse a near-unity or near-zero fidelity into exactly "1"/"0":
+  // the gap from perfect IS the result (Kate 2026-07-28, a 0.99997 run showed
+  // "F = 1"). Precision extends one digit at a time until the gap survives,
+  // capped at 10; only a true 1 or 0 renders bare.
+  if (value === 1 || value === 0) return String(value)
+  for (let digits = 4; digits <= 10; digits++) {
+    const rounded = Number(value.toFixed(digits))
+    if (rounded !== 1 && rounded !== 0) return String(rounded)
+  }
+  return String(value)
 }
 
 export function runChipText(statuses: RunStatusView[]): string | undefined {
