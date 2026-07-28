@@ -69,6 +69,10 @@ export interface Warrant {
   bounds: WarrantBounds;
   expires_at: string;
   issued_by: string;
+  /** `solve` rows recorded under this plan. OPTIONAL: absent on any surface that
+   *  does not supply it, and the rail chip then omits the count rather than
+   *  rendering a wrong "0 of 8". */
+  solves_used?: number;
 }
 
 export type ApprovalState =
@@ -136,4 +140,37 @@ export function boundsText(bounds: WarrantBounds): string {
   if (bounds.max_size_class !== undefined) parts.push(`up to ${bounds.max_size_class}`);
   if (bounds.device !== undefined) parts.push(`device ${bounds.device}`);
   return parts.length ? parts.join(" · ") : "no bounds declared";
+}
+
+/** Rail chip for the ACTIVE warrant (spec §9.6, G-6): remaining budget at a glance,
+ *  so a researcher mid-campaign does not have to open anything to see how much
+ *  authorization is left.
+ *
+ *  Returns undefined when there is nothing true to say — no live warrant, or a live
+ *  one that declares no bounds. A chip reading "warranted" with no bounds behind it
+ *  would imply an authorization the gate does not actually grant (§5.1 rule 2
+ *  refuses a launch needing a bound the warrant omits), so silence is correct.
+ *
+ *  Deliberately shows CONSUMPTION, not permission: "3 of 8 solves" is a fact from
+ *  the ledger. It never says whether the next launch will pass — that is the gate's
+ *  verdict, and the same reason the card carries no coverage claim. */
+export function railWarrantChip(warrants: readonly Warrant[], now: number): string | undefined {
+  // The live warrant expiring latest — the one a launch would actually be checked
+  // against, matching liveWarrant() in amico-run's warrant.ts.
+  let best: Warrant | undefined
+  for (const w of warrants) {
+    if (expiryMs(w) <= now) continue
+    if (!best || expiryMs(w) > expiryMs(best)) best = w
+  }
+  if (!best) return undefined
+
+  const parts: string[] = []
+  if (best.bounds.max_solves !== undefined) {
+    const used = best.solves_used
+    parts.push(used === undefined ? `${best.bounds.max_solves} solves` : `${used} of ${best.bounds.max_solves} solves`)
+  }
+  if (best.bounds.tier !== undefined) parts.push(`tier ${best.bounds.tier}`)
+  if (best.bounds.max_size_class !== undefined) parts.push(`up to ${best.bounds.max_size_class}`)
+  if (best.bounds.device !== undefined) parts.push(`device ${best.bounds.device}`)
+  return parts.length ? parts.join(" · ") : undefined
 }

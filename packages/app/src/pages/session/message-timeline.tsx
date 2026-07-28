@@ -349,6 +349,9 @@ export function MessageTimeline(props: {
         bounds: (typeof row.bounds === "object" && row.bounds !== null ? row.bounds : {}) as Record<string, never>,
         expires_at: row.expires_at,
         issued_by: typeof row.issued_by === "string" ? row.issued_by : "unknown",
+        // Omitted when the server did not send it, so the rail chip drops the count
+        // rather than rendering a wrong "0 of N".
+        ...(typeof row.solves_used === "number" ? { solves_used: row.solves_used } : {}),
       }]
     })
   })

@@ -71,6 +71,25 @@ describe("readWarrants", () => {
     }
   })
 
+  test("counts solve rows under each plan, in the same pass", () => {
+    const { file, cleanup } = withLedger([
+      approval({ plan_hash: "p1" }),
+      { type: "solve", ts: "t", plan_hash: "p1" },
+      { type: "solve", ts: "t", plan_hash: "p1" },
+      { type: "solve", ts: "t", plan_hash: "other" },
+      { type: "solve", ts: "t" },
+      approval({ plan_hash: "p2" }),
+    ])
+    try {
+      const rows = readWarrants(file)
+      expect(rows.find((r) => r.plan_hash === "p1")?.solves_used).toBe(2)
+      // A plan with no solves is 0, not undefined — the chip renders "0 of N".
+      expect(rows.find((r) => r.plan_hash === "p2")?.solves_used).toBe(0)
+    } finally {
+      cleanup()
+    }
+  })
+
   test("warrantsBody is ok:true with the rows", () => {
     const { file, cleanup } = withLedger([approval()])
     try {

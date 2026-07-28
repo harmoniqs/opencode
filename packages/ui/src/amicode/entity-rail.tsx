@@ -2,7 +2,7 @@ import { For, Show, createEffect, createMemo, createResource, createSignal, onCl
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
 import { registerAmicodeApprovalBridge } from "./approval-bridge"
-import type { ApprovalRequest, Warrant } from "./approval"
+import { railWarrantChip, type ApprovalRequest, type Warrant } from "./approval"
 import { Icon } from "../components/icon"
 import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
@@ -217,6 +217,9 @@ export function AmicodeEntityRail(props: {
   })
   onCleanup(disposeUiBridge)
 
+  // Recomputed on any warrant change; no ticker, so an expiry crossing resolves on
+  // the next refetch rather than needing a timer per rail.
+  const warrantChip = createMemo(() => railWarrantChip(props.warrants?.() ?? [], Date.now()))
   const chips = createMemo(() => {
     const snapshot = state()
     if (snapshot.kind !== "ready") return []
@@ -294,6 +297,24 @@ export function AmicodeEntityRail(props: {
                 </Show>
               )}
             </For>
+            {/* Warrant status (spec §9.6 / G-6): the ACTIVE warrant's consumption, so a
+                researcher mid-campaign sees remaining authorization without opening
+                anything. Inert by design — it reports a ledger fact, and whether the
+                next launch passes is the gate's verdict, not this chip's. Absent when
+                there is no live warrant or it declares no bounds, so it never implies
+                an authorization the gate would refuse. */}
+            <Show when={warrantChip()}>
+              {(text) => (
+                <span
+                  class="amc-rail-chip is-empty"
+                  data-slot="amicode-rail-warrant"
+                  title={`Active capability warrant — ${text()}`}
+                >
+                  <Icon name="archive" size="small" />
+                  {text()}
+                </span>
+              )}
+            </Show>
             <Show when={props.onInspectRun && hasRun()}>
               <button
                 type="button"
