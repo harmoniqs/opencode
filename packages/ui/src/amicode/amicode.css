@@ -222,6 +222,12 @@
 [data-component="amicode-card"][data-state="error"] .amc-detail {
   color: var(--v2-state-fg-danger);
 }
+/* a collapsed run's count (receipt-runs.ts) — short and always-visible, so it
+   never loses the ellipsis race against a long diff value beside it */
+[data-component="amicode-card"] .amc-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
 
 /* structured diff pieces */
 [data-component="amicode-card"] .amc-diff {
