@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync, lstatSync } from "node:fs"
 import { tmpdir, homedir } from "node:os"
 import path from "node:path"
-import { candidates, synthesize, normalizeRef, sanitizeVaultName, attachVault, scanMounts } from "@/server/amicode/vaults"
+import {
+  annotateBrowsable,
+  candidates,
+  synthesize,
+  normalizeRef,
+  sanitizeVaultName,
+  attachVault,
+  scanMounts,
+} from "@/server/amicode/vaults"
 
 describe("synthesize", () => {
   test("emits the plural failure shape the UI parser expects", () => {
@@ -116,5 +124,41 @@ describe("scanMounts (CLI-less fallback)", () => {
     expect(out.mounts.map((m: { id: string }) => m.id)).toEqual(["jack", "armonissima"]) // personal(0) before team(4)
     expect(out.mounts[0]).toMatchObject({ id: "jack", kind: "personal", writable: true })
     expect(out.mounts[1]).toMatchObject({ id: "armonissima", kind: "team", writable: false })
+  })
+})
+
+describe("annotateBrowsable", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "vaults-annotate-"))
+  const mk = (name: string, marker: string) => {
+    mkdirSync(path.join(root, name), { recursive: true })
+    writeFileSync(path.join(root, name, ".amico-vault.toml"), marker)
+  }
+  mk("personal-v", 'kind = "personal"\nname = "personal-v"\n')
+  mk("team-dark", 'kind = "team"\nname = "team-dark"\n')
+  mk("team-open", 'kind = "team"\nname = "team-open"\nbrowse = true\n')
+  mk("personal-off", 'kind = "personal"\nname = "personal-off"\nbrowse = false\n')
+  const env = { AMICO_VAULT_BROWSER: "1" }
+
+  test("stamps browsable per the fail-closed law (kind default + browse override)", () => {
+    const out = JSON.parse(annotateBrowsable(scanMounts(root), root, env)) as {
+      mounts: { id: string; browsable: boolean }[]
+    }
+    const by = Object.fromEntries(out.mounts.map((m) => [m.id, m.browsable]))
+    expect(by["personal-v"]).toBe(true)
+    expect(by["team-dark"]).toBe(false)
+    expect(by["team-open"]).toBe(true)
+    expect(by["personal-off"]).toBe(false)
+  })
+  test("a mount the browser can't resolve is not browsable; junk passes through", () => {
+    const body = JSON.stringify({ ok: true, mounts: [{ id: "ghost", kind: "personal" }], error: null })
+    const out = JSON.parse(annotateBrowsable(body, root, env)) as { mounts: { browsable: boolean }[] }
+    expect(out.mounts[0].browsable).toBe(false)
+    expect(annotateBrowsable("not json", root, env)).toBe("not json")
+  })
+  test("deployment gate off (AMICO_VAULT_BROWSER=0) darkens every mount", () => {
+    const out = JSON.parse(annotateBrowsable(scanMounts(root), root, { AMICO_VAULT_BROWSER: "0" })) as {
+      mounts: { browsable: boolean }[]
+    }
+    for (const m of out.mounts) expect(m.browsable).toBe(false)
   })
 })
