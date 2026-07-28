@@ -68,74 +68,239 @@ export type ComponentRow = { id: string; role: string; levels?: number; params: 
 export type CouplingRow = { between: string[]; kind: string; params: Record<string, number> }
 export type TableModel = { components: ComponentRow[]; couplings: CouplingRow[] }
 
-// Composite Hamiltonian LaTeX (spec §6.1 "show the system"): drift per distinct
-// component role + interaction per distinct coupling kind + a drive term.
-// Illustrative (authoring-aware bookkeeping spirit), not an exact derivation.
-const COUPLING_TERM: Record<string, string> = {
-  "dispersive-chi": "\\tfrac{\\chi}{2}\\,\\hat a^\\dagger \\hat a\\,\\hat\\sigma_z",
-  ZZ: "J\\,\\hat\\sigma_z^{(1)}\\hat\\sigma_z^{(2)}",
-  "cross-resonance": "\\Omega\\,\\hat\\sigma_x^{(1)}\\hat\\sigma_z^{(2)}",
-  exchange: "g\\,(\\hat a^\\dagger \\hat b + \\hat a \\hat b^\\dagger)",
-  vdW: "\\tfrac{C_6}{r^6}\\,\\hat n_1 \\hat n_2",
-  "mode-mediated": "g\\,(\\hat a^\\dagger \\hat b + \\mathrm{h.c.})",
-}
+// Composite Hamiltonian LaTeX (spec §6.1 "show the system"), composed over the
+// ACTUAL component and edge sets. The previous version deduped term STRINGS over
+// the set of distinct roles, which meant a 2-atom register and a 20-atom register
+// rendered the identical single-site Hamiltonian, an N-edge chain rendered one
+// edge with hardcoded indices (1),(2), a qubit and a cavity in the same system
+// both used â, and the drive-arch badge had no counterpart in the equation.
+// Still ILLUSTRATIVE — the canonical model per role, not a derivation from the
+// recorded numbers — but it has to be the Hamiltonian of THIS system.
 
-function driftTerm(c: { role: string; levels?: number; params: Record<string, number> }): string {
+type SiteKind = "spin" | "ladder" | "rydberg" | "opaque"
+type Site = { idx: number; role: string; kind: SiteKind; key: string; letter: string }
+
+/** Distinct bosonic groups get distinct operator letters, so a qubit ladder and
+ *  a cavity in one system are never both â. */
+const LADDER_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h"]
+const KERR_KEYS = ["K", "K_c", "K_c_Hz", "kerr"]
+const MODE_ROLES = new Set(["cavity", "resonator", "mode"])
+
+/** The term shape a component contributes; `key` groups sites that share one
+ *  (two linear cavities are one group, a Kerr cavity is its own). */
+function classify(c: ComponentRow): { kind: SiteKind; key: string } {
   switch (c.role) {
+    case "atom":
+      return { kind: "rydberg", key: "rydberg" }
     case "qubit":
-      // Keyed off LEVELS, not off whether δ happens to be filled in yet: a
-      // 3-level transmon whose params are still empty is an anharmonic ladder,
-      // and rendering it as a bare spin misstates the model the solve will use.
-      return c.levels === 2
-        ? "\\tfrac{\\omega}{2}\\,\\hat\\sigma_z"
-        : "\\omega\\,\\hat a^\\dagger \\hat a + \\tfrac{\\delta}{2}\\,\\hat a^\\dagger \\hat a^\\dagger \\hat a \\hat a"
+      // Levels, not param presence: a 3-level transmon with empty params is
+      // still an anharmonic ladder, and a spin is never one.
+      return c.levels === 2 ? { kind: "spin", key: "spin" } : { kind: "ladder", key: "qubit" }
     case "cavity":
     case "resonator":
     case "mode":
-      // A mode's Kerr is genuinely optional (a linear cavity has none), so here
-      // the recorded params ARE the evidence.
-      return ["K", "K_c", "K_c_Hz", "kerr"].some((k) => k in c.params)
-        ? "\\omega_c\\,\\hat a^\\dagger \\hat a + \\tfrac{K}{2}\\,\\hat a^{\\dagger 2}\\hat a^2"
-        : "\\omega_c\\,\\hat a^\\dagger \\hat a"
-    case "atom":
-      return "-\\Delta\\,|r\\rangle\\langle r|"
+      // A mode's Kerr is genuinely optional, so here the params ARE the evidence.
+      return KERR_KEYS.some((k) => k in c.params) ? { kind: "ladder", key: "mode-kerr" } : { kind: "ladder", key: "mode" }
     default:
-      return "\\hat H_{\\mathrm{drift}}"
+      return { kind: "opaque", key: `opaque:${c.role}` }
   }
 }
 
-/** Drive term per component. Atoms are laser-driven on the |1⟩↔|r⟩ transition
- *  (3-level Rydberg convention: |0⟩ dark); a strictly two-level component is
- *  driven in the Pauli basis its drift already uses; everything bosonic or
- *  bosonic-truncated keeps the quadrature drive. */
-function driveTerm(c: { role: string; levels?: number }): string {
-  if (c.role === "atom") return "\\tfrac{\\Omega(t)}{2}\\,(|r\\rangle\\langle 1| + \\mathrm{h.c.})"
-  if (c.role === "qubit" && c.levels === 2) return "u_1(t)\\,\\hat\\sigma_x + u_2(t)\\,\\hat\\sigma_y"
-  return "\\varepsilon(t)\\,(\\hat a + \\hat a^\\dagger)"
+const ann = (letter: string, i: string) => (i ? `\\hat ${letter}_{${i}}` : `\\hat ${letter}`)
+const cre = (letter: string, i: string) => (i ? `\\hat ${letter}^\\dagger_{${i}}` : `\\hat ${letter}^\\dagger`)
+const num = (i: string) => (i ? `\\hat n_{${i}}` : "\\hat n")
+const pauli = (axis: string, i: string) => (i ? `\\hat\\sigma_${axis}^{(${i})}` : `\\hat\\sigma_${axis}`)
+const sub = (sym: string, i: string) => (i ? `${sym}_{${i}}` : sym)
+
+/** Whether a control carries a site index: a GLOBAL drive is one knob shared by
+ *  every site, per-component is an independent knob each, zoned is one per zone.
+ *  That distinction is the whole difference between a global-drive CZ and a
+ *  locally-addressed one, and the card claims it in a badge. */
+const control = (i: string, arch?: string) =>
+  !i || arch === "global" ? "" : arch === "zoned" ? `_{z(${i})}` : `_{${i}}`
+
+/** Sum prefix + index token for a group: no index at all in a single-component
+ *  system, a literal site number for a lone member, `\sum_i` when the group is
+ *  every site, else an explicit index set. */
+function indexing(group: Site[], total: number): { sum: string; i: string } {
+  if (total === 1) return { sum: "", i: "" }
+  if (group.length === total) return { sum: "\\sum_i ", i: "i" }
+  if (group.length === 1) return { sum: "", i: String(group[0].idx) }
+  return { sum: `\\sum_{i \\in \\{${group.map((s) => s.idx).join(",")}\\}} `, i: "i" }
 }
 
-/** Compose an illustrative Hamiltonian for ANY composite system. undefined when
- *  there are no components. Distinct role drifts + distinct coupling terms + drive. */
-export function systemHamiltonianLatex(proj: SystemProjection): string | undefined {
-  const terms: string[] = []
-  const seen = new Set<string>()
-  for (const c of proj.components) {
-    const t = driftTerm(c)
-    if (!seen.has(t)) { seen.add(t); terms.push(t) }
+/** Parenthesize a summed body only when it has a top-level `+` — an h.c. inside
+ *  its own parens must not trigger a redundant outer bracket. */
+function wrap(sum: string, body: string): string {
+  if (!sum) return body
+  let depth = 0
+  for (const ch of body) {
+    if (ch === "(") depth++
+    else if (ch === ")") depth--
+    else if (ch === "+" && depth === 0) return `${sum}\\left(${body}\\right)`
   }
-  for (const cp of proj.couplings) {
-    const t = COUPLING_TERM[cp.kind]
-    if (t && !seen.has(cp.kind)) { seen.add(cp.kind); terms.push(t) }
+  return `${sum}${body}`
+}
+
+function driftLatex(g: Site[], total: number, arch?: string): string {
+  const { sum, i } = indexing(g, total)
+  switch (g[0].kind) {
+    case "spin":
+      return wrap(sum, `\\tfrac{${sub("\\omega", i)}}{2}\\,${pauli("z", i)}`)
+    case "rydberg": {
+      // Δ is set by the laser, so it is per-site exactly when the drive is.
+      const c = control(i, arch)
+      return c ? `-${sum}\\Delta${c}\\,${num(i)}` : `-\\Delta\\,${sum}${num(i)}`
+    }
+    case "ladder": {
+      const L = g[0].letter
+      const isMode = g[0].key.startsWith("mode")
+      const w = isMode ? (i ? `\\omega_{c,${i}}` : "\\omega_c") : sub("\\omega", i)
+      const linear = `${w}\\,${cre(L, i)} ${ann(L, i)}`
+      if (g[0].key === "mode") return wrap(sum, linear)
+      const k = isMode ? sub("K", i) : sub("\\delta", i)
+      const sq = i ? `\\hat ${L}^{\\dagger 2}_{${i}}\\hat ${L}^{2}_{${i}}` : `\\hat ${L}^{\\dagger 2}\\hat ${L}^{2}`
+      return wrap(sum, `${linear} + \\tfrac{${k}}{2}\\,${sq}`)
+    }
+    default:
+      // No model for this role — name a drift, don't invent its algebra.
+      return `${sum}${i ? `\\hat H_{\\mathrm{drift}}^{(${i})}` : "\\hat H_{\\mathrm{drift}}"}`
   }
-  if (terms.length === 0) return undefined
-  for (const c of proj.components) {
-    const t = driveTerm(c)
-    if (!seen.has(t)) {
-      seen.add(t)
-      terms.push(t)
+}
+
+/** Atoms are laser-driven on |1⟩↔|r⟩ (3-level Rydberg convention: |0⟩ dark); a
+ *  strictly two-level component is driven in the Pauli basis its drift already
+ *  uses; bosonic and bosonic-truncated components keep the quadrature drive; a
+ *  role we have no model for gets a named control, not an invented operator. */
+function driveLatex(g: Site[], total: number, arch?: string): string {
+  const { sum, i } = indexing(g, total)
+  const c = control(i, arch)
+  switch (g[0].kind) {
+    case "rydberg":
+      return wrap(sum, `\\tfrac{\\Omega${c}(t)}{2}\\,(|r\\rangle\\langle 1|${i ? `_{${i}}` : ""} + \\mathrm{h.c.})`)
+    case "spin":
+      return wrap(sum, `u^x${c}(t)\\,${pauli("x", i)} + u^y${c}(t)\\,${pauli("y", i)}`)
+    case "ladder":
+      return wrap(sum, `\\varepsilon${c}(t)\\,(${ann(g[0].letter, i)} + ${cre(g[0].letter, i)})`)
+    default:
+      return `${sum}\\hat H_{\\mathrm{c}}${i ? `^{(${i})}` : ""}(t)`
+  }
+}
+
+type Edge = { a: Site; b: Site; rest: Site[] }
+
+/** Raising / lowering operator for a site in whatever algebra it actually has.
+ *  A coupling term must never assume its endpoints are bosonic: the ladder
+ *  letter is empty for a spin, an atom, or an unmodeled role, and `\hat ^\dagger`
+ *  is not LaTeX — it renders as an error box in the transcript. */
+const raise = (s: Site, i: string) =>
+  s.kind === "ladder" ? cre(s.letter, i) : s.kind === "rydberg" ? `|r\\rangle\\langle 1|_{${i}}` : `\\hat\\sigma_+^{(${i})}`
+const lower = (s: Site, i: string) =>
+  s.kind === "ladder" ? ann(s.letter, i) : s.kind === "rydberg" ? `|1\\rangle\\langle r|_{${i}}` : `\\hat\\sigma_-^{(${i})}`
+
+/** One term for a set of edges that share a kind AND an endpoint shape. A lone
+ *  edge names its actual sites; several become a sum over pairs — the old code
+ *  printed one hardcoded `(1),(2)` term no matter how many edges existed. */
+function couplingLatex(kind: string, edges: Edge[]): string {
+  const many = edges.length > 1
+  const e = edges[0]
+  const x = many ? "i" : String(e.a.idx)
+  const y = many ? "j" : String(e.b.idx)
+  const pair = many ? "\\sum_{\\langle ij\\rangle} " : ""
+  // For a role we have no model for — or a coupling kind we don't know — name
+  // the interaction. Inventing its algebra would be a guess, and DROPPING it
+  // (what an unknown kind used to do) left the card listing a coupling that the
+  // equation silently didn't have.
+  const generic = `${pair}\\hat H_{\\mathrm{int},${x}${y}}`
+  if (e.a.kind === "opaque" || e.b.kind === "opaque") return generic
+  switch (kind) {
+    case "vdW":
+      return `${pair}\\tfrac{C_6}{r_{${x}${y}}^6}\\,${num(x)} ${num(y)}`
+    case "ZZ": {
+      const spins = e.a.kind === "spin" && e.b.kind === "spin"
+      const op = spins ? `${pauli("z", x)}${pauli("z", y)}` : `${num(x)} ${num(y)}`
+      return `${pair}${many ? "J_{ij}" : "J"}\\,${op}`
+    }
+    case "cross-resonance": {
+      // Drive on the control at the target's frequency. Pauli form only when
+      // both ends really are two-level — otherwise it would put σ algebra on
+      // components whose drift is an anharmonic ladder, in the same equation.
+      const amp = many ? "\\Omega_{\\mathrm{CR},ij}" : "\\Omega_{\\mathrm{CR}}"
+      return e.a.kind === "spin" && e.b.kind === "spin"
+        ? `${pair}${amp}\\,${pauli("x", x)}${pauli("z", y)}`
+        : `${pair}${amp}\\,(${lower(e.a, x)} + ${raise(e.a, x)})\\,${num(y)}`
+    }
+    case "exchange":
+      return `${pair}${many ? "g_{ij}" : "g"}\\,(${raise(e.a, x)} ${lower(e.b, y)} + \\mathrm{h.c.})`
+    case "dispersive-chi": {
+      // `b` is the mode (oriented by the caller). Several qubits on ONE cavity
+      // is the common readout layout, and there the cavity factors out.
+      if (e.b.kind !== "ladder") return generic // a dispersive shift needs a mode
+      const m = String(e.b.idx)
+      const cav = `${cre(e.b.letter, m)} ${ann(e.b.letter, m)}`
+      if (!many)
+        return e.a.kind === "spin"
+          ? `\\tfrac{\\chi}{2}\\,${cav}\\,${pauli("z", x)}`
+          : `\\chi\\,${cav}\\,${num(x)}`
+      if (edges.every((z) => z.b.idx === e.b.idx)) return `${cav}\\,\\sum_i \\chi_i\\,${num("i")}`
+      return `\\sum_{\\langle ij\\rangle} \\chi_{ij}\\,${cre(e.b.letter, "j")} ${ann(e.b.letter, "j")}\\,${num("i")}`
+    }
+    case "mode-mediated": {
+      // The shared mode is `b`; every other member couples into it.
+      if (e.b.kind !== "ladder") return generic // nothing to mediate through
+      const ids = [...new Set(edges.flatMap((z) => [z.a, ...z.rest]).map((s) => s.idx))].sort((p, q) => p - q)
+      const qi = ids.length > 1 ? "i" : String(ids[0])
+      const sum = ids.length > 1 ? `\\sum_{i \\in \\{${ids.join(",")}\\}} ` : ""
+      return `${sum}g\\,(${raise(e.a, qi)} ${ann(e.b.letter, String(e.b.idx))} + \\mathrm{h.c.})`
     }
   }
-  return "\\hat H/\\hbar = " + terms.join(" + ")
+  return generic
+}
+
+/** Terms carry their own sign, so a drift like `-Δ n̂` must not be pasted on
+ *  with " + " (that printed a literal "+ -Δ"). */
+function joinTerms(terms: string[]): string {
+  return terms.reduce((acc, t) => (!acc ? t : t.startsWith("-") ? `${acc} - ${t.slice(1).trimStart()}` : `${acc} + ${t}`), "")
+}
+
+/** Compose an illustrative Hamiltonian for ANY composite system: one drift and
+ *  one drive per component GROUP (summed over the group's sites) plus one term
+ *  per set of like edges. undefined when there are no components. Never throws. */
+export function systemHamiltonianLatex(proj: SystemProjection): string | undefined {
+  const total = proj.components.length
+  if (total === 0) return undefined
+
+  const sites: Site[] = proj.components.map((c, k) => ({ idx: k + 1, role: c.role, letter: "", ...classify(c) }))
+  const byKey = new Map<string, Site[]>()
+  for (const s of sites) (byKey.get(s.key) ?? byKey.set(s.key, []).get(s.key)!).push(s)
+  const groups = [...byKey.values()]
+  let letters = 0
+  for (const g of groups)
+    if (g[0].kind === "ladder") {
+      const L = LADDER_LETTERS[letters++ % LADDER_LETTERS.length]
+      for (const s of g) s.letter = L
+    }
+
+  const byId = new Map(proj.components.map((c, k) => [c.id, sites[k]]))
+  const edges = new Map<string, Edge[]>()
+  for (const cp of proj.couplings) {
+    const members = cp.between.map((id) => byId.get(id)).filter((s): s is Site => s !== undefined)
+    if (members.length < 2) continue
+    // dispersive / mode-mediated are oriented so the shared mode is always `b`.
+    const mode = members.find((s) => MODE_ROLES.has(s.role))
+    const others = mode ? members.filter((s) => s !== mode) : members
+    const edge: Edge =
+      mode && (cp.kind === "dispersive-chi" || cp.kind === "mode-mediated")
+        ? { a: others[0], b: mode, rest: others.slice(1) }
+        : { a: members[0], b: members[1], rest: members.slice(2) }
+    const key = `${cp.kind}|${edge.a.kind}|${edge.b.kind}`
+    ;(edges.get(key) ?? edges.set(key, []).get(key)!).push(edge)
+  }
+
+  const terms = groups.map((g) => driftLatex(g, total, proj.driveArch))
+  for (const [key, group] of edges) terms.push(couplingLatex(key.split("|")[0], group))
+  terms.push(...groups.map((g) => driveLatex(g, total, proj.driveArch)))
+  return "\\hat H/\\hbar = " + joinTerms(terms)
 }
 
 // --- physics rows -------------------------------------------------------------
@@ -211,8 +376,13 @@ const ROLE_PARAMS: Record<string, ParamSpec[]> = {
     { keys: ["drive_max"], label: "drive bound", sym: "|u|", prefix: "≤ " },
   ],
   atom: [
-    { keys: ["Delta", "detuning", "Delta_max"], label: "detuning", sym: "Δ" },
-    { keys: ["Omega", "Omega_max", "rabi", "drive_max"], label: "rabi drive", sym: "Ω", prefix: "≤ " },
+    // Lowercase `delta_max`/`omega_max` are what the Rydberg template and the
+    // interview actually record (Δ_max, Ω_max). They are safe to claim here and
+    // ONLY here: the spec is keyed by role, so a transmon's δ can never reach
+    // this row. A bare `delta` on an atom stays deliberately unclaimed — it is
+    // far more likely a misfiled anharmonicity than a detuning.
+    { keys: ["Delta", "Delta_max", "delta_max", "detuning"], label: "detuning", sym: "Δ", prefix: "≤ " },
+    { keys: ["Omega", "Omega_max", "omega_max", "rabi_max", "rabi", "drive_max"], label: "rabi drive", sym: "Ω", prefix: "≤ " },
   ],
   cavity: MODE_PARAMS,
   resonator: MODE_PARAMS,
