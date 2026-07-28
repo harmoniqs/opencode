@@ -115,9 +115,10 @@ export function AmicodeEntityRail(props: {
   widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
   onAsk?: (text: string) => void
-  // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
-  // to the host (postAmicode → amicode.openInspector) and passes it only when
-  // framed in Amicode, so the button stays hidden everywhere else.
+  // Bridge-agnostic: fired when the user clicks the pulse chip (the rail's one
+  // inspector entry). The app wires it to the host (postAmicode →
+  // amicode.openInspector) and passes it only when framed in Amicode, so the
+  // chip falls back to dialog/inert behavior everywhere else.
   onInspectRun?: () => void
   retryLabel: string
   unavailableLabel: string
@@ -207,14 +208,9 @@ export function AmicodeEntityRail(props: {
   // Which chips hand off to the Run Inspector instead of the entity dialog.
   // Only the pulse chip, and only when the host actually wired an inspector —
   // standalone opencode has none, so there the chip keeps its dialog behavior.
+  // The pulse chip is the ONLY inspector entry on the rail — the separate
+  // "Inspect Run" button was redundant chrome next to it (Kate 2026-07-28).
   const opensInspector = (kind: string) => kind === "pulse" && props.onInspectRun !== undefined
-
-  // Whether there is a run to inspect — gates the "Inspect Run" button so it
-  // appears alongside the live run chip, not before any solve has started.
-  const hasRun = createMemo(() => {
-    const snapshot = state()
-    return snapshot.kind === "ready" && snapshot.view.runs.length > 0
-  })
 
   return (
     <Show when={amicodeParts().any > 0}>
@@ -296,34 +292,19 @@ export function AmicodeEntityRail(props: {
                   >
                     <Icon name={chipIcon(chip.kind)} size="small" />
                     {chip.label}
+                    {/* At-rest chevron on the pending-but-clickable chip: the dotted
+                        border alone reads "inert" (that's what it means on every
+                        other pending chip), so the shape — not hover — carries the
+                        "this goes somewhere" signal (Kate 2026-07-28). */}
+                    <Show when={chip.pending}>
+                      <span class="amc-chev" aria-hidden="true">
+                        ›
+                      </span>
+                    </Show>
                   </button>
                 </Show>
               )}
             </For>
-            <Show when={props.onInspectRun && hasRun()}>
-              <button
-                type="button"
-                data-slot="amicode-rail-inspect"
-                style={{
-                  display: "inline-flex",
-                  "align-items": "center",
-                  "flex-shrink": "0",
-                  gap: "4px",
-                  border: "1px solid var(--v2-border-border-base)",
-                  "border-radius": "var(--radius-md)",
-                  background: "none",
-                  color: "var(--v2-text-text-accent)",
-                  padding: "2px 8px",
-                  font: "inherit",
-                  "font-weight": "600",
-                  cursor: "pointer",
-                }}
-                title="Open the Run Inspector panel"
-                onClick={() => props.onInspectRun?.()}
-              >
-                Inspect Run
-              </button>
-            </Show>
           </div>
         </Show>
       </div>
