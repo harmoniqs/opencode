@@ -82,6 +82,25 @@
 /* The glyph is a block, not text — baseline alignment would sit it high. */
 .amc-thinking .amc-wave { align-self: center; }
 
+/* ---- Amico's aside lane (skill activations) ------------------------------ */
+/* A skill activation is Amico stepping in with its own repertoire — an aside, not part of
+ * the conversation. So it leaves the prose flow: indented behind an accent spine, the same
+ * offset-lane idiom `.amc-lane` uses in amico-presence.css for Amico's in-flow
+ * contributions ("attribution by position + accent, never a repeated label").
+ *
+ * Block layout, not flex: the BasicTool disclosure inside must lay out normally so an
+ * expanded skill's instruction body stays inside the lane instead of reflowing into the
+ * transcript. And no H-mark head of its own — the chip inside already carries one, and two
+ * marks in a row is exactly the clutter this reduces.
+ *
+ * Spine is 45% of the accent rather than `.amc-lane`'s 55%: the lane marks Amico actively
+ * working, and an aside should read quieter than that. */
+.amc-aside {
+  margin: 6px 0 6px 12px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--v2-icon-icon-accent) 45%, transparent);
+}
+
 /* ---- the harmonic working indicator (amico-wave.tsx) --------------------- */
 /* A standing wave in quadrature: two identical curves, the companion a quarter period out
  * of phase, so one is at full swing whenever the other crosses zero.
