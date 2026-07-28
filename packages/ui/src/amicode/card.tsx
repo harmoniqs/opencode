@@ -66,7 +66,14 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
     const sentinel = parseDiffSentinel(props.output)
     return sentinel ? { sentinel, receipt: receiptParts(sentinel) } : undefined
   })
-  const clickable = () => !!parts()
+  // Clickable ONLY when an entity view exists for the kind. A receipt carrying a
+  // sentinel for a kind entity-view.tsx has no case for (e.g. `recommend`, which
+  // emits a sentinel purely so its chip names the param) would otherwise open an
+  // empty dialog. Diff detail and openability are separate properties.
+  const clickable = () => {
+    const entity = parts()?.sentinel.entity
+    return entity !== undefined && INLINE_KINDS.has(entity)
+  }
   const diffPieces = createMemo<DiffPiece[]>(
     () =>
       parts()?.receipt.changes.map((change) =>
