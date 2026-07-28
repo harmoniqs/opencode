@@ -1,5 +1,57 @@
 import { describe, expect, test } from "bun:test"
-import { approvalState, boundsText, isActionable, warrantFor, type Warrant } from "./approval"
+import {
+  approvalState,
+  boundsText,
+  isActionable,
+  parseApprovalInput,
+  warrantFor,
+  type Warrant,
+} from "./approval"
+
+describe("parseApprovalInput", () => {
+  test("reads plan_hash, bounds and rationale from the tool input", () => {
+    expect(
+      parseApprovalInput({
+        plan_hash: " 9f2c ",
+        bounds: { max_solves: 8, tier: "hpc", max_size_class: "MEDIUM", device: "ro" },
+        rationale: "  CZ ladder sweep  ",
+      }),
+    ).toEqual({
+      plan_hash: "9f2c",
+      bounds: { max_solves: 8, tier: "hpc", max_size_class: "MEDIUM", device: "ro" },
+      rationale: "CZ ladder sweep",
+    })
+  })
+
+  test("no plan_hash → undefined (caller falls back to the chip)", () => {
+    for (const bad of [undefined, null, "plain", {}, { plan_hash: "" }, { plan_hash: "  " }, { plan_hash: 4 }]) {
+      expect(parseApprovalInput(bad), JSON.stringify(bad)).toBeUndefined()
+    }
+  })
+
+  test("bounds are optional — a request with none still parses", () => {
+    expect(parseApprovalInput({ plan_hash: "h" })).toEqual({ plan_hash: "h", bounds: {} })
+  })
+
+  // A bound the card shows but the gate does not enforce (or the reverse) is worse
+  // than an absent one, so unusable values are DROPPED rather than coerced.
+  test("unusable bound values are dropped, not guessed", () => {
+    expect(
+      parseApprovalInput({
+        plan_hash: "h",
+        bounds: { max_solves: 0, tier: "  ", max_size_class: "LARGE", device: "yes", nonesuch: 1 },
+      }),
+    ).toEqual({ plan_hash: "h", bounds: {} })
+  })
+
+  test("a fractional max_solves is dropped rather than floored", () => {
+    expect(parseApprovalInput({ plan_hash: "h", bounds: { max_solves: 1.5 } })?.bounds).toEqual({})
+  })
+
+  test("non-object bounds are ignored without rejecting the request", () => {
+    expect(parseApprovalInput({ plan_hash: "h", bounds: "lots" })).toEqual({ plan_hash: "h", bounds: {} })
+  })
+})
 
 const NOW = Date.parse("2026-07-27T20:00:00Z")
 const iso = (offsetMin: number) => new Date(NOW + offsetMin * 60_000).toISOString()
@@ -80,7 +132,7 @@ describe("boundsText", () => {
   test("renders only declared bounds", () => {
     expect(boundsText({ max_solves: 8, tier: "free" })).toBe("8 solves · tier free")
     expect(boundsText({ max_solves: 1 })).toBe("1 solve")
-    expect(boundsText({ max_duration_s: 1800, device: "ro" })).toBe("30 min · device ro")
+    expect(boundsText({ max_size_class: "MEDIUM", device: "ro" })).toBe("up to MEDIUM · device ro")
   })
   test("empty bounds say so rather than implying unlimited", () => {
     expect(boundsText({})).toBe("no bounds declared")

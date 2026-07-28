@@ -21,11 +21,38 @@
 //   "the agent says the user approved". Approvals go straight to the ledger via
 //   ./approval-bridge.ts (→ `amico ledger approve`).
 
+/** Reads an approval request from the tool part's INPUT args, mirroring
+ *  parseAskInput — the ask card's pattern, not a sentinel, because the request is
+ *  the agent's ASK rather than a record of something that happened.
+ *
+ *  Tolerant in the same way: anything unusable → undefined, and the caller falls
+ *  back to the collapsed chip. But NOT tolerant about bounds: an unparseable bound
+ *  is DROPPED rather than guessed, because a bound the card displays and the gate
+ *  does not enforce (or vice versa) is worse than an absent one. */
+export function parseApprovalInput(input: unknown): ApprovalRequest | undefined {
+  if (typeof input !== "object" || input === null) return undefined
+  const raw = input as Record<string, unknown>
+  const planHash = raw.plan_hash
+  if (typeof planHash !== "string" || planHash.trim().length === 0) return undefined
+
+  const bounds: WarrantBounds = {}
+  const b = typeof raw.bounds === "object" && raw.bounds !== null ? (raw.bounds as Record<string, unknown>) : {}
+
+  if (typeof b.max_solves === "number" && Number.isInteger(b.max_solves) && b.max_solves >= 1)
+    bounds.max_solves = b.max_solves
+  if (typeof b.tier === "string" && b.tier.trim().length > 0) bounds.tier = b.tier.trim()
+  if (b.max_size_class === "SMALL" || b.max_size_class === "MEDIUM") bounds.max_size_class = b.max_size_class
+  if (b.device === "none" || b.device === "ro" || b.device === "rw") bounds.device = b.device
+
+  const rationale = typeof raw.rationale === "string" && raw.rationale.trim().length > 0 ? raw.rationale.trim() : undefined
+  return { plan_hash: planHash.trim(), bounds, ...(rationale ? { rationale } : {}) }
+}
+
 /** What a warrant may authorise — the fleet spec §2.1 vocabulary for `device`. */
 export interface WarrantBounds {
   max_solves?: number;
   tier?: string;
-  max_duration_s?: number;
+  max_size_class?: "SMALL" | "MEDIUM";
   device?: "none" | "ro" | "rw";
 }
 
@@ -106,7 +133,7 @@ export function boundsText(bounds: WarrantBounds): string {
   const parts: string[] = [];
   if (bounds.max_solves !== undefined) parts.push(`${bounds.max_solves} solve${bounds.max_solves === 1 ? "" : "s"}`);
   if (bounds.tier !== undefined) parts.push(`tier ${bounds.tier}`);
-  if (bounds.max_duration_s !== undefined) parts.push(`${Math.round(bounds.max_duration_s / 60)} min`);
+  if (bounds.max_size_class !== undefined) parts.push(`up to ${bounds.max_size_class}`);
   if (bounds.device !== undefined) parts.push(`device ${bounds.device}`);
   return parts.length ? parts.join(" · ") : "no bounds declared";
 }

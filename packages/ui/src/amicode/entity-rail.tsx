@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
+import { registerAmicodeApprovalBridge } from "./approval-bridge"
+import type { ApprovalRequest, Warrant } from "./approval"
 import { Icon } from "../components/icon"
 import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
@@ -115,6 +117,13 @@ export function AmicodeEntityRail(props: {
   widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
   onAsk?: (text: string) => void
+  // Warrant transport (spec-20260727-164748 §9.5). DELIBERATELY NOT onAsk: routing an
+  // approval through the chat would leave the ledger's only provenance reading "the
+  // agent says the user approved". The app wires these to GET /amicode/warrants and
+  // POST /amicode/approve; omitting them leaves the approval card non-actionable,
+  // which is the correct read-only-surface behaviour.
+  warrants?: () => readonly Warrant[]
+  onApprove?: (request: ApprovalRequest) => void
   // Bridge-agnostic: fired when the user clicks "Inspect Run". The app wires it
   // to the host (postAmicode → amicode.openInspector) and passes it only when
   // framed in Amicode, so the button stays hidden everywhere else.
@@ -132,6 +141,15 @@ export function AmicodeEntityRail(props: {
       hasUserReplyAfter: (messageID) => hasUserReplyAfter(props.messages, messageID),
     })
     onCleanup(dispose)
+  }
+  // Registered only when BOTH halves are present: a card that could approve but not
+  // read back its own warrant would show "pending" forever after a successful press.
+  if (props.onApprove && props.warrants) {
+    const disposeApproval = registerAmicodeApprovalBridge({
+      approve: (request) => props.onApprove?.(request),
+      warrants: () => props.warrants?.() ?? [],
+    })
+    onCleanup(disposeApproval)
   }
   // The ui bridge (openEntity + the in-transcript entity-view transport) is
   // registered below, once the live problem view, run statuses, and refetch it

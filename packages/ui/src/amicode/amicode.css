@@ -1331,3 +1331,76 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   APPROVAL CARD — [data-component="amicode-approval-card"] (approval-card.tsx)
+   The capability-warrant card (spec-20260727-164748 §9.5). Sibling of the ask
+   card: same in-transcript weight, but the state lives in data-state so the
+   granted/expired/unavailable cases are styleable without extra classes.
+   ───────────────────────────────────────────────────────────────────────────── */
+[data-component="amicode-approval-card"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--amc-rule, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  background: var(--amc-card-bg, transparent);
+}
+[data-component="amicode-approval-card"] .amc-ap-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-component="amicode-approval-card"] .amc-ap-title {
+  font-weight: 600;
+}
+[data-component="amicode-approval-card"] .amc-ap-plan {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+  white-space: nowrap;
+}
+[data-component="amicode-approval-card"] .amc-ap-why {
+  margin: 0;
+  opacity: 0.85;
+}
+[data-component="amicode-approval-card"] .amc-ap-bounds {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 0.9em;
+}
+[data-component="amicode-approval-card"] .amc-ap-bounds dt {
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
+}
+[data-component="amicode-approval-card"] .amc-ap-bounds dd {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+}
+[data-component="amicode-approval-card"] .amc-ap-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+[data-component="amicode-approval-card"] .amc-ap-note {
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+/* A granted warrant is settled, not celebratory — the gate still decides whether
+   its bounds cover any particular launch, so this must not read as "cleared". */
+[data-component="amicode-approval-card"][data-state="granted"] .amc-ap-title {
+  opacity: 0.7;
+}
+[data-component="amicode-approval-card"] button[data-slot="amicode-approval-approve"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
