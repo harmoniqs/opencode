@@ -2,6 +2,8 @@ import { For, Match, Show, Switch, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
+import { parseApprovalInput } from "./approval"
+import { AmicodeApprovalCard } from "./approval-card"
 import { parseDiffSentinel, receiptParts } from "./receipt"
 import { receiptIsCurrent } from "./receipt-currency"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
@@ -282,6 +284,10 @@ export function AmicodeToolCard(props: {
   sessionID?: string
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
+  // §9.5: the warrant card, same tool-input pattern as the ask card.
+  const approval = createMemo(() =>
+    props.tool === "amicode_request_approval" ? parseApprovalInput(props.input) : undefined,
+  )
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
   const authored = createMemo(() =>
     props.tool === "amicode_author_widget" ? parseWidgetSentinel(props.output) : undefined,
@@ -313,6 +319,7 @@ export function AmicodeToolCard(props: {
       <Match when={ask()}>
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>
+      <Match when={approval()}>{(req) => <AmicodeApprovalCard request={req()} />}</Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
       <Match when={authored()}>{(preview) => <WidgetPreviewCard preview={preview()} />}</Match>
       <Match when={inlineEntity()}>{(e) => <InlineEntityView kind={e().kind} seq={e().seq} />}</Match>

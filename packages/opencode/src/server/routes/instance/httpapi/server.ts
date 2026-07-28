@@ -59,6 +59,7 @@ import { Workspace } from "@/control-plane/workspace"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
+import * as AmicodeWarrants from "@/server/amicode/warrants"
 import * as AmicodeVaultBrowser from "@/server/amicode/vault-browser"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeWidgets from "@/server/amicode/widgets"
@@ -207,6 +208,27 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
     // Vault browser (the app's Vault panel): recursive read-only listing of one
     // mount, and single-file reads with a real-path traversal guard. Builders
     // never reject — failures come back as ok:false JSON bodies.
+    // Capability warrants (spec-20260727-164748 §9.5): the approval card's transport.
+    // READ is a plain ledger read; WRITE shells `amico ledger approve` because
+    // amico-run is the ledger's single writer (#212) and an append from here would
+    // break O_APPEND atomicity quietly, only under concurrency.
+    yield* router.add("GET", "/amicode/warrants", () =>
+      Effect.sync(() => HttpServerResponse.text(AmicodeWarrants.warrantsBody(), { contentType: "application/json" })),
+    )
+    yield* router.add("POST", "/amicode/approve", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        let parsed: AmicodeWarrants.ApproveInput = {}
+        try {
+          parsed = JSON.parse(body) as AmicodeWarrants.ApproveInput
+        } catch {
+          return HttpServerResponse.text(JSON.stringify({ ok: false, error: "body must be JSON" }), {
+            contentType: "application/json",
+          })
+        }
+        return HttpServerResponse.text(AmicodeWarrants.approveBody(parsed), { contentType: "application/json" })
+      }),
+    )
     yield* router.add("GET", "/amicode/vault-files", (request) =>
       Effect.sync(() => {
         const mount = new URL(request.url, "http://localhost").searchParams.get("mount") ?? undefined
