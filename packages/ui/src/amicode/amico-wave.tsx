@@ -1,10 +1,10 @@
 // AMICODE: the harmonic working indicator — a standing wave in quadrature, shown while
 // Amico works. Replaces the amc-text-shimmer treatment on both indicator surfaces.
 //
-// Markup only: all geometry and timing come from ./amico-wave, handed to the CSS as custom
-// properties so there is exactly one source of truth. Two paths per mode (lead + companion
-// out of phase by a quarter period); the companion is at full swing exactly when the lead
-// crosses zero, which is what stops the glyph reading as a blink at 12px.
+// Markup only: all geometry and timing come from ./wave-geometry, handed to the CSS as
+// custom properties so there is exactly one source of truth. Two paths per mode (lead +
+// companion out of phase by a quarter period); the companion is at full swing exactly when
+// the lead crosses zero, which is what stops the glyph reading as a blink at 12px.
 //
 // NO <defs> and NO ids — several indicators mount at once (one thinking line plus one tool
 // header per tool call) and SVG ids are document-global, so ids would collide and every
@@ -22,12 +22,7 @@ import {
   companionDelayMs,
   modeCadenceMs,
   modeDelaysMs,
-  // Explicit extension: this package's bundler resolution (moduleResolution: "bundler")
-  // prefers a sibling .tsx over .ts for an extensionless specifier, and this directory now
-  // has both amico-wave.ts (pure module) and amico-wave.tsx (this file) sharing a stem. An
-  // extensionless "./amico-wave" here would resolve back to THIS file, not the pure module —
-  // confirmed by running it (Bun picks .tsx first). The explicit extension pins the target.
-} from "./amico-wave.ts"
+} from "./wave-geometry"
 
 const DELAYS = modeDelaysMs()
 
