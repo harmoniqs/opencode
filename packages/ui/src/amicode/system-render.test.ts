@@ -5,6 +5,7 @@ import {
   systemSchematicModel,
   systemTableModel,
   systemHamiltonianLatex,
+  systemHamiltonian,
   systemIdentityLine,
   systemCountLabel,
   componentPhysicsRows,
@@ -61,7 +62,7 @@ describe("systemSchematicModel", () => {
 describe("systemHamiltonianLatex", () => {
   it("composes drift + coupling + drive for a cavity+qubit dispersive system", () => {
     const cavQubit = {
-      platform: "cavity",
+      platform: "transmon",
       drive: { arch: "per-component" },
       components: [
         { id: "q1", role: "qubit", levels: 3, params: { omega: 4, delta: -0.2 } },
@@ -72,9 +73,11 @@ describe("systemHamiltonianLatex", () => {
     const h = systemHamiltonianLatex(systemProjection(cavQubit))!
     expect(h).toContain("\\hat H/\\hbar")
     expect(h).toContain("\\chi") // the dispersive interaction term
-    // per-component drive → one independently indexed control per subsystem
-    expect(h).toContain("\\varepsilon_{1}(t)")
-    expect(h).toContain("\\varepsilon_{2}(t)")
+    // per-component drive → one independently indexed control PAIR per subsystem
+    // (two quadratures — Piccolo's n_drives = 2, matching the plugin's TRANSMON_LATEX)
+    expect(h).toContain("u_{1,1}(t)")
+    expect(h).toContain("i\\,u_{2,1}(t)")
+    expect(h).toContain("u_{1,2}(t)")
   })
   it("returns undefined for a system with no components", () => {
     expect(systemHamiltonianLatex(systemProjection({ platform: "x", components: [], couplings: [] }))).toBeUndefined()
@@ -151,17 +154,54 @@ describe("systemHamiltonianLatex", () => {
     expect(h).toContain("\\hat b^\\dagger_{2} \\hat b_{2}") // cavity gets its OWN letter
     expect(h).toContain("\\chi\\,\\hat b^\\dagger_{2} \\hat b_{2}\\,\\hat n_{1}")
   })
-  it("a role we have no model for gets a named drift and control, not invented algebra", () => {
+  it("an off-template platform infers NOTHING rather than the transmon ladder", () => {
+    // The reported bug: "hrl style spin qubit" → role defaults to qubit, levels
+    // unstated, and the card asserted ω â†â + δ/2 â†²â² + ε(t)(â + â†). There is
+    // no honest fallback here — `Ĥ_drift + Ĥ_c(t)` is true of every control
+    // problem ever posed — so the slot stays empty until someone records one.
+    const hrl = {
+      platform: "hrl-spin",
+      drive: { arch: "per-component" },
+      components: [{ id: "q1", role: "other", params: {} }],
+      couplings: [],
+    }
+    expect(systemHamiltonianLatex(systemProjection(hrl))).toBeUndefined()
+    // …a role defaulted to "qubit" by an unrecognized platform is the same case…
+    expect(
+      systemHamiltonianLatex(systemProjection({ ...hrl, components: [{ id: "q1", role: "qubit", params: {} }] })),
+    ).toBeUndefined()
+    // …and so is one where the researcher HAS stated a level count. Three levels
+    // on an exchange-only qubit is three dots, not an anharmonic ladder.
+    expect(
+      systemHamiltonianLatex(
+        systemProjection({ ...hrl, components: [{ id: "q1", role: "qubit", levels: 3, params: { drive_max: 1 } }] }),
+      ),
+    ).toBeUndefined()
+    // the same entity on a platform we DO model keeps its ladder
+    const transmon = systemHamiltonianLatex(
+      systemProjection({ ...hrl, platform: "transmon", components: [{ id: "q1", role: "qubit", params: {} }] }),
+    )!
+    expect(transmon).toContain("\\tfrac{\\delta}{2}")
+  })
+
+  it("an unmodelled component in a MIXED system is a placeholder, not a hole", () => {
+    // Here there IS something to say, so the modelled parts render and the
+    // unknown one gets a named term rather than invented algebra.
     const h = systemHamiltonianLatex(
       systemProjection({
-        platform: "spin",
+        platform: "hybrid",
         drive: { arch: "per-component" },
-        components: [{ id: "s1", role: "spin-qudit", levels: 4, params: {} }],
+        components: [
+          { id: "q1", role: "atom", levels: 3, params: {} },
+          { id: "s1", role: "spin-qudit", levels: 4, params: {} },
+        ],
         couplings: [],
       }),
     )!
-    expect(h).toBe("\\hat H/\\hbar = \\hat H_{\\mathrm{drift}} + \\hat H_{\\mathrm{c}}(t)")
-    expect(h).not.toContain("\\hat a") // no bosonic quadrature drive conjured for it
+    expect(h).toContain("\\hat H_{\\mathrm{drift}}^{(2)}")
+    expect(h).toContain("\\hat H_{\\mathrm{c}}^{(2)}(t)")
+    expect(h).toContain("|r\\rangle\\langle 1|_{1}") // the atom still renders properly
+    expect(h).not.toContain("\\hat a") // no bosonic algebra conjured for the qudit
   })
   it("a term carrying its own minus sign is joined with −, not '+ -'", () => {
     const h = systemHamiltonianLatex(
@@ -209,7 +249,87 @@ describe("systemHamiltonianLatex", () => {
     }
     const h = systemHamiltonianLatex(systemProjection(mixed))!
     expect(h).toContain("\\Omega_{1}(t)") // laser Rabi on the atom
-    expect(h).toContain("\\varepsilon_{2}(t)") // quadrature drive on the cavity
+    expect(h).toContain("u_{1,2}(t)") // quadrature drive on the cavity
+  })
+})
+
+describe("systemHamiltonian — recorded beats inferred", () => {
+  // The architectural point: the agent knows what an exchange-only spin qubit
+  // is; the fallback table never will. When the model is RECORDED the card
+  // renders exactly that and stops guessing.
+  const hrl = {
+    platform: "hrl-spin",
+    drive: { arch: "per-component" },
+    components: [
+      { id: "q1", role: "other", params: {} },
+      { id: "q2", role: "other", params: {} },
+      { id: "q3", role: "other", params: {} },
+    ],
+    couplings: [
+      { between: ["q1", "q2"], kind: "exchange", params: {} },
+      { between: ["q2", "q3"], kind: "exchange", params: {} },
+    ],
+    hamiltonian: {
+      terms: [
+        { kind: "coupling", latex: "J_{12}(t)\\,\\vec S_1 \\cdot \\vec S_2", label: "exchange 1–2" },
+        { kind: "coupling", latex: "J_{23}(t)\\,\\vec S_2 \\cdot \\vec S_3", label: "exchange 2–3" },
+      ],
+      notes: "encoded qubit in the S=1/2, S_z=-1/2 subspace; exchange-only, no on-site drive",
+    },
+  }
+
+  it("renders the recorded terms verbatim and marks them recorded", () => {
+    const h = systemHamiltonian(systemProjection(hrl))!
+    expect(h.source).toBe("recorded")
+    expect(h.latex).toBe("\\hat H/\\hbar = J_{12}(t)\\,\\vec S_1 \\cdot \\vec S_2 + J_{23}(t)\\,\\vec S_2 \\cdot \\vec S_3")
+    expect(h.notes).toContain("exchange-only")
+    expect(() => katex.renderToString(h.latex, { throwOnError: true })).not.toThrow()
+  })
+
+  it("orders drift → coupling → drive however they were recorded", () => {
+    const h = systemHamiltonian(
+      systemProjection({
+        ...hrl,
+        hamiltonian: {
+          terms: [
+            { kind: "drive", latex: "u(t)\\,\\hat X" },
+            { kind: "drift", latex: "\\omega\\,\\hat Z" },
+            { kind: "coupling", latex: "J\\,\\hat Z_1\\hat Z_2" },
+          ],
+        },
+      }),
+    )!
+    expect(h.latex).toBe("\\hat H/\\hbar = \\omega\\,\\hat Z + J\\,\\hat Z_1\\hat Z_2 + u(t)\\,\\hat X")
+  })
+
+  it("a recorded term carrying a minus is joined with −, like the inferred path", () => {
+    const h = systemHamiltonian(
+      systemProjection({
+        ...hrl,
+        hamiltonian: { terms: [{ kind: "drift", latex: "\\omega\\,\\hat Z" }, { kind: "drift", latex: "-\\Delta\\,\\hat n" }] },
+      }),
+    )!
+    expect(h.latex).not.toContain("+ -")
+    expect(h.latex).toContain(" - \\Delta")
+  })
+
+  it("falls back to the inferred form, labelled, when nothing is recorded", () => {
+    const h = systemHamiltonian(systemProjection(twoTransmon))!
+    expect(h.source).toBe("inferred")
+    expect(h.latex).toBe(systemHamiltonianLatex(systemProjection(twoTransmon))!)
+  })
+
+  it("nothing recorded and nothing modelled → undefined, so the card can say so", () => {
+    expect(systemHamiltonian(systemProjection({ ...hrl, hamiltonian: undefined }))).toBeUndefined()
+  })
+
+  it("junk terms are dropped rather than rendered as holes", () => {
+    const junk = (terms: unknown) => systemHamiltonian(systemProjection({ ...hrl, hamiltonian: { terms } } as any))
+    expect(junk([{ kind: "drift" }, { kind: "drift", latex: "   " }])).toBeUndefined() // → falls through
+    expect(junk([{ kind: "drift", latex: "\\omega\\,\\hat Z" }, { latex: 42 }])!.latex).toBe(
+      "\\hat H/\\hbar = \\omega\\,\\hat Z",
+    )
+    expect(junk("not an array")).toBeUndefined()
   })
 })
 
@@ -221,6 +341,12 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
   const ROLES = ["qubit2", "qubit3", "atom", "cavity", "cavityK", "resonator", "mode", "unmodeled"]
   const KINDS = ["exchange", "ZZ", "cross-resonance", "dispersive-chi", "vdW", "mode-mediated", "not-a-kind"]
   const ARCHES = ["global", "per-component", "zoned", undefined]
+  // Platform is load-bearing: it is the only thing that licenses a ladder for a
+  // `qubit` role, so the sweep has to cross both sides of that line.
+  const PLATFORMS = ["transmon", "exchange-only-spin"]
+  const LADDER = new Set(["transmon", "bosonic"])
+  /** No model → no terms. The only two ways to get there. */
+  const unmodelled = (r: string, p: string) => r === "unmodeled" || (r === "qubit3" && !LADDER.has(p))
   const mk = (r: string, i: number) =>
     r === "qubit2" ? { id: `q${i}`, role: "qubit", levels: 2, params: {} }
     : r === "qubit3" ? { id: `q${i}`, role: "qubit", levels: 3, params: {} }
@@ -232,32 +358,44 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
   it("every expressible system renders parseable KaTeX", () => {
     const broken: string[] = []
     let checked = 0
-    for (const a of ROLES)
-      for (const b of ROLES)
-        for (const kind of KINDS)
-          for (const arch of ARCHES)
-            for (const third of [false, true]) {
-              const components = [mk(a, 1), mk(b, 2), ...(third ? [mk(b, 3)] : [])]
-              const latex = systemHamiltonianLatex(
-                systemProjection({
-                  platform: "x",
-                  ...(arch ? { drive: { arch } } : {}),
-                  components,
-                  couplings: [
-                    { between: ["q1", "q2"], kind, params: {} },
-                    ...(third ? [{ between: ["q2", "q3"], kind, params: {} }] : []),
-                  ],
-                }),
-              )
-              if (!latex) { broken.push(`no output: ${a}/${b}/${kind}`); continue }
-              checked++
-              try {
-                katex.renderToString(latex, { throwOnError: true })
-              } catch (err) {
-                broken.push(`${a}/${b}/${kind}/${arch}/N${components.length}: ${(err as Error).message}\n  ${latex}`)
+    for (const platform of PLATFORMS)
+      for (const a of ROLES)
+        for (const b of ROLES)
+          for (const kind of KINDS)
+            for (const arch of ARCHES)
+              for (const third of [false, true]) {
+                const components = [mk(a, 1), mk(b, 2), ...(third ? [mk(b, 3)] : [])]
+                const latex = systemHamiltonianLatex(
+                  systemProjection({
+                    platform,
+                    ...(arch ? { drive: { arch } } : {}),
+                    components,
+                    couplings: [
+                      { between: ["q1", "q2"], kind, params: {} },
+                      ...(third ? [{ between: ["q2", "q3"], kind, params: {} }] : []),
+                    ],
+                  }),
+                )
+                // No output is the CORRECT answer when nothing in the system has
+                // a model — there is no honest canonical form to fall back to.
+                if (!latex) {
+                  if (!unmodelled(a, platform) || !unmodelled(b, platform))
+                    broken.push(`no output: ${platform}/${a}/${b}/${kind}`)
+                  continue
+                }
+                // …and conversely, an all-unmodelled system must NOT produce one.
+                if (unmodelled(a, platform) && unmodelled(b, platform))
+                  broken.push(`invented a model for ${platform}/${a}/${b}/${kind}: ${latex}`)
+                checked++
+                try {
+                  katex.renderToString(latex, { throwOnError: true })
+                } catch (err) {
+                  broken.push(
+                    `${platform}/${a}/${b}/${kind}/${arch}/N${components.length}: ${(err as Error).message}\n  ${latex}`,
+                  )
+                }
               }
-            }
-    expect(checked).toBeGreaterThan(3000)
+    expect(checked).toBeGreaterThan(6000)
     expect(broken).toEqual([])
   })
 
@@ -281,7 +419,9 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
         couplings: [{ between: ["q1", "a1", "m1"], kind: "mode-mediated", params: {} }] },
     ]
     for (const c of cases) {
-      const latex = systemHamiltonianLatex(systemProjection(c as any))!
+      const latex = systemHamiltonianLatex(systemProjection(c as any))
+      // undefined is allowed (nothing modelled); anything else must be renderable
+      if (latex === undefined) continue
       expect(latex).toContain("\\hat H/\\hbar")
       expect(() => katex.renderToString(latex, { throwOnError: true })).not.toThrow()
     }
@@ -299,8 +439,9 @@ describe("systemTableModel", () => {
 })
 
 describe("componentPhysicsRows", () => {
-  const labels = (c: any) => componentPhysicsRows(c).map((r) => r.label)
-  const row = (c: any, label: string) => componentPhysicsRows(c).find((r) => r.label === label)
+  const labels = (c: any, platform?: string) => componentPhysicsRows(c, platform).map((r) => r.label)
+  const row = (c: any, label: string, platform?: string) =>
+    componentPhysicsRows(c, platform).find((r) => r.label === label)
 
   it("a rydberg atom is never asked for an anharmonicity — it gets detuning + Rabi", () => {
     const atom = { id: "q1", role: "atom", levels: 3, params: {} }
@@ -312,13 +453,55 @@ describe("componentPhysicsRows", () => {
 
   it("a transmon keeps the frequency/anharmonicity/drive-bound spec", () => {
     const q = { id: "q1", role: "qubit", levels: 3, params: { omega: 4.8, delta: -0.2 } }
-    expect(labels(q)).toEqual(["levels", "frequency", "anharmonicity", "drive bound", "decay"])
-    expect(row(q, "frequency")).toMatchObject({ value: "4.8", state: "recorded" })
-    expect(row(q, "drive bound")).toMatchObject({ value: "not set", state: "missing" })
+    expect(labels(q, "transmon")).toEqual(["levels", "frequency", "anharmonicity", "drive bound", "decay"])
+    expect(row(q, "frequency", "transmon")).toMatchObject({ value: "4.8", state: "recorded" })
+    expect(row(q, "drive bound", "transmon")).toMatchObject({ value: "not set", state: "missing" })
   })
 
   it("a TWO-level qubit has no anharmonicity row at all", () => {
     expect(labels({ id: "q1", role: "qubit", levels: 2, params: {} })).not.toContain("anharmonicity")
+  })
+
+  it("an off-template platform is NOT given the transmon model just because role defaults to qubit", () => {
+    // platformDefaultRole maps every unfamiliar platform to "qubit", so an
+    // exchange-only HRL-style spin qubit arrives here indistinguishable from a
+    // transmon by role alone. It used to be handed ω, δ, |u| and the transmon
+    // Hamiltonian; an exchange-only qubit has no anharmonicity to speak of.
+    const hrl = { id: "q1", role: "qubit", params: {} }
+    expect(labels(hrl)).toEqual(["levels"]) // no platform → nothing claimed
+    expect(componentPhysicsRows(hrl, "hrl-spin").map((r) => r.label)).toEqual(["levels"])
+    expect(componentPhysicsRows(hrl, "hrl-spin").map((r) => r.label)).not.toContain("anharmonicity")
+    // …while a transmon, whose model we do have, still fills in before levels.
+    expect(componentPhysicsRows(hrl, "transmon").map((r) => r.label)).toEqual([
+      "levels",
+      "frequency",
+      "anharmonicity",
+      "drive bound",
+      "decay",
+    ])
+  })
+
+  it("two levels earns the generic two-level model on any platform", () => {
+    // Safe everywhere: every two-level system has a splitting and σx/σy control.
+    const spin = { id: "q1", role: "qubit", levels: 2, params: {} }
+    expect(componentPhysicsRows(spin, "hrl-spin").map((r) => r.label)).toEqual([
+      "levels",
+      "frequency",
+      "drive bound",
+      "decay",
+    ])
+    expect(componentPhysicsRows(spin, "hrl-spin").map((r) => r.label)).not.toContain("anharmonicity")
+  })
+
+  it("THREE levels is a dimension, not an oscillator — it earns no ladder off-template", () => {
+    // Reported against `exchange-only-spin` at levels=3: the card still showed
+    // ω â†â + δ/2 â†²â² + u₁(â+â†) + i u₂(â−â†) and asked for an anharmonicity.
+    // An exchange-only qubit at levels=3 is three dots; a spin-1 defect is three
+    // Zeeman sublevels. Neither is an anharmonic ladder.
+    const three = { id: "q1", role: "qubit", levels: 3, params: {} }
+    expect(componentPhysicsRows(three, "exchange-only-spin").map((r) => r.label)).toEqual(["levels"])
+    // …and the platform whose qubits ARE ladders still gets one.
+    expect(componentPhysicsRows(three, "transmon").map((r) => r.label)).toContain("anharmonicity")
   })
 
   it("an unrecognized role expects nothing — only what was recorded shows", () => {
@@ -330,8 +513,8 @@ describe("componentPhysicsRows", () => {
 
   it("unit-suffixed keys render their unit; bare keys never get an assumed one", () => {
     const c = { id: "q1", role: "qubit", levels: 3, params: { omega_GHz: 4.8, drive_max: 0.2 } }
-    expect(row(c, "frequency")!.value).toBe("4.8 GHz")
-    expect(row(c, "drive bound")!.value).toBe("≤ 0.2")
+    expect(row(c, "frequency", "transmon")!.value).toBe("4.8 GHz")
+    expect(row(c, "drive bound", "transmon")!.value).toBe("≤ 0.2")
   })
 
   it("an atom's Δ does not absorb a transmon's δ — a stray delta stays unclaimed", () => {
@@ -355,8 +538,8 @@ describe("componentPhysicsRows", () => {
 
   it("zero still reads as unset, and recorded T₁/T₂ collapse into one decay row", () => {
     const c = { id: "q1", role: "qubit", levels: 3, params: { omega: 0, T1: 30, T2: 20 } }
-    expect(row(c, "frequency")!.state).toBe("missing")
-    expect(row(c, "decay")).toMatchObject({ value: "T₁ 30 · T₂ 20", state: "recorded" })
+    expect(row(c, "frequency", "transmon")!.state).toBe("missing")
+    expect(row(c, "decay", "transmon")).toMatchObject({ value: "T₁ 30 · T₂ 20", state: "recorded" })
   })
 })
 

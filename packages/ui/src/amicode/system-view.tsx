@@ -2,7 +2,7 @@ import { For, Show, createMemo } from "solid-js"
 import katex from "katex"
 import { systemProjection } from "./problem"
 import { formatSci } from "./facets"
-import { systemTableModel, systemHamiltonianLatex, systemCountLabel, componentPhysicsRows, PARAM_SYMBOL } from "./system-render"
+import { systemTableModel, systemHamiltonian, systemCountLabel, componentPhysicsRows, PARAM_SYMBOL } from "./system-render"
 
 // AMICODE System hero (spec §6.1) — PHYSICS-FORWARD (Kate 2026-07-23): lead with
 // the Hamiltonian, then the physics spec for the component's ROLE. Params the
@@ -25,14 +25,14 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
   const proj = createMemo(() => systemProjection(props.entity))
   const table = createMemo(() => systemTableModel(proj()))
   const hamiltonian = createMemo(() => {
-    const latex = systemHamiltonianLatex(proj())
-    return latex ? katex.renderToString(latex, { throwOnError: false }) : undefined
+    const h = systemHamiltonian(proj())
+    return h ? { ...h, html: katex.renderToString(h.latex, { throwOnError: false }) } : undefined
   })
   // Single qubit/atom, no couplings → the physics spec. Else the structural view.
   const single = createMemo(() => proj().components.length === 1 && proj().couplings.length === 0)
   const physics = createMemo(() => {
     const c = table().components[0]
-    return c ? componentPhysicsRows(c) : []
+    return c ? componentPhysicsRows(c, proj().platform) : []
   })
 
   return (
@@ -47,13 +47,34 @@ export function SystemComposite(props: { entity: Record<string, unknown> }) {
         </div>
       </Show>
 
-      <Show when={hamiltonian()}>
-        {(html) => (
-          <>
-            <div class="amc-ev-sec">Hamiltonian</div>
-            <div class="amc-ev-formula" data-slot="amicode-system-hamiltonian">
-              <div innerHTML={html()} />
+      {/* A recorded model is shown bare — it is what the researcher confirmed.
+          An INFERRED one is a guess about physics nobody stated, so it says so
+          and invites the correction; that correction is what gets recorded. */}
+      <Show
+        when={hamiltonian()}
+        fallback={
+          <Show when={proj().components.length > 0}>
+            <div class="amc-ev-sec">
+              Hamiltonian <span class="amc-ev-sec-note">not recorded</span>
             </div>
+            <div class="amc-ev-formula is-empty" data-slot="amicode-system-hamiltonian">
+              No model for this platform yet — tell Amico the terms and it'll record them here.
+            </div>
+          </Show>
+        }
+      >
+        {(h) => (
+          <>
+            <div class="amc-ev-sec">
+              Hamiltonian
+              <Show when={h().source === "inferred"}>
+                <span class="amc-ev-sec-note">inferred · confirm or correct</span>
+              </Show>
+            </div>
+            <div class="amc-ev-formula" data-slot="amicode-system-hamiltonian" data-source={h().source}>
+              <div innerHTML={h().html} />
+            </div>
+            <Show when={h().notes}>{(n) => <div class="amc-ev-formula-note">{n()}</div>}</Show>
           </>
         )}
       </Show>
