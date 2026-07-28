@@ -4,8 +4,9 @@
 // test the pure bits — see run-series.ts / run-series.test.ts).
 
 // Whimsical-but-tasteful gerunds shown while Amico works, in the spirit of the
-// Claude Code CLI. Kept lightly on-brand (a couple of quantum-control nods among
-// the playful ones). No trailing ellipsis here — the component appends the "…".
+// Claude Code CLI. Kept lightly on-brand — quantum-control and music nods among
+// the playful ones (Kate's list, 2026-07-28). No trailing ellipsis here — the
+// component appends the "…".
 export const THINKING_WORDS = [
   "Thinking",
   "Pondering",
@@ -19,6 +20,21 @@ export const THINKING_WORDS = [
   "Synthesizing",
   "Reticulating",
   "Optimizing",
+  "Oscillating",
+  "Wiggling",
+  "Entangling",
+  "Superposing",
+  "Tunneling",
+  "Propagating",
+  "Splining",
+  "Bending",
+  "Converging",
+  "Warm-starting",
+  "Regularizing",
+  "Trotting",
+  "Strumming",
+  "Resonating",
+  "Hyperfining",
 ] as const
 
 /** Word for a given tick, cycling through THINKING_WORDS (wraps, incl. negatives). */
