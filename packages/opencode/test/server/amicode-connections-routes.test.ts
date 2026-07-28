@@ -25,6 +25,7 @@ import {
   solverModeFile,
   PASQAL_CONFIG_WARNING,
 } from "@/server/amicode/connections"
+import { inMemorySecretStore, setPasqalSecretStore } from "@/server/amicode/pasqal-secret"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances } from "../fixture/fixture"
 
@@ -92,12 +93,23 @@ const ENV_KEYS = [
   "AMICODE_OPS_DIR",
   "AMICO_PYTHON",
   "AMICO_PASQAL_VALIDATOR",
+  // pasqal-secret.ts exposes this so a sandbox/test run gets its own keychain
+  // slot. Saved/restored here so a leak can never reach the real slot even if
+  // the in-memory store below is ever removed.
+  "AMICO_PASQAL_KEYCHAIN_SERVICE",
 ] as const
 let savedEnv: Record<string, string | undefined>
 let dir: string
+let restoreSecretStore: () => void
 
 beforeEach(() => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
+  // MANDATORY, not hygiene: the real store reaches @napi-rs/keyring's native
+  // setPassword(), which segfaults Bun 1.3.14 when called from inside an Effect
+  // route handler under `bun test` (harmoniqs/opencode#82). Production is
+  // unaffected — the same write succeeds under `bun run … serve`. Without this
+  // seam the whole `unit` job dies with exit 137 and reports nothing.
+  restoreSecretStore = setPasqalSecretStore(inMemorySecretStore())
   dir = mkdtempSync(path.join(tmpdir(), "amicode-conn-routes-"))
   process.env.AMICO_CLOUD_FILE = path.join(dir, "cloud.json")
   process.env.AMICO_PASQAL_FILE = path.join(dir, "pasqal.json")
@@ -109,6 +121,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await backgroundRevalidationsSettled() // drain background refreshes BEFORE the env flips to the next test's dir
+  restoreSecretStore?.()
   for (const k of ENV_KEYS) {
     if (savedEnv[k] === undefined) delete process.env[k]
     else process.env[k] = savedEnv[k]
@@ -282,24 +295,24 @@ function stageStubValidator() {
   const harness = mkdtempSync(path.join(tmpdir(), "amicode-pasqal-stub-"))
   const scenarioFile = path.join(harness, "scenario.json")
   const recordFile = path.join(harness, "record.json")
-  const script = path.join(harness, "pasqal_validate_stub.mjs")
+  const script = path.join(harness, "pasqal_validate_stub.py")
   writeFileSync(
     script,
     [
-      `import { readFileSync, writeFileSync } from "node:fs"`,
-      `writeFileSync(${JSON.stringify(recordFile)}, JSON.stringify({`,
-      `  keys: Object.keys(process.env).sort(),`,
-      `  username: process.env.PASQAL_USERNAME ?? null,`,
-      `  password: process.env.PASQAL_PASSWORD ?? null,`,
-      `  project_id: process.env.PASQAL_PROJECT_ID ?? null,`,
-      `  argv: process.argv.slice(2),`,
+      `import json, os, sys`,
+      `open(${JSON.stringify(recordFile)}, "w").write(json.dumps({`,
+      `  "keys": sorted(os.environ.keys()),`,
+      `  "username": os.environ.get("PASQAL_USERNAME"),`,
+      `  "password": os.environ.get("PASQAL_PASSWORD"),`,
+      `  "project_id": os.environ.get("PASQAL_PROJECT_ID"),`,
+      `  "argv": sys.argv[1:],`,
       `}))`,
-      `const scenario = JSON.parse(readFileSync(${JSON.stringify(scenarioFile)}, "utf8"))`,
-      `if (scenario.stdout) console.log(scenario.stdout)`,
-      `process.exit(scenario.exitCode)`,
+      `scenario = json.load(open(${JSON.stringify(scenarioFile)}))`,
+      `if scenario.get("stdout"): print(scenario["stdout"])`,
+      `sys.exit(scenario["exitCode"])`,
     ].join("\n"),
   )
-  process.env.AMICO_PYTHON = process.execPath // "interpreter" = the bun binary
+  process.env.AMICO_PYTHON = "python3" // a REAL interpreter, as production uses
   process.env.AMICO_PASQAL_VALIDATOR = script
   return {
     scenario(exitCode: number, stdout = "") {
@@ -349,7 +362,11 @@ describe("pasqal over the route tree — REAL spawn against a staged stub valida
 
       // the child saw EXACTLY the minimal declared env — the real spawn spreads nothing
       const record = stub.record()
-      expect(record.keys).toEqual(["PASQAL_PASSWORD", "PASQAL_PROJECT_ID", "PASQAL_USERNAME", "PATH"])
+      // CPython injects LC_CTYPE into its own environ under PEP 538 C-locale
+      // coercion, so filter interpreter-owned locale vars. The point of the
+      // assertion is that the SPAWNER declared nothing beyond this set.
+      const declared = record.keys.filter((k) => !/^(LC_[A-Z_]+|LANG)$/.test(k))
+      expect(declared).toEqual(["PASQAL_PASSWORD", "PASQAL_PROJECT_ID", "PASQAL_USERNAME", "PATH"])
       expect(record.username).toBe(PASQAL.username)
       expect(record.password).toBe(PASQAL.password)
       expect(record.project_id).toBe(PASQAL.project_id)
