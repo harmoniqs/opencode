@@ -335,18 +335,22 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 }}
                 onClick={onHpClick}
                 aria-label={
+                  // Name the cloud, not just "the cloud": users are picking a
+                  // paid service here, and every refusal they can hit downstream
+                  // (amico-run's local-launch refusal, the hpc gate) calls it
+                  // Harmoniqs Cloud too — one name end to end.
                   dot() === "connected"
-                    ? "Piccolissimo + Altissimo solver — API key connected"
+                    ? "Piccolissimo + Altissimo solver — connected to Harmoniqs Cloud"
                     : dot() === "attention"
-                      ? "Piccolissimo + Altissimo solver — API key needs attention"
-                      : "Piccolissimo + Altissimo solver — add your API key to enable"
+                      ? "Piccolissimo + Altissimo solver — Harmoniqs Cloud key needs attention"
+                      : "Piccolissimo + Altissimo solver — add your Harmoniqs Cloud API key to enable"
                 }
                 title={
                   dot() === "connected"
-                    ? "API key connected"
+                    ? "Connected to Harmoniqs Cloud — every solve on this solver runs there"
                     : dot() === "attention"
-                      ? "API key needs attention — click to fix"
-                      : "Runs in the cloud — click to add your API key"
+                      ? "Harmoniqs Cloud key needs attention — click to fix"
+                      : "Runs in Harmoniqs Cloud — click to add your API key"
                 }
               >
                 <span style={{ overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap" }}>
@@ -370,12 +374,37 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
                 >
                   PRO
                 </span>
+                {/* Connection state, ON THE ROW. Without this the row is silent:
+                    with a key already on file a click just activates HP, which is
+                    correct but indistinguishable from "nothing happened" (reported
+                    2026-07-28 as "it did not ask me for an API key" — it had no
+                    reason to ask, and no way to say so). Text, not a bare dot:
+                    Kate's idiom is that the dot accompanies words rather than the
+                    solver name, and words survive colour-blindness and a
+                    screenshot. It also states what a click will DO. */}
+                <span
+                  data-slot="amicode-solver-hp-state"
+                  style={{
+                    "font-size": "10px",
+                    "font-weight": "600",
+                    "letter-spacing": "0.3px",
+                    "flex-shrink": "0",
+                    color:
+                      dot() === "connected"
+                        ? "var(--v2-text-text-success, var(--v2-text-text-muted))"
+                        : dot() === "attention"
+                          ? "var(--v2-text-text-warning, var(--v2-text-text-muted))"
+                          : "var(--v2-text-text-muted)",
+                  }}
+                >
+                  {dot() === "connected" ? "CONNECTED" : dot() === "attention" ? "CHECK KEY" : "ADD KEY"}
+                </span>
               </button>
               <Show when={props.compute}>
                 <button
                   type="button"
                   data-slot="amicode-solver-hp-details"
-                  aria-label="Solver API key — connection details"
+                  aria-label="Harmoniqs Cloud — connection details and API key"
                   aria-expanded={computeOpen()}
                   aria-controls="amicode-capsule-compute"
                   title="Connection details"
