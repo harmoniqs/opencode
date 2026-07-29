@@ -289,7 +289,21 @@ function recordedNativeLLMLayer(scenario: RecordedScenario) {
         metadata,
         redactor: HttpRecorderInternal.Redactor.make(redact),
       })
-    : HttpRecorder.http(scenario.cassette, { directory: FIXTURES_DIR, metadata, redact })
+    : // These scenarios assert TRANSPORT mechanics — that a tool loop is driven to a final
+      // text answer — not prompt wording. The default matcher compares the whole request,
+      // so appending to the system prompt invalidates every cassette here even though the
+      // behaviour under test is unchanged. That is exactly what happened when
+      // `provider()` began appending `communicating.txt` for every model family: all three
+      // cassettes broke at once, on a diff of prose.
+      //
+      // Matching prompt-agnostically pins what these tests are actually about and leaves
+      // prompt evolution to the tests that assert on prompts.
+      HttpRecorder.http(scenario.cassette, {
+        directory: FIXTURES_DIR,
+        metadata,
+        redact,
+        match: HttpRecorderInternal.promptAgnosticMatcher,
+      })
   const recordedClient = LLMClient.layer.pipe(
     Layer.provide(Layer.mergeAll(RequestExecutor.layer.pipe(Layer.provide(recordedHttp)), WebSocketExecutor.layer)),
   )
