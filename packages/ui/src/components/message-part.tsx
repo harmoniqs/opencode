@@ -1,6 +1,7 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import { ThinkingLine } from "../amicode/thinking-line"
 import { turnTokens } from "../amicode/thinking"
+import { shellRowLabel } from "../amicode/shell-row"
 import { amicoBrainRef, emitAmicoBrainHover } from "../amicode/brain-ref"
 import {
   Component,
@@ -732,15 +733,12 @@ export function AssistantParts(props: {
   )
 }
 
-// One-line command for a bash part's row in the shell group (prefer the actual
-// command, fall back to title/description; first line only).
+// One-line command for a bash part's row in the shell group. Logic lives in
+// ../amicode/shell-row.ts so the fallback chain is testable — it shipped a bug
+// where a pending part rendered the model's prose description as if it were the
+// command, which read as a hard error for the command's whole duration.
 function shellCommandText(part: ToolPart): string {
-  const input = (part.state.input ?? {}) as Record<string, unknown>
-  const command = typeof input.command === "string" ? input.command : undefined
-  const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title : undefined
-  const description = typeof input.description === "string" ? input.description : undefined
-  const raw = command ?? title ?? description ?? "command"
-  return raw.split("\n")[0]!.trim()
+  return shellRowLabel(part)
 }
 
 function contextToolDetail(part: ToolPart): string | undefined {
