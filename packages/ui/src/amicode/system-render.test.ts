@@ -358,6 +358,10 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
   it("every expressible system renders parseable KaTeX", () => {
     const broken: string[] = []
     let checked = 0
+    // Render each DISTINCT output once. The sweep enumerates ~8k systems but they
+    // collapse onto far fewer equations, and KaTeX is the expensive part —
+    // rendering the same string 200 times proves nothing and timed out CI.
+    const distinct = new Map<string, string>()
     for (const platform of PLATFORMS)
       for (const a of ROLES)
         for (const b of ROLES)
@@ -387,15 +391,18 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
                 if (unmodelled(a, platform) && unmodelled(b, platform))
                   broken.push(`invented a model for ${platform}/${a}/${b}/${kind}: ${latex}`)
                 checked++
-                try {
-                  katex.renderToString(latex, { throwOnError: true })
-                } catch (err) {
-                  broken.push(
-                    `${platform}/${a}/${b}/${kind}/${arch}/N${components.length}: ${(err as Error).message}\n  ${latex}`,
-                  )
-                }
+                if (!distinct.has(latex))
+                  distinct.set(latex, `${platform}/${a}/${b}/${kind}/${arch}/N${components.length}`)
               }
+    for (const [latex, where] of distinct) {
+      try {
+        katex.renderToString(latex, { throwOnError: true })
+      } catch (err) {
+        broken.push(`${where}: ${(err as Error).message}\n  ${latex}`)
+      }
+    }
     expect(checked).toBeGreaterThan(6000)
+    expect(distinct.size).toBeGreaterThan(100) // the sweep really does vary the output
     expect(broken).toEqual([])
   })
 
