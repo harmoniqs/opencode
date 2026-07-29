@@ -1,6 +1,8 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import { ThinkingLine } from "../amicode/thinking-line"
 import { turnTokens } from "../amicode/thinking"
+import { shellRowLabel } from "../amicode/shell-row"
+import { sessionHasAmicodeParts } from "../amicode/rail-gate"
 import { amicoBrainRef, emitAmicoBrainHover } from "../amicode/brain-ref"
 import {
   Component,
@@ -618,12 +620,13 @@ export function AssistantParts(props: {
   // presence (the working lane below; the rail waking) keys off it. Plain-prose
   // turns are the *normal chat*: no Amico chrome in the flow
   // (spec-20260712-amico-third-actor).
+  // Shares the rail's gate (rail-gate.ts) rather than re-testing `amicode_*`
+  // here. Both used the tool-name test independently, so a SHELL-driven amicode
+  // session lost the chips AND Amico's presence mark together — the H-mark read
+  // as "inactive" while a solve was running at iteration 29 (2026-07-29). One
+  // definition, one place to widen.
   const inDomainTurn = createMemo(() =>
-    props.messages.some((message) =>
-      list(data.store.part?.[message.id], emptyParts).some(
-        (p) => p.type === "tool" && /^amicode_/.test((p as ToolPart).tool ?? ""),
-      ),
-    ),
+    sessionHasAmicodeParts(props.messages, (id) => list(data.store.part?.[id], emptyParts) as never),
   )
 
   return (
@@ -732,15 +735,12 @@ export function AssistantParts(props: {
   )
 }
 
-// One-line command for a bash part's row in the shell group (prefer the actual
-// command, fall back to title/description; first line only).
+// One-line command for a bash part's row in the shell group. Logic lives in
+// ../amicode/shell-row.ts so the fallback chain is testable — it shipped a bug
+// where a pending part rendered the model's prose description as if it were the
+// command, which read as a hard error for the command's whole duration.
 function shellCommandText(part: ToolPart): string {
-  const input = (part.state.input ?? {}) as Record<string, unknown>
-  const command = typeof input.command === "string" ? input.command : undefined
-  const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title : undefined
-  const description = typeof input.description === "string" ? input.description : undefined
-  const raw = command ?? title ?? description ?? "command"
-  return raw.split("\n")[0]!.trim()
+  return shellRowLabel(part)
 }
 
 function contextToolDetail(part: ToolPart): string | undefined {
