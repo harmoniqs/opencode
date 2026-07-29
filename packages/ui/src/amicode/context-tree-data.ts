@@ -64,7 +64,14 @@ export function vaultRefFromPath(path: string): { mount: string; rel: string } |
 const dedupKey = (ref: ContextRef, kind: ContextTreeKind) =>
   ref.path ? `p:${ref.path}` : `${kind}:${ref.label.toLowerCase()}`
 
-export function buildContextTree(turns: ContextTurn[], opts: { rootLabel?: string } = {}): ContextTreeNodeInput {
+export type ContextTreeOpts = {
+  rootLabel?: string
+  /** true when the mount refuses browsing (proprietary data/software) — its
+   *  leaves render locked: dimmed, padlocked, not openable */
+  vaultLocked?: (mount: string) => boolean
+}
+
+export function buildContextTree(turns: ContextTurn[], opts: ContextTreeOpts = {}): ContextTreeNodeInput {
   const root: ContextTreeNodeInput = {
     id: "root",
     label: opts.rootLabel ?? "amico",
@@ -95,7 +102,7 @@ export function buildContextTree(turns: ContextTurn[], opts: { rootLabel?: strin
         const key = dedupKey(ref, kind)
         if (seen.has(key)) continue
         seen.set(key, `ctx-${seen.size}`)
-        earlier.children!.push(leafOf(ref, kind, seen.get(key)!))
+        earlier.children!.push(leafOf(ref, kind, seen.get(key)!, opts))
       }
   }
   const seen = seenOf(root)
@@ -123,7 +130,7 @@ export function buildContextTree(turns: ContextTurn[], opts: { rootLabel?: strin
       }
       const id = `ctx-${seen.size}`
       seen.set(key, id)
-      const leaf = leafOf(ref, kind, id)
+      const leaf = leafOf(ref, kind, id, opts)
       node.children!.push(leaf)
       lastLeaf = leaf
     }
@@ -138,7 +145,7 @@ export function buildContextTree(turns: ContextTurn[], opts: { rootLabel?: strin
   return root
 }
 
-function leafOf(ref: ContextRef, kind: ContextTreeKind, id: string): ContextTreeNodeInput {
+function leafOf(ref: ContextRef, kind: ContextTreeKind, id: string, opts: ContextTreeOpts): ContextTreeNodeInput {
   const vault = ref.path ? vaultRefFromPath(ref.path) : undefined
   return {
     id,
@@ -146,6 +153,7 @@ function leafOf(ref: ContextRef, kind: ContextTreeKind, id: string): ContextTree
     kind,
     path: ref.path,
     vault: !!vault,
+    locked: vault && opts.vaultLocked ? opts.vaultLocked(vault.mount) : undefined,
   }
 }
 

@@ -76,6 +76,22 @@ describe("buildContextTree", () => {
     ])
     expect(tree.children![0].children![0].vault).toBe(true)
   })
+  test("vaultLocked marks non-browsable vault leaves locked; others untouched", () => {
+    const tree = buildContextTree(
+      [
+        turn("m1", [
+          { label: "STRATEGY.md", type: "note", path: "/u/.amico/vaults/armonissima/STRATEGY.md" },
+          { label: "notes.md", type: "note", path: "/u/.amico/vaults/armonia-kate/notes.md" },
+          { label: "solve.jl", type: "package", path: "/p/solve.jl" },
+        ]),
+      ],
+      { vaultLocked: (mount) => mount === "armonissima" },
+    )
+    const [team, personal, project] = tree.children![0].children!
+    expect(team.locked).toBe(true)
+    expect(personal.locked).toBe(false)
+    expect(project.locked).toBeUndefined() // not a vault file — predicate never consulted
+  })
   test("marathon sessions fold old turns into one earlier branch", () => {
     const turns = Array.from({ length: 30 }, (_, i) =>
       turn(`m${i}`, [{ label: `f${i}.md`, type: "note", path: `/p/f${i}.md` }]),
