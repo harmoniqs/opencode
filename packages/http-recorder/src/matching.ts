@@ -36,6 +36,65 @@ export const canonicalSnapshot = (snapshot: RequestSnapshot): string =>
 export const defaultMatcher: RequestMatcher = (incoming, recorded) =>
   canonicalSnapshot(incoming) === canonicalSnapshot(recorded)
 
+/** Placeholder standing in for elided system-prompt prose. Substituting rather than
+ *  deleting keeps "a system message is present, with content" part of the match. */
+const SYSTEM_PROMPT_ELIDED = "<system prompt elided for matching>"
+
+/** Top-level keys carrying the system prompt: OpenAI Responses uses `instructions`,
+ *  Anthropic Messages uses `system`. */
+const SYSTEM_PROMPT_KEYS = ["instructions", "system"] as const
+
+/** Keys carrying a message list, where the prompt may instead arrive as a
+ *  `role: "system"` entry (the shape the OpenCode proxy sends). */
+const MESSAGE_LIST_KEYS = ["input", "messages"] as const
+
+/** Neutralizes system-prompt prose wherever a provider puts it, leaving every other
+ *  part of the request — model, tools, the conversation itself — matched exactly. */
+const withoutSystemPrompt = (snapshot: RequestSnapshot): RequestSnapshot => {
+  const body = jsonBody(snapshot.body)
+  if (!isRecord(body)) return snapshot
+
+  const next: Record<string, unknown> = { ...body }
+  let changed = false
+
+  for (const key of SYSTEM_PROMPT_KEYS) {
+    if (!(key in next)) continue
+    delete next[key]
+    changed = true
+  }
+
+  for (const key of MESSAGE_LIST_KEYS) {
+    const list = next[key]
+    if (!Array.isArray(list)) continue
+    let listChanged = false
+    const elided = list.map((entry) => {
+      if (!isRecord(entry) || entry["role"] !== "system" || !("content" in entry)) return entry
+      listChanged = true
+      return { ...entry, content: SYSTEM_PROMPT_ELIDED }
+    })
+    if (!listChanged) continue
+    next[key] = elided
+    changed = true
+  }
+
+  return changed ? { ...snapshot, body: JSON.stringify(next) } : snapshot
+}
+
+/**
+ * Like {@link defaultMatcher}, but ignores the system prompt.
+ *
+ * A cassette records the exact request that produced its response, system prompt
+ * included — so any edit to a prompt invalidates every cassette that carries it,
+ * even when the behaviour under test has nothing to do with prompt text. Tests that
+ * assert on transport mechanics (tool loops, streaming, retries) should pin the
+ * mechanics and stay indifferent to wording.
+ *
+ * Use this when the prompt is incidental to what the test asserts. Do NOT use it for
+ * a test whose subject IS the prompt — there the exact text is the assertion.
+ */
+export const promptAgnosticMatcher: RequestMatcher = (incoming, recorded) =>
+  canonicalSnapshot(withoutSystemPrompt(incoming)) === canonicalSnapshot(withoutSystemPrompt(recorded))
+
 export const safeText = (value: unknown) => {
   if (value === undefined) return "undefined"
   if (secretFindings(value).length > 0) return JSON.stringify(REDACTED)
