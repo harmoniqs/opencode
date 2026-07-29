@@ -3,6 +3,7 @@ import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
 import { parseDiffSentinel, receiptParts } from "./receipt"
+import { receiptIsCurrent } from "./receipt-currency"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
 import { compositeChip, chipText } from "./problem"
 import { AmicoMark } from "./spinner"
@@ -241,9 +242,17 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
 // In-transcript entity view (Kate 2026-07-24): the receipt renders the full
 // verdict-first entity view inline — no click, no modal. Data comes from the
 // rail via the ui bridge (undefined until the rail mounts, exactly like the run
-// window). EVERY entity kind surfaces inline; a run with a live run_dir still
-// prefers the richer RunWindow (matched earlier in the Switch), so a run only
-// reaches the inline path as its verdict when there's no live window.
+// window). A run with a live run_dir still prefers the richer RunWindow (matched
+// earlier in the Switch), so a run only reaches the inline path as its verdict
+// when there's no live window.
+//
+// AMENDED (spec-20260727-164748 §9.4): kind membership is necessary but NO LONGER
+// SUFFICIENT. The inline view reads the LIVE problem view, so when every receipt
+// of a kind took this path, N updates painted N identical copies of the present —
+// and because the transcript fetches the globally-active problem with no ?slug=,
+// switching problems mid-chat retroactively rewrote earlier receipts. Only the
+// CURRENT receipt for the ACTIVE problem may render live (./receipt-currency.ts);
+// the rest fall through to the Chip, which renders from their own captured diff.
 const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
 
 function InlineEntityView(props: { kind: string; seq?: number }) {
@@ -289,6 +298,13 @@ export function AmicodeToolCard(props: {
     if (!sentinel || !INLINE_KINDS.has(sentinel.entity)) return undefined
     const view = amicodeProblemView()
     if (!view) return undefined
+    // §9.4: superseded receipts, and receipts captured against a different
+    // problem, render from their captured diff via the Chip instead of the live
+    // view. Deliberately permissive when currency is ambiguous (a kind with no
+    // events yet stays live) — the original note here warns that tighter gates
+    // hid the view entirely.
+    if (!receiptIsCurrent({ problem: sentinel.problem, entity: sentinel.entity, seq: sentinel.seq }, view))
+      return undefined
     return { kind: sentinel.entity, seq: sentinel.seq }
   })
 
