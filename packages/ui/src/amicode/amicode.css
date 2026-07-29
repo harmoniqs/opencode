@@ -769,6 +769,31 @@
 [data-component="amicode-system-view"] .amc-c-lvl { color: var(--v2-text-text-muted); font-size: 0.8rem; }
 [data-component="amicode-system-view"] .amc-c-params { color: var(--v2-text-text-base); font-size: 0.8rem; }
 [data-component="amicode-system-view"] .amc-ev-formula { margin-top: 4px; }
+/* Provenance on a section header. A RECORDED Hamiltonian is shown bare; an
+   inferred one — the canonical form for the platform, which nobody stated —
+   has to say so, or the card is asserting physics it guessed. Sits before the
+   ::after rule so the hairline still fills the remaining width. */
+[data-component="amicode-entity-view"] .amc-ev-sec-note {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--v2-text-text-faint);
+  font-style: italic;
+}
+/* The "no model recorded" placeholder reads as a prompt, not as an equation. */
+[data-component="amicode-system-view"] .amc-ev-formula.is-empty {
+  color: var(--v2-text-text-faint);
+  font-size: 0.82rem;
+  font-style: italic;
+  background: transparent;
+  border-style: dashed;
+}
+/* Conventions the recorded terms assume (frame, units, basis ordering). */
+[data-component="amicode-system-view"] .amc-ev-formula-note {
+  margin: -2px 4px 4px;
+  font-size: 0.72rem;
+  color: var(--v2-text-text-faint);
+}
 
 /* ---- Formulation hero (spec §6.2): mode badges + objective + constraints ---- */
 [data-component="amicode-formulation-view"] { display: flex; flex-direction: column; gap: 8px; }

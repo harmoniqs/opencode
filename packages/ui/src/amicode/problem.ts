@@ -522,9 +522,20 @@ export interface SystemProjection {
   topology?: string
   components: { id: string; role: string; levels?: number; params: Record<string, number> }[]
   couplings: { between: string[]; kind: string; params: Record<string, number> }[]
+  /** The model the researcher CONFIRMED, term by term (amicode_set_model's
+   *  `hamiltonian`). Present → the card renders exactly this; absent → it falls
+   *  back to a canonical form for the platform and labels it as inferred. */
+  hamiltonian?: { terms: HamiltonianTermProjection[]; notes?: string }
   notes?: string
   /** false = a legacy FLAT entity read-collapsed to N=1 (no couplings). */
   isComposite: boolean
+}
+
+export interface HamiltonianTermProjection {
+  kind: string
+  latex: string
+  acts_on?: string[]
+  label?: string
 }
 
 const asNumberRecord = (v: unknown): Record<string, number> => {
@@ -533,6 +544,24 @@ const asNumberRecord = (v: unknown): Record<string, number> => {
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (typeof val === "number") out[k] = val
   }
   return out
+}
+
+/** Recorded Hamiltonian, tolerant of raw JSON: a term without usable `latex` is
+ *  dropped rather than rendered as a hole, and an empty result reads as "nothing
+ *  recorded" so the card falls back to inference instead of showing `Ĥ/ℏ = `. */
+const asHamiltonian = (v: unknown): SystemProjection["hamiltonian"] => {
+  if (typeof v !== "object" || v === null) return undefined
+  const raw = v as Record<string, unknown>
+  if (!Array.isArray(raw.terms)) return undefined
+  const terms = (raw.terms as Record<string, unknown>[])
+    .filter((t) => t && typeof t.latex === "string" && t.latex.trim() !== "")
+    .map((t) => ({
+      kind: typeof t.kind === "string" ? t.kind : "drift",
+      latex: t.latex as string,
+      ...(Array.isArray(t.acts_on) ? { acts_on: (t.acts_on as unknown[]).map(String) } : {}),
+      ...(typeof t.label === "string" ? { label: t.label } : {}),
+    }))
+  return terms.length === 0 ? undefined : { terms, ...(typeof raw.notes === "string" ? { notes: raw.notes } : {}) }
 }
 
 /** Structured projection for the entity view (spec §3 point 3). Composite → read
@@ -559,6 +588,7 @@ export function systemProjection(input: Record<string, unknown>): SystemProjecti
         kind: str(cp.kind) ?? "?",
         params: asNumberRecord(cp.params),
       })),
+      ...(asHamiltonian(entity.hamiltonian) ? { hamiltonian: asHamiltonian(entity.hamiltonian) } : {}),
       ...(typeof entity.notes === "string" ? { notes: entity.notes } : {}),
       isComposite: true,
     }
