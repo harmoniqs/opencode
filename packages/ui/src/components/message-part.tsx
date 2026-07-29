@@ -2,6 +2,7 @@ import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
 import { ThinkingLine } from "../amicode/thinking-line"
 import { turnTokens } from "../amicode/thinking"
 import { shellRowLabel } from "../amicode/shell-row"
+import { sessionHasAmicodeParts } from "../amicode/rail-gate"
 import { amicoBrainRef, emitAmicoBrainHover } from "../amicode/brain-ref"
 import {
   Component,
@@ -619,12 +620,13 @@ export function AssistantParts(props: {
   // presence (the working lane below; the rail waking) keys off it. Plain-prose
   // turns are the *normal chat*: no Amico chrome in the flow
   // (spec-20260712-amico-third-actor).
+  // Shares the rail's gate (rail-gate.ts) rather than re-testing `amicode_*`
+  // here. Both used the tool-name test independently, so a SHELL-driven amicode
+  // session lost the chips AND Amico's presence mark together — the H-mark read
+  // as "inactive" while a solve was running at iteration 29 (2026-07-29). One
+  // definition, one place to widen.
   const inDomainTurn = createMemo(() =>
-    props.messages.some((message) =>
-      list(data.store.part?.[message.id], emptyParts).some(
-        (p) => p.type === "tool" && /^amicode_/.test((p as ToolPart).tool ?? ""),
-      ),
-    ),
+    sessionHasAmicodeParts(props.messages, (id) => list(data.store.part?.[id], emptyParts) as never),
   )
 
   return (
