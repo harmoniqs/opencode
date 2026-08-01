@@ -19,6 +19,8 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { AmicoMark } from "@opencode-ai/ui/amico-spinner"
+import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -53,7 +55,6 @@ import { isScrollKeyTarget, scrollKey, scrollKeyOwner, ScrollView } from "@openc
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import type {
   AssistantMessage,
   Message as MessageType,
@@ -143,12 +144,20 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean }) {
+function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
   const language = useLanguage()
 
   return (
     <div data-slot="session-turn-thinking">
-      <TextShimmer text={language.t("ui.sessionTurn.status.thinking")} />
+      {/* amicode: the harmonic working indicator — AmicoWave glyph + cycling
+          gerund + live elapsed/tokens — replacing the stock TextShimmer here.
+          This row IS the new-architecture mount; the old AssistantParts lane is
+          dead code on this timeline (recovered in the 2026-08-01 branch merges,
+          mount moved 2026-08-01). */}
+      <span class="amc-thinking-row" style={{ display: "inline-flex", "align-items": "center", gap: "8px" }}>
+        <AmicoMark />
+        <ThinkingLine tokens={props.tokens} />
+      </span>
       <Show when={!props.showReasoningSummaries}>
         <TextReveal text={props.reasoningHeading} class="session-turn-thinking-heading" travel={25} duration={700} />
       </Show>
@@ -408,6 +417,15 @@ export function MessageTimeline(props: {
   })
   const parentTitle = createMemo(() => sessionTitle(parent()?.title) ?? language.t("command.session.new"))
   const getMsgParts = (msgId: string) => sync().data.part[msgId] ?? emptyParts
+
+  // amicode: live token count for a turn's assistant messages — feeds the
+  // thinking line's token chip on the Thinking row (the recovered wave mount).
+  const assistantTokensForTurn = (userMessageID: string) => {
+    const msgs = sessionMessages()
+    const start = msgs.findIndex((m) => m.id === userMessageID)
+    if (start === -1) return 0
+    return turnTokens(msgs.slice(start + 1).filter((m) => m.role === "assistant"))
+  }
   const getMsgPart = (messageID: string, partID: string) => getMsgParts(messageID).find((part) => part.id === partID)
   const childTaskDescription = createMemo(() => {
     const id = sessionID()
@@ -1306,6 +1324,7 @@ export function MessageTimeline(props: {
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
+                tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
               />
             </div>
           </TimelineRowFrame>
