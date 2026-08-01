@@ -95,9 +95,9 @@ function ContextTreeFrame(props: { sessionID: string }) {
     return map.get(mount) === false
   }
 
-  const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
-  const getParts = (msgId: string) => sync.data.part[msgId] ?? []
-  const busy = createMemo(() => (sync.data.session_status[props.sessionID]?.type ?? "idle") !== "idle")
+  const messages = createMemo(() => sync().data.message[props.sessionID] ?? [])
+  const getParts = (msgId: string) => sync().data.part[msgId] ?? []
+  const busy = createMemo(() => (sync().data.session_status[props.sessionID]?.type ?? "idle") !== "idle")
 
   // the session's turns: ONE branch per user prompt. A single ask can span
   // several assistant messages (continuation steps), and charting per

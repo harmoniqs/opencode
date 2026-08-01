@@ -42,6 +42,14 @@ export function parseDiffSentinel(output: unknown): DiffSentinel | undefined {
   }
 }
 
+// Entities with a live in-transcript view (card.tsx's InlineEntityView, fed by
+// the entity rail) instead of just a diff chip. Whether any GIVEN receipt for
+// one of these renders as the chip or the live view depends on
+// receipt-currency.ts's receiptIsCurrent (reactive, live-problem-view state) —
+// so anything keying off this set (e.g. receipt-runs.ts) must treat it as "no
+// safe static answer" rather than guessing.
+export const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
+
 export const ENTITY_LABELS: Record<string, string> = {
   system: "System",
   formulation: "Formulation",

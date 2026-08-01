@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js"
+import { type Accessor, createMemo, createResource } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DateTime } from "luxon"
 import { filter, firstBy, flat, groupBy, mapValues, pipe, uniqueBy, values } from "remeda"
@@ -27,8 +27,8 @@ function modelKey(model: ModelKey) {
 export const { use: useModels, provider: ModelsProvider } = createSimpleContext({
   name: "Models",
   gate: false,
-  init: () => {
-    const providers = useProviders()
+  init: (props: { directory?: Accessor<string | undefined> } = {}) => {
+    const providers = useProviders(() => props.directory?.())
 
     const [store, setStore, _, ready] = persisted(
       Persist.global("model", ["model.v1"]),
@@ -154,6 +154,15 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       setStore("variant", key, value)
     }
 
+    const [recentModels] = createResource(
+      async () => {
+        const recent = store.recent
+        await ready.promise
+        return recent
+      },
+      (p) => p,
+      { initialValue: [] },
+    )
     return {
       ready,
       list,
@@ -161,7 +170,7 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       visible,
       setVisibility,
       recent: {
-        list: createMemo(() => store.recent),
+        list: () => recentModels()!,
         push,
       },
       pin: {

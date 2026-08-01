@@ -1,27 +1,16 @@
-import {
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  For,
-  Match,
-  onMount,
-  Show,
-  startTransition,
-  Switch,
-  untrack,
-} from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onMount, Show, startTransition, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useLocation, useMatch, useNavigate, useParams } from "@solidjs/router"
+import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
-import { useTheme } from "@opencode-ai/ui/theme/context"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 
-import { getProjectAvatarVariant, LayoutRoute, useLayout, type LocalProject } from "@/context/layout"
+import { LayoutRoute, useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
@@ -29,46 +18,31 @@ import { vaultPanel } from "@/context/vault-panel"
 import { useSettings } from "@/context/settings"
 import { WindowsAppMenu } from "./windows-app-menu"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
-import { useServerSync } from "@/context/server-sync"
-import { base64Encode } from "@opencode-ai/core/util/encode"
-import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
-import { displayName, getProjectAvatarSource, projectForSession } from "@/pages/layout/helpers"
-import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
+import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
 import { makeEventListener } from "@solid-primitives/event-listener"
+import { createMediaQuery } from "@solid-primitives/media"
 import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
 import { useGlobal } from "@/context/global"
-import { decode64 } from "@/utils/base64"
+import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
+import type { LocalProject } from "@/context/layout"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
+import type { PromptSession } from "@/context/prompt"
+import { normalizeSessionInfo } from "@/utils/session"
+import { projectForSession } from "@/pages/layout/helpers"
+import { useSplit } from "@/context/split"
+import { IS_AMICODE_PANE } from "@/utils/amicode-pane"
+import { reportTabDrag } from "@/components/pane-bridge"
 import { Mark } from "@opencode-ai/ui/logo"
 import { ContextMenu } from "@opencode-ai/ui/context-menu"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
+import "./titlebar.css"
 
-type TauriDesktopWindow = {
-  startDragging?: () => Promise<void>
-  toggleMaximize?: () => Promise<void>
-}
-
-type TauriThemeWindow = {
-  setTheme?: (theme?: "light" | "dark" | null) => Promise<void>
-}
-
-type TauriApi = {
-  window?: {
-    getCurrentWindow?: () => TauriDesktopWindow
-  }
-  webviewWindow?: {
-    getCurrentWebviewWindow?: () => TauriThemeWindow
-  }
-}
-
-const tauriApi = () => (window as unknown as { __TAURI__?: TauriApi }).__TAURI__
-const currentDesktopWindow = () => tauriApi()?.window?.getCurrentWindow?.()
-const currentThemeWindow = () => tauriApi()?.webviewWindow?.getCurrentWebviewWindow?.()
 const legacyTitlebarHeight = 40
 const v2TitlebarHeight = 36
 const minTitlebarZoom = 0.25
 const windowsControlsBaseWidth = 138 // 3 native Windows caption buttons at 46px each.
+const macTrafficLightsBaseWidth = 84
 
 export type TitlebarUpdate = {
   version: () => string | undefined
@@ -76,24 +50,31 @@ export type TitlebarUpdate = {
   install: () => void
 }
 
-export function Titlebar(props: { update?: TitlebarUpdate }) {
+export function useTitlebarRightMount() {
+  const [mount, setMount] = createSignal<HTMLElement | null>(null)
+  onMount(() => setMount(document.getElementById("opencode-titlebar-right")))
+  return mount
+}
+
+export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visible: boolean; toggle: () => void } }) {
   const layout = useLayout()
   const platform = usePlatform()
   const command = useCommand()
   const language = useLanguage()
   const settings = useSettings()
-  const theme = useTheme()
   const server = useServer()
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams()
   const useV2Titlebar = createMemo(() => settings.general.newLayoutDesigns())
+  const mobile = createMediaQuery("(max-width: 767px)")
+  const bottom = createMemo(() => useV2Titlebar() && mobile() && settings.general.mobileTitlebarPosition() === "bottom")
 
   const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
   const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
-  const electronWindows = createMemo(() => windows() && !tauriApi())
   const linux = createMemo(() => platform.platform === "desktop" && platform.os === "linux")
   const web = createMemo(() => platform.platform === "web")
+  const macTrafficLights = createMemo(() => mac() && !platform.windowFullscreen?.())
   const zoom = () => platform.webviewZoom?.() ?? 1
   const titlebarZoom = () => (windows() ? Math.max(zoom(), minTitlebarZoom) : zoom())
   const counterZoom = () => (windows() && titlebarZoom() < 1 ? 1 / titlebarZoom() : 1)
@@ -113,6 +94,8 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
 
   const path = () => `${location.pathname}${location.search}${location.hash}`
   const creating = createMemo(() => {
+    const route = layout.route()
+    if (route.type === "draft" || route.type === "dir-new-sesssion") return true
     if (!params.dir) return false
     if (params.id) return false
     const parts = location.pathname.replace(/\/+$/, "").split("/")
@@ -180,92 +163,30 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
     },
   ])
 
-  const getWin = () => {
-    if (platform.platform !== "desktop") return
-    return currentDesktopWindow()
-  }
-
-  createEffect(() => {
-    if (platform.platform !== "desktop") return
-
-    const scheme = theme.colorScheme()
-    const value = scheme === "system" ? null : scheme
-
-    const win = currentThemeWindow()
-    if (!win?.setTheme) return
-
-    void win.setTheme(value).catch(() => undefined)
-  })
-
-  const interactive = (target: EventTarget | null) => {
-    if (!(target instanceof Element)) return false
-
-    const selector =
-      "button, a, input, textarea, select, option, [role='button'], [role='menuitem'], [contenteditable='true'], [contenteditable='']"
-
-    return !!target.closest(selector)
-  }
-
-  const drag = (e: MouseEvent) => {
-    if (platform.platform !== "desktop") return
-    if (e.buttons !== 1) return
-    if (interactive(e.target)) return
-
-    const win = getWin()
-    if (!win?.startDragging) return
-
-    e.preventDefault()
-    void win.startDragging().catch(() => undefined)
-  }
-
-  const maximize = (e: MouseEvent) => {
-    if (platform.platform !== "desktop") return
-    if (interactive(e.target)) return
-    if (e.target instanceof Element && e.target.closest("[data-tauri-decorum-tb]")) return
-
-    const win = getWin()
-    if (!win?.toggleMaximize) return
-
-    e.preventDefault()
-    void win.toggleMaximize().catch(() => undefined)
-  }
-
   return (
     <header
+      data-slot={useV2Titlebar() ? "titlebar-v2" : undefined}
       classList={{
         "shrink-0 relative flex flex-row": true,
         "h-9 bg-v2-background-bg-deep overflow-visible": useV2Titlebar(),
         "h-10 bg-background-base overflow-hidden": !useV2Titlebar(),
+        "order-last": bottom(),
       }}
       style={{
         "min-height": minHeight(),
-        "padding-left": mac() ? `${84 / zoom()}px` : 0,
-        width: electronWindows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
-        "max-width": electronWindows()
-          ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))`
-          : undefined,
-        "align-self": electronWindows() ? "flex-start" : undefined,
+        // Keep native macOS traffic lights clear even when the desktop window is narrow.
+        "padding-left": macTrafficLights() ? `${macTrafficLightsBaseWidth / zoom()}px` : 0,
+        width: windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
+        "max-width": windows() ? `env(titlebar-area-width, calc(100vw - ${windowsControlsWidth()}))` : undefined,
+        "align-self": windows() ? "flex-start" : undefined,
       }}
       data-tauri-drag-region
-      onMouseDown={drag}
-      onDblClick={maximize}
     >
       <Switch>
         <Match when={useV2Titlebar()}>
           {(_) => {
-            const serverSync = useServerSync()
-            const navigate = useNavigate()
-            const homeMatch = useMatch(() => "/")
             const layout = useLayout()
-
-            const newSessionHref = () => {
-              if (params.dir) return `/${params.dir}/session`
-
-              const project = layout.projects.list()[0]
-              if (!project) return "/"
-
-              return `/${base64Encode(project.worktree)}/session`
-            }
+            const global = useGlobal()
 
             const tabs = useTabs()
             const tabsStore = tabs.store
@@ -281,6 +202,21 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                 navigate(href)
               })
             }
+            const [session] = createResource(
+              () => {
+                const route = layout.route()
+                if (route.type !== "session") return undefined
+                const conn = global.servers
+                  .list()
+                  .find((item) => ServerConnection.key(item) === (route.server ?? server.key))
+                return conn ? { route, sdk: global.ensureServerCtx(conn).sdk } : undefined
+              },
+              ({ route, sdk }) =>
+                sdk.api.session
+                  .get({ sessionID: route.sessionId })
+                  .then(normalizeSessionInfo)
+                  .catch(() => {}),
+            )
 
             const matchRoute = (route: LayoutRoute) => {
               if (route.type === "home") return
@@ -293,10 +229,9 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                     item.type === "session" && item.server === route.server && item.sessionId === route.sessionId,
                 )
                 if (main) return main
-                const sync = serverSync.createDirSyncContext(route.dir)
-                const session = sync.session.get(route.sessionId)
-                if (session?.parentID) {
-                  const parentID = session.parentID
+                const s = session()
+                if (s?.parentID) {
+                  const parentID = s.parentID
                   const parent = tabsStore.find(
                     (item) => item.type === "session" && item.server === route.server && item.sessionId === parentID,
                   )
@@ -311,18 +246,16 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               const route = layout.route()
               if (!tabs.ready()) return
               const tab = currentTab()
-              if (tab) return
+              if (tab) {
+                tabs.remember(tab)
+                return
+              }
 
               if (route.type === "session") {
-                const sync = serverSync.createDirSyncContext(route.dir)
-                const session = sync.session.get(route.sessionId)
-                if (!session) return
-                const sessionId = session.parentID ?? session.id
-                const next = {
-                  server: route.server ?? server.key,
-                  dirBase64: route.dirBase64,
-                  sessionId,
-                }
+                const s = session()
+                if (!s) return
+                const sessionId = s.parentID ?? s.id
+                const next = { server: route.server ?? server.key, sessionId }
                 tabsStoreActions.addSessionTab(next)
               }
             })
@@ -333,7 +266,68 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               tabsStoreActions.removeSessions(detail)
             })
 
-            const openNewTab = () => navigate(newSessionHref())
+            const openNewTab = () => {
+              const route = layout.route()
+              const activeSession = session()
+              if (route.type === "session" && activeSession) {
+                const sessionTab = {
+                  type: "session" as const,
+                  server: route.server ?? server.key,
+                  sessionId: activeSession.id,
+                }
+                const model = tabs.stateValue<PromptSession>(sessionTab, "prompt")?.model.current()
+                tabs.newDraft({ server: sessionTab.server, directory: activeSession.directory }, "", model)
+                return
+              }
+
+              const activeTab = currentTab()
+              if (activeTab?.type === "draft") {
+                const model = tabs.stateValue<PromptSession>(activeTab, "prompt")?.model.current()
+                tabs.newDraft({ server: activeTab.server, directory: activeTab.directory }, "", model)
+                return
+              }
+
+              if (route.type === "home") {
+                const selection = layout.home.selection()
+                const conn = global.servers.list().find((item) => ServerConnection.key(item) === selection.server)
+                const project = conn
+                  ? global
+                      .ensureServerCtx(conn)
+                      .projects.list()
+                      .find((item) => item.worktree === selection.directory)
+                  : undefined
+                if (conn && project) {
+                  tabs.newDraft({ server: ServerConnection.key(conn), directory: project.worktree }, "")
+                  return
+                }
+              }
+
+              const current = layout.projects.list()[0]
+              if (current) {
+                tabs.newDraft({ server: server.key, directory: current.worktree }, "")
+                return
+              }
+
+              const fallback = global.servers.list().flatMap((conn) => {
+                const project = global.ensureServerCtx(conn).projects.list()[0]
+                return project ? [{ server: ServerConnection.key(conn), project }] : []
+              })[0]
+              if (!fallback) return
+
+              tabs.newDraft({ server: fallback.server, directory: fallback.project.worktree }, "")
+            }
+            const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
+
+            command.register("titlebar-home", () => [
+              {
+                id: "home.toggle",
+                title: language.t("home.title"),
+                category: language.t("command.category.view"),
+                keybind: "mod+b",
+                hidden: true,
+                onSelect: toggleHome,
+              },
+            ])
 
             command.register("tabs", () => {
               const current = currentTab()
@@ -343,7 +337,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   id: "tab.new",
                   category: "tab",
                   title: language.t("command.session.new"),
-                  keybind: "mod+t",
+                  keybind: "mod+t,mod+n",
                   hidden: true,
                   onSelect: openNewTab,
                 },
@@ -354,59 +348,16 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   keybind: "mod+w",
                   hidden: true,
                   onSelect: () => {
-                    tabsStoreActions.removeTab(tabsStore.findIndex((tab) => current === tab))
+                    tabsStoreActions.closeTab(tabsStore.findIndex((tab) => current === tab))
                   },
                 },
                 {
-                  id: `tab.prev`,
-                  category: "tab",
-                  title: "",
-                  keybind: `mod+option+ArrowLeft`,
-                  hidden: true,
-                  onSelect: () => {
-                    let index = tabsStore.findIndex((tab) => tab === currentTab())
-                    if (index === -1) return
-
-                    index -= 1
-                    if (index === -1) index = tabsStore.length - 1
-
-                    const next = tabsStore[index]
-                    if (next) navigateTab(next)
-                  },
+                  id: "tab.reopenClosed",
+                  category: language.t("command.category.file"),
+                  title: language.t("command.tab.reopenClosed"),
+                  keybind: "mod+shift+t",
+                  onSelect: () => tabsStoreActions.reopenClosedTab(),
                 },
-                {
-                  id: `tab.next`,
-                  category: "tab",
-                  title: "",
-                  keybind: `mod+option+ArrowRight`,
-                  hidden: true,
-                  onSelect: () => {
-                    let index = tabsStore.findIndex((tab) => tab === currentTab())
-                    if (index === -1) return
-
-                    index += 1
-                    if (index === tabsStore.length) index = 0
-
-                    const next = tabsStore[index]
-                    if (next) navigateTab(next)
-                  },
-                },
-                ...Array.from({ length: 9 }, (_, i) => {
-                  const index = i
-                  const number = index + 1
-                  return {
-                    id: `tab.${number}`,
-                    category: "tab",
-                    title: "",
-                    keybind: `mod+${number}`,
-                    disabled: layout.projects.list().length <= index,
-                    hidden: true,
-                    onSelect: () => {
-                      const tab = tabsStore[index]
-                      if (tab) navigateTab(tab)
-                    },
-                  }
-                }),
               ].filter((v) => v !== undefined)
             })
 
@@ -419,24 +370,53 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
 
             return (
               <div
-                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 pr-3 pt-2"
+                class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pr-3"
                 classList={{
-                  "pl-2": mac(),
-                  "pl-4": !mac(),
+                  "pt-2": !bottom(),
+                  "pb-2": bottom(),
+                  "md:pl-2": macTrafficLights(),
+                  "md:pl-4": !macTrafficLights(),
                 }}
               >
-                <ChannelIndicator />
+                <ChannelIndicator debugTools={props.debugTools} />
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
+                <TooltipV2
+                  placement="bottom"
+                  value={
+                    <>
+                      {language.t("home.title")}
+                      <KeybindV2 keys={command.keybindParts("home.toggle")} variant="neutral" />
+                    </>
+                  }
+                  class="shrink-0"
+                >
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<IconV2 name="grid-plus" />}
+                    state={layout.route().type === "home" ? "pressed" : undefined}
+                    onClick={toggleHome}
+                    aria-label={language.t("home.title")}
+                    aria-pressed={layout.route().type === "home"}
+                  />
+                </TooltipV2>
+                {/* amicode(workbench S1): the sessions-panel toggle, v2 titlebar
+                    edition — the legacy grid-branch button never rendered here,
+                    so the panel had no affordance (S1.4 probe). */}
                 <IconButtonV2
+                  type="button"
                   variant="ghost-muted"
                   size="large"
-                  as="a"
-                  href="/"
                   class="!w-9 shrink-0"
-                  icon={<IconV2 name="grid-plus" />}
-                  state={!!homeMatch() ? "pressed" : undefined}
+                  icon={<IconV2 name="sidebar-right" />}
+                  state={layout.sidebar.opened() ? "pressed" : undefined}
+                  onClick={() => layout.sidebar.toggle()}
+                  aria-label={language.t("command.sidebar.toggle")}
+                  aria-expanded={layout.sidebar.opened()}
                 />
 
                 <div
@@ -483,7 +463,6 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                               ref={ref}
                               href={tabHref(tab)}
                               server={tab.server}
-                              directory={decode64(tab.dirBase64)!}
                               sessionId={tab.sessionId}
                               onNavigate={() => {
                                 navigateTab(tab)
@@ -533,22 +512,19 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   </div>
                 </div>
                 <Show when={!(creating() && params.dir)}>
+
                   <IconButtonV2
                     type="button"
                     variant="ghost-muted"
                     size="large"
                     class="shrink-0"
                     icon={<IconV2 name="plus" />}
-                    as="a"
-                    href={newSessionHref()}
+                    onClick={openNewTab}
                     aria-label={language.t("command.session.new")}
                   />
                 </Show>
                 <div class="flex-1" />
                 <TitlebarV2Right state={v2RightState()} />
-                <Show when={windows() && !electronWindows()}>
-                  <div data-tauri-decorum-tb class="flex flex-row" />
-                </Show>
               </div>
             )
           }}
@@ -561,14 +537,13 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
             <div
               classList={{
                 "flex items-center min-w-0": true,
-                "pl-2": !mac(),
+                "pl-2": !macTrafficLights(),
               }}
             >
               <Show when={windows() || linux()}>
                 <WindowsAppMenu command={command} platform={platform} />
               </Show>
               <Show when={mac()}>
-                {/*<div class="h-full shrink-0" style={{ width: `${72 / zoom()}px` }} />*/}
                 <div class="xl:hidden w-10 shrink-0 flex items-center justify-center">
                   <IconButton
                     icon="menu"
@@ -626,11 +601,10 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                           placement="bottom"
                           title={language.t("command.session.new")}
                           keybind={command.keybind("session.new")}
-                          openDelay={2000}
+                          openDelay={800}
                         >
                           <Button
                             variant="ghost"
-                            icon={creating() ? "new-session-active" : "new-session"}
                             class="titlebar-icon w-8 h-6 p-0 box-border"
                             disabled={layout.sidebar.opened()}
                             tabIndex={layout.sidebar.opened() ? -1 : undefined}
@@ -640,7 +614,9 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                             }}
                             aria-label={language.t("command.session.new")}
                             aria-current={creating() ? "page" : undefined}
-                          />
+                          >
+                            <IconV2 name="edit" size="small" />
+                          </Button>
                         </TooltipKeybind>
                       </div>
                     </div>
@@ -655,7 +631,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   >
                     <Show when={hasProjects() && nav()}>
                       <div class="flex items-center gap-0 transition-transform">
-                        <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
+                        <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={800}>
                           <Button
                             variant="ghost"
                             icon="chevron-left"
@@ -665,7 +641,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                             aria-label={language.t("common.goBack")}
                           />
                         </Tooltip>
-                        <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
+                        <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={800}>
                           <Button
                             variant="ghost"
                             icon="chevron-right"
@@ -678,9 +654,9 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                       </div>
                     </Show>
                     <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
-                    <ChannelIndicator />
                   </div>
                 </div>
+                <ChannelIndicator debugTools={props.debugTools} />
               </div>
             </div>
 
@@ -697,7 +673,6 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                 "pr-2": !windows(),
               }}
               data-tauri-drag-region
-              onMouseDown={drag}
             >
               <Tooltip placement="bottom" value={language.t(vaultPanel.opened() ? "amicode.vault.close" : "amicode.vault.open")}>
                 <IconButton
@@ -711,8 +686,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               </Tooltip>
               <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
               <Show when={windows()}>
-                {!tauriApi() && <div class="shrink-0" style={{ width: windowsControlsWidth() }} />}
-                <div data-tauri-decorum-tb class="flex flex-row" />
+                <div class="shrink-0" style={{ width: windowsControlsWidth() }} />
               </Show>
             </div>
           </div>
@@ -760,7 +734,7 @@ function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
 
 function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
   return (
-    <div class="relative isolate mr-3 size-5 shrink-0">
+    <div class="group relative mr-3 h-5 w-5 shrink-0 rounded-full bg-v2-background-bg-deep transition-[width] duration-150 ease-out hover:z-30 hover:w-[68px] focus-within:z-30 focus-within:w-[68px] motion-reduce:transition-none">
       <button
         type="button"
         class="group absolute right-0 top-0 z-10 flex h-5 w-5 items-center justify-end overflow-hidden rounded-full bg-[var(--accent-fill-soft)] text-v2-icon-icon-accent shadow-[inset_0_0_0_1px_var(--accent-edge)] transition-[width,background-color] duration-150 ease-out hover:z-30 hover:w-[68px] focus-visible:z-30 focus-visible:w-[68px] focus-visible:outline focus-visible:outline-1 focus-visible:outline-border-focus-base disabled:opacity-60 disabled:cursor-default motion-reduce:transition-none"
@@ -791,7 +765,6 @@ function TabNavItem(props: {
   ref?: HTMLDivElement
   href: string
   server: ServerConnection.Key
-  directory: string
   sessionId?: string
   hideClose?: boolean
   onClose: () => void
@@ -812,31 +785,56 @@ function TabNavItem(props: {
     event.stopPropagation()
     props.onClose()
   }
+  // amicode(split): the tab IS the drag handle — top-document drags feed the
+  // split context; pane strips report theirs to the parent over the workbench
+  // bridge instead (the parent owns drop resolution across frames).
+  const split = useSplit()
+  let rootEl: HTMLDivElement | undefined
+  onMount(() => {
+    const el = rootEl
+    if (!el || (!split.enabled && !IS_AMICODE_PANE)) return
+    el.draggable = true
+    el.addEventListener("dragstart", (e) => {
+      const ev = e as DragEvent
+      ev.dataTransfer?.setData("text/plain", props.href)
+      if (IS_AMICODE_PANE) reportTabDrag(props.href)
+      else split.beginTabDrag(props.href)
+    })
+    el.addEventListener("dragend", () => {
+      if (IS_AMICODE_PANE) reportTabDrag(undefined)
+      else split.endDrag()
+    })
+  })
   const global = useGlobal()
   const serverCtx = createMemo(() => {
     const conn = global.servers.list().find((item) => ServerConnection.key(item) === props.server)
-    if (conn) return global.createServerCtx(conn)
+    if (conn) return global.ensureServerCtx(conn)
   })
-  const dirSyncCtx = createMemo(() => serverCtx()?.sync.createDirSyncContext(props.directory))
 
+  // server-wide session store — no directory needed (upstream's tabs dropped
+  // dirBase64); the session record itself carries the directory for the avatar.
   const [session] = createResource(
     () => {
-      const ctx = dirSyncCtx()
+      const ctx = serverCtx()
       if (!ctx || !props.sessionId) return
-      return [props.sessionId, ctx] as const
+      return [props.sessionId, ctx.sync] as const
     },
-    async ([sessionId, dirSyncCtx]) => {
-      await dirSyncCtx.session.sync(sessionId).catch(() => {})
-      return dirSyncCtx.session.get(sessionId)
+    async ([sessionId, sync]) => {
+      await sync.session.sync(sessionId).catch(() => {})
+      return sync.session.get(sessionId)
     },
-    { initialValue: props.sessionId ? dirSyncCtx()?.session.get(props.sessionId) : undefined },
+    { initialValue: props.sessionId ? serverCtx()?.sync.session.get(props.sessionId) : undefined },
   )
 
   return (
     <ContextMenu modal={false}>
       <ContextMenu.Trigger
         as="div"
-        ref={props.ref}
+        ref={(el: HTMLDivElement) => {
+          rootEl = el
+          const r = props.ref as unknown
+          if (typeof r === "function") (r as (v: HTMLDivElement) => void)(el)
+        }}
         class="group relative flex h-7 min-w-24 max-w-60 flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-md bg-[var(--tab-bg)] px-1.5 [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-background-bg-layer-02)]"
         data-active={props.active}
         onMouseDown={(event: MouseEvent) => {
@@ -860,12 +858,16 @@ function TabNavItem(props: {
               <span data-slot="project-avatar-slot">
                 <ProjectTabAvatar
                   project={project()}
-                  directory={props.directory}
+                  directory={session().directory}
                   sessionId={session().id}
+                  server={props.server}
                   activeServer={props.activeServer}
                 />
               </span>
-              <span class="min-w-0 flex-1">{session().title}</span>
+              {/* truncate = overflow hidden + ellipsis + nowrap: the label
+                  ellipsizes at pane widths instead of hard-clipping mid-glyph
+                  (workbench FM4 / S1.3). */}
+              <span class="min-w-0 flex-1 truncate">{session().title}</span>
             </a>
           )
         }}
@@ -915,11 +917,14 @@ function ProjectTabAvatar(props: {
   project?: LocalProject
   directory: string
   sessionId: string
+  server: ServerConnection.Key
   activeServer: boolean
 }) {
-  const directory = () => props.directory
-  const sessionId = () => props.sessionId
-  const state = useSessionTabAvatarState(directory, sessionId, () => props.activeServer)
+  const state = useSessionTabAvatarState(
+    () => props.server,
+    () => props.directory,
+    () => props.sessionId,
+  )
   // amicode: brand mark instead of the letter project-avatar ("blue A"). Idle =
   // static Mark; while the agent works, Aaron's H-robot spinner (gentle pulse,
   // honors prefers-reduced-motion) replaces the radar ring. Unread keeps a dot.
@@ -952,9 +957,33 @@ function DraftTabItem(props: {
     event.stopPropagation()
     props.onClose()
   }
+  // amicode(split): drafts split too — the draftId rides the href, so the
+  // pane rebuilds with its draft text intact. Pane strips report over the
+  // workbench bridge (the parent resolves the drop).
+  const split = useSplit()
+  let rootEl: HTMLDivElement | undefined
+  onMount(() => {
+    const el = rootEl
+    if (!el || (!split.enabled && !IS_AMICODE_PANE)) return
+    el.draggable = true
+    el.addEventListener("dragstart", (e) => {
+      const ev = e as DragEvent
+      ev.dataTransfer?.setData("text/plain", props.href)
+      if (IS_AMICODE_PANE) reportTabDrag(props.href)
+      else split.beginTabDrag(props.href)
+    })
+    el.addEventListener("dragend", () => {
+      if (IS_AMICODE_PANE) reportTabDrag(undefined)
+      else split.endDrag()
+    })
+  })
   return (
     <div
-      ref={props.ref}
+      ref={(el: HTMLDivElement) => {
+        rootEl = el
+        const r = props.ref as unknown
+        if (typeof r === "function") (r as (v: HTMLDivElement) => void)(el)
+      }}
       data-active={props.active}
       class="group relative shrink-0 flex h-7 max-w-60 flex-row items-center gap-1.5 overflow-hidden rounded-[6px] bg-[var(--tab-bg)] pl-1.5 pr-8 whitespace-nowrap [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-overlay-simple-overlay-pressed)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--v2-border-border-focus)]"
       onMouseDown={(event) => {
@@ -1034,7 +1063,22 @@ function NewSessionTabItem(props: { ref?: HTMLDivElement; href: string; title: s
   )
 }
 
-function ChannelIndicator() {
+function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () => void } }) {
+  const channel = import.meta.env.VITE_OPENCODE_CHANNEL
+  if (channel === "dev" && props.debugTools) {
+    return (
+      <button
+        type="button"
+        class="bg-icon-interactive-base text-[#FFF] font-medium px-2 rounded-sm uppercase font-mono cursor-pointer"
+        onClick={props.debugTools.toggle}
+        aria-label="Toggle debug tools"
+        aria-pressed={props.debugTools.visible}
+      >
+        DEV
+      </button>
+    )
+  }
+
   return (
     <>
       {["beta", "dev"].includes(import.meta.env.VITE_OPENCODE_CHANNEL) && (

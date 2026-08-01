@@ -25,8 +25,9 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { useTabs } from "@/context/tabs"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
-import { useLayout, type LocalProject } from "@/context/layout"
-import { useNavigate } from "@solidjs/router"
+import { useLayout, type HomeProjectSelection, type LocalProject } from "@/context/layout"
+import { useLocation, useNavigate } from "@solidjs/router"
+import { postRouteInfo } from "@/utils/amicode-route-info"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
@@ -36,7 +37,7 @@ import { useDirectoryPicker } from "@/components/directory-picker"
 import { DialogSelectServer, useServerManagementController } from "@/components/dialog-select-server"
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
 import { ServerConnection, useServer } from "@/context/server"
-import { useServerSync } from "@/context/server-sync"
+import { useServerSync, type ServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import {
@@ -44,7 +45,6 @@ import {
   displayName,
   homeProjectDirectories,
   homeProjectNavigation,
-  type HomeProjectSelection,
   projectForSession,
   sortedRootSessions,
   toggleHomeProjectSelection,
@@ -57,7 +57,6 @@ import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } fro
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
-import { useSettings } from "@/context/settings"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
@@ -120,7 +119,7 @@ const HOME_SEARCH_RESULT_META =
 let pendingHomeNavigation: { server: ServerConnection.Key; href: string } | undefined
 
 function buildHomeSessionRecords(input: {
-  sync: Pick<ReturnType<typeof useServerSync>, "child">
+  sync: Pick<ServerSync, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
   isHidden: (worktree: string) => boolean
@@ -173,13 +172,11 @@ function homeSessionSearchKey(record: HomeSessionRecord) {
   return `${pathKey(record.session.directory)}:${record.session.id}`
 }
 
-export default function Home() {
-  const settings = useSettings()
-  return (
-    <Show when={settings.general.newLayoutDesigns()} fallback={<LegacyHome />}>
-      <HomeDesign />
-    </Show>
-  )
+// amicode: upstream's app.tsx imports { NewHome } and already gates the "/" route
+// on newLayoutDesigns (the legacy route is served by pages/home/legacy-home), so
+// the fork's dashboard is exported as NewHome and renders directly.
+export function NewHome() {
+  return <HomeDesign />
 }
 
 function HomeDesign() {
@@ -189,11 +186,15 @@ function HomeDesign() {
   const pickDirectory = useDirectoryPicker()
   const dialog = useDialog()
   const navigate = useNavigate()
+  const location = useLocation()
   const server = useServer()
   const language = useLanguage()
   const global = useGlobal()
   const command = useCommand()
   const notification = useNotification()
+
+  // amicode(deck): label the framing pane tab when the dashboard is home.
+  onMount(() => postRouteInfo(`${location.pathname}${location.search}`, "Home"))
 
   // amicode#200: the defaults capsule owns the Company Compute connection —
   // an always-warm connections instance so the HP dot is truthful from mount
@@ -227,9 +228,9 @@ function HomeDesign() {
   const focusedServerCtx = createMemo(() => {
     const conn = focusedServer()
     if (!conn) return
-    return global.createServerCtx(conn)
+    return global.ensureServerCtx(conn)
   })
-  const focusedSync = () => focusedServerCtx()?.sync ?? sync
+  const focusedSync = () => focusedServerCtx()?.sync ?? sync()
   const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
   // amicode: the Projects list mirrors ~/AmicodeProjects on disk (folder-first).
   // Fetch the folders the server sees (keyed by active server) and fold them into
@@ -244,7 +245,7 @@ function HomeDesign() {
     const conn = focusedServer()
     const view = amicodeProjects()
     if (!conn || !view.ok) return
-    const ctx = global.createServerCtx(conn)
+    const ctx = global.ensureServerCtx(conn)
     // untrack the store read so writing it back doesn't re-trigger this effect.
     const tracked = untrack(() => ctx.projects.list().map((p) => ({ worktree: p.worktree, expanded: p.expanded })))
     const next = reconcileProjectList({ tracked, amicodeDirs: view.projects.map((p) => p.path) })
@@ -652,7 +653,7 @@ function HomeDesign() {
     const conn = focusedServer()
     const directory = focusedSync().data.path.directory
     if (!conn || !directory) return
-    const ctx = global.createServerCtx(conn)
+    const ctx = global.ensureServerCtx(conn)
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
     tabs.newDraft({ server: ServerConnection.key(conn), directory }, prompt)
@@ -771,7 +772,7 @@ function HomeDesign() {
     const key = ServerConnection.key(conn)
     if (
       !global
-        .createServerCtx(conn)
+        .ensureServerCtx(conn)
         .projects.list()
         .some((project) => project.worktree === directory)
     )
@@ -782,7 +783,7 @@ function HomeDesign() {
   function addProjects(conn: ServerConnection.Any, directories: string[]) {
     const directory = directories[0]
     if (!directory) return
-    const ctx = global.createServerCtx(conn)
+    const ctx = global.ensureServerCtx(conn)
     directories.forEach(ctx.projects.open)
     ctx.projects.touch(directory)
     setSelection({ server: ServerConnection.key(conn), directory })
@@ -806,7 +807,7 @@ function HomeDesign() {
   }
 
   function openProjectNewSession(conn: ServerConnection.Any, directory: string) {
-    const ctx = global.createServerCtx(conn)
+    const ctx = global.ensureServerCtx(conn)
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
     navigateOnServer(conn, `/${base64Encode(directory)}/session`)
@@ -838,7 +839,7 @@ function HomeDesign() {
     const conn = focusedServer()
     if (!conn) return
     const directory = project?.worktree ?? session.directory
-    const ctx = global.createServerCtx(conn)
+    const ctx = global.ensureServerCtx(conn)
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
     navigateOnServer(conn, `/${base64Encode(session.directory)}/session/${session.id}`)
@@ -849,7 +850,7 @@ function HomeDesign() {
       addProjects(conn, homeProjectDirectories(result))
     }
 
-    const server = global.createServerCtx(conn)
+    const server = global.ensureServerCtx(conn)
 
     pickDirectory({
       server: conn,
@@ -1003,7 +1004,7 @@ function HomeDesign() {
                         const next = closeHomeProject(
                           state.selection,
                           ServerConnection.key(conn),
-                          global.createServerCtx(conn).projects,
+                          global.ensureServerCtx(conn).projects,
                           directory,
                         )
                         if (next) setSelection(next)
@@ -1320,7 +1321,7 @@ function HomeProjectColumn(props: {
           {(item) => {
             const key = ServerConnection.key(item)
             const healthy = () => !!global.servers.health[key]?.healthy
-            const serverCtx = global.createServerCtx(item)
+            const serverCtx = global.ensureServerCtx(item)
             return (
               <div class="flex max-h-[min(572px,calc(100vh_-_300px))] min-w-0 flex-col gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <HomeServerRow
@@ -1897,125 +1898,3 @@ function HomeCardsSkeleton() {
   )
 }
 
-function LegacyHome() {
-  const sync = useServerSync()
-  const platform = usePlatform()
-  const pickDirectory = useDirectoryPicker()
-  const dialog = useDialog()
-  const navigate = useNavigate()
-  const global = useGlobal()
-  const server = useServer()
-  const language = useLanguage()
-  const homedir = createMemo(() => sync.data.path.home)
-  const recent = createMemo(() => {
-    return sync.data.project
-      .slice()
-      .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-      .slice(0, 5)
-  })
-
-  const serverDotClass = createMemo(() => {
-    const healthy = global.servers.health[server.key]?.healthy
-    if (healthy === true) return "bg-icon-success-base"
-    if (healthy === false) return "bg-icon-critical-base"
-    return "bg-border-weak-base"
-  })
-
-  function openProject(server: ServerConnection.Any, directory: string) {
-    const serverCtx = global.createServerCtx(server)
-    serverCtx.projects.open(directory)
-    serverCtx.projects.touch(directory)
-    navigate(`/${base64Encode(directory)}`)
-  }
-
-  function chooseProject() {
-    const s = server.current
-    if (!s) return
-
-    const resolve = (result: string | string[] | null) => {
-      if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(s, directory)
-        }
-      } else if (result) {
-        openProject(s, result)
-      }
-    }
-
-    pickDirectory({
-      server: s,
-      title: language.t("command.project.open"),
-      multiple: true,
-      onSelect: resolve,
-    })
-  }
-
-  return (
-    <div class="mx-auto mt-55 w-full md:w-auto px-4">
-      <Logo class="md:w-xl opacity-12" />
-      <Button
-        size="large"
-        variant="ghost"
-        class="mt-4 mx-auto text-14-regular text-text-weak"
-        onClick={() => dialog.show(() => <DialogSelectServer />)}
-      >
-        <div
-          classList={{
-            "size-2 rounded-full": true,
-            [serverDotClass()]: true,
-          }}
-        />
-        {server.name}
-      </Button>
-      <Switch>
-        <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full flex flex-col gap-4">
-            <div class="flex gap-2 items-center justify-between pl-3">
-              <div class="text-14-medium text-text-strong">{language.t("home.recentProjects")}</div>
-              <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                {language.t("command.project.open")}
-              </Button>
-            </div>
-            <ul class="flex flex-col gap-2">
-              <For each={recent()}>
-                {(project) => (
-                  <Button
-                    size="large"
-                    variant="ghost"
-                    class="text-14-mono text-left justify-between px-3"
-                    onClick={() => openProject(server.current!, project.worktree)}
-                  >
-                    {project.worktree.replace(homedir(), "~")}
-                    <div class="text-14-regular text-text-weak">
-                      {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
-                    </div>
-                  </Button>
-                )}
-              </For>
-            </ul>
-          </div>
-        </Match>
-        <Match when={!sync.ready}>
-          <div class="mt-30 mx-auto flex flex-col items-center gap-3">
-            <div class="text-12-regular text-text-weak">{language.t("common.loading")}</div>
-            <Button class="px-3" onClick={chooseProject}>
-              {language.t("command.project.open")}
-            </Button>
-          </div>
-        </Match>
-        <Match when={true}>
-          <div class="mt-30 mx-auto flex flex-col items-center gap-3">
-            <Icon name="folder-add-left" size="large" />
-            <div class="flex flex-col gap-1 items-center justify-center">
-              <div class="text-14-medium text-text-strong">{language.t("home.empty.title")}</div>
-              <div class="text-12-regular text-text-weak">{language.t("home.empty.description")}</div>
-            </div>
-            <Button class="px-3 mt-1" onClick={chooseProject}>
-              {language.t("command.project.open")}
-            </Button>
-          </div>
-        </Match>
-      </Switch>
-    </div>
-  )
-}

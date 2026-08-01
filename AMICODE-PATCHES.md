@@ -1,7 +1,43 @@
 # AMICODE patch-stack log
 
-Local fork of sst/opencode @ v1.17.3 on branch `local/amicode`. Remote: `upstream` only
+Local fork of sst/opencode @ v1.18.10 (merge `042634f37` + follow-up `fb6587f3a`, 2026-08-01) on branch `amicode/merge-upstream-dev`, pending fast-forward of `local/amicode` (was v1.17.3). Remote: `upstream` only
 (fetch = github.com/sst/opencode, push URL disabled to `no_push_disabled`). Never push.
+
+## Upstream sync 2026-08-01 (1.17.3 → 1.18.10, merge-base 2026-06-10)
+
+Merged sst/opencode `dev` @ `19231fce4b` (1,229 upstream commits) into the fork's 472. 78 conflicts
+resolved by policy: versions/lockfile mechanical; ~40 files hand-merged. Notables:
+
+- **Adopted upstream's**: session-ui package split (fork's `message-part-groups`/`message-part-skill`
+  moved there with their consumers), review/diffs side panel (fork's vault tab grafted in;
+  `reviewOpen = tabsOpen` — same persisted key), controller-driven composer/settings/home,
+  AppNodeBuilder test harness (fork's `promptAgnosticMatcher` kept inside it), bounded SSE +
+  heartbeat, **native per-event-location contract** (supersedes the fork's connection-pinned
+  streams; the app reducer filters per-directory client-side).
+- **Kept fork's**: branding/fonts/accents, KaTeX macros (now threaded into upstream's hand-rolled
+  `renderKatexToken`), AmicoSpinner sites, entity-rail card dispatch (new
+  `@opencode-ai/ui/amicode-*` shims; `packages/ui` now depends on `@opencode-ai/session-ui` for
+  ask-card's data context — module-level acyclic), titlebar inline tab strip (server-wide
+  `sync.session.get` replaces the deleted `dirBase64`), prompt-agnostic cassette matcher.
+- **Dropped**: old `message-timeline.tsx` mounts (entity rail, AmicoSpinner, ask bridge) — upstream
+  deleted the file; ports into `pages/session/timeline/` are FOLLOW-UPS. `debug-bar.tsx` stays
+  deleted. `showSessionProgressBar` row dropped (its consumer died with the timeline). Fork's
+  markdown polish (~75 lines, heading hierarchy + inline-code chip) needs porting into
+  session-ui's markdown.
+- **prompt.ts silent-turn guard REFINED**: fires only on reasoning-bearing turns with no error.
+  Upstream treats mid-stream provider explosions as finish `unknown` (no error, no reasoning) and
+  its run-process tests lock "end the run" for that shape — the unrefined guard re-invoked them.
+- **i18n parity**: upstream's strict parity test demands every en.ts key in every locale; the 72
+  amicode-era English keys were filled into all 17 app locales as ENGLISH fallbacks (verbatim,
+  placeholders preserved). Non-English translations still deliberately unreviewed.
+- **Test-suite gotcha (this machine)**: the Amicode session exports `OPENCODE_CONFIG_CONTENT`
+  (skills.paths + permissions) — it leaks into any `bun test` spawned from an Amicode shell and
+  breaks skill/permission fixtures. Run suites with
+  `env -u OPENCODE_CONFIG_CONTENT -u OPENCODE_SERVER_PASSWORD bun test`.
+- **Known reds, all pre-existing or upstream-flaky**: pasqal connections (8) + amicode widgets (15)
+  fail identically on `origin/local/amicode` (WIP features); `httpapi-v2-pty` "serves
+  location-wrapped PTY routes" times out ~1-in-3 on clean upstream on this machine.
+- Build recipe below is unchanged (channel gate gotcha 2 still applies: `OPENCODE_CHANNEL=dev`).
 
 ## Build recipe (v1.17.3)
 
@@ -353,3 +389,42 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
     - STILL UNVERIFIED (needs live API creds): whether the OLD legacy `thinking:{type:"enabled",budgetTokens}` form actually 400s against Opus 5 or merely degrades — i.e. whether this was "hobbled" or "unusable". Also unexercised by CI: the Grok/GLM effort variants and the opus-4-5 `budgetTokens`+`effort` combination.
     - FUTURE SYNC COST: this is a knowing trade — porting file end-states now makes a future clean upstream merge harder on these 4 files. Accepted. NOTE the bug class recurs every model generation (version-regex parsing of model IDs will break again at Opus 6), which argues for a standing narrow sync lane on `transform.ts` rather than one-off unfreezes.
     - SEPARATE RISK SPOTTED (not fixed here): the release build does a bare `fetch(models.dev/api.json)` with no fallback, so a models.dev outage hard-fails the build. Consider pinning `MODELS_DEV_API_JSON` for the hackathon build.
+
+25. (clickable chat links — file:// opens in the editor, 2026-08-01) — amicode: markdown links in chat were dead wholesale (Aaron, live: vault-note links authored per the amico-vault skill's new `file://` convention — "clicking does nothing"). Diagnosis, three layers, all confirmed in source: (1) the marked link renderer emits `<a href class="external-link" target="_blank">` intact — no sanitization (packages/ui/src/context/marked.tsx:572); (2) session-ui's markdown component had NO anchor click handler at all — its only listener was the code-copy button, so anchors fell to default `target="_blank"` navigation, which the sandboxed cross-origin chat iframe blocks — every scheme dead, not just file://; (3) even past (2), two downstream filters would have dropped file://: the app platform `openExternal` (http/https/mailto only, packages/app/src/entry.tsx:87) and the extension bridge (https-only regex, amicode packages/extension/src/chat_bridge.ts).
+    - FORK: packages/session-ui/src/components/markdown.tsx — NEW `setupExternalLinks(root)`: delegated click handler on `a.external-link`, framed contexts only (`window.parent !== window`; a plain browser tab keeps native behavior). `preventDefault` + postMessage to parent: https/mailto → `{source:"amicode", kind:"open-external", url}`, file:// → NEW bridge kind `{kind:"open-file", url}`; any other scheme untouched (native fallback, dead-in-iframe as before). Wired next to `setupCodeCopy` with the same mount-once-in-effect + onCleanup pattern.
+    - EXTENSION (amicode repo): chat_bridge.ts — new `open-file` branch: kind + string + `^file://` gate in one condition (non-file → `false`, not consumed — open-external idiom); then `decodeURIComponent(new URL(url).pathname)`, must be `path.isAbsolute` + ≤4096 + `fs.existsSync` → `vscode.commands.executeCommand("vscode.open", vscode.Uri.file(fsPath))`; unparseable/unreachable → consumed-silent (save-file idiom). Posix path semantics (fleet is mac/linux). Relay allowlists (chat_panel.ts lane-1, deck/shell.ts) gain `"open-file"`.
+    - Skill companion (already landed, becomes live with this build): amico-vault SKILL.md "Reporting writes in chat" — vault writes are reported as absolute `file://` markdown links, one per file.
+    - Tests: extension `chat_bridge.test.ts` +2 (opens an existing file incl. a %-decoded space path; rejects non-file schemes as not-consumed, missing files/non-absolute as consumed-silent) → file 9/9; full extension suite 843/846 — the 3 failures are PRE-EXISTING and environmental (server_auth.test.ts spawn-env resolves the machine's provisioned `~/.amico/amicode/venvs/pasqal-connector` interpreter; logic committed at HEAD in extension.ts/pasqal_python.ts, untouched by this diff). session-ui `bun test src/components` → 69 pass / 0 fail. Extension `tsc --noEmit` clean.
+    - Build sha256: `df1dbe0de082a65c181e6aba7546acd4694842e76cc035c69b95352d08c5dac1` (packages/opencode/dist/opencode-darwin-arm64/bin/opencode + convenience copy dist/opencode-local; vendored into amicode packages/extension/vendor/opencode/darwin-arm64/opencode AND swapped into the installed extension `~/.vscode/extensions/harmoniqs.amicode-0.1.2/vendor/...` — plain cp, ETXTBSY not hit). Verify: binary contains `open-file` ×8; channel-gate sentinel `newLayoutDesigns` `!0` present; smoke `--version` → 1.17.3. Extension dist (`extension.js` open-file ×2, `deck_shell.js` ×1) copied into the installed extension's dist/.
+    - **Interactive click → `vscode.open` in the live webview NOT yet human-verified** — needs a window reload (extension host + spawned server both restart from the new artifacts); same deferred-acceptance caveat as #12/#13/#16.
+    - Divergence note: the vendored binary is now AHEAD of amicode `opencode.lock.json`'s pinned fork ref until the fork commits (`session-ui markdown.tsx`) and the lock bumps — normal amicode.N tag flow, not done here.
+24. (harmonic wave indicator — de-shimmer the tool-status title, 2026-07-28) — amicode: the chat had two "working" indicators that read as identical — the fork's thinking line and the STOCK tool-group header (`packages/ui/src/components/tool-status-title.tsx`, e.g. "Working in shell" → "Worked in shell") — because both were shimmering text with no glyph. Earlier steps of this run gave the thinking line a standing-wave glyph (`AmicoWave`, `packages/ui/src/amicode/amico-wave.tsx`) and deleted the `amc-text-shimmer` CSS; this patch removes the shimmer from the last surface still asking for it.
+    - `tool-status-title.tsx`: all five `<TextShimmer text={...} active={...} offset={...} />` render positions (swap-mode active/done, suffix-mode prefix/active/done) replaced with plain `<span>{text}</span>`. `TextShimmer` import removed. The now-orphaned `prefixLen` memo (it existed only to feed the shimmer's `offset` phase-alignment prop) removed too — confirmed via `oxlint` before/after (498→499→498 warnings) that leaving it in place tripped `no-unused-vars`, so dropping it was the correct call rather than "keep everything."
+    - Deliberately PRESERVED: the `common()` prefix-splitting logic, the width-morph animation (`animate()`/`finish()`, the `requestAnimationFrame`, the stored `width`, the `data-ready` flag), the `data-component`/`data-active`/`data-mode` attributes, the `aria-label`, and the active→done text swap itself. None of that is the shimmer — it's the genuinely good word-morph behavior.
+    - `text-shimmer.tsx` untouched — it has many other live callers (`basic-tool.tsx`, `message-part.tsx` ×7, `session-turn.tsx`, `v2/components/basic-tool-v2.tsx` via `text-shimmer-v2.tsx`, plus stories), confirmed via `rg -n 'TextShimmer' packages/`. Not a candidate for deletion.
+    - The dropped `offset` prop existed only so the shimmer's gradient phase stayed continuous across the prefix/tail split; with no shimmer there's nothing to phase-align, so it has no replacement. Verified live (Storybook, `UI/AnimatedCountList` stories) that the prefix and tail still read as one unbroken word with no seam: in the swap-mode `Playground` story, driving an active→done transition showed the mid-animation frame rendering both the active and done spans simultaneously under the animating width (`data-ready="true"`, container `style="width: 0px"` mid-transition, then settling) — the word-morph is intact. The suffix/prefix-tail mode (`data-mode="suffix"`) is currently unreachable from any real call site — both app usages (`message-part.tsx` context-tool-group and shell-group titles) and the only story pass `split={false}` — so it was verified by transiently flipping one story's `split` prop off (`Done` export, "Exploring"/"Explored"), confirming `data-mode="suffix"` renders `"Explor"` + `"ed"` as an unbroken "Explored" with no visible gap, then reverting that story edit before commit (`git status` shows only the two files below).
+    - Tests: ui `bun test src` → 402 pass / 0 fail (unchanged). typecheck (tsgo) clean in `packages/ui`. `oxlint packages/ui/src` → 498 warnings / 0 errors both before and after (no new warnings once `prefixLen` was dropped).
+
+## Feature-branch recovery 2026-08-01 (after the upstream sync)
+
+The upstream sync covered only `local/amicode`; live work sat on unmerged feature branches.
+Merged into `amicode/merge-upstream-dev` on top of the sync:
+
+- `ann/thinking-words-updated` (Quantizing/Obsidianing), `feat/amicode-system-card-model`,
+  `fix/amicode-receipt-currency` — clean merges.
+- `pr/amico-working-indicator` — the harmonic wave indicator (AmicoWave in the thinking line,
+  H-mark static; tool-status-title de-shimmered) + collapsed receipt runs + AmicoSkillChip.
+  Conflicts: message-part count×useV2Actions threading unioned; shims amicode-receipt(-runs).
+- `kate/context-tree-vault-zoom` — framed external links route over the open-external bridge
+  (kept upstream's openExternal; branch's global link interceptor dropped — patch #25 covers it).
+- `feat/warrant-receipts-captured` (contains approval-surfaces) — capability warrants:
+  rail warrant chip, approval card (deliberately NOT onAsk), /amicode/warrants + /amicode/approve.
+- `feat/harmonic-wave-indicator` — recorded-Hamiltonian rendering, system-card physics rows,
+  KaTeX dedupe (spine/aside-lane cancel against their own reverts).
+
+DELIBERATELY NOT MERGED: `amico/issue-56-living-chat` (34 commits — glass sweep, Latent
+Constellation, bottom-dock composer, thought camera). It redesigns exactly the surfaces
+upstream replaced (old message-timeline, session-new-design-view, prompt-input, markdown —
+all deleted/moved upstream), 23 conflicted files. Merging would hybridize two design
+directions into neither. It stays on its branch; reviving the glass recipe is a deliberate
+port project onto the NEW ui, not a merge.

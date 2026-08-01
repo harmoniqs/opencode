@@ -53,8 +53,14 @@ const STEPS = ["① Define your system and problem", "② Optimize and iterate",
  *  a filled body (bg-layer-02) + a hairline (border-strong) so they read on the
  *  near-white start page; muted ink that lifts on hover. A transparent fill with
  *  a 10%-alpha border was ~1.25:1 vs the page — effectively invisible in light. */
+export type StarterChip = { label: string; prompt: string; dataSlot?: string }
+
 export function AmicodeStarterChips(props: {
   onStart: (prompt: string) => void
+  // Dynamic chip set, ranked by the caller from the problem history
+  // (Resume → Warm-start → Retry → static pad). Falls back to AMICODE_STARTERS
+  // + the legacy resumeName/onResume pair when `chips` is not given.
+  chips?: StarterChip[]
   resumeName?: string
   onResume?: () => void
 }) {
@@ -67,22 +73,44 @@ export function AmicodeStarterChips(props: {
       data-component="amicode-starter-chips"
       class="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2"
     >
-      <For each={AMICODE_STARTERS}>
-        {(starter) => (
-          <button
-            type="button"
-            data-slot="amicode-gs-starter"
-            class={pill}
-            onClick={() => props.onStart(starter.prompt)}
-          >
-            {starter.label}
-          </button>
+      <Show
+        when={props.chips}
+        fallback={
+          <>
+            <For each={AMICODE_STARTERS}>
+              {(starter) => (
+                <button
+                  type="button"
+                  data-slot="amicode-gs-starter"
+                  class={pill}
+                  onClick={() => props.onStart(starter.prompt)}
+                >
+                  {starter.label}
+                </button>
+              )}
+            </For>
+            <Show when={props.resumeName && props.onResume}>
+              <button type="button" data-slot="amicode-gs-resume" class={pill} onClick={() => props.onResume?.()}>
+                Resume {props.resumeName}
+              </button>
+            </Show>
+          </>
+        }
+      >
+        {(chips) => (
+          <For each={chips()}>
+            {(chip) => (
+              <button
+                type="button"
+                data-slot={chip.dataSlot ?? "amicode-gs-starter"}
+                class={pill}
+                onClick={() => props.onStart(chip.prompt)}
+              >
+                {chip.label}
+              </button>
+            )}
+          </For>
         )}
-      </For>
-      <Show when={props.resumeName && props.onResume}>
-        <button type="button" data-slot="amicode-gs-resume" class={pill} onClick={() => props.onResume?.()}>
-          Resume {props.resumeName}
-        </button>
       </Show>
     </div>
   )
