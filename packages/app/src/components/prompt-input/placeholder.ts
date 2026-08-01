@@ -13,3 +13,9 @@ export function promptPlaceholder(input: PromptPlaceholderInput) {
   if (!input.suggest) return input.t("prompt.placeholder.simple")
   return input.t("prompt.placeholder.normal", { example: input.example })
 }
+
+export function promptDesignPlaceholder(mode: PromptPlaceholderInput["mode"], placeholder: string) {
+  if (mode === "shell") return placeholder
+  // amicode: brand the composer prompt
+  return "Ask Amico anything, / for commands, @ for context..."
+}

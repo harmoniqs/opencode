@@ -9,7 +9,6 @@ import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
 import { webZoom } from "@/utils/web-zoom"
-import { handleNotificationClick } from "@/utils/notification-click"
 import { authFromToken } from "@/utils/server"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
@@ -57,7 +56,7 @@ const setStorage = (key: string, value: string | null) => {
 const readDefaultServerUrl = () => getStorage(DEFAULT_SERVER_URL_KEY)
 const writeDefaultServerUrl = (url: string | null) => setStorage(DEFAULT_SERVER_URL_KEY, url)
 
-const notify: Platform["notify"] = async (title, description, href) => {
+const notify: Platform["notify"] = async (title, description, onClick) => {
   if (!("Notification" in window)) return
 
   const permission =
@@ -76,21 +75,17 @@ const notify: Platform["notify"] = async (title, description, href) => {
   })
 
   notification.onclick = () => {
-    handleNotificationClick(href)
+    window.focus()
+    onClick?.()
     notification.close()
   }
 }
 
-const openLink: Platform["openLink"] = (url) => {
-  window.open(url, "_blank")
-}
-
-const back: Platform["back"] = () => {
-  window.history.back()
-}
-
-const forward: Platform["forward"] = () => {
-  window.history.forward()
+const openExternal: Platform["openExternal"] = (value) => {
+  if (!URL.canParse(value)) return
+  const url = new URL(value)
+  if (url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "mailto:") return
+  window.open(url.href, "_blank", "noopener,noreferrer")
 }
 
 const restart: Platform["restart"] = async () => {
@@ -163,9 +158,7 @@ const clearAuthToken = () => {
 const platform: Platform = {
   platform: "web",
   version: pkg.version,
-  openLink,
-  back,
-  forward,
+  openExternal,
   restart,
   notify,
   webviewZoom: webZoom,

@@ -2,7 +2,11 @@ import { For, Show, createSignal } from "solid-js"
 import { amicodeAskBridge } from "./ask-bridge"
 import { answeredOption, hasUserReplyAfter, type AskInput } from "./ask"
 import { AmicoMark } from "./spinner"
-import { useData } from "../context/data"
+// The session data context moved to packages/session-ui with the message-part
+// stack; the card renders inside its provider, so consume it from there.
+// (Package-direction irregularity, but module-level acyclic: data.tsx's only
+// ui import is the context helper, never the amicode tree.)
+import { useData } from "@opencode-ai/session-ui/context"
 
 // AMICODE: question card for amicode_ask tool parts — question text + one
 // button per option (with optional dim detail line under each label). Click

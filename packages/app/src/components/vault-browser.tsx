@@ -9,7 +9,7 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Markdown } from "@opencode-ai/ui/markdown"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
 import { amicodeGet } from "@/utils/amicode-fetch"
