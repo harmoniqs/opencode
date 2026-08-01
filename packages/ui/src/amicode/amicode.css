@@ -54,8 +54,8 @@
 
 /* ---- thinking line (Claude-Code-esque working indicator) ----------------- */
 /* Sits after the AMICO wordmark while a reply streams (thinking-line.tsx). The
- * gerund word cycles + shimmers; the meta line ticks elapsed (· tokens · esc).
- * Leading dot separates it from the wordmark. */
+ * gerund word cycles without shimmer — the wave glyph (amico-wave.tsx) will carry
+ * the motion once mounted (a later task); the meta line ticks elapsed (· tokens · esc). */
 .amc-thinking {
   display: inline-flex;
   align-items: baseline;
@@ -65,42 +65,10 @@
   letter-spacing: 0.01em;
   color: var(--v2-text-text-muted);
 }
-.amc-thinking::before {
-  content: "";
-  align-self: center;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--v2-border-border-base);
-  flex-shrink: 0;
-}
 .amc-thinking-word {
   font-weight: 600;
   white-space: nowrap;
   color: var(--v2-text-text-accent);
-}
-/* The shimmer: a bright band sweeps across otherwise-dimmed accent text.
- * Motion-gated — under reduced motion (or .is-still) the word is plain accent. */
-@media (prefers-reduced-motion: no-preference) {
-  .amc-thinking:not(.is-still) .amc-thinking-word {
-    color: transparent;
-    background-image: linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 0%,
-      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 38%,
-      var(--v2-text-text-accent) 50%,
-      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 62%,
-      color-mix(in srgb, var(--v2-text-text-accent) 42%, transparent) 100%
-    );
-    background-size: 220% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    animation: amc-text-shimmer 1.6s linear infinite;
-  }
-}
-@keyframes amc-text-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -20% 0; }
 }
 .amc-thinking-meta {
   display: inline-flex;
@@ -111,6 +79,91 @@
 }
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
+/* The glyph is a block, not text — baseline alignment would sit it high. */
+.amc-thinking .amc-wave { align-self: center; }
+
+/* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
+/* Expanding a skill used to dump its instructions as bare markdown straight into the
+ * transcript, because [data-component="tool-output"] carries no surface of its own — no
+ * border, no background, no padding. So an opened skill read as more conversation. It is a
+ * FILE, so it gets a file's surface: hairline, tint, padding, and a bounded height that
+ * scrolls rather than pushing the transcript around.
+ *
+ * Scoped to skills — every other tool's output keeps the plain treatment. The chip ABOVE this
+ * stays flush left with the other Amico chips; an earlier attempt indented the whole
+ * activation behind an accent spine and broke the shared left edge the chips read along.
+ *
+ * Compound selector, not a bare class: `[data-component="tool-output"]` is also (0,1,0), so a
+ * lone `.amc-skill-file` would tie on specificity and be decided by stylesheet order. */
+[data-component="tool-output"].amc-skill-file {
+  margin-top: 6px;
+  padding: 10px 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md);
+  background: var(--v2-background-bg-layer-01);
+  /* tool-output sets `white-space: pre` for raw command output; rendered markdown must wrap. */
+  white-space: normal;
+}
+
+/* ---- the harmonic working indicator (amico-wave.tsx) --------------------- */
+/* A standing wave in quadrature: two identical curves, the companion a quarter period out
+ * of phase, so one is at full swing whenever the other crosses zero.
+ *
+ * Every duration, delay and opacity here comes from wave-geometry.ts via a custom property
+ * set inline by the component — do NOT restate those numbers in this file. */
+.amc-wave {
+  display: block;
+  flex-shrink: 0;
+  /* The ink role, already resolved by the active theme: oc-2.json maps
+   * v2-icon-icon-accent to grey-800 on light and #FFF676 on dark. The brand lemon is a
+   * fill, never an ink (1.1:1 on white), and this token is what encodes that — no theme
+   * selector needed here. Same treatment as amico-presence.css. */
+  color: var(--v2-icon-icon-accent);
+}
+
+/* .amc-wave-ln / .amc-wave-mode are component-private — only amico-wave.tsx ever sets the
+ * custom properties these animation shorthands read. Both shorthands carry a var(), which
+ * makes the whole shorthand a pending-substitution value: if any referenced custom property
+ * is ever missing (e.g. someone hand-writes <svg class="amc-wave"> in a fixture without the
+ * component's inline style block), the ENTIRE shorthand goes invalid and silently falls back
+ * to no animation — a static glyph, no console warning. */
+.amc-wave-ln {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: amc-wave-stand var(--amc-wave-period) var(--amc-wave-ease) infinite;
+}
+.amc-wave-ln[data-role="companion"] {
+  opacity: var(--amc-wave-comp-op);
+  animation-delay: var(--amc-wave-quad);
+}
+@keyframes amc-wave-stand {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(-1); }
+}
+
+.amc-wave-mode {
+  animation: amc-wave-mode var(--amc-wave-cadence) steps(1) infinite;
+}
+/* THE ONE UNAVOIDABLE DUPLICATION. 33.3333% is MODE_VISIBLE_PCT from wave-geometry.ts, and it
+ * cannot be a var(): @keyframes selectors are not a property-value context, so custom
+ * properties are invalid there. Writing 33% instead would leave a ~23ms window each cadence
+ * with NO mode visible — a per-cycle flicker. A test in wave-geometry.test.ts reads this file
+ * and asserts this literal still matches the constant, so the two cannot drift. */
+@keyframes amc-wave-mode {
+  0%, 33.3333%   { opacity: 1; }
+  33.3334%, 100% { opacity: 0; }
+}
+
+/* Static mode-1 curve, companion hidden. The elapsed counter in the thinking line keeps
+ * ticking — it is information, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .amc-wave-ln,
+  .amc-wave-mode { animation: none !important; }
+  .amc-wave-ln[data-role="companion"] { opacity: 0 !important; }
+  .amc-wave-mode:not(:first-child) { opacity: 0 !important; }
+}
 
 /* ============================================================
    THE CHIP — [data-component="amicode-card"]
@@ -193,6 +246,12 @@
 }
 [data-component="amicode-card"][data-state="error"] .amc-detail {
   color: var(--v2-state-fg-danger);
+}
+/* a collapsed run's count (receipt-runs.ts) — short and always-visible, so it
+   never loses the ellipsis race against a long diff value beside it */
+[data-component="amicode-card"] .amc-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* structured diff pieces */

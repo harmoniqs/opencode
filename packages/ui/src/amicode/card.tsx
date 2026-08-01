@@ -2,7 +2,7 @@ import { For, Match, Show, Switch, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
-import { parseDiffSentinel, receiptParts } from "./receipt"
+import { parseDiffSentinel, receiptParts, INLINE_KINDS } from "./receipt"
 import { receiptIsCurrent } from "./receipt-currency"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
 import { compositeChip, chipText } from "./problem"
@@ -55,7 +55,7 @@ function runRefFromOutput(output: unknown): { run: string; lab?: string } | unde
 
 type DiffPiece = { key: string; from?: string; to?: string }
 
-function Chip(props: { tool: string; status?: string; output?: string }) {
+function Chip(props: { tool: string; status?: string; output?: string; count?: number }) {
   const stage = createMemo(() => amicodeStage(props.tool))
   const running = () => props.status === "pending" || props.status === "running"
   const errored = () => props.status === "error" || props.status === "failed"
@@ -179,6 +179,15 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
               )}
             </Show>
           </Show>
+          {/* amicode: a run of N consecutive receipts sharing (problem, entity,
+              action) collapses to this one card (../components/message-part.tsx,
+              ../amicode/receipt-runs.ts) — shown only when N > 1 so a lone
+              receipt renders exactly as it always has. */}
+          <Show when={(props.count ?? 1) > 1}>
+            <span class="amc-detail amc-count" data-slot="amicode-card-count">
+              ×{props.count}
+            </span>
+          </Show>
         </span>
       )}
     </Show>
@@ -239,6 +248,63 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
   )
 }
 
+// AMICODE: a skill activation, wearing the Amico chip. Amicode's skills ARE Amico's — its
+// repertoire — so activating one is Amico acting, and it earns the same chip the domain
+// receipts wear. Reads "<kind> <specific>" like every other chip: the label names the kind,
+// the detail names the skill.
+//
+// Inert by construction. Unlike a receipt there is no entity to open, so this is the plain
+// shell with no chevron rather than the clickable <button> one. The expandable instruction
+// body stays with BasicTool at the mount site; this is only the trigger's face. Nesting it
+// there is safe because BasicTool declares an `icon` prop and never renders it (verified —
+// nothing in basic-tool.tsx reads props.icon), so the H-mark is the row's only glyph.
+//
+// A <span> shell rather than Chip's <div>: this sits inside a trigger's inline context, and
+// [data-component="amicode-card"] is already display:inline-flex, so nothing is lost.
+export function AmicoSkillChip(props: { kind: string; name?: string; status?: string }) {
+  const running = () => props.status === "pending" || props.status === "running"
+  const errored = () => props.status === "error" || props.status === "failed"
+  const state = () =>
+    errored() ? "error" : running() ? "running" : props.status === "completed" ? "done" : "idle"
+
+  return (
+    <span data-component="amicode-card" data-tool="skill" data-state={state()} data-clickable="false">
+      <span class="amc-sig">
+        <AmicoMark running={running()} />
+      </span>
+      <span class="amc-rule" aria-hidden="true" />
+      <span class="amc-body">
+        <span class="amc-label" data-slot="amicode-skill-kind">
+          {props.kind}
+        </span>
+        <Show when={props.name}>
+          <span class="amc-detail" data-slot="amicode-skill-name">
+            {props.name}
+          </span>
+        </Show>
+      </span>
+      <span class="amc-trail">
+        <Switch>
+          <Match when={state() === "done"}>
+            <svg class="amc-tick" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M3.5 8.5l3 3 6-6.5"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </Match>
+          <Match when={state() === "running"}>
+            <span class="amc-livedot" aria-hidden="true" />
+          </Match>
+        </Switch>
+      </span>
+    </span>
+  )
+}
+
 // In-transcript entity view (Kate 2026-07-24): the receipt renders the full
 // verdict-first entity view inline — no click, no modal. Data comes from the
 // rail via the ui bridge (undefined until the rail mounts, exactly like the run
@@ -253,8 +319,6 @@ function Chip(props: { tool: string; status?: string; output?: string }) {
 // switching problems mid-chat retroactively rewrote earlier receipts. Only the
 // CURRENT receipt for the ACTIVE problem may render live (./receipt-currency.ts);
 // the rest fall through to the Chip, which renders from their own captured diff.
-const INLINE_KINDS = new Set(["system", "formulation", "run", "device_session", "calibration"])
-
 function InlineEntityView(props: { kind: string; seq?: number }) {
   const labels = createMemo(() => amicodeEntityLabels())
   return (
@@ -280,6 +344,14 @@ export function AmicodeToolCard(props: {
   output?: string // passed by message-part.tsx's Dynamic (already wired)
   messageID?: string
   sessionID?: string
+  // amicode: set by message-part.tsx when this part is the surviving (latest)
+  // member of a collapsed run of ≥2 identical (problem, entity, action)
+  // receipts (../receipt-runs.ts). Only the Chip fallback below reads it —
+  // every collapse-eligible receipt renders through Chip by construction
+  // (receipt-runs.ts excludes anything that could route elsewhere), so a
+  // count reaching ask/approval/run/widget/inline-entity render is not
+  // expected; those paths simply ignore the prop.
+  count?: number
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
@@ -309,7 +381,7 @@ export function AmicodeToolCard(props: {
   })
 
   return (
-    <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} />}>
+    <Switch fallback={<Chip tool={props.tool} status={props.status} output={props.output} count={props.count} />}>
       <Match when={ask()}>
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>

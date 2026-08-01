@@ -41,7 +41,7 @@ import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { type UiI18n, useI18n } from "@opencode-ai/ui/context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
-import { AmicodeToolCard } from "@opencode-ai/ui/amicode-card"
+import { AmicodeToolCard, AmicoSkillChip } from "@opencode-ai/ui/amicode-card"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
@@ -223,6 +223,11 @@ export interface MessagePartProps {
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
   useV2Actions?: boolean
+  // amicode: set when this part is the surviving (latest) member of a
+  // collapsed run of ≥2 identical (problem, entity, action) receipts
+  // (./message-part-groups's PartGroup + ../amicode/receipt-runs.ts). Only
+  // AmicodeToolCard reads it; every other part type ignores it.
+  count?: number
 }
 
 function MessageActionButton(
@@ -581,7 +586,9 @@ export function getToolInfo(
     case "skill":
       return {
         icon: "brain",
-        title: input.name || i18n.t("ui.tool.skill"),
+        // AMICODE: name the kind here too. This is the compact/summary path, where the
+        // fallback-only use of ui.tool.skill left an activated skill looking like a bare tool.
+        title: input.name ? `${i18n.t("ui.tool.skill")} · ${input.name}` : i18n.t("ui.tool.skill"),
       }
     default:
       return {
@@ -648,10 +655,68 @@ export {
   type PartGroup,
   type PartRef,
 } from "./message-part-groups"
-import { groupParts, sameGroups, isContextGroupTool, isShellGroupTool, type PartGroup } from "./message-part-groups"
+import {
+  groupParts,
+  sameGroups,
+  isContextGroupTool,
+  isShellGroupTool,
+  type PartGroup,
+  type PartRef,
+} from "./message-part-groups"
+import { parseDiffSentinel } from "@opencode-ai/ui/amicode-receipt"
+import {
+  collapseReceiptRuns,
+  receiptRunKey,
+  type ReceiptCandidate,
+  type ReceiptKey,
+} from "@opencode-ai/ui/amicode-receipt-runs"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
+}
+
+// amicode: does this resolved part carry a mergeable receipt key? Only
+// completed amicode_* tool calls whose AMICODE_DIFF sentinel parses (and
+// whose entity isn't inline-view-eligible — see receipt-runs.ts) are
+// candidates; everything else (still running, errored, not amicode_*, no/
+// unparseable sentinel) gets `key: undefined` and can never merge.
+function amicodeReceiptCandidateKey(part: PartType | undefined): { key?: ReceiptKey; seq?: number } {
+  if (!part || part.type !== "tool" || !part.tool.startsWith("amicode_")) return {}
+  if (part.state.status !== "completed") return {}
+  const sentinel = parseDiffSentinel(part.state.output)
+  return { key: receiptRunKey(sentinel), seq: sentinel?.seq }
+}
+
+function sameAmicodeCounts(a: Map<string, number>, b: Map<string, number>) {
+  if (a === b) return true
+  if (a.size !== b.size) return false
+  for (const [k, v] of a) if (b.get(k) !== v) return false
+  return true
+}
+
+// amicode: second pass over groupParts's output that collapses consecutive
+// "part" entries which are amicode_* receipts sharing (problem, entity,
+// action) into one — the fix for "these repeated amico cards add a lot of
+// clutter" (four amicode_* calls updating the same entity rendering four
+// identical cards). context/shell groups and any part that isn't a
+// collapse-eligible receipt pass through unchanged; see ../amicode/
+// receipt-runs.ts for the (conservative, tested) matching rules.
+function collapseAmicodeGroups(
+  groups: readonly PartGroup[],
+  resolvePart: (ref: PartRef) => PartType | undefined,
+): { groups: PartGroup[]; counts: Map<string, number> } {
+  const candidates: ReceiptCandidate<PartGroup>[] = groups.map((group) => {
+    if (group.type !== "part") return { ref: group }
+    const { key, seq } = amicodeReceiptCandidateKey(resolvePart(group.ref))
+    return { ref: group, key, seq }
+  })
+  const runs = collapseReceiptRuns(candidates)
+  const counts = new Map<string, number>()
+  const survivors = runs.map((run) => {
+    if (run.count > 1) counts.set(run.latestRef.key, run.count)
+    return run.latestRef
+  })
+  return { groups: survivors, counts }
 }
 
 export function renderable(part: PartType, showReasoningSummaries = true) {
@@ -714,6 +779,18 @@ export function AssistantParts(props: {
 
   const last = createMemo(() => grouped().at(-1)?.key)
 
+  // amicode: collapse runs of consecutive amicode_* receipts sharing (problem,
+  // entity, action) into one card + count (../amicode/receipt-runs.ts). Drives
+  // the render list below; `last()` above stays keyed off the UNCOLLAPSED
+  // groups so the busy/streaming indicator keeps comparing against the raw
+  // most-recent group (its key survives collapsing whenever it's genuinely the
+  // latest receipt, which is the only case that indicator cares about).
+  const collapsed = createMemo(
+    () => collapseAmicodeGroups(grouped(), (ref) => part().get(ref.messageID)?.get(ref.partID)),
+    { groups: [] as PartGroup[], counts: new Map<string, number>() },
+    { equals: (a, b) => sameGroups(a.groups, b.groups) && sameAmicodeCounts(a.counts, b.counts) },
+  )
+
   // amicode: tokens generated so far this turn (output + reasoning across the
   // turn's assistant messages) — feeds the thinking line's live token chip.
   // Reactive: re-runs as the store updates message.tokens.* while streaming.
@@ -740,7 +817,7 @@ export function AssistantParts(props: {
           in-domain turn, Amico's working presence rides in an offset accent
           lane BELOW the streamed parts (see the lane after </Index>).
           spec-20260712-amico-third-actor. */}
-      <Index each={grouped()}>
+      <Index each={collapsed().groups}>
         {(entryAccessor) => {
           const entryType = createMemo(() => entryAccessor().type)
 
@@ -802,6 +879,9 @@ export function AssistantParts(props: {
                     if (entry.type !== "part") return
                     return part().get(entry.ref.messageID)?.get(entry.ref.partID)
                   })
+                  // amicode: >1 when this part survived a receipt-run collapse
+                  // (../amicode/receipt-runs.ts); undefined for every other part.
+                  const count = createMemo(() => collapsed().counts.get(entryAccessor().key))
 
                   return (
                     <Show when={message()}>
@@ -813,6 +893,7 @@ export function AssistantParts(props: {
                           turnDurationMs={props.turnDurationMs}
                           useV2Actions={props.useV2Actions}
                           defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                          count={count()}
                         />
                       </Show>
                     </Show>
@@ -831,7 +912,9 @@ export function AssistantParts(props: {
       <Show when={inDomainTurn() && props.working && last() === grouped().at(-1)?.key}>
         <div class="amc-lane" data-slot="amico-working">
           <span class="amc-lane-head">
-            <AmicoMark running />
+            {/* static: AmicoWave in the thinking line carries the motion now — two
+                animated brand marks side by side compete with each other */}
+            <AmicoMark />
           </span>
           <ThinkingLine tokens={turnTokenCount() || undefined} />
         </div>
@@ -1004,8 +1087,16 @@ export function AssistantMessageDisplay(props: {
     { equals: sameGroups },
   )
 
+  // amicode: same receipt-run collapse as AssistantParts, above — see
+  // ../amicode/receipt-runs.ts.
+  const collapsed = createMemo(
+    () => collapseAmicodeGroups(grouped(), (ref) => part().get(ref.partID)),
+    { groups: [] as PartGroup[], counts: new Map<string, number>() },
+    { equals: (a, b) => sameGroups(a.groups, b.groups) && sameAmicodeCounts(a.counts, b.counts) },
+  )
+
   return (
-    <Index each={grouped()}>
+    <Index each={collapsed().groups}>
       {(entryAccessor) => {
         const entryType = createMemo(() => entryAccessor().type)
 
@@ -1060,6 +1151,7 @@ export function AssistantMessageDisplay(props: {
                   if (entry.type !== "part") return
                   return part().get(entry.ref.partID)
                 })
+                const count = createMemo(() => collapsed().counts.get(entryAccessor().key))
 
                 return (
                   <Show when={item()}>
@@ -1068,6 +1160,7 @@ export function AssistantMessageDisplay(props: {
                       message={props.message}
                       showAssistantCopyPartID={props.showAssistantCopyPartID}
                       useV2Actions={props.useV2Actions}
+                      count={count()}
                     />
                   </Show>
                 )
@@ -1585,6 +1678,7 @@ export function Part(props: MessagePartProps) {
         showAssistantCopyPartID={props.showAssistantCopyPartID}
         turnDurationMs={props.turnDurationMs}
         useV2Actions={props.useV2Actions}
+        count={props.count}
       />
     </Show>
   )
@@ -1770,6 +1864,9 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               deferContent={props.deferToolContent}
               virtualizeDiff={props.virtualizeDiff}
               onContentRendered={props.onContentRendered}
+              // amicode: collapsed-run count (../amicode/receipt-runs.ts); only
+              // AmicodeToolCard reads this, every other tool component ignores it
+              count={props.count}
             />
           </Match>
         </Switch>
@@ -2773,18 +2870,17 @@ ToolRegistry.register({
   name: "skill",
   render(props) {
     const i18n = useI18n()
-    const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
-    const running = createMemo(() => props.status === "pending" || props.status === "running")
+    // AMICODE: label the kind, then name it. `ui.tool.skill` used to be reachable only as a
+    // fallback for a missing input.name — which never happens — so an activated skill rendered
+    // as a bare word ("brainstorming") indistinguishable from any other tool. The kind now
+    // always renders, with the skill's own name beside it.
+    const name = createMemo(() => props.input.name?.trim() || "")
     const body = createMemo(() => skillBody(props.output))
-
-    const titleContent = () => <TextShimmer text={title()} active={running()} />
 
     const trigger = () => (
       <div data-slot="basic-tool-tool-info-structured">
         <div data-slot="basic-tool-tool-info-main">
-          <span data-slot="basic-tool-tool-title" class="capitalize agent-title">
-            {titleContent()}
-          </span>
+          <AmicoSkillChip kind={i18n.t("ui.tool.skill")} name={name()} status={props.status} />
         </div>
       </div>
     )
@@ -2792,7 +2888,11 @@ ToolRegistry.register({
     return (
       <BasicTool icon="brain" status={props.status} trigger={trigger()}>
         <Show when={body()}>
-          <div data-component="tool-output" data-scrollable>
+          {/* AMICODE: an opened skill is a FILE, not more conversation. tool-output carries no
+              surface of its own, so the instructions flowed as bare prose; amc-skill-file gives
+              them a bounded, tinted panel. The chip above stays flush with the other Amico chips
+              — shared left alignment is the transcript's spine, and indenting the row broke it. */}
+          <div class="amc-skill-file" data-component="tool-output" data-scrollable>
             <Markdown text={body()} />
           </div>
         </Show>

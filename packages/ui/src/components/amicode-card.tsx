@@ -2,4 +2,4 @@
 // tool card through the existing `"./*": "./src/components/*.tsx"` export
 // wildcard without touching packages/ui/package.json. Logic lives in
 // ../amicode/card.tsx.
-export { AmicodeToolCard } from "../amicode/card"
+export { AmicodeToolCard, AmicoSkillChip } from "../amicode/card"
