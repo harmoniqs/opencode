@@ -1164,7 +1164,7 @@ const layer = Layer.effect(
               lastAssistantMsg?.parts.some(
                 (part) => part.type === "reasoning" && typeof (part as SessionV1.ReasoningPart).text === "string" && (part as SessionV1.ReasoningPart).text.trim() !== "",
               ) ?? false
-            if (!producedOutput && reasonedSilently && !lastAssistantMsg?.info.error && silentTurns < SILENT_TURN_LIMIT) {
+            if (!producedOutput && reasonedSilently && !lastAssistant?.error && silentTurns < SILENT_TURN_LIMIT) {
               silentTurns++
               yield* Effect.logWarning("silent assistant turn — re-invoking instead of ending the turn", {
                 "session.id": sessionID,
