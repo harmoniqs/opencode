@@ -49,6 +49,8 @@ import { GlobalProvider, useGlobal } from "@/context/global"
 import { HighlightsProvider } from "@/context/highlights"
 import { LanguageProvider, type Locale, useLanguage } from "@/context/language"
 import { LayoutProvider } from "@/context/layout"
+import { SplitProvider } from "@/context/split"
+import { WorkbenchProvider } from "@/context/workbench"
 import { ModelsProvider } from "@/context/models"
 import { NotificationProvider } from "@/context/notification"
 import { PermissionProvider } from "@/context/permission"
@@ -313,7 +315,15 @@ function SharedProviders(props: ParentProps) {
       <BodyDesignClass />
       <CommandProvider>
         <DesktopCommands />
-        <HighlightsProvider>{props.children}</HighlightsProvider>
+        <HighlightsProvider>
+          {/* amicode(split): the in-app pane state wraps the shell — the
+              titlebar (drag sources) and the layout (drop zones) both
+              consume it. amicode(workbench S2): the parent's tab mirror
+              sits above it — drops resolve against the mirror. */}
+          <WorkbenchProvider>
+            <SplitProvider>{props.children}</SplitProvider>
+          </WorkbenchProvider>
+        </HighlightsProvider>
       </CommandProvider>
     </>
   )

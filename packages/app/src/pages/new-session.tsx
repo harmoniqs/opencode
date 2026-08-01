@@ -1,7 +1,8 @@
 import { createPromptProjectController } from "@/components/prompt-project-selector"
 import { useTitlebarRightMount } from "@/components/titlebar"
 import { useSettings } from "@/context/settings"
-import { createEffect, createMemo, createResource } from "solid-js"
+import { createEffect, createMemo, createResource, onMount } from "solid-js"
+import { useLocation } from "@solidjs/router"
 import { createNewSessionDraftController } from "./new-session/new-session-draft-controller"
 import { NewSessionStatus, NewSessionView } from "./new-session/new-session-view"
 import { createNewSessionWorkspaceController } from "./new-session/new-session-workspace-controller"
@@ -9,6 +10,7 @@ import { useNewSessionCommands } from "./new-session/use-new-session-commands"
 import { usePrompt } from "@/context/prompt"
 import { useServer } from "@/context/server"
 import { startPrompt as startPromptWith } from "@/utils/start-prompt"
+import { postRouteInfo } from "@/utils/amicode-route-info"
 import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { AmicodeStarterChips, AMICODE_STARTERS, type StarterChip } from "@opencode-ai/ui/amicode-getting-started"
@@ -34,6 +36,7 @@ export default function NewSessionPage() {
       open: () => project.setOpen(true),
     },
   })
+  const location = useLocation()
 
   // amicode: register the Amico ops commands here too — the draft page has no
   // palette, so restart/update-memory are reachable via their direct keybinds.
@@ -113,6 +116,12 @@ export default function NewSessionPage() {
   createEffect(() => {
     if (!draft.prompt.ready()) return
     draft.input.restoreFocus()
+  })
+
+  onMount(() => {
+    // amicode(deck): label the framing pane tab; the draftId rides the search
+    // so the shell can rebuild this pane with its draft text intact.
+    postRouteInfo(`${location.pathname}${location.search}`, "New session")
   })
   const ready = Promise.resolve()
   const [suspendUntilPromptReady] = createResource(

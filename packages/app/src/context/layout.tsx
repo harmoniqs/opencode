@@ -273,7 +273,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       { ...target, migrate },
       createStore({
         sidebar: {
-          opened: false,
+          // amicode(workbench): default open — the sessions panel is the
+          // workbench's left rail (S1). A user hide persists as before; anyone
+          // with a persisted false keeps it until one toggle.
+          opened: true,
           width: DEFAULT_SIDEBAR_WIDTH,
           workspaces: {} as Record<string, boolean>,
           workspacesDefault: false,

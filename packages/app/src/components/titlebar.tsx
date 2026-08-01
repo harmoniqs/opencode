@@ -30,6 +30,9 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { projectForSession } from "@/pages/layout/helpers"
+import { useSplit } from "@/context/split"
+import { IS_AMICODE_PANE } from "@/utils/amicode-pane"
+import { reportTabDrag } from "@/components/pane-bridge"
 import { Mark } from "@opencode-ai/ui/logo"
 import { ContextMenu } from "@opencode-ai/ui/context-menu"
 import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
@@ -401,6 +404,20 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     aria-pressed={layout.route().type === "home"}
                   />
                 </TooltipV2>
+                {/* amicode(workbench S1): the sessions-panel toggle, v2 titlebar
+                    edition — the legacy grid-branch button never rendered here,
+                    so the panel had no affordance (S1.4 probe). */}
+                <IconButtonV2
+                  type="button"
+                  variant="ghost-muted"
+                  size="large"
+                  class="!w-9 shrink-0"
+                  icon={<IconV2 name="sidebar-right" />}
+                  state={layout.sidebar.opened() ? "pressed" : undefined}
+                  onClick={() => layout.sidebar.toggle()}
+                  aria-label={language.t("command.sidebar.toggle")}
+                  aria-expanded={layout.sidebar.opened()}
+                />
 
                 <div
                   class="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto no-scrollbar [app-region:no-drag]"
@@ -768,6 +785,26 @@ function TabNavItem(props: {
     event.stopPropagation()
     props.onClose()
   }
+  // amicode(split): the tab IS the drag handle — top-document drags feed the
+  // split context; pane strips report theirs to the parent over the workbench
+  // bridge instead (the parent owns drop resolution across frames).
+  const split = useSplit()
+  let rootEl: HTMLDivElement | undefined
+  onMount(() => {
+    const el = rootEl
+    if (!el || (!split.enabled && !IS_AMICODE_PANE)) return
+    el.draggable = true
+    el.addEventListener("dragstart", (e) => {
+      const ev = e as DragEvent
+      ev.dataTransfer?.setData("text/plain", props.href)
+      if (IS_AMICODE_PANE) reportTabDrag(props.href)
+      else split.beginTabDrag(props.href)
+    })
+    el.addEventListener("dragend", () => {
+      if (IS_AMICODE_PANE) reportTabDrag(undefined)
+      else split.endDrag()
+    })
+  })
   const global = useGlobal()
   const serverCtx = createMemo(() => {
     const conn = global.servers.list().find((item) => ServerConnection.key(item) === props.server)
@@ -793,7 +830,11 @@ function TabNavItem(props: {
     <ContextMenu modal={false}>
       <ContextMenu.Trigger
         as="div"
-        ref={props.ref}
+        ref={(el: HTMLDivElement) => {
+          rootEl = el
+          const r = props.ref as unknown
+          if (typeof r === "function") (r as (v: HTMLDivElement) => void)(el)
+        }}
         class="group relative flex h-7 min-w-24 max-w-60 flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-md bg-[var(--tab-bg)] px-1.5 [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-background-bg-layer-02)]"
         data-active={props.active}
         onMouseDown={(event: MouseEvent) => {
@@ -823,7 +864,10 @@ function TabNavItem(props: {
                   activeServer={props.activeServer}
                 />
               </span>
-              <span class="min-w-0 flex-1">{session().title}</span>
+              {/* truncate = overflow hidden + ellipsis + nowrap: the label
+                  ellipsizes at pane widths instead of hard-clipping mid-glyph
+                  (workbench FM4 / S1.3). */}
+              <span class="min-w-0 flex-1 truncate">{session().title}</span>
             </a>
           )
         }}
@@ -913,9 +957,33 @@ function DraftTabItem(props: {
     event.stopPropagation()
     props.onClose()
   }
+  // amicode(split): drafts split too — the draftId rides the href, so the
+  // pane rebuilds with its draft text intact. Pane strips report over the
+  // workbench bridge (the parent resolves the drop).
+  const split = useSplit()
+  let rootEl: HTMLDivElement | undefined
+  onMount(() => {
+    const el = rootEl
+    if (!el || (!split.enabled && !IS_AMICODE_PANE)) return
+    el.draggable = true
+    el.addEventListener("dragstart", (e) => {
+      const ev = e as DragEvent
+      ev.dataTransfer?.setData("text/plain", props.href)
+      if (IS_AMICODE_PANE) reportTabDrag(props.href)
+      else split.beginTabDrag(props.href)
+    })
+    el.addEventListener("dragend", () => {
+      if (IS_AMICODE_PANE) reportTabDrag(undefined)
+      else split.endDrag()
+    })
+  })
   return (
     <div
-      ref={props.ref}
+      ref={(el: HTMLDivElement) => {
+        rootEl = el
+        const r = props.ref as unknown
+        if (typeof r === "function") (r as (v: HTMLDivElement) => void)(el)
+      }}
       data-active={props.active}
       class="group relative shrink-0 flex h-7 max-w-60 flex-row items-center gap-1.5 overflow-hidden rounded-[6px] bg-[var(--tab-bg)] pl-1.5 pr-8 whitespace-nowrap [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-overlay-simple-overlay-pressed)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--v2-border-border-focus)]"
       onMouseDown={(event) => {

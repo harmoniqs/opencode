@@ -1,5 +1,7 @@
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
+import { AMICODE_PANE_ID } from "@/utils/amicode-pane"
+import { base64Decode } from "@opencode-ai/core/util/encode"
 import { createStore, produce } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/utils/persist"
 import { ServerConnection, useServer } from "./server"
@@ -56,10 +58,20 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
   init: () => {
     const server = useServer()
     const platform = usePlatform()
+    /** amicode(workbench): TabsProvider sits ABOVE the SDK/Sync providers, so
+     *  a draft's project directory comes from the route or the server
+     *  context — never from useSDK (there is no provider above us). */
+    const draftDirectory = () => {
+      if (params.dir) return base64Decode(params.dir) ?? ""
+      return server.projects.list()[0]?.worktree ?? ""
+    }
     const fallback = server.key
     const [store, setStore, _, ready] = persisted(
       {
-        ...Persist.window("tabs"),
+        // amicode(split): a pane's tab list is namespaced by its pane id —
+        // persisted stores don't live-sync across documents, so a shared key
+        // would make the two strips fight last-writer-wins.
+        ...Persist.window(AMICODE_PANE_ID ? `tabs:${AMICODE_PANE_ID}` : "tabs"),
         migrate: (value: unknown) => migrateTabs(value, fallback),
       },
       createStore<Tab[]>([]),
@@ -215,6 +227,57 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
             tabs.splice(0, tabs.length, ...next)
           }),
         )
+      },
+      /** amicode(workbench): open a tab by its ROUTE path (session or draft),
+       *  no-op if already open — the bridge command for cross-pane moves.
+       *  Navigates only when `activate` is set. Returns true when the tab is
+       *  present afterwards (the ack the parent waits on). */
+      openPath: (path: string, opts?: { activate?: boolean }): boolean => {
+        const session = /^\/([^/]+)\/session\/([^/?]+)/.exec(path)
+        if (session) {
+          // session tabs are server-scoped (no dirBase64 field post-merge) —
+          // the route's dir segment is parsed but not stored.
+          const [, , sessionId] = session
+          actions.addSessionTab({ server: server.key, sessionId })
+          if (opts?.activate) navigate(path)
+          return true
+        }
+        const draft = /^\/new-session\?draftId=([^&]+)/.exec(path)
+        if (draft) {
+          const draftID = draft[1]
+          setStore(
+            produce((tabs) => {
+              if (tabs.some((item) => item.type === "draft" && item.draftID === draftID)) return
+              tabs.push({ type: "draft", draftID, server: server.key, directory: draftDirectory() })
+            }),
+          )
+          if (opts?.activate) navigate(path)
+          return true
+        }
+        return false
+      },
+      /** amicode(workbench): close a tab by its route path. Re-navigates ONLY
+       *  when the closed tab was the active one — a move's close step must
+       *  never yank the user's current view. */
+      closePath: (path: string): void => {
+        const index = store.findIndex((tab) => tabHref(tab) === path || (tab.type === "draft" && draftHref(tab.draftID) === path))
+        if (index === -1) return
+        const tab = store[index]
+        const wasActive = currentTabIndex() === index
+        const draftID = tab.type === "draft" ? tab.draftID : undefined
+        closing.add(tabKey(tab))
+        setStore(
+          produce((tabs) => {
+            tabs.splice(index, 1)
+          }),
+        )
+        if (draftID) removeDraftPersisted(draftID)
+        if (wasActive) {
+          const next = store[index] ?? store[index - 1]
+          if (next) navigateTab(next)
+          else navigate("/")
+        }
+        closing.delete(tabKey(tab))
       },
       draft(draftID: string) {
         const tab = store.find((item) => item.type === "draft" && item.draftID === draftID)

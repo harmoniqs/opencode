@@ -56,6 +56,8 @@ import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis, getDraggableId } from "@/utils/solid-dnd"
 import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
+import { SplitFrame } from "@/components/split-frame"
+import { WorkbenchBridge } from "@/components/pane-bridge"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { ServerConnection, useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
@@ -2228,14 +2230,21 @@ export default function LegacyLayout(props: ParentProps) {
         fallback={
         <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
           {autoselecting() ?? ""}
-          <Titlebar update={titlebarUpdate} />
+          {/* amicode(split): the titlebar rides INSIDE the SplitFrame's main
+              column — full width when unsplit, confined to the main side when
+              split, so both sides' content baselines align. */}
           <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
             <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
-              {props.children}
+              {/* amicode(split): edge-rail drop zones + the right pane live
+                  here, wrapping the routed content on every page. */}
+              <SplitFrame titlebar={<Titlebar update={titlebarUpdate} />}>{props.children}</SplitFrame>
             </Show>
           </main>
           <VaultPanel />
           <ToastRegion v2={newDesign()} />
+          {/* amicode(workbench S2): every instance reports its tab list to the
+              parent's mirror and (panes) obeys its commands. */}
+          <WorkbenchBridge />
         </div>
       }
     >
