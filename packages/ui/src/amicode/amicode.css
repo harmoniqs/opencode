@@ -1450,6 +1450,7 @@
 [data-color-scheme="dark"] [data-slot="amicode-beta-tag"] {
   color: var(--amber-dark-11);
   background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    APPROVAL CARD — [data-component="amicode-approval-card"] (approval-card.tsx)
