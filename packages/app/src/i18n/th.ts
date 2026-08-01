@@ -1013,6 +1013,8 @@ export const dict = {
 
   "app.server.unreachable": "ไม่สามารถติดต่อ {{server}}",
   "app.server.retrying": "กำลังลองใหม่โดยอัตโนมัติ...",
+  "app.server.connectionLost": "Server connection dropped — reconnecting…",
+  "app.server.reconnected": "Server reconnected",
   "app.server.otherServers": "เซิร์ฟเวอร์อื่น ๆ",
   "dialog.server.add.usernamePlaceholder": "ชื่อผู้ใช้",
   "dialog.server.add.passwordPlaceholder": "รหัสผ่าน",
