@@ -67,6 +67,7 @@ import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
+import { postRouteInfo } from "@/utils/amicode-route-info"
 import { same } from "@/utils/same"
 import { formatServerError } from "@/utils/server-errors"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
@@ -311,6 +312,14 @@ export default function Page() {
 
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const isChildSession = createMemo(() => !!info()?.parentID)
+
+  // amicode(deck): report the live route + session title to a framing host —
+  // path immediately (so a dragged pane rebuilds HERE), title once the session
+  // record lands (its async summarize may follow it in).
+  createEffect(() => {
+    if (!params.id) return
+    postRouteInfo(`${location.pathname}${location.search}`, info()?.title)
+  })
   const diffs = createMemo(() => (params.id ? list(sync.data.session_diff[params.id]) : []))
   const canReview = createMemo(() => !!sync.project)
   const reviewTab = createMemo(() => isDesktop())

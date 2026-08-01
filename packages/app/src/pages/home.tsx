@@ -26,7 +26,8 @@ import { useTabs } from "@/context/tabs"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { useLayout, type LocalProject } from "@/context/layout"
-import { useNavigate } from "@solidjs/router"
+import { useLocation, useNavigate } from "@solidjs/router"
+import { postRouteInfo } from "@/utils/amicode-route-info"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
@@ -189,11 +190,15 @@ function HomeDesign() {
   const pickDirectory = useDirectoryPicker()
   const dialog = useDialog()
   const navigate = useNavigate()
+  const location = useLocation()
   const server = useServer()
   const language = useLanguage()
   const global = useGlobal()
   const command = useCommand()
   const notification = useNotification()
+
+  // amicode(deck): label the framing pane tab when the dashboard is home.
+  onMount(() => postRouteInfo(`${location.pathname}${location.search}`, "Home"))
 
   // amicode#200: the defaults capsule owns the Company Compute connection —
   // an always-warm connections instance so the HP dot is truthful from mount

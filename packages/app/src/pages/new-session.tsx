@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, onMount, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useSearchParams } from "@solidjs/router"
+import { useLocation, useSearchParams } from "@solidjs/router"
 import { NewSessionDesignView } from "@/components/session"
 import { useComments } from "@/context/comments"
 import { usePrompt } from "@/context/prompt"
@@ -8,6 +8,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { useServer } from "@/context/server"
 import { startPrompt as startPromptWith } from "@/utils/start-prompt"
+import { postRouteInfo } from "@/utils/amicode-route-info"
 import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { AmicodeStarterChips } from "@opencode-ai/ui/amicode-getting-started"
@@ -26,6 +27,7 @@ export default function NewSessionPage() {
   const server = useServer()
   const comments = useComments()
   const [searchParams, setSearchParams] = useSearchParams<{ prompt?: string }>()
+  const location = useLocation()
 
   let inputRef: HTMLDivElement | undefined
 
@@ -74,6 +76,9 @@ export default function NewSessionPage() {
 
   onMount(() => {
     requestAnimationFrame(() => inputRef?.focus())
+    // amicode(deck): label the framing pane tab; the draftId rides the search
+    // so the shell can rebuild this pane with its draft text intact.
+    postRouteInfo(`${location.pathname}${location.search}`, "New session")
   })
 
   return (
