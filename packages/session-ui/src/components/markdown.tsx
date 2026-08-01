@@ -325,6 +325,31 @@ function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
   }
 }
 
+// Chat link clicks: inside the amicode webview the chat iframe is sandboxed and
+// cross-origin, so anchor default behavior (target=_blank) is dead. Route every
+// external-link click over the iframe→parent bridge instead: https/mailto →
+// open-external (the extension opens the system browser), file:// → open-file
+// (the extension opens vault notes / run artifacts in the editor). Framed
+// contexts only — a plain browser tab keeps native link behavior.
+function setupExternalLinks(root: HTMLDivElement) {
+  if (window.parent === window) return
+  const handleClick = (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const anchor = target.closest("a.external-link")
+    if (!(anchor instanceof HTMLAnchorElement)) return
+    const href = anchor.getAttribute("href") ?? ""
+    let kind: "open-external" | "open-file" | undefined
+    if (/^https?:\/\//i.test(href) || /^mailto:/i.test(href)) kind = "open-external"
+    else if (/^file:\/\//i.test(href)) kind = "open-file"
+    if (!kind) return
+    event.preventDefault()
+    window.parent.postMessage({ source: "amicode", kind, url: href }, "*")
+  }
+  root.addEventListener("click", handleClick)
+  return () => root.removeEventListener("click", handleClick)
+}
+
 function initialResult(text: string, key: string | undefined, projection: Projection, owner: string): RenderResult {
   if (!text) return { text, blocks: [] }
   const base = key ?? checksum(text)
@@ -454,6 +479,7 @@ export function Markdown(
   )
 
   let copyCleanup: (() => void) | undefined
+  let linkCleanup: (() => void) | undefined
 
   createEffect(() => {
     const container = root()
@@ -493,10 +519,12 @@ export function Markdown(
         copy: i18n.t("ui.message.copy"),
         copied: i18n.t("ui.message.copied"),
       }))
+    if (!linkCleanup) linkCleanup = setupExternalLinks(container)
   })
 
   onCleanup(() => {
     if (copyCleanup) copyCleanup()
+    if (linkCleanup) linkCleanup()
     activeCodeKeys.forEach(disposeCode)
     completedCode.clear()
   })

@@ -1150,7 +1150,21 @@ const layer = Layer.effect(
             // user, whatever the finish reason claims — so re-invoke rather than
             // ending the turn. Bounded by SILENT_TURN_LIMIT so a model that only
             // ever returns silence still terminates.
-            if (!producedOutput && silentTurns < SILENT_TURN_LIMIT) {
+            // Two refinements keep the guard honest (both from upstream's
+            // run-process tests, which lock in "end the run" for each):
+            // 1. A turn that ended with an error (provider failure, abort) is
+            //    not a "silent turn" — re-invoking would swallow the failure
+            //    the caller is supposed to see (and spin on a dead provider).
+            // 2. A mid-stream provider explosion is recorded as finish
+            //    "unknown" with NO error (upstream's deliberate "finish, not a
+            //    fatal error" contract) — and it emits no reasoning. Require
+            //    reasoning content: the guard's target is a turn that THOUGHT
+            //    but never spoke, not one that died before it could.
+            const reasonedSilently =
+              lastAssistantMsg?.parts.some(
+                (part) => part.type === "reasoning" && typeof (part as SessionV1.ReasoningPart).text === "string" && (part as SessionV1.ReasoningPart).text.trim() !== "",
+              ) ?? false
+            if (!producedOutput && reasonedSilently && !lastAssistantMsg?.info.error && silentTurns < SILENT_TURN_LIMIT) {
               silentTurns++
               yield* Effect.logWarning("silent assistant turn — re-invoking instead of ending the turn", {
                 "session.id": sessionID,
