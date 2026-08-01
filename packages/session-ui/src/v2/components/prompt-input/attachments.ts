@@ -77,6 +77,10 @@ export type PromptInputV2AttachmentConfig = {
   duplicate: () => void
   onError: (error: unknown) => void
   readClipboardImage?: () => Promise<File | null>
+  /** Clipboard-text reader for framed hosts where the paste event delivers no
+   *  data (the Amicode VS Code webview — see app's prompt-input/clipboard-bridge).
+   *  Resolves "" when unavailable. */
+  readClipboardText?: () => Promise<string>
   getPathForFile?: (file: File) => string
 }
 
@@ -156,10 +160,15 @@ export function createPromptInputV2Attachments(
       await addAttachments(files, true, target)
       return
     }
-    const plainText = clipboardData.getData("text/plain") ?? ""
+    let plainText = clipboardData.getData("text/plain") ?? ""
     if (input.readClipboardImage && !plainText) {
       const file = await input.readClipboardImage()
       if (file && (await add(file, true, target, true))) return
+    }
+    // Framed host fallback (the Amicode webview): the paste event fired but
+    // carried nothing readable, so ask the host clipboard before giving up.
+    if (!plainText && input.readClipboardText) {
+      plainText = await input.readClipboardText()
     }
     if (!plainText) return
     const text = plainText.includes("\r") ? plainText.replace(/\r\n?/g, "\n") : plainText
@@ -190,6 +199,26 @@ export function createPromptInputV2Attachments(
     if (files) await addAttachments(Array.from(files))
   }
 
+  // Amicode webview ⌘V: a framed host whose paste event never fires at all
+  // (the VS Code webview grants no clipboard-read to the iframe), so the paste
+  // flow above never starts. Read the host clipboard through the wired bridge
+  // hooks instead — image first (screenshots), then text, same precedence as
+  // handlePaste. Both hooks self-gate to empty outside the webview.
+  const handleFramedPaste = async () => {
+    const target = capture()
+    if (!target) return
+    if (input.readClipboardImage) {
+      const file = await input.readClipboardImage()
+      if (file && (await add(file, true, target, true))) return
+    }
+    const plain = input.readClipboardText ? await input.readClipboardText() : ""
+    if (!plain) return
+    const text = plain.includes("\r") ? plain.replace(/\r\n?/g, "\n") : plain
+    if (input.addPart({ type: "text", content: text, start: 0, end: 0 })) return
+    input.focusEditor()
+    input.addPart({ type: "text", content: text, start: 0, end: 0 })
+  }
+
   onMount(() => {
     makeEventListener(document, "dragover", (event) => {
       if (input.isDialogActive()) return
@@ -206,6 +235,7 @@ export function createPromptInputV2Attachments(
   return {
     addAttachments,
     handlePaste,
+    handleFramedPaste,
     handleDrop,
     pick(fallback: () => void) {
       if (!input.picker) {

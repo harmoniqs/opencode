@@ -13,6 +13,7 @@ import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
+import { readClipboardImageViaBridge, readClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -375,7 +376,12 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
           title: language.t("common.requestFailed"),
           description: error instanceof Error ? error.message : String(error),
         }),
-      readClipboardImage: platform.readClipboardImage,
+      // Amicode webview (patch #11): the bridge reads the OS clipboard through
+      // the extension host where the framed app has no clipboard permission.
+      // Bridge first (self-gates to null unframed), platform as fallback.
+      readClipboardImage: async () => (await readClipboardImageViaBridge()) ?? (await platform.readClipboardImage?.()) ?? null,
+      // Text side of the same bridge — feeds session-ui's handleFramedPaste.
+      readClipboardText: () => readClipboardViaBridge(),
       getPathForFile: platform.getPathForFile,
     },
     view: {

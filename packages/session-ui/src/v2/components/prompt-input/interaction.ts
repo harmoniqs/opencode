@@ -186,6 +186,24 @@ export function createPromptInputV2Controller(input: {
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
+    // Amicode webview ⌘V (amicode patch #11 parity with the legacy composer):
+    // the framed app has no clipboard-read permission, so the browser dispatches
+    // no usable paste event on ⌘V. Intercept the keystroke and read the host
+    // clipboard over the wired bridge hooks instead (attachments.handleFramedPaste).
+    // Framed contexts only — plain web/desktop keeps the native paste event.
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === "v" &&
+      typeof window !== "undefined" &&
+      window.parent !== window &&
+      attachments
+    ) {
+      event.preventDefault()
+      void attachments.handleFramedPaste()
+      return true
+    }
     if (
       state.mode === "normal" &&
       (event.metaKey || event.ctrlKey) &&
