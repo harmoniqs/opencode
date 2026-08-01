@@ -404,3 +404,27 @@ Rebuilt with the exact T3 recipe (`OPENCODE_VERSION=1.17.3 bun run script/build.
     - `text-shimmer.tsx` untouched — it has many other live callers (`basic-tool.tsx`, `message-part.tsx` ×7, `session-turn.tsx`, `v2/components/basic-tool-v2.tsx` via `text-shimmer-v2.tsx`, plus stories), confirmed via `rg -n 'TextShimmer' packages/`. Not a candidate for deletion.
     - The dropped `offset` prop existed only so the shimmer's gradient phase stayed continuous across the prefix/tail split; with no shimmer there's nothing to phase-align, so it has no replacement. Verified live (Storybook, `UI/AnimatedCountList` stories) that the prefix and tail still read as one unbroken word with no seam: in the swap-mode `Playground` story, driving an active→done transition showed the mid-animation frame rendering both the active and done spans simultaneously under the animating width (`data-ready="true"`, container `style="width: 0px"` mid-transition, then settling) — the word-morph is intact. The suffix/prefix-tail mode (`data-mode="suffix"`) is currently unreachable from any real call site — both app usages (`message-part.tsx` context-tool-group and shell-group titles) and the only story pass `split={false}` — so it was verified by transiently flipping one story's `split` prop off (`Done` export, "Exploring"/"Explored"), confirming `data-mode="suffix"` renders `"Explor"` + `"ed"` as an unbroken "Explored" with no visible gap, then reverting that story edit before commit (`git status` shows only the two files below).
     - Tests: ui `bun test src` → 402 pass / 0 fail (unchanged). typecheck (tsgo) clean in `packages/ui`. `oxlint packages/ui/src` → 498 warnings / 0 errors both before and after (no new warnings once `prefixLen` was dropped).
+
+## Feature-branch recovery 2026-08-01 (after the upstream sync)
+
+The upstream sync covered only `local/amicode`; live work sat on unmerged feature branches.
+Merged into `amicode/merge-upstream-dev` on top of the sync:
+
+- `ann/thinking-words-updated` (Quantizing/Obsidianing), `feat/amicode-system-card-model`,
+  `fix/amicode-receipt-currency` — clean merges.
+- `pr/amico-working-indicator` — the harmonic wave indicator (AmicoWave in the thinking line,
+  H-mark static; tool-status-title de-shimmered) + collapsed receipt runs + AmicoSkillChip.
+  Conflicts: message-part count×useV2Actions threading unioned; shims amicode-receipt(-runs).
+- `kate/context-tree-vault-zoom` — framed external links route over the open-external bridge
+  (kept upstream's openExternal; branch's global link interceptor dropped — patch #25 covers it).
+- `feat/warrant-receipts-captured` (contains approval-surfaces) — capability warrants:
+  rail warrant chip, approval card (deliberately NOT onAsk), /amicode/warrants + /amicode/approve.
+- `feat/harmonic-wave-indicator` — recorded-Hamiltonian rendering, system-card physics rows,
+  KaTeX dedupe (spine/aside-lane cancel against their own reverts).
+
+DELIBERATELY NOT MERGED: `amico/issue-56-living-chat` (34 commits — glass sweep, Latent
+Constellation, bottom-dock composer, thought camera). It redesigns exactly the surfaces
+upstream replaced (old message-timeline, session-new-design-view, prompt-input, markdown —
+all deleted/moved upstream), 23 conflicted files. Merging would hybridize two design
+directions into neither. It stays on its branch; reviving the glass recipe is a deliberate
+port project onto the NEW ui, not a merge.
