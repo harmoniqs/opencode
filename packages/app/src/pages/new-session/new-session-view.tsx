@@ -3,6 +3,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { WordmarkV2 } from "@opencode-ai/ui/v2/wordmark-v2"
+import { MarkDetailed } from "@opencode-ai/ui/logo"
 import { Show, createMemo, createSignal, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
@@ -39,7 +40,16 @@ export function NewSessionView(props: {
       >
         <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
           <div class={NEW_SESSION_CONTENT_WIDTH}>
-            <WordmarkV2 class="h-auto w-full text-v2-background-bg-inverse" />
+            {/* amicode: brand mark + wordmark (recovered composition — the
+                H-robot over the AMICODE wordmark, Kate's Kimi-clean ordering;
+                upstream's giant full-width WordmarkV2 replaced the fork's
+                mark+logo hero in the 1.18.10 merge) */}
+            <div class="flex justify-center">
+              <MarkDetailed class="w-24 h-auto mb-4" style={{ color: "var(--icon-base)" }} />
+            </div>
+            <div class="flex justify-center">
+              <WordmarkV2 class="h-auto w-52 max-w-full text-v2-background-bg-inverse" />
+            </div>
             <div class="mt-8 flex flex-col gap-8">
               <PromptInputV2Composer controller={props.input} />
               <Show when={props.project.empty()}>
