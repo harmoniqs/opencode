@@ -58,6 +58,8 @@ export const THINKING_WORDS = [
   "Fidelitymaxxing",
   "Ionizing",
   "Unionizing",
+  "Quantizing",
+  "Obsidianing",
 ] as const
 
 /** Word for a given tick, cycling through THINKING_WORDS (wraps, incl. negatives). */
