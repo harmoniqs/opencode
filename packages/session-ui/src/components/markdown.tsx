@@ -1,5 +1,6 @@
 import { useMarked } from "@opencode-ai/ui/context/marked"
 import { useI18n } from "@opencode-ai/ui/context/i18n"
+import { copyTextToClipboard } from "../util/clipboard"
 import { normalizeDisplayMath } from "./markdown-stream"
 import morphdom from "morphdom"
 import { checksum } from "@opencode-ai/core/util/encode"
@@ -299,9 +300,8 @@ function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
     const code = button.closest('[data-component="markdown-code"]')?.querySelector("code")
     const content = code?.textContent ?? ""
     if (!content) return
-    const clipboard = navigator?.clipboard
-    if (!clipboard) return
-    await clipboard.writeText(content)
+    // Amicode webview: navigator.clipboard dies in the chat iframe — bridge-aware write.
+    if (!(await copyTextToClipboard(content))) return
     const labels = getLabels()
     setCopyState(button, labels, true)
     const existing = timeouts.get(button)

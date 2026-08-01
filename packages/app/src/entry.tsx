@@ -8,6 +8,7 @@ import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
+import { installWebviewContextMenu } from "@/utils/webview-context-menu"
 import { webZoom } from "@/utils/web-zoom"
 import { authFromToken } from "@/utils/server"
 import pkg from "../package.json"
@@ -204,6 +205,7 @@ if (root instanceof HTMLElement) {
   // Amicode webview: route ⌘V/⌘C/⌘X for every editable through the
   // extension-host bridge (framed contexts only — self-gates unframed).
   installGlobalClipboardFallback(window)
+  installWebviewContextMenu()
   adoptHiddenProject(location.search) // amicode#203: hide the extension's scaffold project
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()

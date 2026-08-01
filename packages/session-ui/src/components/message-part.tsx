@@ -3,6 +3,7 @@ import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import { shellRowLabel } from "@opencode-ai/ui/amicode-shell-row"
 import { sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-rail-gate"
 import { amicoBrainRef, emitAmicoBrainHover } from "@opencode-ai/ui/amicode-brain-ref"
+import { copyTextToClipboard } from "../util/clipboard"
 import {
   Component,
   createEffect,
@@ -76,28 +77,10 @@ import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-in
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
+// Amicode webview: the execCommand trick and navigator.clipboard both die in
+// the chat iframe — copyTextToClipboard bridges to the extension host there.
 async function writeClipboard(text: string): Promise<boolean> {
-  const body = typeof document === "undefined" ? undefined : document.body
-  if (body) {
-    const textarea = document.createElement("textarea")
-    textarea.value = text
-    textarea.setAttribute("readonly", "")
-    textarea.style.position = "fixed"
-    textarea.style.opacity = "0"
-    textarea.style.pointerEvents = "none"
-    body.appendChild(textarea)
-    textarea.select()
-    const copied = document.execCommand("copy")
-    body.removeChild(textarea)
-    if (copied) return true
-  }
-
-  const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard
-  if (!clipboard?.writeText) return false
-  return clipboard.writeText(text).then(
-    () => true,
-    () => false,
-  )
+  return copyTextToClipboard(text)
 }
 
 function ShellSubmessage(props: { text: string; animate?: boolean }) {

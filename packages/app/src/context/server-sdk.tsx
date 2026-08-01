@@ -3,7 +3,7 @@ import type { Event } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { type Accessor, batch, createMemo, createResource, onCleanup, onMount } from "solid-js"
+import { type Accessor, batch, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
 import { createApiForServer, createSdkForServer, type ServerApi } from "@/utils/server"
 import { useLanguage } from "./language"
 import { usePlatform } from "./platform"
@@ -178,6 +178,9 @@ type ServerSDKBase = {
     on: ServerEventEmitter["on"]
     listen: ServerEventEmitter["listen"]
     start: () => Promise<void> | undefined
+    /** amicode webview: live stream visibility for the ConnectionBanner —
+     *  "connected" only while the SSE loop is actively subscribed. */
+    status: Accessor<"connected" | "disconnected">
   }
   createClient: (
     opts: Omit<Parameters<typeof createSdkForServer>[0], "server" | "fetch">,
@@ -256,6 +259,12 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   let run: Promise<void> | undefined
   let started = false
   let generation = 0
+  // Amicode webview: connection visibility for the ConnectionBanner. The loop
+  // below reconnects silently every RECONNECT_DELAY_MS, so without a signal a
+  // dead server reads as an endless "thinking" wave. (The branch's 15s
+  // heartbeat timer is NOT carried — upstream's bounded SSE heartbeat already
+  // governs liveness; two abort clocks would fight.)
+  const [streamStatus, setStreamStatus] = createSignal<"connected" | "disconnected">("disconnected")
 
   const start = () => {
     if (started) return run
@@ -273,10 +282,22 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
         abort.signal.addEventListener("abort", onAbort)
         try {
           const kind = await protocol
+          const onSseError = (error: unknown) => {
+            if (isStreamClosed(error, attempt?.signal)) return
+            setStreamStatus("disconnected")
+            if (streamErrorLogged) return
+            streamErrorLogged = true
+            console.error("[global-sdk] event stream error", {
+              url: server.http.url,
+              fetch: eventFetch ? "platform" : "webview",
+              error,
+            })
+          }
           const events =
             kind === "v1"
-              ? (await eventSdk.global.event({ signal: attempt.signal })).stream
+              ? (await eventSdk.global.event({ signal: attempt.signal, onSseError })).stream
               : eventApi.event.subscribe({ signal: attempt.signal })
+          setStreamStatus("connected")
           let yielded = Date.now()
           for await (const event of events) {
             streamErrorLogged = false
@@ -291,6 +312,7 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
             await wait(0)
           }
         } catch (error) {
+          if (!isStreamClosed(error, attempt?.signal)) setStreamStatus("disconnected")
           if (!isStreamClosed(error, attempt?.signal) && !streamErrorLogged) {
             streamErrorLogged = true
             console.error("[global-sdk] event stream failed", {
@@ -361,6 +383,7 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
       on: emitter.on.bind(emitter),
       listen: emitter.listen.bind(emitter),
       start,
+      status: streamStatus,
     },
     createClient(opts: Omit<Parameters<typeof createSdkForServer>[0], "server" | "fetch">) {
       return createSdkForServer({

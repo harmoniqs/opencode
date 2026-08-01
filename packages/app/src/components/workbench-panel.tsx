@@ -32,7 +32,7 @@ export function WorkbenchPanel() {
 
   const sessions = createMemo(() =>
     directories()
-      .flatMap((directory) => sortedRootSessions(sync.child(directory, { bootstrap: false })[0], Date.now()))
+      .flatMap((directory) => sortedRootSessions(sync().child(directory, { bootstrap: false })[0], Date.now()))
       .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
       .slice(0, PANEL_LIMIT),
   )

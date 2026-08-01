@@ -4,6 +4,7 @@ import { resolveThemeVariant } from "@opencode-ai/ui/theme/resolve"
 import { resolveThemeVariantV2 } from "@opencode-ai/ui/theme/v2/resolve"
 import type { HexColor, ResolvedV2Theme } from "@opencode-ai/ui/theme/types"
 import { showToast } from "@/utils/toast"
+import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
 import { type ComponentProps, createEffect, createMemo, onCleanup, onMount, splitProps } from "solid-js"
 import { SerializeAddon } from "@/addons/serialize"
@@ -428,7 +429,10 @@ export const Terminal = (props: TerminalProps) => {
         const key = event.key.toLowerCase()
 
         if (event.ctrlKey && event.shiftKey && !event.metaKey && key === "c") {
-          document.execCommand("copy")
+          // Amicode webview: execCommand("copy") dies in the chat iframe —
+          // mirror the selection through the host bridge first.
+          const selection = typeof t.getSelection === "function" ? t.getSelection() : ""
+          if (!(selection && writeClipboardViaBridge(selection))) document.execCommand("copy")
           return true
         }
 
