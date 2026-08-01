@@ -2,6 +2,8 @@ import { For, Match, Show, Switch, createMemo } from "solid-js"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
+import { parseApprovalInput } from "./approval"
+import { AmicodeApprovalCard } from "./approval-card"
 import { parseDiffSentinel, receiptParts, INLINE_KINDS } from "./receipt"
 import { receiptIsCurrent } from "./receipt-currency"
 import { systemReceiptPieces, formulationReceiptPieces } from "./facets"
@@ -64,7 +66,14 @@ function Chip(props: { tool: string; status?: string; output?: string; count?: n
     const sentinel = parseDiffSentinel(props.output)
     return sentinel ? { sentinel, receipt: receiptParts(sentinel) } : undefined
   })
-  const clickable = () => !!parts()
+  // Clickable ONLY when an entity view exists for the kind. A receipt carrying a
+  // sentinel for a kind entity-view.tsx has no case for (e.g. `recommend`, which
+  // emits a sentinel purely so its chip names the param) would otherwise open an
+  // empty dialog. Diff detail and openability are separate properties.
+  const clickable = () => {
+    const entity = parts()?.sentinel.entity
+    return entity !== undefined && INLINE_KINDS.has(entity)
+  }
   const diffPieces = createMemo<DiffPiece[]>(
     () =>
       parts()?.receipt.changes.map((change) =>
@@ -354,6 +363,10 @@ export function AmicodeToolCard(props: {
   count?: number
 }) {
   const ask = createMemo(() => (props.tool === "amicode_ask" ? parseAskInput(props.input) : undefined))
+  // §9.5: the warrant card, same tool-input pattern as the ask card.
+  const approval = createMemo(() =>
+    props.tool === "amicode_request_approval" ? parseApprovalInput(props.input) : undefined,
+  )
   const runRef = createMemo(() => (props.tool === "amicode_solve" ? runRefFromOutput(props.output) : undefined))
   const authored = createMemo(() =>
     props.tool === "amicode_author_widget" ? parseWidgetSentinel(props.output) : undefined,
@@ -385,6 +398,7 @@ export function AmicodeToolCard(props: {
       <Match when={ask()}>
         {(value) => <AmicodeAskCard ask={value()} messageID={props.messageID} sessionID={props.sessionID} />}
       </Match>
+      <Match when={approval()}>{(req) => <AmicodeApprovalCard request={req()} />}</Match>
       <Match when={runRef()}>{(ref) => <RunWindow run={ref().run} lab={ref().lab} />}</Match>
       <Match when={authored()}>{(preview) => <WidgetPreviewCard preview={preview()} />}</Match>
       <Match when={inlineEntity()}>{(e) => <InlineEntityView kind={e().kind} seq={e().seq} />}</Match>

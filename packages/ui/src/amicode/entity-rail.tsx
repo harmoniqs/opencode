@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { hasUserReplyAfter } from "./ask"
 import { registerAmicodeAskBridge } from "./ask-bridge"
+import { registerAmicodeApprovalBridge } from "./approval-bridge"
+import { railWarrantChip, type ApprovalRequest, type Warrant } from "./approval"
 import { Icon } from "../components/icon"
 import { registerAmicodeUiBridge, type AmicodeWidgetHost } from "./ui-bridge"
 import {
@@ -85,6 +87,13 @@ export function AmicodeEntityRail(props: {
   widgetHost?: AmicodeWidgetHost
   onOpenEntity: (kind: string, seq?: number) => void
   onAsk?: (text: string) => void
+  // Warrant transport (spec-20260727-164748 §9.5). DELIBERATELY NOT onAsk: routing an
+  // approval through the chat would leave the ledger's only provenance reading "the
+  // agent says the user approved". The app wires these to GET /amicode/warrants and
+  // POST /amicode/approve; omitting them leaves the approval card non-actionable,
+  // which is the correct read-only-surface behaviour.
+  warrants?: () => readonly Warrant[]
+  onApprove?: (request: ApprovalRequest) => void
   // Bridge-agnostic: fired when the user clicks the pulse chip (the rail's one
   // inspector entry). The app wires it to the host (postAmicode →
   // amicode.openInspector) and passes it only when framed in Amicode, so the
@@ -103,6 +112,15 @@ export function AmicodeEntityRail(props: {
       hasUserReplyAfter: (messageID) => hasUserReplyAfter(props.messages, messageID),
     })
     onCleanup(dispose)
+  }
+  // Registered only when BOTH halves are present: a card that could approve but not
+  // read back its own warrant would show "pending" forever after a successful press.
+  if (props.onApprove && props.warrants) {
+    const disposeApproval = registerAmicodeApprovalBridge({
+      approve: (request) => props.onApprove?.(request),
+      warrants: () => props.warrants?.() ?? [],
+    })
+    onCleanup(disposeApproval)
   }
   // The ui bridge (openEntity + the in-transcript entity-view transport) is
   // registered below, once the live problem view, run statuses, and refetch it
@@ -170,6 +188,15 @@ export function AmicodeEntityRail(props: {
   })
   onCleanup(disposeUiBridge)
 
+  // Recomputed on any warrant change; no ticker, so an expiry crossing resolves on
+  // the next refetch rather than needing a timer per rail.
+  const warrantChip = createMemo(() => railWarrantChip(props.warrants?.() ?? [], Date.now()))
+  // Whether there is a run to inspect — gates the "Inspect Run" button so it
+  // appears alongside the live run chip, not before any solve has started.
+  const hasRun = createMemo(() => {
+    const snapshot = state()
+    return snapshot.kind === "ready" && snapshot.view.runs.length > 0
+  })
   const chips = createMemo(() => {
     const snapshot = state()
     if (snapshot.kind !== "ready") return []
@@ -275,6 +302,48 @@ export function AmicodeEntityRail(props: {
                 </Show>
               )}
             </For>
+            {/* Warrant status (spec §9.6 / G-6): the ACTIVE warrant's consumption, so a
+                researcher mid-campaign sees remaining authorization without opening
+                anything. Inert by design — it reports a ledger fact, and whether the
+                next launch passes is the gate's verdict, not this chip's. Absent when
+                there is no live warrant or it declares no bounds, so it never implies
+                an authorization the gate would refuse. */}
+            <Show when={warrantChip()}>
+              {(text) => (
+                <span
+                  class="amc-rail-chip is-empty"
+                  data-slot="amicode-rail-warrant"
+                  title={`Active capability warrant — ${text()}`}
+                >
+                  <Icon name="archive" size="small" />
+                  {text()}
+                </span>
+              )}
+            </Show>
+            <Show when={props.onInspectRun && hasRun()}>
+              <button
+                type="button"
+                data-slot="amicode-rail-inspect"
+                style={{
+                  display: "inline-flex",
+                  "align-items": "center",
+                  "flex-shrink": "0",
+                  gap: "4px",
+                  border: "1px solid var(--v2-border-border-base)",
+                  "border-radius": "var(--radius-md)",
+                  background: "none",
+                  color: "var(--v2-text-text-accent)",
+                  padding: "2px 8px",
+                  font: "inherit",
+                  "font-weight": "600",
+                  cursor: "pointer",
+                }}
+                title="Open the Run Inspector panel"
+                onClick={() => props.onInspectRun?.()}
+              >
+                Inspect Run
+              </button>
+            </Show>
           </div>
         </Show>
       </div>

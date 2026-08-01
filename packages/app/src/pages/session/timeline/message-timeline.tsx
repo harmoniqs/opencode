@@ -302,6 +302,35 @@ export function MessageTimeline(props: {
     const raw = problemRaw.latest
     return raw === undefined ? undefined : parseProblemResponse(raw)
   })
+  // Capability warrants (spec-20260727-164748 §9.5). Fetched unconditionally rather
+  // than gated on a dialog: the approval card lives IN the transcript, so it needs
+  // its state on first paint. Cheap — one ledger read, and the card's state derives
+  // from these rows rather than from optimistic local state, so a press round-trips
+  // through the ledger before it reads as granted.
+  const [warrantsRaw, { refetch: refetchWarrants }] = createResource(() =>
+    amicodeGet(server.current, "/amicode/warrants").catch(() => undefined),
+  )
+  const warrants = createMemo(() => {
+    const raw = warrantsRaw.latest as { ok?: boolean; warrants?: unknown } | undefined
+    if (!raw?.ok || !Array.isArray(raw.warrants)) return []
+    // Tolerant per row: a malformed row is dropped, never defaulted into a warrant.
+    return raw.warrants.flatMap((r) => {
+      const row = r as Record<string, unknown>
+      if (typeof row.plan_hash !== "string" || typeof row.expires_at !== "string") return []
+      return [{
+        plan_hash: row.plan_hash,
+        bounds: (typeof row.bounds === "object" && row.bounds !== null ? row.bounds : {}) as Record<string, never>,
+        expires_at: row.expires_at,
+        issued_by: typeof row.issued_by === "string" ? row.issued_by : "unknown",
+        // Omitted when the server did not send it, so the rail chip drops the count
+        // rather than rendering a wrong "0 of N".
+        ...(typeof row.solves_used === "number" ? { solves_used: row.solves_used } : {}),
+      }]
+    })
+  })
+  // Run verdict data for the entity view: /amicode/run-status is fetched
+  // whenever a dialog opens (cheap, server-cached ~1s); only the Run dialog
+  // reads it. Same endpoint the rail's run chip polls.
   const [runStatusRaw] = createResource(
     () => (entityViewOpen() ? 1 : undefined),
     () => amicodeGet(server.current, "/amicode/run-status"),
@@ -1957,6 +1986,22 @@ export function MessageTimeline(props: {
                 const id = sessionID()
                 if (!id) return
                 void sdk().client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+              }}
+              // Warrant transport (spec-20260727-164748 §9.5). NOT routed through
+              // onAsk on purpose: an approval delivered as a chat message would be
+              // read by the agent, which would then write the ledger row, leaving
+              // the only provenance as "the agent says the user approved".
+              warrants={() => warrants() ?? []}
+              onApprove={(request) => {
+                void amicodePost(server.current, "/amicode/approve", {
+                  plan_hash: request.plan_hash,
+                  bounds: request.bounds,
+                })
+                  // Refetch so the card flips to "granted" from the LEDGER rather
+                  // than from optimistic local state — same discipline as deriving
+                  // state from the durable log in the first place.
+                  .then(() => void refetchWarrants())
+                  .catch(() => void refetchWarrants())
               }}
             />
             {/* amicode: the context tree, folded into the header (ADR 0003) —
