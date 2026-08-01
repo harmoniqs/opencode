@@ -49,6 +49,28 @@ function heal(text: string) {
   return remend(text, { linkMode: "text-only" })
 }
 
+// amicode (ported in the 1.18.10 sync): the block-math rule only tokenizes
+// $$…$$ display math in two shapes — all on one line, or with the $$ alone on
+// their own lines (^$$\n … \n$$). LLMs routinely emit a third shape —
+// `label: $$\n…\n$$`, opening mid-line with a multi-line body — which matches
+// NEITHER, so the span falls through to markdown, which then eats the LaTeX
+// backslash-escapes (\; → ;, \! → !, \text → text) and renders a raw, mangled
+// `$$ … $$`. Normalize every complete display-math span onto its own block
+// lines so the block rule always matches. Fenced/inline code is skipped so
+// LaTeX shown as code stays literal; an unclosed trailing `$$` (mid-stream)
+// has no match and is left untouched until its closer arrives.
+export function normalizeDisplayMath(text: string): string {
+  const codePattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g
+  return text
+    .split(codePattern)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part.replace(/\$\$([\s\S]*?)\$\$/g, (_match, body: string) => `\n\n$$\n${body.trim()}\n$$\n\n`),
+    )
+    .join("")
+}
+
 export function stream(text: string, live: boolean): Block[] {
   if (!live) return [{ raw: text, src: text, mode: "full" }] satisfies Block[]
   if (refs(text)) return [{ raw: text, src: heal(text), mode: "live" }] satisfies Block[]

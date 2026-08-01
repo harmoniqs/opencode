@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { canReusePendingBlock, project, stream } from "./markdown-stream"
+import { canReusePendingBlock, normalizeDisplayMath, project, stream } from "./markdown-stream"
 
 describe("markdown stream", () => {
   test("heals incomplete emphasis while streaming", () => {
@@ -190,5 +190,25 @@ describe("markdown stream", () => {
       language: "ts",
       complete: true,
     })
+  })
+})
+
+// amicode (ported in the 1.18.10 sync): mid-line-opened multi-line $$ display
+// math — the shape LLMs actually emit, which neither the inline nor the strict
+// block katex rule matches. Pure-function coverage of the normalizer; the
+// render side is the block rule's own regex (covered by the markdown tests).
+describe("normalizeDisplayMath", () => {
+  test("moves mid-line-opened, multi-line display math onto its own block lines", () => {
+    expect(normalizeDisplayMath("label: $$\n\\rho = 1\n$$")).toBe("label: \n\n$$\n\\rho = 1\n$$\n\n")
+    expect(normalizeDisplayMath("a: $$ x\n= y $$ b")).toBe("a: \n\n$$\nx\n= y\n$$\n\n b")
+  })
+
+  test("leaves $$ inside fenced or inline code untouched", () => {
+    expect(normalizeDisplayMath("```\n$$ not math $$\n```")).toBe("```\n$$ not math $$\n```")
+    expect(normalizeDisplayMath("use `$$ x $$` inline")).toBe("use `$$ x $$` inline")
+  })
+
+  test("leaves an unclosed trailing $$ (mid-stream) untouched", () => {
+    expect(normalizeDisplayMath("label: $$\n\\rho = 1")).toBe("label: $$\n\\rho = 1")
   })
 })

@@ -1,6 +1,7 @@
 import {
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
   Index,
@@ -17,6 +18,14 @@ import { useNavigate } from "@solidjs/router"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
+import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import {
+  AmicodeEntityView,
+  entityLabel,
+  parseProblemResponse,
+  parseRunStatusResponse,
+} from "@opencode-ai/ui/amicode-entity-view"
+import { parseDashboardResponse, type DashboardState } from "@opencode-ai/ui/amicode-widget-grid"
 import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
@@ -64,8 +73,14 @@ import { useLanguage } from "@/context/language"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { useServerSDK } from "@/context/server-sdk"
 import { usePlatform } from "@/context/platform"
+import { useServer } from "@/context/server"
+import { usePrompt } from "@/context/prompt"
 import { useSettings } from "@/context/settings"
 import { useTabs } from "@/context/tabs"
+import { ContextTreePanel } from "@/pages/session/context-tree-panel"
+import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
+import { draftPrompt } from "@/utils/start-prompt"
+import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -269,6 +284,57 @@ export function MessageTimeline(props: {
   const dialog = useDialog()
   const language = useLanguage()
   const { params, sessionKey } = useSessionKey()
+
+  // ── amicode: problem-UI wiring (ported from the pre-merge message-timeline;
+  // the mounts died with that file — see AMICODE-PATCHES.md "Upstream sync
+  // 2026-08-01"). The app owns transport (per-active-server Basic auth via
+  // amicodeGet) + the ring-2 entity dialog; the rail owns its own polling.
+  // Dialog resources are gated on the open signal, cleared on close.
+  const server = useServer()
+  const prompt = usePrompt()
+  const [entityViewOpen, setEntityViewOpen] = createSignal(false)
+  const [problemRaw, { refetch: refetchProblem }] = createResource(
+    () => (entityViewOpen() ? 1 : undefined),
+    () => amicodeGet(server.current, "/amicode/problem"),
+  )
+  const problemView = createMemo(() => {
+    if (problemRaw.error) return parseProblemResponse({ ok: false, error: language.t("amicode.fetchFailed") })
+    const raw = problemRaw.latest
+    return raw === undefined ? undefined : parseProblemResponse(raw)
+  })
+  const [runStatusRaw] = createResource(
+    () => (entityViewOpen() ? 1 : undefined),
+    () => amicodeGet(server.current, "/amicode/run-status"),
+  )
+  const entityRunStatus = createMemo(() => parseRunStatusResponse(runStatusRaw.latest))
+  const openEntityView = (kind: string, seq?: number) => {
+    setEntityViewOpen(true)
+    dialog.show(
+      () => (
+        <Dialog title={`AMICO · ${entityLabel(kind)}`} fit>
+          {/* fit-to-content goes near-fullscreen on run entities (long paths +
+              history) — cap the panel and let it scroll internally instead */}
+          <div style={{ width: "100%", "max-height": "68vh", "overflow-y": "auto" }}>
+            <AmicodeEntityView
+              view={problemView()}
+              kind={kind}
+              runStatus={entityRunStatus()}
+              anchorSeq={seq}
+              onDraftPrompt={(text) => {
+                dialog.close()
+                draftPrompt(prompt, text)
+              }}
+              onRetry={() => void refetchProblem()}
+              retryLabel={language.t("amicode.retry")}
+              editLabel={language.t("amicode.editInChat")}
+            />
+          </div>
+        </Dialog>
+      ),
+      () => setEntityViewOpen(false),
+    )
+  }
+
   const ownerSessionKey = sessionKey()
   const cached = timelineCache.get(ownerSessionKey)
   const initialMeasurements = cached?.measurements
@@ -1835,6 +1901,67 @@ export function MessageTimeline(props: {
                 )}
               </Show>
             </div>
+            {/* amicode: problem-header rail (renders only when the session has
+                amicode_* parts) + ask/ui bridges — ported from the pre-merge
+                message-timeline (AMICODE-PATCHES.md "Upstream sync 2026-08-01") */}
+            <AmicodeEntityRail
+              messages={sessionMessages()}
+              partsFor={getMsgParts}
+              fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
+              fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
+              fetchRunSeries={(run, lab) =>
+                amicodeGet(
+                  server.current,
+                  `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
+                )
+              }
+              widgetHost={{
+                // Stage 2: the in-chat widget preview reuses the home grid's
+                // frame kernel; server context is resolved live per call.
+                frameSrc: (id, hash) => {
+                  const url = server.current?.http.url
+                  return url
+                    ? new URL(
+                        `/amicode/widget-frame?id=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`,
+                        url,
+                      ).toString()
+                    : ""
+                },
+                callbacks: {
+                  fetch: (path) => amicodeGet(server.current, path),
+                  action: async () => ({ ok: true }),
+                  prompt: (text) => {
+                    const id = sessionID()
+                    if (id) void sdk().client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+                  },
+                  open: () => {},
+                },
+                // pin = GET current dashboard, append this widget if absent, POST
+                // the full state back (applySave treats the body as the whole
+                // state, so a partial POST would wipe other tiles).
+                pin: async (id) => {
+                  const raw = await amicodeGet(server.current, "/amicode/dashboard")
+                  const state: DashboardState = parseDashboardResponse(raw) ?? { version: 1, widget: [] }
+                  if (!state.widget.some((e) => e.id === id))
+                    state.widget = [...state.widget, { key: id, id, hidden: false, config: {} }]
+                  return amicodePost(server.current, "/amicode/dashboard", state)
+                },
+              }}
+              onOpenEntity={openEntityView}
+              onDraftPrompt={(text) => draftPrompt(prompt, text)}
+              editLabel={language.t("amicode.editInChat")}
+              onInspectRun={inAmicode() ? () => postAmicode("amicode.openInspector") : undefined}
+              retryLabel={language.t("amicode.retry")}
+              unavailableLabel={language.t("amicode.unavailable")}
+              onAsk={(text) => {
+                const id = sessionID()
+                if (!id) return
+                void sdk().client.session.promptAsync({ sessionID: id, parts: [{ type: "text", text }] })
+              }}
+            />
+            {/* amicode: the context tree, folded into the header (ADR 0003) —
+                closes the sticky block beneath the title row + chip rail */}
+            <ContextTreePanel sessionID={sessionID()} />
           </div>
         </Show>
         <div
