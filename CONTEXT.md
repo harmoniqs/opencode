@@ -85,6 +85,18 @@ _Avoid_: Local implementation
 A bounded ordered result containing `items` and opaque `previous` and `next` cursor links for navigating the same query in either direction.
 _Avoid_: Response envelope
 
+**Vault Drawer**:
+The standalone, globally mounted vault file-browser surface (left drawer) — the vault's only host, driven solely by the module-scope `vaultPanel` store and rendered on every route (home, new-session, session).
+_Avoid_: vault tab (retired), vault panel (ambiguous with the **Status Popover**'s vault-mount manager)
+
+**Work Column**:
+The per-session right-hand column hosting the files-changed navigator, the context tree, and file tabs, owned solely by the session's `reviewPanel` store. Diffs render as full-width file tabs within the column, never as a split second pane.
+_Avoid_: review panel, side panel, tabs column (legacy names from the pre-merge UI)
+
+**Status Popover**:
+The titlebar's global health-and-connections surface: server health, MCP/LSP status, vault-mount and connection-credential management. Complements the **Vault Drawer** (browser vs manager); it does not browse files.
+_Avoid_: status button (it is a popover), drawers menu
+
 ## Relationships
 
 - A **System Context** is an opaque carrier composed from zero or more **Context Sources**.
