@@ -8,6 +8,7 @@ import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
+import { installWebviewContextMenu } from "@/utils/webview-context-menu"
 import { webZoom } from "@/utils/web-zoom"
 import { handleNotificationClick } from "@/utils/notification-click"
 import { authFromToken } from "@/utils/server"
@@ -81,8 +82,41 @@ const notify: Platform["notify"] = async (title, description, href) => {
   }
 }
 
+// Amicode webview: window.open from the sandboxed chat iframe has no route to
+// a real browser, and the markdown link click handler preventDefaults every
+// click (plain or ⌘), so links in chat were dead. Post the URL over the same
+// bridge as the clipboard (host: kind "open-external" → vscode.env.openExternal,
+// https:// only). Framed contexts only; plain browser tabs keep window.open.
 const openLink: Platform["openLink"] = (url) => {
-  window.open(url, "_blank")
+  if (window.parent === window) {
+    window.open(url, "_blank")
+    return
+  }
+  window.parent.postMessage({ source: "amicode", kind: "open-external", url }, "*")
+}
+
+// Amicode webview: raw <a href> clicks never reach platform.openLink — the
+// Markdown renderer stamps plain anchors (no interceptor), and native
+// navigation/popups from the sandboxed iframe are dead ends. Route every
+// external anchor click to the extension host over the same bridge, in the
+// capture phase so component-level handlers (link.tsx → openLink) don't fire
+// a second postMessage. Framed contexts only; relative/router hrefs pass
+// through untouched.
+const installLinkBridge = () => {
+  if (window.parent === window) return
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const href = target.closest("a[href]")?.getAttribute("href")
+      if (!href || !/^https?:\/\//i.test(href)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.parent.postMessage({ source: "amicode", kind: "open-external", url: href }, "*")
+    },
+    true,
+  )
 }
 
 const back: Platform["back"] = () => {
@@ -201,6 +235,8 @@ if (root instanceof HTMLElement) {
   // Amicode webview: route ⌘V/⌘C/⌘X for every editable through the
   // extension-host bridge (framed contexts only — self-gates unframed).
   installGlobalClipboardFallback(window)
+  installLinkBridge()
+  installWebviewContextMenu()
   adoptHiddenProject(location.search) // amicode#203: hide the extension's scaffold project
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()

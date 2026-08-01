@@ -16,6 +16,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { VaultPanel } from "@/components/vault-panel"
+import { ConnectionBanner } from "@/components/connection-banner"
 import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
@@ -2307,7 +2308,7 @@ export default function Layout(props: ParentProps) {
     <Show
       when={!newDesign()}
       fallback={
-        <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+        <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text [&_[data-component=text-part]]:select-text [&_[data-component=user-message]]:select-text [&_[data-component=reasoning-part]]:select-text">
           {autoselecting() ?? ""}
           <Titlebar update={titlebarUpdate} />
           <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
@@ -2316,11 +2317,12 @@ export default function Layout(props: ParentProps) {
             </Show>
           </main>
           <VaultPanel />
+          <ConnectionBanner />
           <ToastRegion v2={newDesign()} />
         </div>
       }
     >
-      <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+      <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text [&_[data-component=text-part]]:select-text [&_[data-component=user-message]]:select-text [&_[data-component=reasoning-part]]:select-text">
         {autoselecting() ?? ""}
         <Titlebar update={titlebarUpdate} />
         <Show when={updateVersion() !== undefined}>

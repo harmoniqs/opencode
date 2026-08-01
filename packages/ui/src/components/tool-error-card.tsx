@@ -1,5 +1,6 @@
 import { type ComponentProps, createMemo, Show, splitProps } from "solid-js"
 import { createStore } from "solid-js/store"
+import { copyTextToClipboard } from "../util/clipboard"
 import { Card, CardDescription } from "./card"
 import { Collapsible } from "./collapsible"
 import { Icon } from "./icon"
@@ -85,7 +86,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
   const copy = async () => {
     const text = cleaned()
     if (!text) return
-    await navigator.clipboard.writeText(text)
+    await copyTextToClipboard(text)
     setState("copied", true)
     setTimeout(() => setState("copied", false), 2000)
   }

@@ -5,6 +5,7 @@ import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Keybind } from "@opencode-ai/ui/keybind"
+import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { showToast } from "@/utils/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
@@ -279,20 +280,21 @@ export function SessionHeader() {
       })
   }
 
-  const copyPath = () => {
+  const copyPath = async () => {
     const directory = projectDirectory()
     if (!directory) return
-    navigator.clipboard
-      .writeText(directory)
-      .then(() => {
-        showToast({
-          variant: "success",
-          icon: "circle-check",
-          title: language.t("session.share.copy.copied"),
-          description: directory,
-        })
+    try {
+      // Amicode webview: navigator.clipboard dies in the chat iframe — bridge first.
+      if (!writeClipboardViaBridge(directory)) await navigator.clipboard.writeText(directory)
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("session.share.copy.copied"),
+        description: directory,
       })
-      .catch((err: unknown) => showRequestError(language, err))
+    } catch (err: unknown) {
+      showRequestError(language, err)
+    }
   }
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)

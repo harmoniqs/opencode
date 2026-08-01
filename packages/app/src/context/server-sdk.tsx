@@ -2,7 +2,7 @@ import type { Event } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { batch, onCleanup, onMount } from "solid-js"
+import { batch, createSignal, onCleanup, onMount } from "solid-js"
 import { createSdkForServer } from "@/utils/server"
 import { useLanguage } from "./language"
 import { usePlatform } from "./platform"
@@ -111,6 +111,10 @@ export function createServerSdkContext(server: ServerConnection.Any, scope: Serv
   const HEARTBEAT_TIMEOUT_MS = 15_000
   let lastEventAt = Date.now()
   let heartbeat: ReturnType<typeof setTimeout> | undefined
+  // Amicode webview: connection visibility for the ConnectionBanner. The loop
+  // below reconnects silently every RECONNECT_DELAY_MS, so without a signal a
+  // dead server reads as an endless "thinking" wave.
+  const [streamStatus, setStreamStatus] = createSignal<"connected" | "disconnected">("disconnected")
   const resetHeartbeat = () => {
     lastEventAt = Date.now()
     if (heartbeat) clearTimeout(heartbeat)
@@ -144,6 +148,7 @@ export function createServerSdkContext(server: ServerConnection.Any, scope: Serv
             signal: attempt.signal,
             onSseError: (error) => {
               if (isStreamClosed(error, attempt?.signal)) return
+              setStreamStatus("disconnected")
               if (streamErrorLogged) return
               streamErrorLogged = true
               console.error("[global-sdk] event stream error", {
@@ -153,6 +158,7 @@ export function createServerSdkContext(server: ServerConnection.Any, scope: Serv
               })
             },
           })
+          setStreamStatus("connected")
           let yielded = Date.now()
           resetHeartbeat()
           for await (const event of events.stream) {
@@ -186,6 +192,7 @@ export function createServerSdkContext(server: ServerConnection.Any, scope: Serv
             await wait(0)
           }
         } catch (error) {
+          if (!isStreamClosed(error, attempt?.signal)) setStreamStatus("disconnected")
           if (!isStreamClosed(error, attempt?.signal) && !streamErrorLogged) {
             streamErrorLogged = true
             console.error("[global-sdk] event stream failed", {
@@ -250,6 +257,7 @@ export function createServerSdkContext(server: ServerConnection.Any, scope: Serv
       on: emitter.on.bind(emitter),
       listen: emitter.listen.bind(emitter),
       start,
+      status: streamStatus,
     },
     createClient(opts: Omit<Parameters<typeof createSdkForServer>[0], "server" | "fetch">) {
       return createSdkForServer({

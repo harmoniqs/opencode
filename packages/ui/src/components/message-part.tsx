@@ -1,4 +1,5 @@
 import { AmicoSpinner, AmicoMark } from "../amicode/spinner"
+import { copyTextToClipboard } from "../util/clipboard"
 import { ThinkingLine } from "../amicode/thinking-line"
 import { turnTokens } from "../amicode/thinking"
 import { amicoBrainRef, emitAmicoBrainHover } from "../amicode/brain-ref"
@@ -67,28 +68,10 @@ import { readPartText } from "./message-part-text"
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
+// Amicode webview: the execCommand trick and navigator.clipboard both die in
+// the chat iframe — copyTextToClipboard bridges to the extension host there.
 async function writeClipboard(text: string): Promise<boolean> {
-  const body = typeof document === "undefined" ? undefined : document.body
-  if (body) {
-    const textarea = document.createElement("textarea")
-    textarea.value = text
-    textarea.setAttribute("readonly", "")
-    textarea.style.position = "fixed"
-    textarea.style.opacity = "0"
-    textarea.style.pointerEvents = "none"
-    body.appendChild(textarea)
-    textarea.select()
-    const copied = document.execCommand("copy")
-    body.removeChild(textarea)
-    if (copied) return true
-  }
-
-  const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard
-  if (!clipboard?.writeText) return false
-  return clipboard.writeText(text).then(
-    () => true,
-    () => false,
-  )
+  return copyTextToClipboard(text)
 }
 
 function ShellSubmessage(props: { text: string; animate?: boolean }) {
