@@ -4,7 +4,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { WordmarkV2 } from "@opencode-ai/ui/v2/wordmark-v2"
 import { MarkDetailed } from "@opencode-ai/ui/logo"
-import { Show, createMemo, createSignal, type Accessor } from "solid-js"
+import { Show, createMemo, createSignal, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import createPresence from "solid-presence"
@@ -31,6 +31,9 @@ export function NewSessionView(props: {
   input: NewSessionDraftController["input"]
   project: PromptProjectController
   workspace: NewSessionWorkspaceController
+  // amicode: starter chips slot (Kimi-clean ordering — brand → composer →
+  // chips → project row). Optional: the classic view renders nothing.
+  gettingStarted?: JSX.Element
 }) {
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
@@ -52,6 +55,9 @@ export function NewSessionView(props: {
             </div>
             <div class="mt-8 flex flex-col gap-8">
               <PromptInputV2Composer controller={props.input} />
+              <Show when={props.gettingStarted}>
+                <div class="flex justify-center -mt-2">{props.gettingStarted}</div>
+              </Show>
               <Show when={props.project.empty()}>
                 <PromptProjectAddButton controller={props.project} />
               </Show>

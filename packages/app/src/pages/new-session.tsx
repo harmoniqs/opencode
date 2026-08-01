@@ -11,7 +11,7 @@ import { useServer } from "@/context/server"
 import { startPrompt as startPromptWith } from "@/utils/start-prompt"
 import { amicodeGet } from "@/utils/amicode-fetch"
 import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
-import { AmicodeStarterChips } from "@opencode-ai/ui/amicode-getting-started"
+import { AmicodeStarterChips, AMICODE_STARTERS, type StarterChip } from "@opencode-ai/ui/amicode-getting-started"
 import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
 
 /** The draft-only V2 session page. Submitting promotes the draft into a real session. */
@@ -57,6 +57,59 @@ export default function NewSessionPage() {
     return [...open].sort((a, b) => (b.recorded ?? "").localeCompare(a.recorded ?? ""))[0]
   })
 
+  // amicode: dynamic chip ranking (2026-08-01 — chips under the composer,
+  // earned not static). Problem workspaces are all status "designing", so the
+  // rank keys off recency + entity_kinds: a `pulse` entity means a banked
+  // pulse (warm-startable); a `run` without a `pulse` means the attempt
+  // stalled (retry-able); anything recent is resume-able. Capped at 4, padded
+  // to 3 with the static starters when history is thin, static-only when
+  // there's no history at all.
+  const chips = createMemo((): StarterChip[] => {
+    const raw = problemsRaw()
+    if (raw === undefined) return AMICODE_STARTERS.map((s) => ({ label: s.label, prompt: s.prompt }))
+    const view = parseProblemsResponse(raw)
+    if (!view.ok) return AMICODE_STARTERS.map((s) => ({ label: s.label, prompt: s.prompt }))
+    const open = [...view.problems.filter((p) => p.status !== "archived")].sort((a, b) =>
+      (b.recorded ?? "").localeCompare(a.recorded ?? ""),
+    )
+    const out: StarterChip[] = []
+    const seen = new Set<string>()
+    const resume = open[0]
+    if (resume) {
+      out.push({
+        label: `Resume ${resume.name}`,
+        prompt: `Open the problem "${resume.name}" and continue where we left off`,
+        dataSlot: "amicode-gs-resume",
+      })
+      seen.add(resume.slug)
+    }
+    const banked = open.find((p) => !seen.has(p.slug) && p.entityKinds.includes("pulse"))
+    if (banked) {
+      out.push({
+        label: `Warm-start from ${banked.name}`,
+        prompt: `Warm-start a new solve from the banked pulse on "${banked.name}"`,
+        dataSlot: "amicode-gs-warmstart",
+      })
+      seen.add(banked.slug)
+    }
+    const stalled = open.find(
+      (p) => !seen.has(p.slug) && p.entityKinds.includes("run") && !p.entityKinds.includes("pulse"),
+    )
+    if (stalled) {
+      out.push({
+        label: `Retry ${stalled.name}`,
+        prompt: `Pick back up "${stalled.name}" — the last attempt stalled without a banked pulse. Diagnose what happened and try again`,
+        dataSlot: "amicode-gs-retry",
+      })
+      seen.add(stalled.slug)
+    }
+    for (const starter of AMICODE_STARTERS) {
+      if (out.length >= 3) break
+      out.push({ label: starter.label, prompt: starter.prompt })
+    }
+    return out.slice(0, 4)
+  })
+
   createEffect(() => {
     if (!draft.prompt.ready()) return
     draft.input.restoreFocus()
@@ -72,24 +125,18 @@ export default function NewSessionPage() {
       {suspendUntilPromptReady()}
       <NewSessionStatus mount={rightMount} visible={settings.visibility.status} />
       <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
-        <NewSessionView input={draft.input} project={project} workspace={workspace} />
         {/*
-          amicode: starter chips + Resume chip (Kate: no jump — they persist
-          while typing and disappear on submit, when this page navigates to the
-          real session; no dirty()-gated fade that yanks the layout
-          mid-keystroke). Mounted from the page, below the hero view, because
-          upstream's NewSessionView has no getting-started slot.
+          amicode: chips ride inside the hero view now (Kimi ordering — brand →
+          composer → chips), ranked from the problem history: Resume →
+          Warm-start → Retry → static pad. They persist while typing and
+          disappear on submit, when this page navigates to the real session.
         */}
-        <div class="flex shrink-0 justify-center pb-1">
-          <AmicodeStarterChips
-            onStart={startPrompt}
-            resumeName={resumeProblem()?.name}
-            onResume={() => {
-              const name = resumeProblem()?.name
-              if (name) startPrompt(`Open the problem "${name}" and continue where we left off`)
-            }}
-          />
-        </div>
+        <NewSessionView
+          input={draft.input}
+          project={project}
+          workspace={workspace}
+          gettingStarted={<AmicodeStarterChips onStart={startPrompt} chips={chips()} />}
+        />
       </div>
     </div>
   )
