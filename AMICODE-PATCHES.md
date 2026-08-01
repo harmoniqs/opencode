@@ -1,7 +1,43 @@
 # AMICODE patch-stack log
 
-Local fork of sst/opencode @ v1.17.3 on branch `local/amicode`. Remote: `upstream` only
+Local fork of sst/opencode @ v1.18.10 (merge `042634f37` + follow-up `fb6587f3a`, 2026-08-01) on branch `amicode/merge-upstream-dev`, pending fast-forward of `local/amicode` (was v1.17.3). Remote: `upstream` only
 (fetch = github.com/sst/opencode, push URL disabled to `no_push_disabled`). Never push.
+
+## Upstream sync 2026-08-01 (1.17.3 → 1.18.10, merge-base 2026-06-10)
+
+Merged sst/opencode `dev` @ `19231fce4b` (1,229 upstream commits) into the fork's 472. 78 conflicts
+resolved by policy: versions/lockfile mechanical; ~40 files hand-merged. Notables:
+
+- **Adopted upstream's**: session-ui package split (fork's `message-part-groups`/`message-part-skill`
+  moved there with their consumers), review/diffs side panel (fork's vault tab grafted in;
+  `reviewOpen = tabsOpen` — same persisted key), controller-driven composer/settings/home,
+  AppNodeBuilder test harness (fork's `promptAgnosticMatcher` kept inside it), bounded SSE +
+  heartbeat, **native per-event-location contract** (supersedes the fork's connection-pinned
+  streams; the app reducer filters per-directory client-side).
+- **Kept fork's**: branding/fonts/accents, KaTeX macros (now threaded into upstream's hand-rolled
+  `renderKatexToken`), AmicoSpinner sites, entity-rail card dispatch (new
+  `@opencode-ai/ui/amicode-*` shims; `packages/ui` now depends on `@opencode-ai/session-ui` for
+  ask-card's data context — module-level acyclic), titlebar inline tab strip (server-wide
+  `sync.session.get` replaces the deleted `dirBase64`), prompt-agnostic cassette matcher.
+- **Dropped**: old `message-timeline.tsx` mounts (entity rail, AmicoSpinner, ask bridge) — upstream
+  deleted the file; ports into `pages/session/timeline/` are FOLLOW-UPS. `debug-bar.tsx` stays
+  deleted. `showSessionProgressBar` row dropped (its consumer died with the timeline). Fork's
+  markdown polish (~75 lines, heading hierarchy + inline-code chip) needs porting into
+  session-ui's markdown.
+- **prompt.ts silent-turn guard REFINED**: fires only on reasoning-bearing turns with no error.
+  Upstream treats mid-stream provider explosions as finish `unknown` (no error, no reasoning) and
+  its run-process tests lock "end the run" for that shape — the unrefined guard re-invoked them.
+- **i18n parity**: upstream's strict parity test demands every en.ts key in every locale; the 72
+  amicode-era English keys were filled into all 17 app locales as ENGLISH fallbacks (verbatim,
+  placeholders preserved). Non-English translations still deliberately unreviewed.
+- **Test-suite gotcha (this machine)**: the Amicode session exports `OPENCODE_CONFIG_CONTENT`
+  (skills.paths + permissions) — it leaks into any `bun test` spawned from an Amicode shell and
+  breaks skill/permission fixtures. Run suites with
+  `env -u OPENCODE_CONFIG_CONTENT -u OPENCODE_SERVER_PASSWORD bun test`.
+- **Known reds, all pre-existing or upstream-flaky**: pasqal connections (8) + amicode widgets (15)
+  fail identically on `origin/local/amicode` (WIP features); `httpapi-v2-pty` "serves
+  location-wrapped PTY routes" times out ~1-in-3 on clean upstream on this machine.
+- Build recipe below is unchanged (channel gate gotcha 2 still applies: `OPENCODE_CHANNEL=dev`).
 
 ## Build recipe (v1.17.3)
 
