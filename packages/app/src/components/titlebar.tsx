@@ -406,13 +406,14 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 </TooltipV2>
                 {/* amicode(workbench S1): the sessions-panel toggle, v2 titlebar
                     edition — the legacy grid-branch button never rendered here,
-                    so the panel had no affordance (S1.4 probe). */}
+                    so the panel had no affordance (S1.4 probe). sidebar-LEFT:
+                    this one drives the left sessions panel. */}
                 <IconButtonV2
                   type="button"
                   variant="ghost-muted"
                   size="large"
                   class="!w-9 shrink-0"
-                  icon={<IconV2 name="sidebar-right" />}
+                  icon={<IconV2 name="sidebar-left" />}
                   state={layout.sidebar.opened() ? "pressed" : undefined}
                   onClick={() => layout.sidebar.toggle()}
                   aria-label={language.t("command.sidebar.toggle")}
