@@ -17,11 +17,16 @@ export const Option = Schema.Struct({
   description: Schema.String.annotate({ description: "Explanation of choice" }),
 }).annotate({ identifier: "QuestionOption" })
 
+export const Kind = Schema.Literals(["choice", "text"]).annotate({
+  description: 'Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)',
+})
+
 const base = {
   question: Schema.String.annotate({ description: "Complete question" }),
   header: Schema.String.annotate({ description: "Very short label (max 30 chars)" }),
   options: Schema.Array(Option).annotate({ description: "Available choices" }),
   multiple: Schema.optional(Schema.Boolean).annotate({ description: "Allow selecting multiple choices" }),
+  kind: Schema.optional(Kind),
 }
 
 export const Info = Schema.Struct({
