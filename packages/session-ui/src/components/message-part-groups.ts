@@ -5,11 +5,8 @@
 import type { Part as PartType, ToolPart } from "@opencode-ai/sdk/v2"
 
 // Consecutive read/search/list calls collapse into one "Explored" context group;
-// consecutive bash calls (≥2) collapse into one "Worked in shell" group (spec B);
-// consecutive file-mutation calls (≥2) collapse into one "Edited files" group
-// (same spec-B shape — the mutation set mirrors toolDefaultOpen's edit family).
+// consecutive bash calls (≥2) collapse into one "Worked in shell" group (spec B).
 const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
-const EDIT_GROUP_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
 
 export function isContextGroupTool(part: PartType): part is ToolPart {
   return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
@@ -17,10 +14,6 @@ export function isContextGroupTool(part: PartType): part is ToolPart {
 
 export function isShellGroupTool(part: PartType): part is ToolPart {
   return part.type === "tool" && part.tool === "bash"
-}
-
-export function isEditGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && EDIT_GROUP_TOOLS.has(part.tool)
 }
 
 export type PartRef = {
@@ -44,11 +37,6 @@ export type PartGroup =
       type: "shell"
       refs: PartRef[]
     }
-  | {
-      key: string
-      type: "edit"
-      refs: PartRef[]
-    }
 
 function sameRef(a: PartRef, b: PartRef) {
   return a.messageID === b.messageID && a.partID === b.partID
@@ -62,7 +50,7 @@ function sameGroup(a: PartGroup, b: PartGroup) {
     if (b.type !== "part") return false
     return sameRef(a.ref, b.ref)
   }
-  // context | shell | edit — all carry refs
+  // context | shell — both carry refs
   if (b.type === "part") return false
   if (a.refs.length !== b.refs.length) return false
   return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
