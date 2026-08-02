@@ -38,3 +38,14 @@ export type GlobalStatusTab = (typeof GLOBAL_STATUS_TABS)[number]
 
 /** The home entry is labeled "Connections", so that tab opens pre-selected. */
 export const GLOBAL_STATUS_DEFAULT_TAB: GlobalStatusTab = "connections"
+
+/**
+ * Popover anchoring (amicode#105): bottom-end with the standard gutter and the
+ * library's default collision handling — NEVER a hardcoded `shift`. The
+ * shift={-168} magic offset positioned the panel by guesswork: it clipped
+ * off-anchor at narrow widths and could not adapt to the viewport. Deleting it
+ * is the fix; the AC is that it stays deleted (popover_magic_shift == 0).
+ */
+export function statusPopoverLayout(): { placement: "bottom-end"; gutter: number } {
+  return { placement: "bottom-end", gutter: 4 }
+}

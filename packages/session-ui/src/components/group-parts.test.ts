@@ -35,8 +35,40 @@ describe("groupParts — shell grouping (spec B)", () => {
     expect(groups.map((g) => g.type)).toEqual(["shell", "context"])
   })
 
-  test("edits are never grouped", () => {
-    const groups = groupParts([tool("e1", "edit"), tool("e2", "write")])
-    expect(groups.map((g) => g.type)).toEqual(["part", "part"])
+  test("≥2 consecutive file mutations collapse into one edit group", () => {
+    const groups = groupParts([tool("a", "edit"), tool("b", "write"), tool("c", "edit")])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.type).toBe("edit")
+    expect(groups[0]!.type === "edit" && groups[0]!.refs.map((r) => r.partID)).toEqual(["a", "b", "c"])
+  })
+
+  test("a lone edit stays a full part (its inline diff is worth the card)", () => {
+    const groups = groupParts([text("t"), tool("a", "edit"), text("u")])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part", "part"])
+  })
+
+  test("non-adjacent edits are not grouped", () => {
+    const groups = groupParts([tool("a", "edit"), text("t"), tool("b", "write")])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part", "part"])
+  })
+
+  test("patch and apply_patch join the edit run; shell and edit runs stay distinct", () => {
+    const groups = groupParts([
+      tool("e1", "edit"),
+      tool("e2", "apply_patch"),
+      tool("b1", "bash"),
+      tool("b2", "bash"),
+      tool("e3", "write"),
+      tool("e4", "edit"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["edit", "shell", "edit"])
+    expect(groups[0]!.type === "edit" && groups[0]!.refs).toHaveLength(2)
+    expect(groups[1]!.type === "shell" && groups[1]!.refs).toHaveLength(2)
+    expect(groups[2]!.type === "edit" && groups[2]!.refs).toHaveLength(2)
+  })
+
+  test("edit then context: order + boundaries preserved", () => {
+    const groups = groupParts([tool("e1", "write"), tool("e2", "write"), tool("r1", "read")])
+    expect(groups.map((g) => g.type)).toEqual(["edit", "context"])
   })
 })

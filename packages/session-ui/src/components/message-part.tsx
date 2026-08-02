@@ -635,6 +635,7 @@ export {
   sameGroups,
   isContextGroupTool,
   isShellGroupTool,
+  isEditGroupTool,
   type PartGroup,
   type PartRef,
 } from "./message-part-groups"
@@ -643,10 +644,12 @@ import {
   sameGroups,
   isContextGroupTool,
   isShellGroupTool,
+  isEditGroupTool,
   type PartGroup,
   type PartRef,
 } from "./message-part-groups"
 import { parseDiffSentinel } from "@opencode-ai/ui/amicode-receipt"
+import { editRowDiff, editRowFilePath, editRowLabel } from "@opencode-ai/ui/amicode-edit-row"
 import {
   collapseReceiptRuns,
   receiptRunKey,
@@ -846,6 +849,28 @@ export function AssistantParts(props: {
                   return (
                     <Show when={parts().length > 0}>
                       <ShellToolGroup parts={parts()} busy={busy()} />
+                    </Show>
+                  )
+                })()}
+              </Match>
+              <Match when={entryType() === "edit"}>
+                {(() => {
+                  const parts = createMemo(
+                    () => {
+                      const entry = entryAccessor()
+                      if (entry.type !== "edit") return emptyTools
+                      return entry.refs
+                        .map((ref) => part().get(ref.messageID)?.get(ref.partID))
+                        .filter((part): part is ToolPart => !!part && isEditGroupTool(part))
+                    },
+                    emptyTools,
+                    { equals: same },
+                  )
+                  const busy = createMemo(() => props.working && last() === entryAccessor().key)
+
+                  return (
+                    <Show when={parts().length > 0}>
+                      <EditToolGroup parts={parts()} busy={busy()} />
                     </Show>
                   )
                 })()}
@@ -1127,6 +1152,27 @@ export function AssistantMessageDisplay(props: {
                 )
               })()}
             </Match>
+            <Match when={entryType() === "edit"}>
+              {(() => {
+                const parts = createMemo(
+                  () => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "edit") return emptyTools
+                    return entry.refs
+                      .map((ref) => part().get(ref.partID))
+                      .filter((part): part is ToolPart => !!part && isEditGroupTool(part))
+                  },
+                  emptyTools,
+                  { equals: same },
+                )
+
+                return (
+                  <Show when={parts().length > 0}>
+                    <EditToolGroup parts={parts()} />
+                  </Show>
+                )
+              })()}
+            </Match>
             <Match when={entryType() === "part"}>
               {(() => {
                 const item = createMemo(() => {
@@ -1347,6 +1393,119 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
                             <span data-slot="basic-tool-tool-title" class="font-mono">
                               <TextShimmer text={cmd()} active={running()} />
                             </span>
+                            <Show when={errored()}>
+                              <span data-slot="basic-tool-tool-subtitle" style={{ color: "var(--v2-state-fg-danger)" }}>
+                                failed
+                              </span>
+                            </Show>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
+          </Index>
+        </div>
+      </Collapsible.Content>
+    </Collapsible>
+  )
+}
+
+// AMICODE (spec B shape): consecutive file mutations (edit/write/patch) collapse
+// into one row so a long authoring run doesn't dominate the timeline. Mirrors
+// ShellToolGroup's markup (reuses its CSS slots) with per-file rows that keep
+// their diff stats. A lone mutation never reaches here — groupParts leaves it
+// as a full card, whose inline diff is worth the space. Row labels come from
+// @opencode-ai/ui/amicode-edit-row (pure, tested): a pending part without a
+// filePath can never fill the row with prose.
+export function EditToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSizeChange?: () => void }) {
+  const [open, setOpen] = createSignal(false)
+  const pending = createMemo(
+    () =>
+      !!props.busy || props.parts.some((part) => part.state.status === "pending" || part.state.status === "running"),
+  )
+  const count = createMemo(() => props.parts.length)
+  // Unique targets: "4 changes in 3 files" reads truer than a bare call count
+  // when the same file is re-edited mid-run.
+  const fileCount = createMemo(() => {
+    const paths = props.parts
+      .map((part) => editRowFilePath(part))
+      .filter((path): path is string => typeof path === "string")
+    return new Set(paths).size
+  })
+  // Aggregate +/- across the run — DiffChanges sums an array itself. Parts that
+  // haven't recorded a filediff yet (still pending) simply don't contribute.
+  const diffs = createMemo(() =>
+    props.parts
+      .map((part) => editRowDiff(part))
+      .filter((diff): diff is { additions: number; deletions: number } => !!diff),
+  )
+  const handleOpenChange = (value: boolean) => {
+    setOpen(value)
+    props.onSizeChange?.()
+  }
+  // amicode: hovering the group chip glances at every member node on the map
+  const glanceAll = () => {
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+  }
+
+  return (
+    <Collapsible
+      open={open()}
+      onOpenChange={handleOpenChange}
+      variant="ghost"
+      class="tool-collapsible"
+      data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
+    >
+      <Collapsible.Trigger>
+        <div data-component="context-tool-group-trigger" onMouseEnter={glanceAll}>
+          <span
+            data-slot="context-tool-group-title"
+            class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
+          >
+            <span data-slot="context-tool-group-label" class="shrink-0">
+              <ToolStatusTitle active={pending()} activeText="Editing files" doneText="Edited files" split={false} />
+            </span>
+            <span
+              data-slot="context-tool-group-summary"
+              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
+            >
+              {count()} {count() === 1 ? "change" : "changes"}
+              <Show when={fileCount() > 0}>
+                {" "}
+                in {fileCount()} {fileCount() === 1 ? "file" : "files"}
+              </Show>
+            </span>
+            <Show when={diffs().length > 0}>
+              <DiffChanges changes={diffs()} />
+            </Show>
+          </span>
+          <Collapsible.Arrow />
+        </div>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
+        <div data-component="context-tool-group-list">
+          <Index each={props.parts}>
+            {(partAccessor) => {
+              const label = createMemo(() => editRowLabel(partAccessor()))
+              const diff = createMemo(() => editRowDiff(partAccessor()))
+              const running = createMemo(
+                () => partAccessor().state.status === "pending" || partAccessor().state.status === "running",
+              )
+              const errored = createMemo(() => partAccessor().state.status === "error")
+              return (
+                <div data-slot="context-tool-group-item">
+                  <div data-component="tool-trigger">
+                    <div data-slot="basic-tool-tool-trigger-content">
+                      <div data-slot="basic-tool-tool-info">
+                        <div data-slot="basic-tool-tool-info-structured">
+                          <div data-slot="basic-tool-tool-info-main">
+                            <span data-slot="basic-tool-tool-title" class="font-mono">
+                              <TextShimmer text={label()} active={running()} />
+                            </span>
+                            <Show when={!running() && diff()}>{(d) => <DiffChanges changes={d()} />}</Show>
                             <Show when={errored()}>
                               <span data-slot="basic-tool-tool-subtitle" style={{ color: "var(--v2-state-fg-danger)" }}>
                                 failed

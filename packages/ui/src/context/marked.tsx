@@ -418,7 +418,16 @@ export const OpenCodeTheme = {
 
 registerCustomTheme("OpenCode", () => Promise.resolve(OpenCodeTheme))
 
-function renderMathInText(text: string): string {
+// Single-$ inline math — restored after #34850 removed it for currency false
+// positives. Pandoc-style tight delimiters (no whitespace just inside either
+// $), no digit-led content (so $5, and $30-and-$50 pairs, stay literal), no
+// $$ adjacency, no escaped \$. One regex family, three shapes: the tokenizer
+// start hint, the anchored tokenizer match, and the global replace below.
+const singleDollarStartRegex = /(?<![\\$])\$(?!\$)/
+const singleDollarTokenizerRegex = /^\$(?!\$|\s|\d)((?:\\.|[^$\\\n])+?)(?<![\\\s])\$(?!\$)/
+const singleDollarInlineRegex = /(?<![\\$])\$(?!\$|\s|\d)((?:\\.|[^$\\\n])+?)(?<![\\\s])\$(?!\$)/g
+
+export function renderMathInText(text: string): string {
   let result = text
 
   // Display math: $$...$$
@@ -449,13 +458,26 @@ function renderMathInText(text: string): string {
     }
   })
 
+  // Inline math: $...$ (guarded — see singleDollarInlineRegex above)
+  result = result.replace(singleDollarInlineRegex, (_, math) => {
+    try {
+      return katex.renderToString(math, {
+        displayMode: false,
+        throwOnError: false,
+        macros: KATEX_MACROS,
+      })
+    } catch {
+      return `$${math}$`
+    }
+  })
+
   return result
 }
 
 const inlineMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
 const blockMathRegex = /^\$\$\n([\s\S]+?)\n\$\$(?:\n|$)/
 
-const katexExtension: MarkedExtension = {
+export const katexExtension: MarkedExtension = {
   extensions: [
     {
       name: "inlineKatex",
@@ -488,6 +510,27 @@ const katexExtension: MarkedExtension = {
           raw: match[0],
           text: match[1].trim(),
           displayMode: true,
+        }
+      },
+      renderer: renderKatexToken,
+    },
+    {
+      // Single-$ inline math (guarded, see singleDollar*Regex above). The
+      // close-side (?!\$) keeps this from ever eating one half of $$..$$.
+      name: "singleDollarKatex",
+      level: "inline",
+      start(src) {
+        const match = src.match(singleDollarStartRegex)
+        return match ? match.index : undefined
+      },
+      tokenizer(src) {
+        const match = src.match(singleDollarTokenizerRegex)
+        if (!match) return
+        return {
+          type: "singleDollarKatex",
+          raw: match[0],
+          text: match[1].trim(),
+          displayMode: false,
         }
       },
       renderer: renderKatexToken,

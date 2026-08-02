@@ -5,6 +5,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { Popover } from "@opencode-ai/ui/popover"
 import { Suspense, batch, createEffect, createMemo, createSignal, lazy, Show, type ComponentProps, type JSX } from "solid-js"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
+import { statusPopoverLayout } from "./status-popover-model"
 import { useLanguage } from "@/context/language"
 import { ServerConnection, useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
@@ -71,9 +72,7 @@ export function StatusPopover(props: { healthDot?: boolean }) {
         </div>
       }
       class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg"
-      gutter={4}
-      placement="bottom-end"
-      shift={-168}
+      {...statusPopoverLayout()}
     >
       <Show when={shown()}>
         <Suspense
@@ -185,9 +184,7 @@ function StatusPopoverView(props: { state: StatusPopoverState }) {
   const popoverProps = {
     class:
       "[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg",
-    gutter: 4,
-    placement: "bottom-end" as const,
-    shift: -168,
+    ...statusPopoverLayout(),
   }
 
   return (
@@ -239,6 +236,9 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
   }
   createEffect(() => {
     if (chromeDropdownOpenId() !== "connections" && shown()) setShownRaw(false)
+    // amicode#105: the announce is bidirectional — deep links (the vault
+    // drawer's attach CTA) open this popover by naming it, not just close it.
+    if (chromeDropdownOpenId() === "connections" && !shown()) setShownRaw(true)
   })
 
   return (

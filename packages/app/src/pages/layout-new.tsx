@@ -1,7 +1,9 @@
 import { createEffect, Suspense, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { TabsInfoPopup } from "@/components/help-button"
+import { ConnectionBanner } from "@/components/connection-banner"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
+import { VaultPanel } from "@/components/vault-panel"
 import { usePlatform } from "@/context/platform"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
 
@@ -40,6 +42,12 @@ export default function NewLayout(props: ParentProps) {
       <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
         <Suspense>{props.children}</Suspense>
       </main>
+      {/* amicode#105: the vault's global host lives in the layout that ACTUALLY
+          renders the v2 tree — the workbench/wave merges grafted their chrome
+          into layout.tsx's LegacyLayout branch, which newLayoutDesigns never
+          reaches (VaultPanel AND the ConnectionBanner were invisible here). */}
+      <VaultPanel />
+      <ConnectionBanner />
       {/* DebugBar removed with the fork's debug-bar deletion (kept during the
           upstream merge) — the debugTools toggle state stays for the titlebar's
           channel indicator. */}

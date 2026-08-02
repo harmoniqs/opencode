@@ -29,8 +29,6 @@ import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 
 import FileTree from "@/components/file-tree"
-import { VaultBrowser } from "@/components/vault-browser"
-import { vaultPanel } from "@/context/vault-panel"
 import { normalizeFileTreeV2Path } from "@/components/file-tree-v2-model"
 import { SessionContextUsage } from "@/components/session-context-usage"
 
@@ -183,48 +181,10 @@ export function SessionSidePanel(props: {
     setActive: tabs().setActive,
   })
 
-  // vault tab <-> the global vaultPanel store: the titlebar button, palette
-  // command, and context-tree deep-links open the store; inside a session THIS
-  // is the host, so mirror store state into a "vault" tab (and back on close)
-  const vaultOpen = createMemo(() => vaultPanel.opened())
-  // on() scopes tracking to the STORE signal alone — the tab reads/writes in
-  // the callback are untracked. Tracking them looped: tabs().open() writes
-  // the same store the effect would re-read, and Solid spins the effect
-  // until the stack blows (found via Playwright pageerror stack).
-  createEffect(
-    on(
-      () => vaultPanel.opened(),
-      (openNow) => {
-        if (!isDesktop()) return
-        if (openNow) {
-          if (!view().reviewPanel.opened()) view().reviewPanel.open()
-          if (!tabs().all().includes("vault")) tabs().open("vault")
-          if (tabs().active() !== "vault") tabs().setActive("vault")
-        } else if (tabs().all().includes("vault")) {
-          tabs().close("vault")
-        }
-      },
-    ),
-  )
-  // column closed (panel toggle) → the store must follow, or the titlebar
-  // button's next press toggles an invisible state and "does nothing"
-  createEffect(
-    on(
-      tabsOpen,
-      (openNow, wasOpen) => {
-        if (wasOpen && !openNow && vaultPanel.opened()) vaultPanel.close()
-        // a column with nothing to show fills with the vault by default
-        if (!wasOpen && openNow && tabState.activeTab() === "empty") vaultPanel.open()
-      },
-      { defer: true },
-    ),
-  )
-
   const tabState = createSessionTabs({
     tabs,
     pathFromTab: file.pathFromTab,
     normalizeTab,
-    vaultOpen,
     review: reviewTab,
     hasReview: props.canReview,
     fileBrowser: () => !!props.fileBrowserState,
@@ -425,34 +385,11 @@ export function SessionSidePanel(props: {
                                   </div>
                                 </Tabs.Trigger>
                               </Show>
-                              {/* amicode: the vault browser tab (the fork's vault
-                                  panel — titlebar button / palette / deep-links
-                                  sync it via the vaultPanel store) */}
-                              <Show when={vaultOpen()}>
-                                <Tabs.Trigger
-                                  value="vault"
-                                  closeButton={
-                                    <IconButton
-                                      icon="close-small"
-                                      variant="ghost"
-                                      class="h-5 w-5"
-                                      onClick={() => {
-                                        vaultPanel.close()
-                                        // nothing else to show → the column goes too
-                                        if (openedTabs().length === 0 && !contextOpen()) view().reviewPanel.close()
-                                      }}
-                                      aria-label={language.t("amicode.vault.close")}
-                                    />
-                                  }
-                                  hideCloseButton
-                                  onMiddleClick={() => {
-                                    vaultPanel.close()
-                                    if (openedTabs().length === 0 && !contextOpen()) view().reviewPanel.close()
-                                  }}
-                                >
-                                  <div>{language.t("amicode.vault.title")}</div>
-                                </Tabs.Trigger>
-                              </Show>
+                              {/* amicode#105: the vault tab is retired — the
+                                  global drawer is the vault's only host (ADR
+                                  docs/adr/0001). Do not re-add a tab here:
+                                  two hosts mirrored through two stores was the
+                                  desync this column's toggle got blamed for. */}
                               <Show when={contextOpen()}>
                                 <Tabs.Trigger
                                   value="context"
@@ -565,15 +502,6 @@ export function SessionSidePanel(props: {
                             >
                               {props.reviewPanel()}
                             </div>
-                          </Show>
-
-                          {/* amicode: vault browser content */}
-                          <Show when={vaultOpen()}>
-                            <Tabs.Content value="vault" class="flex flex-col h-full overflow-hidden contain-strict">
-                              <Show when={activeTab() === "vault"}>
-                                <VaultBrowser />
-                              </Show>
-                            </Tabs.Content>
                           </Show>
 
                           <Show when={activeTab() === "empty"}>

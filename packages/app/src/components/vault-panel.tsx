@@ -1,19 +1,17 @@
-// amicode: the standalone Vault drawer — vault access OUTSIDE sessions
-// (Landing/home), where no session side panel exists. Inside a session the
-// side panel's Vault tab is the host (it replaced the git review; Kate
-// 2026-07-27), so the drawer stands down there — both hosts ride the same
-// vaultPanel store and render the same VaultBrowser body.
+// amicode: the standalone Vault drawer — the vault's ONLY host, on EVERY
+// route (home, new-session, session; amicode#105, ADR docs/adr/0001). The
+// side-panel tab it used to yield to inside sessions is retired: two hosts
+// mirrored through two stores was the desync the titlebar button got blamed
+// for. Renders the same VaultBrowser body everywhere.
 import { Show } from "solid-js"
-import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { vaultPanel } from "@/context/vault-panel"
 import { VaultBrowser } from "@/components/vault-browser"
 
 export function VaultPanel() {
   const language = useLanguage()
-  const params = useParams()
   return (
-    <Show when={vaultPanel.opened() && !params.id}>
+    <Show when={vaultPanel.opened()}>
       <aside
         data-component="amico-vault-panel"
         aria-label={language.t("amicode.vault.title")}
