@@ -85,7 +85,6 @@ import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-review-empty-no-git-v2"
-import { SessionReviewV2SidebarToggle } from "@opencode-ai/session-ui/v2/session-review-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
 import { reviewDiffDirectory, reviewDiffNeedsLoad, reviewRootDirectory } from "@/pages/session/v2/review-diff-kinds"
@@ -2342,6 +2341,9 @@ export default function Page() {
               <Show when={isDesktop() && (desktopV2ReviewOpen() || desktopFileTreeOpen())}>
                 <div class="min-h-0 flex-1">
                   <Suspense>
+                    {/* amicode#105: no reviewSidebarToggle — the Work Column is
+                        single-pane (reviewSidebarOpened is policy-false), so the
+                        old kanban-icon affordance would be a dead button. */}
                     <SessionSidePanel
                       canReview={canReview}
                       diffs={reviewDiffs}
@@ -2351,13 +2353,6 @@ export default function Page() {
                       reviewHasFocusableContent={() => hasReview() || reviewV2State.sidebarOpened()}
                       reviewCount={reviewCount}
                       reviewPanel={reviewPanelV2}
-                      reviewSidebarToggle={(disabled) => (
-                        <SessionReviewV2SidebarToggle
-                          opened={reviewV2State.sidebarOpened()}
-                          disabled={disabled}
-                          onToggle={reviewV2State.toggleSidebar}
-                        />
-                      )}
                       fileBrowserState={reviewV2State}
                       activeDiff={activeReviewFile()}
                       focusReviewDiff={focusReviewDiff}
