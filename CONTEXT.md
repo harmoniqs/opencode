@@ -97,6 +97,22 @@ _Avoid_: review panel, side panel, tabs column (legacy names from the pre-merge 
 The titlebar's global health-and-connections surface: server health, MCP/LSP status, vault-mount and connection-credential management. Complements the **Vault Drawer** (browser vs manager); it does not browse files.
 _Avoid_: status button (it is a popover), drawers menu
 
+**Question**:
+An ask the agent puts to the user through the question tool — the single ask mechanism. Every Question renders as a card the user answers directly, never as prose awaiting a composer reply. A Question is either a **Choice Question** or a **Free-form Question**.
+_Avoid_: prose question, interview prompt
+
+**Choice Question**:
+A **Question** answered by picking from a presented option list (recommended option first where a recommendation exists). It may additionally offer a typed custom answer behind the list.
+_Avoid_: multiple-choice form (the form is a rendering, not the concept)
+
+**Free-form Question**:
+A **Question** expecting an open-ended typed answer — a name, a number, "in your own words." It renders as a **Text card**, with no option list.
+_Avoid_: the Other box, custom-answer question (the typed-custom-answer path belongs to a **Choice Question**)
+
+**Text card**:
+The card shape a **Free-form Question** renders as: a bare text input with submit — no option list, no custom-answer pseudo-option.
+_Avoid_: empty-option card (an option list is simply absent, not collapsed)
+
 ## Relationships
 
 - A **System Context** is an opaque carrier composed from zero or more **Context Sources**.
