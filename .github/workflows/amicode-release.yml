@@ -78,10 +78,13 @@ jobs:
             local VAR
             VAR=$( { grep -aoh 'newLayoutDesigns:[$_A-Za-z0-9]\{1,20\}[,}]' "$BIN" || true; } | head -1 | sed 's/newLayoutDesigns://; s/[,}]//')
             if test -n "$VAR"; then
-              if grep -aq "[^A-Za-z0-9_$]${VAR}=[$_A-Za-z]\{0,8\}(()=>!1)" "$BIN"; then
+              # `\$`, never `$`, inside these double-quoted classes: `$_A` is a
+              # valid shell name and `set -u` kills the step on expansion
+              # (bit amicode.1's second run).
+              if grep -aq "[^A-Za-z0-9_\$]${VAR}=[\$_A-Za-z]\{0,8\}(()=>!1)" "$BIN"; then
                 echo "FAIL: shorthand memo is OFF (=>!1) in $BIN — built with channel latest/prod?"; exit 1
               fi
-              if grep -aq "[^A-Za-z0-9_$]${VAR}=[$_A-Za-z]\{0,8\}(()=>!0)" "$BIN"; then
+              if grep -aq "[^A-Za-z0-9_\$]${VAR}=[\$_A-Za-z]\{0,8\}(()=>!0)" "$BIN"; then
                 echo "OK: gate hardcoded ON (shorthand memo ${VAR}=…(()=>!0)) in $BIN"
                 return 0
               fi
