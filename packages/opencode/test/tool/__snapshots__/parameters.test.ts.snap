@@ -206,6 +206,14 @@ exports[`tool parameters JSON Schema (wire shape) question 1`] = `
             "description": "Very short label (max 30 chars)",
             "type": "string",
           },
+          "kind": {
+            "description": "Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)",
+            "enum": [
+              "choice",
+              "text",
+            ],
+            "type": "string",
+          },
           "multiple": {
             "description": "Allow selecting multiple choices",
             "type": "boolean",
