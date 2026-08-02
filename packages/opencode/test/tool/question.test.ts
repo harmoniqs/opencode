@@ -68,6 +68,38 @@ describe("tool.question", () => {
     }),
   )
 
+  it.instance("teaches the text kind for free-form questions in its description", () =>
+    Effect.gen(function* () {
+      const toolInfo = yield* QuestionTool
+      const tool = yield* toolInfo.init()
+      expect(tool.description).toContain('kind: "text"')
+    }),
+  )
+
+  it.instance("passes a text-kind question through to the pending request", () =>
+    Effect.gen(function* () {
+      const question = yield* Question.Service
+      const toolInfo = yield* QuestionTool
+      const tool = yield* toolInfo.init()
+      const questions = [
+        {
+          question: "What should we call you?",
+          header: "Name",
+          options: [],
+          kind: "text" as const,
+        },
+      ]
+
+      const fiber = yield* tool.execute({ questions }, ctx).pipe(Effect.forkScoped)
+      const item = yield* pending(question)
+      expect(item.questions[0]?.kind).toBe("text")
+      yield* question.reply({ requestID: item.id, answers: [["JJ"]] })
+
+      const result = yield* Fiber.join(fiber)
+      expect(result.output).toContain(`"What should we call you?"="JJ"`)
+    }),
+  )
+
   it.instance("should now pass with a header longer than 12 but less than 30 chars", () =>
     Effect.gen(function* () {
       const question = yield* Question.Service

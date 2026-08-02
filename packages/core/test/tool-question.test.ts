@@ -52,6 +52,12 @@ const it = testEffect(
 )
 
 describe("QuestionTool", () => {
+  it.effect("teaches the text kind for free-form questions in its description", () =>
+    Effect.gen(function* () {
+      expect(QuestionTool.description).toContain('kind: "text"')
+    }),
+  )
+
   it.effect("omits a denied built-in question and terminally settles a stale call", () =>
     Effect.gen(function* () {
       captured = undefined
