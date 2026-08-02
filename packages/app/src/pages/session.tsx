@@ -78,8 +78,12 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { restorePromptModel, syncPromptModel, syncSessionModel } from "@/pages/session/session-model-helpers"
 import {
   clampSessionPanelWidth,
+  clampWorkColumnWidth,
   SESSION_PANEL_WIDTH_MIN,
+  sessionChatTakesRemainder,
   sessionPanelWidthMax,
+  WORK_COLUMN_WIDTH_MIN,
+  workColumnWidthMax,
 } from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
@@ -497,11 +501,6 @@ export default function Page() {
       split: splitReview(),
     }),
   )
-  const sessionPanelWidth = createMemo(() => {
-    if (!desktopSidePanelOpen()) return "100%"
-    if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
-    return `calc(100% - ${layout.fileTree.width()}px)`
-  })
   const centered = createMemo(() => isDesktop() && (newSessionDesign() || !desktopReviewOpen()))
   const desktopV2PanelLayout = createMemo(() =>
     sessionPanelLayout({
@@ -510,6 +509,23 @@ export default function Page() {
       files: desktopFileTreeOpen(),
     }),
   )
+  // amicode#105: in v2 the WORK COLUMN owns a bounded width (default 320,
+  // user-resizable) and the CHAT is the flex remainder — the pre-fix layout
+  // gave the review pane whatever the chat left behind, squishing the chat
+  // into the margin on wide monitors. (After desktopV2PanelLayout — createMemo
+  // evaluates eagerly, so order is load-bearing.)
+  const chatTakesRemainder = createMemo(() =>
+    sessionChatTakesRemainder({ newDesign: newSessionDesign(), columnVisible: isDesktop() && desktopV2PanelLayout().visible }),
+  )
+  const workColumnWidth = createMemo(() =>
+    clampWorkColumnWidth({ width: layout.panelColumn.width(), available: sessionPanelAvailable() }),
+  )
+  const sessionPanelWidth = createMemo(() => {
+    if (chatTakesRemainder()) return undefined
+    if (!desktopSidePanelOpen()) return "100%"
+    if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
+    return `calc(100% - ${layout.fileTree.width()}px)`
+  })
 
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
@@ -2276,7 +2292,9 @@ export default function Page() {
 
         <div
           classList={{
-            "@container relative shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
+            "@container relative shrink-0 flex flex-col min-h-0 h-full transition-[width]": true,
+            "flex-1 md:flex-none": !chatTakesRemainder(),
+            "flex-1": chatTakesRemainder(),
             "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
               !size.active() && !ui.reviewSnap && !desktopInlineTerminalOnlyOpen(),
           }}
@@ -2298,12 +2316,11 @@ export default function Page() {
             </SessionPanelFrame>
           )}
 
-          <Show when={desktopSessionResizeOpen()}>
+          {/* the chat-side handle only survives in the classic layout — in v2
+              the work column owns its width and the handle rides its edge */}
+          <Show when={!newSessionDesign() && desktopSessionResizeOpen()}>
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
-                classList={{
-                  "-right-1": settings.general.newLayoutDesigns(),
-                }}
                 direction="horizontal"
                 size={sessionPanelResizedWidth()}
                 min={SESSION_PANEL_WIDTH_MIN}
@@ -2337,7 +2354,32 @@ export default function Page() {
         </Show>
         <Show when={newSessionDesign()}>
           <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>
-            <div class="min-w-0 h-full flex flex-1 flex-col">
+            <div
+              classList={{
+                "min-w-0 h-full flex flex-col relative": true,
+                "flex-1": !isDesktop(),
+                "flex-none": isDesktop(),
+              }}
+              style={{ width: isDesktop() ? `${workColumnWidth()}px` : undefined }}
+            >
+              {/* amicode#105: the work column's own resize handle (its left
+                  edge), sizing layout.panelColumn within the policy bounds —
+                  the chat flexes around it, never below it. */}
+              <Show when={isDesktop()}>
+                <div onPointerDown={() => size.start()}>
+                  <ResizeHandle
+                    direction="horizontal"
+                    edge="start"
+                    size={layout.panelColumn.width()}
+                    min={WORK_COLUMN_WIDTH_MIN}
+                    max={workColumnWidthMax(sessionPanelAvailable() ?? 900)}
+                    onResize={(width) => {
+                      size.touch()
+                      layout.panelColumn.resize(width)
+                    }}
+                  />
+                </div>
+              </Show>
               <Show when={isDesktop() && (desktopV2ReviewOpen() || desktopFileTreeOpen())}>
                 <div class="min-h-0 flex-1">
                   <Suspense>

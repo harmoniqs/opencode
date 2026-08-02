@@ -76,6 +76,12 @@ test("sidebar-right toggles a single-pane work column, pressed state truthful", 
   // single-pane: the review file-list sidebar never renders (the split that
   // squished the chat) — the aside must not exist even with the column open
   await expect(page.locator('[data-slot="session-review-v2-sidebar"]')).toHaveCount(0)
+  // bounded: the column is fixed-width and the chat is the flex REMAINDER —
+  // the pre-fix review pane took everything the chat left behind
+  const width = await page.evaluate(() => window.innerWidth)
+  const columnBox = (await column.boundingBox())!
+  expect(columnBox.width).toBeLessThanOrEqual(width * 0.6)
+  expect(columnBox.width).toBeLessThan(width / 2)
 
   await toggle.click()
   await expect(column).toBeHidden()
