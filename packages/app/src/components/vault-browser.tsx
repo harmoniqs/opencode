@@ -6,13 +6,16 @@
 // the palette command, and context-tree deep-links land in whichever host is
 // mounted. Data: the read-only /amicode/vault-files + /amicode/vault-file
 // routes (loopback-gated server-side).
-import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { useLanguage } from "@/context/language"
-import { useServer } from "@/context/server"
+import { ServerConnection, useServer } from "@/context/server"
+import { useGlobal } from "@/context/global"
 import { amicodeGet } from "@/utils/amicode-fetch"
+import { announceChromeDropdown } from "@/utils/chrome-dropdown"
+import { pickVaultServer, vaultMountsState } from "@/components/vault-browser-model"
 import { vaultPanel } from "@/context/vault-panel"
 
 type Mount = { id: string; kind: string; writable: boolean }
@@ -45,14 +48,34 @@ export function VaultBrowser(props: {
 }) {
   const language = useLanguage()
   const server = useServer()
+  const global = useGlobal()
 
-  const [mountsRaw] = createResource(
-    () => (vaultPanel.opened() ? server.current : undefined),
+  // amicode#105: the drawer is the only host, so it opens POPULATED on every
+  // route — the fetch rides the focused server, else the first healthy, else
+  // the first at all (pickVaultServer); and its failure states are named
+  // (loading / no-server / error+retry / empty+CTA), never one bare "empty".
+  const picked = createMemo(() =>
+    pickVaultServer({
+      current: server.current,
+      list: server.list,
+      healthy: (conn) => global.servers.health[ServerConnection.key(conn)]?.healthy === true,
+    }),
+  )
+
+  const [mountsRaw, { refetch: refetchMounts }] = createResource(
+    () => (vaultPanel.opened() ? picked() : undefined),
     (conn) => amicodeGet(conn, "/amicode/vaults").catch(() => undefined),
   )
+  const mountsState = createMemo(() =>
+    vaultMountsState({
+      raw: mountsRaw() as { mounts?: Mount[] } | undefined,
+      loading: mountsRaw.loading,
+      noServer: !picked(),
+    }),
+  )
   const mounts = createMemo<Mount[]>(() => {
-    const raw = mountsRaw() as { mounts?: Mount[] } | undefined
-    return Array.isArray(raw?.mounts) ? raw.mounts.filter((m) => typeof m?.id === "string") : []
+    const state = mountsState()
+    return state.kind === "ready" ? (state.mounts as Mount[]).filter((m) => typeof m?.id === "string") : []
   })
 
   const [chosenMount, setChosenMount] = createSignal<string | undefined>(undefined)
@@ -62,8 +85,8 @@ export function VaultBrowser(props: {
     return mounts()[0]?.id
   })
 
-  const [listingRaw] = createResource(
-    () => (vaultPanel.opened() && mount() && server.current ? { conn: server.current, mount: mount()! } : undefined),
+  const [listingRaw, { refetch: refetchListing }] = createResource(
+    () => (vaultPanel.opened() && mount() && picked() ? { conn: picked()!, mount: mount()! } : undefined),
     (key) => amicodeGet(key.conn, `/amicode/vault-files?mount=${encodeURIComponent(key.mount)}`).catch(() => undefined),
   )
   const listing = createMemo(() => {
@@ -227,34 +250,81 @@ export function VaultBrowser(props: {
           </div>
         </Show>
         <div class="min-h-0 flex-1 overflow-y-auto px-1 py-2">
-          <Show
-            when={listing()}
-            fallback={
+          <Switch>
+            <Match when={mountsState().kind === "loading"}>
               <div class="px-3 py-2 text-12-regular text-text-weak">
-                {mountsRaw.loading || listingRaw.loading
-                  ? `${language.t("common.loading")}${language.t("common.loading.ellipsis")}`
-                  : language.t("amicode.vault.empty")}
+                {language.t("common.loading")}
+                {language.t("common.loading.ellipsis")}
               </div>
-            }
-          >
-            {(state) => (
+            </Match>
+            <Match when={mountsState().kind === "no-server"}>
+              <div class="px-3 py-2 text-12-regular text-text-weak">{language.t("amicode.vault.noServer")}</div>
+            </Match>
+            <Match when={mountsState().kind === "error"}>
+              <div class="flex items-center gap-2 px-3 py-2">
+                <span class="text-12-regular text-text-weak">{language.t("amicode.vault.fetchError")}</span>
+                <button
+                  type="button"
+                  class="cursor-pointer rounded-md border border-border-weaker-base px-2 py-0.5 text-12-regular text-text-base hover:bg-background-stronger"
+                  onClick={() => void refetchMounts()}
+                >
+                  {language.t("amicode.vault.retry")}
+                </button>
+              </div>
+            </Match>
+            <Match when={mountsState().kind === "empty"}>
+              <div class="flex flex-col gap-2 px-3 py-2">
+                <span class="text-12-regular text-text-weak">{language.t("amicode.vault.attachHint")}</span>
+                <button
+                  type="button"
+                  class="w-fit cursor-pointer rounded-md border border-border-weaker-base px-2 py-0.5 text-12-regular text-text-base hover:bg-background-stronger"
+                  onClick={() => announceChromeDropdown("connections")}
+                >
+                  {language.t("amicode.vault.attach")}
+                </button>
+              </div>
+            </Match>
+            <Match when={true}>
               <Show
-                when={"tree" in state() ? (state() as { tree: Dir }) : undefined}
-                fallback={<div class="px-3 py-2 text-12-regular text-text-weak">{language.t("amicode.vault.error")}</div>}
+                when={listing()}
+                fallback={
+                  <div class="px-3 py-2 text-12-regular text-text-weak">
+                    {language.t("common.loading")}
+                    {language.t("common.loading.ellipsis")}
+                  </div>
+                }
               >
-                {(ok) => (
-                  <>
-                    {renderDir(ok().tree, 0)}
-                    <Show when={(state() as { truncated?: boolean }).truncated}>
-                      <div class="px-3 py-2 text-12-regular text-text-weaker">
-                        {language.t("amicode.vault.truncated")}
+                {(state) => (
+                  <Show
+                    when={"tree" in state() ? (state() as { tree: Dir }) : undefined}
+                    fallback={
+                      <div class="flex items-center gap-2 px-3 py-2">
+                        <span class="text-12-regular text-text-weak">{language.t("amicode.vault.error")}</span>
+                        <button
+                          type="button"
+                          class="cursor-pointer rounded-md border border-border-weaker-base px-2 py-0.5 text-12-regular text-text-base hover:bg-background-stronger"
+                          onClick={() => void refetchListing()}
+                        >
+                          {language.t("amicode.vault.retry")}
+                        </button>
                       </div>
-                    </Show>
-                  </>
+                    }
+                  >
+                    {(ok) => (
+                      <>
+                        {renderDir(ok().tree, 0)}
+                        <Show when={(state() as { truncated?: boolean }).truncated}>
+                          <div class="px-3 py-2 text-12-regular text-text-weaker">
+                            {language.t("amicode.vault.truncated")}
+                          </div>
+                        </Show>
+                      </>
+                    )}
+                  </Show>
                 )}
               </Show>
-            )}
-          </Show>
+            </Match>
+          </Switch>
         </div>
       </Show>
 

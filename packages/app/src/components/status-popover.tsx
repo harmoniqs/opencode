@@ -236,6 +236,9 @@ export function GlobalConnectionsPopover(props: { onManageVaults: () => void }) 
   }
   createEffect(() => {
     if (chromeDropdownOpenId() !== "connections" && shown()) setShownRaw(false)
+    // amicode#105: the announce is bidirectional — deep links (the vault
+    // drawer's attach CTA) open this popover by naming it, not just close it.
+    if (chromeDropdownOpenId() === "connections" && !shown()) setShownRaw(true)
   })
 
   return (
