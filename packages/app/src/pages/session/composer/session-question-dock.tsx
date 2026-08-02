@@ -13,6 +13,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useServerSDK } from "@/context/server-sdk"
 import { ScopedKey } from "@/utils/server-scope"
+import { questionCustomRow, questionText, questionTextReady } from "./session-question-dock.helpers"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
@@ -94,7 +95,12 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const input = createMemo(() => store.custom[store.tab] ?? "")
   const on = createMemo(() => store.customOn[store.tab] === true)
   const multi = createMemo(() => question()?.multiple === true)
-  const count = createMemo(() => options().length + 1)
+  // A Free-form Question (amicode#245) renders as a text card: the header plus
+  // a bare text input with submit — no option rows, no pseudo-option. Its
+  // answer rides the typed-custom-answer path; submit waits for non-empty text.
+  const text = createMemo(() => questionText(question()))
+  const customRow = createMemo(() => questionCustomRow(question()))
+  const count = createMemo(() => (text() ? 0 : options().length + 1))
 
   const summary = createMemo(() => {
     const n = Math.min(store.tab + 1, total())
@@ -339,7 +345,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
     const target =
       event.target instanceof HTMLElement ? event.target.closest('[data-slot="question-options"]') : undefined
-    if (store.editing) return
+    if (store.editing || text()) return
     if (!(target instanceof HTMLElement)) return
     if (event.altKey || event.ctrlKey || event.metaKey) return
 
@@ -416,6 +422,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const next = () => {
     if (sending()) return
     if (store.editing) commitCustom()
+    if (text() && !questionTextReady(input())) return
 
     if (store.tab >= total() - 1) {
       submit()
@@ -534,7 +541,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
               <Button
                 variant={last() ? "primary" : "secondary"}
                 size="large"
-                disabled={sending()}
+                disabled={sending() || (text() && !questionTextReady(input()))}
                 onClick={next}
                 aria-keyshortcuts="Meta+Enter Control+Enter"
               >
@@ -555,7 +562,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
         >
           {question()?.question}
         </div>
-        <Show when={!store.minimized}>
+        <Show when={!store.minimized && !text()}>
           <Show when={multi()} fallback={<div data-slot="question-hint">{language.t("ui.question.singleHint")}</div>}>
             <div data-slot="question-hint">{language.t("ui.question.multiHint")}</div>
           </Show>
@@ -571,23 +578,55 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
             visibility: optionsOff() ? "hidden" : "visible",
           }}
         >
-          <For each={options()}>
-            {(opt, i) => (
-              <Option
-                multi={multi()}
-                picked={picked(opt.label)}
-                label={opt.label}
-                description={opt.description}
-                disabled={sending()}
-                ref={(el) => (optsRef[i()] = el)}
-                onFocus={() => setStore("focus", i())}
-                onClick={() => selectOption(i())}
-              />
-            )}
-          </For>
-
           <Show
-            when={store.editing}
+            when={!text()}
+            fallback={
+              <form
+                data-slot="question-text-form"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  next()
+                }}
+              >
+                <textarea
+                  ref={focusCustom}
+                  data-slot="question-custom-input"
+                  placeholder={customPlaceholder()}
+                  value={input()}
+                  rows={1}
+                  disabled={sending()}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && !e.altKey) return
+                    if (e.key !== "Enter" || e.shiftKey) return
+                    e.preventDefault()
+                    next()
+                  }}
+                  onInput={(e) => {
+                    customUpdate(e.currentTarget.value, true)
+                    resizeInput(e.currentTarget)
+                  }}
+                />
+              </form>
+            }
+          >
+            <For each={options()}>
+              {(opt, i) => (
+                <Option
+                  multi={multi()}
+                  picked={picked(opt.label)}
+                  label={opt.label}
+                  description={opt.description}
+                  disabled={sending()}
+                  ref={(el) => (optsRef[i()] = el)}
+                  onFocus={() => setStore("focus", i())}
+                  onClick={() => selectOption(i())}
+                />
+              )}
+            </For>
+
+            <Show when={customRow()}>
+              <Show
+                when={store.editing}
             fallback={
               <button
                 type="button"
@@ -655,9 +694,11 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
                     customUpdate(e.currentTarget.value)
                     resizeInput(e.currentTarget)
                   }}
-                />
+                 />
               </span>
             </form>
+              </Show>
+            </Show>
           </Show>
         </div>
       </DockPrompt>
