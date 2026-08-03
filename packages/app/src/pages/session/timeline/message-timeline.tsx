@@ -19,7 +19,6 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { AmicoMark } from "@opencode-ai/ui/amico-spinner"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -149,17 +148,25 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
 
   return (
     <div data-slot="session-turn-thinking">
-      {/* amicode: the harmonic working indicator — AmicoWave glyph + cycling
-          gerund + live elapsed/tokens — replacing the stock TextShimmer here.
+      {/* amicode: the harmonic working indicator — a two-row block (H-mark +
+          AmicoWave glyph + cycling gerund; live elapsed/tokens meta below),
+          replacing the stock TextShimmer here. The block OWNS its mark now
+          (thinking-line.tsx) and is unsqueezable (flex-shrink: 0 in
+          session-turn.css): the sibling heading truncates via TextReveal's
+          `truncate` instead — a squeeze once shattered the meta line
+          mid-phrase across three lines.
           This row IS the new-architecture mount; the old AssistantParts lane is
           dead code on this timeline (recovered in the 2026-08-01 branch merges,
           mount moved 2026-08-01). */}
-      <span class="amc-thinking-row" style={{ display: "inline-flex", "align-items": "center", gap: "8px" }}>
-        <AmicoMark />
-        <ThinkingLine tokens={props.tokens} />
-      </span>
+      <ThinkingLine tokens={props.tokens} />
       <Show when={!props.showReasoningSummaries}>
-        <TextReveal text={props.reasoningHeading} class="session-turn-thinking-heading" travel={25} duration={700} />
+        <TextReveal
+          text={props.reasoningHeading}
+          class="session-turn-thinking-heading"
+          travel={25}
+          duration={700}
+          truncate
+        />
       </Show>
     </div>
   )

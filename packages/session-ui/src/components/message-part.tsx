@@ -1,4 +1,4 @@
-import { AmicoSpinner, AmicoMark } from "@opencode-ai/ui/amico-spinner"
+import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import { shellRowLabel } from "@opencode-ai/ui/amicode-shell-row"
 import { sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-rail-gate"
@@ -914,16 +914,12 @@ export function AssistantParts(props: {
       </Index>
       {/* amicode: Amico's working presence — the offset accent lane. Shown only
           while an in-domain turn streams (state === "on"), decoupled from any
-          card-suppression: the H-mark pulses + the thinking line runs
-          (cycling shimmer word + live elapsed/tokens). Pops out the moment
-          working flips false. spec-20260712-amico-third-actor. */}
+          card-suppression: the thinking block runs (H-mark + cycling gerund +
+          live elapsed/tokens — it owns its mark now, no lane-head here; two
+          signature marks side by side compete with each other). Pops out the
+          moment working flips false. spec-20260712-amico-third-actor. */}
       <Show when={inDomainTurn() && props.working && last() === grouped().at(-1)?.key}>
         <div class="amc-lane" data-slot="amico-working">
-          <span class="amc-lane-head">
-            {/* static: AmicoWave in the thinking line carries the motion now — two
-                animated brand marks side by side compete with each other */}
-            <AmicoMark />
-          </span>
           <ThinkingLine tokens={turnTokenCount() || undefined} />
         </div>
       </Show>

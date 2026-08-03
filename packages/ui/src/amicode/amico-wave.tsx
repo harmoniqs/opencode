@@ -1,6 +1,6 @@
 // AMICODE: the harmonic working indicator — a standing wave in quadrature, shown while
-// Amico works. Will replace the amc-text-shimmer treatment on both indicator surfaces once
-// mounted — that wiring (thinking-line.tsx and the tool header) is a later task.
+// Amico works. Mounted inside the thinking block (thinking-line.tsx), which replaced the
+// old shimmer treatment there; the tool-header surface remains unwired.
 //
 // Markup only: all geometry and timing come from ./wave-geometry, handed to the CSS as
 // custom properties so there is exactly one source of truth. Two paths per mode (lead +

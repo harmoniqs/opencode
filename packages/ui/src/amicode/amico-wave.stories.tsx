@@ -1,9 +1,9 @@
 // @ts-nocheck
 // AmicoWave: the harmonic working indicator. Geometry/timing live in wave-geometry.ts and are
-// unit-tested there; this file is the only place the SVG + CSS actually render, so it is also
-// the only place a CSS regression (wrong ink, broken quadrature, id collisions across
-// simultaneous mounts) would be visible before it ships. Nothing mounts AmicoWave in the app
-// yet — see amico-wave.tsx's header comment — so these stories are the sole way to see it.
+// unit-tested there; this file is the only place the SVG + CSS actually render in isolation, so
+// it is also the only place a CSS regression (wrong ink, broken quadrature, id collisions across
+// simultaneous mounts) would be visible before it ships. The glyph mounts inside the thinking
+// block (thinking-line.tsx) in the app — these stories remain the focused way to see it.
 //
 // ---- why Default/Schemes exist -------------------------------------------------------------
 // A review caught a critical color bug that no unit test could have caught: the component
@@ -40,6 +40,7 @@
 // mapping from its source file, so it tracks theme changes instead of a hand-copied hex.
 import { createSignal, For, onMount } from "solid-js"
 import { AmicoWave } from "./amico-wave"
+import { AmicoMark } from "./spinner"
 import { MODE_WAVELENGTHS, WAVE_BOX } from "./wave-geometry"
 import oc2ThemeJson from "../theme/themes/oc-2.json"
 import { resolveThemeVariantV2 } from "../theme/v2/resolve"
@@ -110,13 +111,16 @@ function SchemePane(props: { scheme: "light" | "dark"; children: unknown }) {
   )
 }
 
-// Mimics the real mount site (thinking-line.tsx, once wired): glyph, bold gerund, muted
-// elapsed time — reusing the actual .amc-thinking* classes from amicode.css.
+// Mimics the real mount site (thinking-line.tsx): H-mark, glyph and bold gerund
+// on the top row; the muted meta below, starting under the glyph — reusing the
+// actual .amc-thinking* classes from amicode.css. DOM order is word-first so
+// the block's first baseline is the verb's (see thinking-line.tsx).
 const ThinkingRow = () => (
   <span class="amc-thinking">
+    <span class="amc-thinking-word">Percolating…</span>
+    <AmicoMark />
     <AmicoWave />
-    <span class="amc-thinking-word">Percolating</span>
-    <span class="amc-thinking-meta">5m 13s</span>
+    <span class="amc-thinking-meta">5m 13s · ↑ 2.4k tokens</span>
   </span>
 )
 
@@ -136,9 +140,9 @@ three modes (1/2/3 full wavelengths across the box) on a slower cadence. All geo
 timing come from wave-geometry.ts via CSS custom properties set inline by the component —
 never restated here.
 
-Not yet mounted anywhere in the app (a later task will wire it into the thinking line and the
-tool header, replacing the amc-text-shimmer treatment) — these stories are the only current
-way to see it render.
+Not yet mounted anywhere in the app directly — it renders inside the thinking block
+(thinking-line.tsx, mounted by the app timeline and the session-ui lane) — so these stories
+remain the focused way to see the glyph itself.
 
 **Hard invariant, guarded by ManyInstances below:** no SVG \`<defs>\`, no \`id\` attributes.
 SVG ids are document-global, and several indicators mount at once in real use (one thinking
