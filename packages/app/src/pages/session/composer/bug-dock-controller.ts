@@ -96,12 +96,28 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     }
   }
 
+  /** The chevron — collapse/re-expand only. Never posts, never closes:
+   *  collapsing the dock keeps the bug session alive (ADR 0004). */
+  const toggleCollapsed = () => {
+    if (!open()) return
+    setCollapsed((value) => !value)
+  }
+
+  /** Re-expand an open-but-collapsed dock — the button's revealNonce path.
+   *  Never posts. */
+  const reveal = () => {
+    if (!open()) return
+    setCollapsed(false)
+  }
+
   return {
     phase,
     sessionID,
     collapsed,
     filedUrl,
     handleBridgeMessage,
+    toggleCollapsed,
+    reveal,
   }
 }
 

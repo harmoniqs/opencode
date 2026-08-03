@@ -73,3 +73,46 @@ describe("bug-dock controller: open-bug-report (AC1)", () => {
     expect(url.searchParams.get("amicode_hide_project")).toBe("/wt/hidden")
   })
 })
+
+describe("bug-dock controller: collapse keeps the session alive (AC2)", () => {
+  test("the chevron collapses and re-expands, posting nothing and never closing", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.toggleCollapsed()
+    expect(controller.collapsed()).toBe(true)
+    expect(controller.phase()).toBe("chat")
+
+    controller.toggleCollapsed()
+    expect(controller.collapsed()).toBe(false)
+
+    // Collapse is not close: zero bridge traffic, the dock seam stays open.
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+
+  test("reveal() re-expands an open-but-collapsed dock without posting (the button's revealNonce path)", () => {
+    const { controller, posts } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.toggleCollapsed()
+    expect(controller.collapsed()).toBe(true)
+
+    controller.reveal()
+
+    expect(controller.collapsed()).toBe(false)
+    expect(controller.phase()).toBe("chat")
+    expect(posts).toEqual([])
+  })
+
+  test("collapse/reveal on a closed dock are no-ops", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.toggleCollapsed()
+    controller.reveal()
+    expect(controller.phase()).toBe("closed")
+    expect(controller.collapsed()).toBe(false)
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+})
