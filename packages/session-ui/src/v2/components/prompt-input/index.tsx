@@ -40,6 +40,13 @@ export type PromptInputV2Props = {
   borderUnderlay?: boolean
   class?: string
   modelControl?: JSX.Element
+  /**
+   * Optional control rendered in the bottom row's right anchor, immediately
+   * left of the send button (amicode/opencode#116: the report-a-bug button).
+   * Follows the modelControl optional-control pattern: pass `undefined` and
+   * nothing renders — the row's layout does not shift.
+   */
+  trailingControl?: JSX.Element
   variantControlVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
@@ -246,6 +253,9 @@ export function PromptInputV2(props: PromptInputV2Props) {
               )}
             </Show>
           </div>
+          <Show when={props.trailingControl} keyed>
+            {(control) => <div class="mr-1 flex items-center">{control}</div>}
+          </Show>
           <PromptInputV2SubmitButton
             mode={state.mode}
             stopping={view.submit.stopping()}
