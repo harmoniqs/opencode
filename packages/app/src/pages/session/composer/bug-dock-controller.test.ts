@@ -14,7 +14,7 @@ import { bugDockFrameSrc, createBugDockController, findBugFiledUrl, matchBugFile
 
 const openMessage = (sessionID: string) => ({ source: "amicode", kind: "open-bug-report", sessionID })
 
-function setup(opts?: { enabled?: boolean }) {
+function setup(opts?: { enabled?: () => boolean }) {
   const posts: { kind: string; payload: Record<string, unknown> }[] = []
   const dockCalls: string[] = []
   const controller = createBugDockController({
