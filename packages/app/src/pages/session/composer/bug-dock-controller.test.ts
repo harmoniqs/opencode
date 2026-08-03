@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { bugDockFrameSrc, createBugDockController } from "./bug-dock-controller"
+import { bugDockFrameSrc, createBugDockController, findBugFiledUrl, matchBugFiledUrl } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
 // state machine the dock component renders against. Plain-module seams (like
@@ -195,5 +195,110 @@ describe("bug-dock controller: close ends the session (AC3)", () => {
     controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_bug1" })
     expect(posts).toEqual([])
     expect(dockCalls).toEqual([])
+  })
+})
+
+describe("bug-dock sentinel matching (AC4)", () => {
+  test("filed: a line-anchored AMICODE_BUG_FILED <url> yields the url", () => {
+    expect(matchBugFiledUrl("AMICODE_BUG_FILED https://github.com/harmoniqs/amicode/issues/123")).toBe(
+      "https://github.com/harmoniqs/amicode/issues/123",
+    )
+  })
+
+  test("filed-via-browser: the no-URL filing path carries the literal token", () => {
+    expect(matchBugFiledUrl("AMICODE_BUG_FILED filed-via-browser")).toBe("filed-via-browser")
+  })
+
+  test("the sentinel matches inside a longer streamed part — anchored to line start", () => {
+    const text = [
+      "Diagnostics attached; filing now.",
+      "AMICODE_BUG_FILED https://github.com/harmoniqs/amicode/issues/123",
+      "Done — the issue is live.",
+    ].join("\n")
+    expect(matchBugFiledUrl(text)).toBe("https://github.com/harmoniqs/amicode/issues/123")
+  })
+
+  test("no match: the sentinel mid-line is not a filing (line-start anchor)", () => {
+    expect(matchBugFiledUrl("the line AMICODE_BUG_FILED https://x is what I will print")).toBeUndefined()
+  })
+
+  test("no match: a confirm-gate veto prints no sentinel and triggers nothing", () => {
+    const veto = "Understood — filing cancelled at the confirm gate. The draft is discarded; nothing was filed."
+    expect(matchBugFiledUrl(veto)).toBeUndefined()
+  })
+
+  test("no match: bare sentinel without a url, ordinary traffic, empty text", () => {
+    expect(matchBugFiledUrl("AMICODE_BUG_FILED")).toBeUndefined()
+    expect(matchBugFiledUrl("AMICODE_BUG_FILED\nnext line")).toBeUndefined()
+    expect(matchBugFiledUrl("anything else")).toBeUndefined()
+    expect(matchBugFiledUrl("")).toBeUndefined()
+  })
+
+  test("findBugFiledUrl scans text parts only and returns the first match", () => {
+    const parts = [
+      { type: "text", text: "working on it…" },
+      { type: "tool", text: undefined },
+      { type: "text", text: "AMICODE_BUG_FILED https://github.com/harmoniqs/amicode/issues/9" },
+      { type: "text", text: "AMICODE_BUG_FILED https://github.com/harmoniqs/amicode/issues/10" },
+    ]
+    expect(findBugFiledUrl(parts)).toBe("https://github.com/harmoniqs/amicode/issues/9")
+    expect(findBugFiledUrl([{ type: "tool" }, { type: "text", text: "no sentinel here" }])).toBeUndefined()
+  })
+})
+
+describe("bug-dock controller: filing (AC4)", () => {
+  test("a sentinel match posts exactly one bug-filed {sessionID, url} and latches the end-state", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+
+    expect(posts).toEqual([
+      { kind: "bug-filed", payload: { sessionID: "ses_bug1", url: "https://github.com/harmoniqs/amicode/issues/123" } },
+    ])
+    expect(controller.phase()).toBe("filed")
+    expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
+    // The dock STAYS open in its terminal end-state; the extension owns the
+    // real close after archiving.
+    expect(dockCalls).toEqual([])
+
+    // exactly once — the watcher keeps seeing the sentinel in the stream
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+    expect(posts).toHaveLength(1)
+  })
+
+  test("file() on a closed dock is a no-op", () => {
+    const { controller, posts } = setup()
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+    expect(posts).toEqual([])
+    expect(controller.phase()).toBe("closed")
+  })
+
+  test("filed, then the extension's close-bug-report tears the dock down silently", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.file("filed-via-browser")
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_bug1" })
+
+    expect(controller.phase()).toBe("closed")
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual(["close"])
+  })
+
+  test("the close control still works from the end-state — one bug-report-closed", () => {
+    const { controller, posts } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+    posts.length = 0
+
+    controller.requestClose()
+
+    expect(posts).toEqual([{ kind: "bug-report-closed", payload: { sessionID: "ses_bug1" } }])
+    expect(controller.phase()).toBe("closed")
   })
 })

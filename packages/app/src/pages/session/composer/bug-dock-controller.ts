@@ -26,6 +26,33 @@ export const BUG_REPORT_CLOSED_KIND = "bug-report-closed"
  *  "filed" — terminal end-state (issue link) until the extension closes it. */
 export type BugDockPhase = "closed" | "chat" | "filed"
 
+// The skill's terminal sentinel (the run-telemetry idiom), printed ONLY after
+// actual filing — never at the confirm gate, so a veto never emits it. On the
+// browser-fallback path there is no URL and the line carries the literal
+// token `filed-via-browser`. Anchored to line start, multiline (a streamed
+// part's text carries whole chunks of the transcript); the separator is
+// HORIZONTAL whitespace only so a bare sentinel at end-of-line can't capture
+// the next line's first word.
+const BUG_FILED_SENTINEL = /^AMICODE_BUG_FILED[ \t]+(\S+)/m
+
+/** Match the terminal sentinel in a streamed text part — the issue URL, the
+ *  `filed-via-browser` token, or undefined for non-matching traffic. */
+export function matchBugFiledUrl(text: string): string | undefined {
+  return BUG_FILED_SENTINEL.exec(text)?.[1]
+}
+
+/** Scan a session's message parts for the sentinel. Text parts only; the
+ *  first match wins. The caller scopes the parts to the bug session — the
+ *  watcher only ever observes the session the dock hosts. */
+export function findBugFiledUrl(parts: Iterable<{ type: string; text?: string }>): string | undefined {
+  for (const part of parts) {
+    if (part.type !== "text" || typeof part.text !== "string") continue
+    const url = matchBugFiledUrl(part.text)
+    if (url) return url
+  }
+  return undefined
+}
+
 export type BugDockControllerDeps = {
   /** the boot-param gate (amicode_bug_report=1) — the dock is inert without it */
   enabled?: () => boolean
@@ -136,6 +163,17 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     dismiss()
   }
 
+  /** The sentinel watcher matched — the skill filed. Posts bug-filed exactly
+   *  once (latched: the sentinel keeps matching in the persisted transcript,
+   *  so the phase guard is load-bearing) and switches to the terminal
+   *  end-state; the dock stays open until the extension closes it. */
+  const file = (url: string) => {
+    const id = sessionID()
+    if (!open() || !id || filedUrl()) return
+    post(BUG_FILED_KIND, { sessionID: id, url })
+    setFiledUrl(url)
+  }
+
   return {
     phase,
     sessionID,
@@ -145,6 +183,7 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     toggleCollapsed,
     reveal,
     requestClose,
+    file,
   }
 }
 
