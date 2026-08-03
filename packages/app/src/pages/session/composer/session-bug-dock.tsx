@@ -4,9 +4,10 @@
 // collapses and keeps the session alive; the close control posts
 // bug-report-closed and ends it; the sentinel watcher switches the dock to
 // its terminal end-state until the extension closes it. All state lives in
-// the module-singleton bugDockController (one dock per window) — this
-// component is the thin Solid shell: bridge listener, reveal effect, the
-// watcher, and the family-idiom animation. Logic is unit-tested in
+// the module-singleton bugDockController (one dock per window); bridge
+// down-messages reach it at app level (AmicodeThemeBridge in app.tsx) — this
+// component is the thin Solid shell: the revealNonce re-expand effect, the
+// sentinel watcher, and the family-idiom animation. Logic is unit-tested in
 // bug-dock-controller.test.ts; the visual contract lives in
 // session-bug-dock.stories.tsx (no component-render test surface — see the
 // issue's Testing Decisions). en-only chrome, per the amicode precedent.
