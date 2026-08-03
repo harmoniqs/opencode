@@ -1,6 +1,8 @@
 import { Show, type JSX } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
+import { bugReportEnabled } from "@/utils/amicode-bug-report"
+import { SessionBugDock } from "@/pages/session/composer/session-bug-dock"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
 import { SessionFollowupDock } from "@/pages/session/composer/session-followup-dock"
@@ -57,6 +59,14 @@ export function SessionComposerRegion(props: {
               />
             </div>
           )}
+        </Show>
+
+        {/* amicode/opencode#117: the bug-report dock — window-singleton state
+            (not per-session), so it sits outside the composer block gates: a
+            question/permission prompt must never hide it. Gated on the same
+            amicode_bug_report=1 boot param as the button (#116). */}
+        <Show when={bugReportEnabled()}>
+          <SessionBugDock />
         </Show>
 
         <Show when={controller.showComposer()}>

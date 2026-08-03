@@ -69,6 +69,7 @@ import { useCheckServerHealth } from "./utils/server-health"
 import { AmicodeSplash } from "@opencode-ai/ui/amicode-splash"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
+import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
@@ -409,6 +410,13 @@ function AmicodeThemeBridge() {
     // defaults capsule's compute-connect flow (consumed when home is showing).
     if (d.kind === "open-compute-connect") {
       requestComputeConnect()
+      return
+    }
+    // amicode/opencode#117: bug-report dock open/close down-messages. Handled
+    // at app level (not in the dock) so an open can't be missed between
+    // pages; the controller self-gates on the boot param + kind.
+    if (d.kind === "open-bug-report" || d.kind === "close-bug-report") {
+      bugDockController.handleBridgeMessage(d)
       return
     }
     if (d.kind !== "theme") return
