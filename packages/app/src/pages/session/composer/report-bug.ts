@@ -10,5 +10,11 @@ import { bugDock } from "./bug-dock"
 export const REPORT_BUG_COMMAND = "amicode.reportBug"
 
 export function reportBug(dock: Pick<typeof bugDock, "isOpen" | "reveal"> = bugDock): void {
+  // Dock already open → reveal/re-expand it and post nothing; the flow is
+  // already alive, a second bridge post would spawn a duplicate.
+  if (dock.isOpen()) {
+    dock.reveal()
+    return
+  }
   postAmicode(REPORT_BUG_COMMAND)
 }

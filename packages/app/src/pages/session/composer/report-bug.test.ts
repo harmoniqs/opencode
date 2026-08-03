@@ -24,4 +24,50 @@ describe("reportBug", () => {
       spy.mockRestore()
     }
   })
+
+  test("reveals the open dock instead of posting — reveal/re-expand, zero bridge messages", () => {
+    const spy = spyOn(window.parent, "postMessage").mockImplementation(() => {})
+    try {
+      bugDock.open() // #117 drives this when its dock mounts
+      expect(bugDock.isOpen()).toBe(true)
+      const before = bugDock.revealNonce()
+
+      reportBug()
+
+      expect(spy).not.toHaveBeenCalled()
+      // reveal must be observable even on an already-open dock (re-expand).
+      expect(bugDock.revealNonce()).toBe(before + 1)
+      expect(bugDock.isOpen()).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("posts again once the dock has been dismissed", () => {
+    const spy = spyOn(window.parent, "postMessage").mockImplementation(() => {})
+    try {
+      bugDock.open()
+      reportBug()
+      expect(spy).not.toHaveBeenCalled()
+
+      bugDock.close()
+      expect(bugDock.isOpen()).toBe(false)
+      reportBug()
+      expect(spy).toHaveBeenCalledTimes(1)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("an injected dock seam is consulted — open dock → reveal called, no post", () => {
+    const spy = spyOn(window.parent, "postMessage").mockImplementation(() => {})
+    let revealed = 0
+    try {
+      reportBug({ isOpen: () => true, reveal: () => revealed++ })
+      expect(revealed).toBe(1)
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
