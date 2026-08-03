@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import { bugDockFrameSrc, createBugDockController } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
@@ -112,6 +112,87 @@ describe("bug-dock controller: collapse keeps the session alive (AC2)", () => {
     controller.reveal()
     expect(controller.phase()).toBe("closed")
     expect(controller.collapsed()).toBe(false)
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+})
+
+describe("bug-dock controller: close ends the session (AC3)", () => {
+  test("the close control posts exactly one bug-report-closed {sessionID} and dismisses", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.requestClose()
+
+    expect(posts).toEqual([{ kind: "bug-report-closed", payload: { sessionID: "ses_bug1" } }])
+    expect(controller.phase()).toBe("closed")
+    expect(controller.sessionID()).toBeUndefined()
+    expect(dockCalls).toEqual(["close"])
+
+    // exactly once — a second request is a no-op on an already-closed dock
+    controller.requestClose()
+    expect(posts).toHaveLength(1)
+    expect(dockCalls).toEqual(["close"])
+  })
+
+  test("collapse-then-close still posts exactly once — collapse posted nothing", () => {
+    const { controller, posts } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.toggleCollapsed()
+    controller.toggleCollapsed()
+    expect(posts).toEqual([])
+
+    controller.requestClose()
+    expect(posts).toEqual([{ kind: "bug-report-closed", payload: { sessionID: "ses_bug1" } }])
+  })
+
+  test("the real default post builds the bridge envelope {source, kind, sessionID}", () => {
+    const spy = spyOn(window.parent, "postMessage").mockImplementation(() => {})
+    try {
+      const controller = createBugDockController({
+        enabled: () => true,
+        dock: { open: () => {}, close: () => {} },
+      })
+      controller.handleBridgeMessage(openMessage("ses_bug1"))
+      controller.requestClose()
+      expect(spy).toHaveBeenCalledTimes(1)
+      const [message, targetOrigin] = spy.mock.calls[0] as unknown as [unknown, unknown]
+      expect(message).toEqual({ source: "amicode", kind: "bug-report-closed", sessionID: "ses_bug1" })
+      expect(targetOrigin).toBe("*")
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("an extension-initiated close-bug-report for the hosted session closes silently", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_bug1" })
+
+    // The extension owns this close (post-archive) — the dock posts nothing back.
+    expect(controller.phase()).toBe("closed")
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual(["close"])
+  })
+
+  test("close-bug-report for another session — or with no dock open — is ignored", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    posts.length = 0
+
+    controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_other" })
+    expect(controller.phase()).toBe("chat")
+    expect(posts).toEqual([])
+
+    controller.requestClose()
+    posts.length = 0
+    dockCalls.length = 0
+    controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_bug1" })
     expect(posts).toEqual([])
     expect(dockCalls).toEqual([])
   })

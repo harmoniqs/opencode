@@ -85,6 +85,14 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     dock.open()
   }
 
+  const dismiss = () => {
+    setOpen(false)
+    setSessionID(undefined)
+    setCollapsed(false)
+    setFiledUrl(undefined)
+    dock.close()
+  }
+
   const handleBridgeMessage = (data: unknown) => {
     if (typeof data !== "object" || !data) return
     const message = data as { source?: unknown; kind?: unknown; sessionID?: unknown }
@@ -93,6 +101,13 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
       if (!enabled()) return
       if (typeof message.sessionID !== "string" || !message.sessionID) return
       adopt(message.sessionID)
+      return
+    }
+    if (message.kind === CLOSE_BUG_REPORT_KIND) {
+      // Extension-initiated close (post-archive teardown): close quietly —
+      // the extension already knows, posting bug-report-closed back would lie.
+      if (!open() || message.sessionID !== sessionID()) return
+      dismiss()
     }
   }
 
@@ -110,6 +125,17 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setCollapsed(false)
   }
 
+  /** The close control — the ONLY user action that ends an unfiled session.
+   *  Posts bug-report-closed exactly once (the dock is closed after the first
+   *  request, so there is no second), then dismisses locally; the extension
+   *  aborts + hard-deletes the session. */
+  const requestClose = () => {
+    const id = sessionID()
+    if (!open() || !id) return
+    post(BUG_REPORT_CLOSED_KIND, { sessionID: id })
+    dismiss()
+  }
+
   return {
     phase,
     sessionID,
@@ -118,6 +144,7 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     handleBridgeMessage,
     toggleCollapsed,
     reveal,
+    requestClose,
   }
 }
 
