@@ -45,7 +45,11 @@
 
   [data-slot="session-turn-thinking"] {
     display: flex;
-    align-items: center;
+    /* baseline: aligns the heading with the thinking block's VERB row — the
+       block's first baseline is the verb's by construction (thinking-line.tsx),
+       so a center-aligned two-row block never leaves the heading floating
+       between the verb and meta rows */
+    align-items: baseline;
     gap: 8px;
     margin-top: 12px;
     width: 100%;
@@ -56,6 +60,13 @@
     font-weight: var(--font-weight-medium);
     line-height: 20px;
     min-height: 20px;
+
+    /* the indicator block is unsqueezable — the sibling heading truncates
+       instead (TextReveal truncate). The old flex row once let the heading
+       squeeze the meta until it shattered mid-phrase across three lines. */
+    > [data-slot="amc-thinking"] {
+      flex-shrink: 0;
+    }
 
     [data-component="spinner"] {
       width: 16px;

@@ -52,35 +52,58 @@
   flex-shrink: 0;
 }
 
-/* ---- thinking line (Claude-Code-esque working indicator) ----------------- */
-/* Sits after the AMICO wordmark while a reply streams (thinking-line.tsx). The
- * gerund word cycles without shimmer — the wave glyph (amico-wave.tsx) will carry
- * the motion once mounted (a later task); the meta line ticks elapsed (· tokens · esc). */
+/* ---- thinking block (Claude-Code-esque working indicator) ---------------- */
+/* Two-row grid shown while a reply streams (thinking-line.tsx): the H-mark,
+ * harmonic wave and cycling gerund ride the top row; the live meta line
+ * (elapsed · tokens · esc) sits below, starting under the wave. Anti-glitch
+ * invariants, earned the hard way:
+ *  - GRID, never flex-wrap — the old flex row once let a greedy sibling
+ *    heading squeeze the meta until "↑ 8.7k tokens" shattered across three
+ *    lines, and baseline alignment scattered the mark/wave/verb;
+ *  - the verb reserves the longest gerund's width (16ch covers
+ *    "Fidelitymaxxing…") so word rotation never shifts the layout around it;
+ *  - the meta renders from mount (elapsed always ticks), so the block's height
+ *    is constant whether or not tokens/hints are present;
+ *  - nowrap + ellipsis on the meta for absurdly narrow panes.
+ * DOM order is word-first so the block's first baseline is the VERB's — the
+ * sibling activity heading (session-turn-thinking) aligns with the verb, not
+ * the mark's bottom edge. Explicit grid placement keeps the visual order. */
 .amc-thinking {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  display: inline-grid;
+  grid-template-columns: auto auto 1fr;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
   min-width: 0;
+  max-width: 100%;
   font-size: 11px;
   letter-spacing: 0.01em;
   color: var(--v2-text-text-muted);
 }
+.amc-thinking .amc-mark { grid-column: 1; grid-row: 1; }
+.amc-thinking .amc-wave { grid-column: 2; grid-row: 1; }
 .amc-thinking-word {
+  grid-column: 3;
+  grid-row: 1;
   font-weight: 600;
   white-space: nowrap;
+  min-width: 16ch;
   color: var(--v2-text-text-accent);
 }
 .amc-thinking-meta {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
+  grid-column: 2 / -1;
+  grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--v2-text-text-faint);
   font-variant-numeric: tabular-nums;
 }
+/* inline children (no flex) so the whole meta truncates as one line of text */
+.amc-thinking-meta > * + * { margin-left: 6px; }
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
-/* The glyph is a block, not text — baseline alignment would sit it high. */
-.amc-thinking .amc-wave { align-self: center; }
 
 /* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
 /* Expanding a skill used to dump its instructions as bare markdown straight into the

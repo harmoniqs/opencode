@@ -87,7 +87,11 @@ function MockFlow(props: { state: PresenceState }) {
       {/* Amico lane */}
       <Show when={props.state === "stepping_in" || props.state === "on"}>
         <div class="amc-lane" classList={{ "is-stepping-in": props.state === "stepping_in" }}>
-          <div class="amc-lane-head"><AmicoMark running />{props.state === "stepping_in" ? "stepping in…" : ""}</div>
+          {/* stepping_in gets a bare lane-head; once working, the thinking block
+              OWNS its H-mark (thinking-line.tsx) so no lane-head here */}
+          <Show when={props.state === "stepping_in"}>
+            <div class="amc-lane-head"><AmicoMark running />stepping in…</div>
+          </Show>
           <Show when={props.state === "on"}>
             <ThinkingLine tokens={2437} />
           </Show>
