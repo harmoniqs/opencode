@@ -302,3 +302,94 @@ describe("bug-dock controller: filing (AC4)", () => {
     expect(controller.phase()).toBe("closed")
   })
 })
+
+describe("bug-dock controller: gate + open idempotency (AC5)", () => {
+  test("the boot param off → open-bug-report is inert (the dock never renders)", () => {
+    const { controller, posts, dockCalls } = setup({ enabled: () => false })
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    expect(controller.phase()).toBe("closed")
+    expect(controller.sessionID()).toBeUndefined()
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+
+  test("a duplicate open-bug-report for the hosted session is a reveal — no re-adopt, no reset", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.toggleCollapsed()
+    expect(controller.collapsed()).toBe(true)
+    dockCalls.length = 0
+
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+
+    // re-expanded, same session, the dock seam untouched (still exactly one dock)
+    expect(controller.collapsed()).toBe(false)
+    expect(controller.sessionID()).toBe("ses_bug1")
+    expect(dockCalls).toEqual([])
+    expect(posts).toEqual([])
+  })
+
+  test("a duplicate open does NOT reset the filed end-state", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+    posts.length = 0
+    dockCalls.length = 0
+
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+
+    expect(controller.phase()).toBe("filed")
+    expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+
+  test("an open-bug-report for a DIFFERENT session while open is ignored — one dock per window", () => {
+    const { controller, posts, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    dockCalls.length = 0
+
+    controller.handleBridgeMessage(openMessage("ses_bug2"))
+
+    expect(controller.sessionID()).toBe("ses_bug1")
+    expect(controller.phase()).toBe("chat")
+    expect(dockCalls).toEqual([])
+    expect(posts).toEqual([])
+  })
+
+  test("unknown and malformed down-messages are ignored", () => {
+    const { controller, posts, dockCalls } = setup()
+    const ignored: unknown[] = [
+      undefined,
+      null,
+      "open-bug-report",
+      { kind: "open-bug-report", sessionID: "ses_bug1" }, // wrong/missing source
+      { source: "amicode", kind: "open-bug-report" }, // no sessionID
+      { source: "amicode", kind: "open-bug-report", sessionID: "" }, // empty
+      { source: "amicode", kind: "open-bug-report", sessionID: 42 }, // non-string
+      { source: "amicode", kind: "theme", colorScheme: "dark" }, // a different lane entirely
+      { source: "amicode", kind: "open-compute-connect" },
+    ]
+    for (const message of ignored) controller.handleBridgeMessage(message)
+
+    expect(controller.phase()).toBe("closed")
+    expect(posts).toEqual([])
+    expect(dockCalls).toEqual([])
+  })
+
+  test("after a full close, a new open-bug-report starts a fresh dock", () => {
+    const { controller, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    controller.file("https://github.com/harmoniqs/amicode/issues/123")
+    controller.requestClose()
+    expect(controller.phase()).toBe("closed")
+
+    controller.handleBridgeMessage(openMessage("ses_bug2"))
+
+    expect(controller.phase()).toBe("chat")
+    expect(controller.sessionID()).toBe("ses_bug2")
+    expect(controller.filedUrl()).toBeUndefined()
+    expect(controller.collapsed()).toBe(false)
+    expect(dockCalls).toEqual(["open", "close", "open"])
+  })
+})

@@ -127,6 +127,14 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     if (message.kind === OPEN_BUG_REPORT_KIND) {
       if (!enabled()) return
       if (typeof message.sessionID !== "string" || !message.sessionID) return
+      if (open()) {
+        // One bug dock per window. A duplicate open for the hosted session is
+        // a reveal (re-expand; crucially NOT a re-adopt — the filed end-state
+        // must survive it). A different session id is dropped: the
+        // extension's single-open guard owns which bug session is live.
+        if (message.sessionID === sessionID()) reveal()
+        return
+      }
       adopt(message.sessionID)
       return
     }
