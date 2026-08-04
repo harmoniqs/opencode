@@ -11,7 +11,7 @@
 // bug-dock-controller.test.ts; the visual contract lives in
 // session-bug-dock.stories.tsx (no component-render test surface — see the
 // issue's Testing Decisions). en-only chrome, per the amicode precedent.
-import { Show, createEffect, createMemo, createSignal, on, onCleanup, onMount, untrack, type JSX } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -19,30 +19,23 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
-import { useTheme } from "@opencode-ai/ui/theme/context"
 import { usePlatform } from "@/context/platform"
-import { useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { usePermission } from "@/context/permission"
-import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
-import { authTokenFromCredentials } from "@/utils/server"
 import { bugDock } from "./bug-dock"
-import { bugDockController, bugDockFrameSrc, bugProgress, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
+import { bugDockController, bugProgress, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 import { SessionQuestionDock } from "./session-question-dock"
 import { SessionPermissionDock } from "./session-permission-dock"
 
 const HEADER_HEIGHT = 42
-const FRAME_HEIGHT = 320
 
 export function SessionBugDock() {
   const controller = bugDockController
   const sync = useSync()
-  const server = useServer()
-  const theme = useTheme()
   const platform = usePlatform()
 
   // Bridge down-messages (open-bug-report / close-bug-report) are handled at
@@ -89,33 +82,33 @@ export function SessionBugDock() {
     bugDockController.handleBridgeMessage({ source: "amicode", kind: "open-bug-report", sessionID: id })
   })
 
-  // Pinned per hosted session (untracked reads): a theme flip or server-state
-  // wobble must NOT reload the iframe mid-report — live theme rides the
-  // postMessage forward inside the view (the split-frame idiom).
-  const src = createMemo(
-    on(controller.sessionID, (id) => {
-      if (!id) return undefined
-      return untrack(() => {
-        const conn = server.current
-        return bugDockFrameSrc({
-          origin: window.location.origin,
-          serverKey: server.key,
-          sessionID: id,
-          colorScheme: theme.mode(),
-          authToken: conn?.http.password
-            ? authTokenFromCredentials({ username: conn.http.username, password: conn.http.password })
-            : undefined,
-          hiddenProject: hiddenProjectWorktree(),
-        })
-      })
-    }),
-  )
+  // The agent's latest visible message (amicode#249 QA — the dialogue body):
+  // the last text part from the bug session's most recent assistant turn
+  // that produced one — the draft under review at the confirm gate, or what
+  // the agent last said. Clamped for the dock.
+  const lastAssistantText = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return undefined
+    const messages = sync().data.message[id] ?? []
+    for (let m = messages.length - 1; m >= 0; m--) {
+      const message = messages[m]
+      if (message.role !== "assistant") continue
+      const parts = sync().data.part[message.id] ?? []
+      for (let p = parts.length - 1; p >= 0; p--) {
+        const part = parts[p]
+        if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+          const text = part.text.trim()
+          return text.length > 1600 ? `…${text.slice(-1600)}` : text
+        }
+      }
+    }
+    return undefined
+  })
 
   // The answer surface (amicode#249 QA): the bug session's question and
-  // permission cards render IN THE DOCK — the pane is chromeless by design,
-  // and the main composer stays the user's own. Replies route by the
-  // request's own sessionID. This is the window where the user answers
-  // "what happened / what did you expect".
+  // permission cards render IN THE DOCK — the dialogue box IS the window
+  // where the user answers "what happened / what did you expect". Replies
+  // route by the request's own sessionID.
   const sdk = useSDK()
   const permission = usePermission()
   const bugQuestion = createMemo(() => {
@@ -176,7 +169,7 @@ export function SessionBugDock() {
         <BugDockView
           phase={controller.phase() === "filed" ? "filed" : "chat"}
           collapsed={controller.collapsed()}
-          src={src()}
+          agentText={lastAssistantText()}
           filedUrl={controller.filedUrl()}
           progress={progress()}
           onCancel={controller.requestClose}
@@ -194,7 +187,7 @@ export function SessionBugDock() {
 export function BugDockView(props: {
   phase: "chat" | "filed"
   collapsed: boolean
-  src?: string
+  agentText?: string
   filedUrl?: string
   progress?: { step: string; label: string }
   onCancel?: () => void
@@ -203,9 +196,8 @@ export function BugDockView(props: {
   onOpenLink: (url: string) => void
   footer?: JSX.Element
 }) {
-  const [store, setStore] = createStore({ height: HEADER_HEIGHT + FRAME_HEIGHT })
+  const [store, setStore] = createStore({ height: HEADER_HEIGHT + 120 })
   let contentRef: HTMLDivElement | undefined
-  let frameRef: HTMLIFrameElement | undefined
 
   // The dock family's animated max-height idiom (the todo dock's shape):
   // measure the collapse-independent content, spring between full and header.
@@ -220,20 +212,6 @@ export function BugDockView(props: {
     const update = () => setStore("height", el.scrollHeight)
     update()
     createResizeObserver(el, update)
-  })
-
-  // Editor-theme flips reach the main app over the extension bridge; forward
-  // them into the pane so both re-theme together (the split-frame idiom) —
-  // the frame src stays pinned, no reload mid-report.
-  onMount(() => {
-    const observer = new MutationObserver(() => {
-      const mode = document.documentElement.dataset.colorScheme
-      if ((mode === "light" || mode === "dark") && frameRef?.contentWindow) {
-        frameRef.contentWindow.postMessage({ source: "amicode", kind: "theme", colorScheme: mode }, window.location.origin)
-      }
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
-    onCleanup(() => observer.disconnect())
   })
 
   const status = createMemo(() => (props.phase === "filed" ? "Issue filed" : "In progress"))
@@ -391,20 +369,19 @@ export function BugDockView(props: {
               </div>
             }
           >
-            <iframe
-              ref={(el) => (frameRef = el)}
-              data-slot="bug-dock-frame"
-              src={props.src}
-              title="Bug report session"
-              class="w-full border-0"
-              style={{ height: `${FRAME_HEIGHT}px` }}
-              allow="clipboard-read; clipboard-write"
-              sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
-            />
-            {/* The answer surface (amicode#249 QA): the bug session's
-                question/permission cards, fed by SessionBugDock — the dock IS
-                the window where the user answers "what happened / what did
-                you expect". Auto-measured into the collapse animation. */}
+            {/* The dialogue body (amicode#249 QA): NATIVE, no embedded app —
+                the agent's latest message (the draft under review, or what it
+                last said), then the answer cards below. */}
+            <Show when={props.agentText}>
+              {(text) => (
+                <div
+                  data-slot="bug-dock-agent"
+                  class="max-h-44 overflow-y-auto whitespace-pre-wrap border-t-[0.5px] border-v2-border-border-base px-4 py-2.5 text-[13px] leading-5 text-v2-text-text-base"
+                >
+                  {text()}
+                </div>
+              )}
+            </Show>
             {props.footer}
           </Show>
         </div>

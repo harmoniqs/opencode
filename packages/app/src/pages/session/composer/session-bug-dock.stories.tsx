@@ -32,7 +32,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "chat",
       collapsed: false,
-      src: "about:blank",
+      agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
       progress: { step: "dedup", label: "Checking for an existing ticket…" },
       onCancel: noop,
       onToggle: noop,
@@ -42,7 +42,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
   },
   {
     label: "collapsed — session alive, no bridge traffic",
-    props: { phase: "chat", collapsed: true, src: "about:blank", onToggle: noop, onClose: noop, onOpenLink: noop },
+    props: { phase: "chat", collapsed: true, agentText: "What happened, and what did you expect?", onToggle: noop, onClose: noop, onOpenLink: noop },
   },
   {
     label: "filed — terminal end-state with the issue link",

@@ -105,7 +105,6 @@ import { extractPromptFromParts } from "@/utils/prompt"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
-import { IS_BUG_DOCK_PANE } from "@/utils/amicode-pane"
 import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
 import { createSessionOwnership } from "./session/session-ownership"
@@ -2218,11 +2217,6 @@ export default function Page() {
               promptDock = el
             },
           })
-          // amicode/opencode#117 (minimal bug dock, amicode#249): the
-          // bug-dock pane is chromeless — transcript only, no composer. The
-          // bug session's question/permission requests surface in the MAIN
-          // window's composer region (retargeted in session-composer-state).
-          if (IS_BUG_DOCK_PANE) return undefined
           return (
             <SessionComposerRegion
               controller={controller}
@@ -2295,11 +2289,7 @@ export default function Page() {
 
   return (
     <SessionRouteFrame>
-      {/* chromeless in the bug-dock pane (amicode/opencode#117, amicode#249):
-          no titlebar/tabs — the dock's own header carries the chrome. */}
-      <Show when={!IS_BUG_DOCK_PANE}>
-        <SessionHeader />
-      </Show>
+      <SessionHeader />
       <div
         ref={panelRow}
         class="flex-1 min-h-0 flex flex-col md:flex-row"

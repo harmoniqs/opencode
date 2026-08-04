@@ -12,9 +12,7 @@
 //   UP   {source:"amicode", kind:"bug-filed",         sessionID, url}
 //   UP   {source:"amicode", kind:"bug-report-closed", sessionID}
 import { createSignal } from "solid-js"
-import { ServerConnection } from "@/context/server"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
-import { sessionHref } from "@/utils/session-route"
 import { bugDock } from "./bug-dock"
 
 export const OPEN_BUG_REPORT_KIND = "open-bug-report"
@@ -149,27 +147,6 @@ const defaultPost = (kind: string, payload: Record<string, unknown>) => {
   try {
     window.parent?.postMessage({ source: "amicode", kind, ...payload }, "*")
   } catch {}
-}
-
-/** The dock body's iframe URL — the deck's URL-pinned chat-iframe idiom
- *  (split-frame's paneSrc): the app at the bug session's route, booted as a
- *  namespaced pane so its global UI state never fights the main window. */
-export function bugDockFrameSrc(input: {
-  origin: string
-  serverKey: string
-  sessionID: string
-  colorScheme: string
-  authToken?: string
-  hiddenProject?: string
-}): string {
-  const url = new URL(input.origin)
-  url.pathname = sessionHref(ServerConnection.Key.make(input.serverKey), input.sessionID)
-  url.search = ""
-  url.searchParams.set("colorScheme", input.colorScheme)
-  if (input.authToken) url.searchParams.set("auth_token", input.authToken)
-  if (input.hiddenProject) url.searchParams.set("amicode_hide_project", input.hiddenProject)
-  url.searchParams.set("amicode_pane", "bug-dock")
-  return url.href
 }
 
 export function createBugDockController(deps: BugDockControllerDeps = {}) {

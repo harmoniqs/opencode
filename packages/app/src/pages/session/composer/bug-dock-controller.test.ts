@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { bugDockFrameSrc, bugProgress, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
+import { bugProgress, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
 // state machine the dock component renders against. Plain-module seams (like
@@ -42,36 +42,6 @@ describe("bug-dock controller: open-bug-report (AC1)", () => {
     expect(dockCalls).toEqual(["open"])
   })
 
-  test("the frame src pins the bug session's route on the app origin (deck chat-iframe precedent)", () => {
-    const src = bugDockFrameSrc({
-      origin: "http://localhost:4096",
-      serverKey: "test-server-key",
-      sessionID: "ses_bug1",
-      colorScheme: "dark",
-    })
-    const url = new URL(src)
-    expect(url.origin).toBe("http://localhost:4096")
-    expect(url.pathname.endsWith("/session/ses_bug1")).toBe(true)
-    expect(url.pathname.startsWith("/server/")).toBe(true)
-    expect(url.searchParams.get("colorScheme")).toBe("dark")
-    // A namespaced pane instance — the deck's idiom — so the iframe's global
-    // UI state never fights the main window.
-    expect(url.searchParams.get("amicode_pane")).toBe("bug-dock")
-  })
-
-  test("the frame src carries auth + hidden-project params when present", () => {
-    const src = bugDockFrameSrc({
-      origin: "http://localhost:4096",
-      serverKey: "test-server-key",
-      sessionID: "ses_bug1",
-      colorScheme: "light",
-      authToken: "tok",
-      hiddenProject: "/wt/hidden",
-    })
-    const url = new URL(src)
-    expect(url.searchParams.get("auth_token")).toBe("tok")
-    expect(url.searchParams.get("amicode_hide_project")).toBe("/wt/hidden")
-  })
 })
 
 describe("bug-dock controller: collapse keeps the session alive (AC2)", () => {

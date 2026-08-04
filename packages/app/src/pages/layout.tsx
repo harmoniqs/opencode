@@ -21,7 +21,6 @@ import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { decode64 } from "@/utils/base64"
-import { IS_BUG_DOCK_PANE } from "@/utils/amicode-pane"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
@@ -2238,15 +2237,8 @@ export default function LegacyLayout(props: ParentProps) {
           <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
             <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
               {/* amicode(split): edge-rail drop zones + the right pane live
-                  here, wrapping the routed content on every page.
-                  amicode(opencode#117, amicode#249): EXCEPT the bug-dock pane —
-                  chromeless by contract: no Titlebar, no sidebar, no split
-                  machinery; the routed transcript is the whole window. */}
-              {IS_BUG_DOCK_PANE ? (
-                props.children
-              ) : (
-                <SplitFrame titlebar={<Titlebar update={titlebarUpdate} />}>{props.children}</SplitFrame>
-              )}
+                  here, wrapping the routed content on every page. */}
+              <SplitFrame titlebar={<Titlebar update={titlebarUpdate} />}>{props.children}</SplitFrame>
             </Show>
           </main>
           <VaultPanel />
