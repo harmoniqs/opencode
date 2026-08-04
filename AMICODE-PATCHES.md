@@ -1,7 +1,15 @@
 # AMICODE patch-stack log
 
-Local fork of sst/opencode @ v1.18.10 (merge `042634f37` + follow-up `fb6587f3a`, 2026-08-01) on branch `amicode/merge-upstream-dev`, pending fast-forward of `local/amicode` (was v1.17.3). Remote: `upstream` only
+Local fork of sst/opencode @ v1.18.12 (merge `1f09d0dc57`, 2026-08-04) on branch `notturno/merge-upstream-2026-08-04`, pending merge of PR #119 into `local/amicode`. Remote: `upstream` only
 (fetch = github.com/sst/opencode, push URL disabled to `no_push_disabled`). Never push.
+
+## Upstream sync 2026-08-04 (1.18.10 → 1.18.12)
+
+Merged sst/opencode `dev` @ `7fe99387` (v1.18.12; v1.18.11 + v1.18.12 together, 139 files, +4342/−357) into `local/amicode` @ `cf4f06b41`. **Zero conflicts, zero fork files touched** — parity manifest clean on the merged tree. First pass produced by the notturno merge-sentinel machinery (hand-completed locally: the sentinel's hermetic clone lacked a git identity, so its in-CI merge died at commit time with a phantom "merge conflict (0 path(s))" — harmoniqs/amico#322, module fix in harmoniqs/amico#324).
+
+- **Adopted upstream's**, all bugfix-tier: MCP SSE reconnect-loop fix; provider configs with interleaved reasoning fields (`reasoning_text` / custom field names — same bucket as patch #24's provider/model port; verified landed in `packages/llm/src/protocols/openai-responses.ts`); Azure GPT-5.5+ reasoning fix; composer draft-store (large-image lag); project search across all known recent projects; stale-assistant-error clearing on resume; legacy-config skip for v2 servers; desktop fixes (external links, title bar, dir picker, file tree, gutter).
+- **Kept fork's**: everything — the merge touched no amicode-patched file; `session-side-panel.tsx` deletions (ADR 0001) stand.
+- Build + smoke-verify on the dev host before tagging `v1.18.12-amicode.1` (release ritual unchanged; channel gate gotcha 2 still applies: `OPENCODE_CHANNEL=dev`).
 
 ## Upstream sync 2026-08-01 (1.17.3 → 1.18.10, merge-base 2026-06-10)
 
