@@ -244,7 +244,7 @@ export function BugDockView(props: {
         >
           <IconV2 name="bug" size="small" class="shrink-0 text-v2-state-fg-danger" />
           <span class="shrink-0 cursor-default text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-base">
-            Bug report
+            Bug Report
           </span>
           <Show when={props.collapsed}>
             <span class="min-w-0 flex-1 cursor-default truncate text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint">
