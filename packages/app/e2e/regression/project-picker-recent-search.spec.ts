@@ -16,6 +16,15 @@ const OUTSIDE_CAP = "foxtrot-docs"
 const rows = (page: Page) => page.locator("[data-directory-path]")
 const row = (page: Page, name: string) => page.locator(`[data-directory-path*="${name}"]`)
 
+// amicode: skipped on the fork — this spec drives upstream's home-projects
+// surface (the "Add project" button on the home page), which the fork does
+// not render: NewHome (ADR 0001) exposes no add-project entry point and the
+// legacy interface is compile-time retired (context/settings.tsx:
+// newLayoutDesigns = createMemo(() => true)). The v1.18.12 five-cap +
+// search-all logic itself ships intact in dialog-select-directory.tsx;
+// re-enable once a v2 projects surface gains the entry point (harmoniqs#120).
+test.skip(true, "fork v2 home has no add-project surface (see comment above)")
+
 async function openProjectDialog(page: Page) {
   await mockOpenCodeServer(page, {
     sessions: fixture.sessions,
