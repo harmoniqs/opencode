@@ -28,8 +28,17 @@ const noop = () => {}
 
 const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
   {
-    label: "expanded — chat (iframe hosts the bug session's route)",
-    props: { phase: "chat", collapsed: false, src: "about:blank", onToggle: noop, onClose: noop, onOpenLink: noop },
+    label: "expanded — chat (iframe hosts the bug session's route) + progress strip & cancel",
+    props: {
+      phase: "chat",
+      collapsed: false,
+      src: "about:blank",
+      progress: { step: "dedup", label: "Checking for an existing ticket…" },
+      onCancel: noop,
+      onToggle: noop,
+      onClose: noop,
+      onOpenLink: noop,
+    },
   },
   {
     label: "collapsed — session alive, no bridge traffic",

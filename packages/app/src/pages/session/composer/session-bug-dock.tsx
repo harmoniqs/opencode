@@ -11,7 +11,7 @@
 // bug-dock-controller.test.ts; the visual contract lives in
 // session-bug-dock.stories.tsx (no component-render test surface — see the
 // issue's Testing Decisions). en-only chrome, per the amicode precedent.
-import { Show, createEffect, createMemo, on, onCleanup, onMount, untrack } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, on, onCleanup, onMount, untrack, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -24,11 +24,16 @@ import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
+import { useSDK } from "@/context/sdk"
+import { usePermission } from "@/context/permission"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { authTokenFromCredentials } from "@/utils/server"
 import { bugDock } from "./bug-dock"
-import { bugDockController, bugDockFrameSrc, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
+import { bugDockController, bugDockFrameSrc, bugProgress, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
+import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
+import { SessionQuestionDock } from "./session-question-dock"
+import { SessionPermissionDock } from "./session-permission-dock"
 
 const HEADER_HEIGHT = 42
 const FRAME_HEIGHT = 320
@@ -106,6 +111,65 @@ export function SessionBugDock() {
     }),
   )
 
+  // The answer surface (amicode#249 QA): the bug session's question and
+  // permission cards render IN THE DOCK — the pane is chromeless by design,
+  // and the main composer stays the user's own. Replies route by the
+  // request's own sessionID. This is the window where the user answers
+  // "what happened / what did you expect".
+  const sdk = useSDK()
+  const permission = usePermission()
+  const bugQuestion = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return undefined
+    return sessionQuestionRequest(sync().data.session, sync().data.question, id)
+  })
+  const bugPermission = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return undefined
+    return sessionPermissionRequest(sync().data.session, sync().data.permission, id, (item) => {
+      return !permission.autoResponds(item, sdk().directory)
+    })
+  })
+  const [deciding, setDeciding] = createSignal<string>()
+  const decide = (response: "once" | "always" | "reject") => {
+    const perm = bugPermission()
+    if (!perm || deciding() === perm.id) return
+    setDeciding(perm.id)
+    sdk()
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+      .finally(() => setDeciding((id) => (id === perm.id ? undefined : id)))
+  }
+
+  // The progress strip: narrate the agent's phase from the bug session's own
+  // streamed tool calls (dedup → upstream → submit), priority to anything
+  // blocked on the user. Cancel reuses the close path — the extension aborts
+  // and hard-deletes the unfiled session; no orphans.
+  const progress = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return undefined
+    const messages = sync().data.message[id] ?? []
+    const parts = messages.flatMap((message) => sync().data.part[message.id] ?? [])
+    return bugProgress({ questionPending: !!bugQuestion(), permissionPending: !!bugPermission(), parts })
+  })
+
+  const footer = () => {
+    const question = bugQuestion()
+    const perm = bugPermission()
+    if (!question && !perm) return undefined
+    return (
+      <div data-slot="bug-dock-answer" class="border-t-[0.5px] border-v2-border-border-base">
+        <Show when={question} keyed>
+          {(request) => <SessionQuestionDock request={request} onSubmit={() => {}} />}
+        </Show>
+        <Show when={perm} keyed>
+          {(request) => (
+            <SessionPermissionDock request={request} responding={deciding() === request.id} onDecide={decide} />
+          )}
+        </Show>
+      </div>
+    )
+  }
+
   return (
     <Show when={controller.phase() !== "closed"}>
       <div class="pb-2">
@@ -114,9 +178,12 @@ export function SessionBugDock() {
           collapsed={controller.collapsed()}
           src={src()}
           filedUrl={controller.filedUrl()}
+          progress={progress()}
+          onCancel={controller.requestClose}
           onToggle={controller.toggleCollapsed}
           onClose={controller.requestClose}
           onOpenLink={(url) => platform.openExternal(url)}
+          footer={footer()}
         />
       </div>
     </Show>
@@ -129,9 +196,12 @@ export function BugDockView(props: {
   collapsed: boolean
   src?: string
   filedUrl?: string
+  progress?: { step: string; label: string }
+  onCancel?: () => void
   onToggle: () => void
   onClose: () => void
   onOpenLink: (url: string) => void
+  footer?: JSX.Element
 }) {
   const [store, setStore] = createStore({ height: HEADER_HEIGHT + FRAME_HEIGHT })
   let contentRef: HTMLDivElement | undefined
@@ -245,6 +315,46 @@ export function BugDockView(props: {
           </div>
         </div>
 
+        {/* The progress strip (amicode#249 QA): where the agent is, narrated
+            from its own tool calls, plus the always-available cancel — the
+            labeled, discoverable sibling of the header's close control. */}
+        <Show when={props.phase === "chat" && props.progress}>
+          {(progress) => (
+            <div
+              data-slot="bug-dock-progress"
+              data-step={progress().step}
+              aria-hidden={props.collapsed || off()}
+              class="flex items-center gap-2 border-t-[0.5px] border-v2-border-border-base px-4 py-1.5"
+              style={{ visibility: off() ? "hidden" : "visible" }}
+            >
+              <span
+                class="size-1.5 shrink-0 rounded-full bg-v2-state-fg-warning"
+                style={{ animation: "pulse 1.6s ease-in-out infinite" }}
+              />
+              <span class="min-w-0 flex-1 truncate text-[12px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
+                {progress().label}
+              </span>
+              <Show when={props.onCancel}>
+                <button
+                  type="button"
+                  data-action="bug-dock-cancel"
+                  class="shrink-0 cursor-pointer rounded-md px-2 py-0.5 text-[12px] font-[480] leading-5 text-v2-text-text-muted hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base"
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    props.onCancel?.()
+                  }}
+                >
+                  Cancel
+                </button>
+              </Show>
+            </div>
+          )}
+        </Show>
+
         <div
           data-slot="bug-dock-body"
           aria-hidden={props.collapsed || off()}
@@ -291,6 +401,11 @@ export function BugDockView(props: {
               allow="clipboard-read; clipboard-write"
               sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
             />
+            {/* The answer surface (amicode#249 QA): the bug session's
+                question/permission cards, fed by SessionBugDock — the dock IS
+                the window where the user answers "what happened / what did
+                you expect". Auto-measured into the collapse animation. */}
+            {props.footer}
           </Show>
         </div>
       </div>

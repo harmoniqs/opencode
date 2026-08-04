@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { bugDockFrameSrc, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
+import { bugDockFrameSrc, bugProgress, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
 // state machine the dock component renders against. Plain-module seams (like
@@ -426,5 +426,41 @@ describe("findLiveBugSession — the sync-watch selector (QA: amicode#249 previe
   test("empty and malformed input are safe", () => {
     expect(findLiveBugSession([])).toBeUndefined()
     expect(findLiveBugSession([undefined as never, {} as never, { id: 7 } as never])).toBeUndefined()
+  })
+})
+
+describe("bugProgress — the progress strip's phase narration (QA: amicode#249)", () => {
+  const tool = (tool: string, command?: string) => ({
+    type: "tool",
+    tool,
+    state: { status: "completed", input: command ? { command } : {} },
+  })
+
+  test("pending requests beat tool progress — the agent is blocked on the user", () => {
+    expect(bugProgress({ questionPending: true, permissionPending: false, parts: [tool("bash", "gh issue list")] }).step).toBe("answer")
+    expect(bugProgress({ questionPending: true, permissionPending: true, parts: [] }).step).toBe("approval")
+  })
+
+  test("dedup / upstream / submit classify from the skill's observable commands", () => {
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue list --search foo")] }).step).toBe("dedup")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh api repos/harmoniqs/amicode")] }).step).toBe("upstream")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh release view v1.0")] }).step).toBe("upstream")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "git log --oneline -3")] }).step).toBe("upstream")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("webfetch")] }).step).toBe("upstream")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue create --title x")] }).step).toBe("submit")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "open https://github.com/x/issues/new")] }).step).toBe("submit")
+  })
+
+  test("the latest informative call wins; silence reads as working", () => {
+    const parts = [tool("bash", "gh issue list"), tool("bash", "gh api repos/x")]
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts }).step).toBe("upstream")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [] }).step).toBe("working")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "ls -la")] }).step).toBe("working")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [{ type: "text", text: "hi" }] }).step).toBe("working")
+  })
+
+  test("labels are the user's language", () => {
+    expect(bugProgress({ questionPending: true, permissionPending: false, parts: [] }).label).toBe("Waiting for your answer")
+    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue create")] }).label).toBe("Submitting the ticket…")
   })
 })

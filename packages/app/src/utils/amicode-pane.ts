@@ -9,3 +9,10 @@ export const AMICODE_PANE_ID: string | undefined =
   new URLSearchParams(window.location.search).get("amicode_pane") || undefined
 
 export const IS_AMICODE_PANE = AMICODE_PANE_ID !== undefined
+
+/** amicode(opencode#117, minimal QA): the bug-report dock's iframe boots as
+ *  amicode_pane=bug-dock — a CHROMELESS pane: no SessionHeader, no composer
+ *  (the main window's composer region is the answer surface — the bug
+ *  session's question/permission requests are retargeted there). Only the
+ *  transcript renders. */
+export const IS_BUG_DOCK_PANE = AMICODE_PANE_ID === "bug-dock"
