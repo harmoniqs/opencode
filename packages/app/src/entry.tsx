@@ -5,6 +5,7 @@ import { render } from "solid-js/web"
 import { AppBaseProviders, AppInterface } from "@/app"
 import { adoptHiddenProject } from "@/utils/amicode-hidden-project"
 import { type Platform, PlatformProvider } from "@/context/platform"
+import { createBrowserDraftStore } from "@/utils/draft-store"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
@@ -168,6 +169,7 @@ const clearAuthToken = () => {
 
 const platform: Platform = {
   platform: "web",
+  draftStore: createBrowserDraftStore(),
   version: pkg.version,
   openExternal,
   restart,
