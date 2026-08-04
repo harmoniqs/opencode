@@ -41,6 +41,31 @@ export function matchBugFiledUrl(text: string): string | undefined {
   return BUG_FILED_SENTINEL.exec(text)?.[1]
 }
 
+/** The sync-watch's selector: the live bug session in a synced session-info
+ *  set, if any. A bug session carries `metadata.bug_report` (the extension's
+ *  create envelope); archived ones are terminal (filed → archived, the
+ *  end-state latches separately). Most-recently-created wins — the
+ *  extension's single-open invariant means there is at most one in practice.
+ *
+ *  This is the open path that CANNOT be lost (QA: amicode#249 preview): the
+ *  bridge's open-bug-report is the fast path, but it rides a fire-and-forget
+ *  postMessage through the webview; a bug session's presence in the app's own
+ *  synced session list is ground truth the dock can always see. */
+export function findLiveBugSession(
+  sessions: Iterable<{ id?: unknown; metadata?: unknown; time?: { created?: unknown; archived?: unknown } } | undefined>,
+): string | undefined {
+  let best: { id: string; created: number } | undefined
+  for (const s of sessions) {
+    if (!s || typeof s.id !== "string" || s.id === "") continue
+    const meta = s.metadata
+    if (!meta || typeof meta !== "object" || !("bug_report" in meta)) continue
+    if (s.time?.archived) continue
+    const created = typeof s.time?.created === "number" ? s.time.created : 0
+    if (!best || created > best.created) best = { id: s.id, created }
+  }
+  return best?.id
+}
+
 /** Scan a session's message parts for the sentinel. Text parts only; the
  *  first match wins. The caller scopes the parts to the bug session — the
  *  watcher only ever observes the session the dock hosts. */

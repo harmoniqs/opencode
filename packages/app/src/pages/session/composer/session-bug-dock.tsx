@@ -22,11 +22,13 @@ import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
+import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
+import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { authTokenFromCredentials } from "@/utils/server"
 import { bugDock } from "./bug-dock"
-import { bugDockController, bugDockFrameSrc, findBugFiledUrl } from "./bug-dock-controller"
+import { bugDockController, bugDockFrameSrc, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
 
 const HEADER_HEIGHT = 42
 const FRAME_HEIGHT = 320
@@ -62,6 +64,24 @@ export function SessionBugDock() {
     const parts = messages.flatMap((message) => sync().data.part[message.id] ?? [])
     const url = findBugFiledUrl(parts)
     if (url) controller.file(url)
+  })
+
+  // The sync watch — the open path that cannot be lost (QA: amicode#249
+  // preview). The bridge's open-bug-report rides a fire-and-forget webview
+  // postMessage (a cold-boot reload ate it in the preview); a bug session in
+  // the app's OWN synced session map (serverSync.session.data.info — fed by
+  // session.created/updated/deleted events, metadata-carrying) is ground
+  // truth. When one appears and no dock is open, adopt it through the same
+  // idempotent path as the bridge message. Abandoned sessions are
+  // hard-deleted (they vanish from the map), filed ones archive (excluded) —
+  // so a dismissed or terminal dock never re-opens from the watch.
+  const serverSync = useServerSync()
+  createEffect(() => {
+    if (!bugReportEnabled()) return
+    if (bugDockController.phase() !== "closed") return
+    const id = findLiveBugSession(Object.values(serverSync().session.data.info ?? {}))
+    if (!id) return
+    bugDockController.handleBridgeMessage({ source: "amicode", kind: "open-bug-report", sessionID: id })
   })
 
   // Pinned per hosted session (untracked reads): a theme flip or server-state

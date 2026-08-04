@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { bugDockFrameSrc, createBugDockController, findBugFiledUrl, matchBugFiledUrl } from "./bug-dock-controller"
+import { bugDockFrameSrc, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
 // state machine the dock component renders against. Plain-module seams (like
@@ -391,5 +391,40 @@ describe("bug-dock controller: gate + open idempotency (AC5)", () => {
     expect(controller.filedUrl()).toBeUndefined()
     expect(controller.collapsed()).toBe(false)
     expect(dockCalls).toEqual(["open", "close", "open"])
+  })
+})
+
+describe("findLiveBugSession — the sync-watch selector (QA: amicode#249 preview)", () => {
+  const bug = (id: string, created: number, archived?: number) => ({
+    id,
+    metadata: { bug_report: { project: "probe" } },
+    time: { created, ...(archived ? { archived } : {}) },
+  })
+
+  test("finds the unarchived bug session among ordinary sessions", () => {
+    const sessions = [
+      { id: "ses_chat", metadata: {}, time: { created: 1 } },
+      bug("ses_bug", 2),
+      { id: "ses_other", time: { created: 3 } },
+    ]
+    expect(findLiveBugSession(sessions)).toBe("ses_bug")
+  })
+
+  test("excludes archived bug sessions (filed is terminal — the end-state latches elsewhere)", () => {
+    expect(findLiveBugSession([bug("ses_bug", 2, 3)])).toBeUndefined()
+  })
+
+  test("excludes sessions without the bug_report envelope", () => {
+    expect(findLiveBugSession([{ id: "ses_chat", metadata: { other: 1 }, time: { created: 1 } }])).toBeUndefined()
+    expect(findLiveBugSession([{ id: "ses_chat", time: { created: 1 } }])).toBeUndefined()
+  })
+
+  test("most-recently-created wins when several exist (single-open is the extension's job)", () => {
+    expect(findLiveBugSession([bug("ses_old", 1), bug("ses_new", 5), bug("ses_mid", 3)])).toBe("ses_new")
+  })
+
+  test("empty and malformed input are safe", () => {
+    expect(findLiveBugSession([])).toBeUndefined()
+    expect(findLiveBugSession([undefined as never, {} as never, { id: 7 } as never])).toBeUndefined()
   })
 })
