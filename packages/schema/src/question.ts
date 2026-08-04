@@ -25,11 +25,17 @@ export const Option = Schema.Struct({
 }).annotate({ identifier: "QuestionV2.Option" })
 export interface Option extends Schema.Schema.Type<typeof Option> {}
 
+export const Kind = Schema.Literals(["choice", "text"]).annotate({
+  description: 'Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)',
+})
+export type Kind = typeof Kind.Type
+
 const base = {
   question: Schema.String.annotate({ description: "Complete question" }),
   header: Schema.String.annotate({ description: "Very short label (max 30 chars)" }),
   options: Schema.Array(Option).annotate({ description: "Available choices" }),
   multiple: Schema.Boolean.pipe(optional).annotate({ description: "Allow selecting multiple choices" }),
+  kind: Kind.pipe(optional),
 }
 
 export const Info = Schema.Struct({

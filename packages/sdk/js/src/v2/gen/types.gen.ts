@@ -717,6 +717,10 @@ export type QuestionInfo = {
    */
   options: Array<QuestionOption>
   multiple?: boolean
+  /**
+   * Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)
+   */
+  kind?: "choice" | "text"
   custom?: boolean
 }
 
@@ -3152,6 +3156,10 @@ export type QuestionV2Info = {
    */
   options: Array<QuestionV2Option>
   multiple?: boolean
+  /**
+   * Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)
+   */
+  kind?: "choice" | "text"
   custom?: boolean
 }
 

@@ -2707,6 +2707,7 @@ export type QuestionsListRequestsOutput = {
       readonly header: string
       readonly options: ReadonlyArray<{ readonly label: string; readonly description: string }>
       readonly multiple?: boolean
+      readonly kind?: "choice" | "text"
       readonly custom?: boolean
     }>
     readonly tool?: { readonly messageID: string; readonly callID: string }
@@ -2724,6 +2725,7 @@ export type QuestionsListOutput = {
       readonly header: string
       readonly options: ReadonlyArray<{ readonly label: string; readonly description: string }>
       readonly multiple?: boolean
+      readonly kind?: "choice" | "text"
       readonly custom?: boolean
     }>
     readonly tool?: { readonly messageID: string; readonly callID: string }

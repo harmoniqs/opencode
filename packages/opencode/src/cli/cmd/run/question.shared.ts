@@ -67,7 +67,14 @@ export function questionInfo(request: QuestionRequest, state: QuestionBodyState)
   return request.questions[state.tab]
 }
 
+// A Free-form Question (amicode#245): renders as a text card — a bare text
+// input with submit, no option rows and no "Type your own answer" pseudo-option.
+export function questionText(request: QuestionRequest, state: QuestionBodyState): boolean {
+  return questionInfo(request, state)?.kind === "text"
+}
+
 export function questionCustom(request: QuestionRequest, state: QuestionBodyState): boolean {
+  if (questionText(request, state)) return false
   return questionInfo(request, state)?.custom !== false
 }
 
@@ -86,7 +93,7 @@ export function questionPicked(state: QuestionBodyState): boolean {
 
 export function questionOther(request: QuestionRequest, state: QuestionBodyState): boolean {
   const info = questionInfo(request, state)
-  if (!info || info.custom === false) {
+  if (!info || info.custom === false || info.kind === "text") {
     return false
   }
 
@@ -95,7 +102,7 @@ export function questionOther(request: QuestionRequest, state: QuestionBodyState
 
 export function questionTotal(request: QuestionRequest, state: QuestionBodyState): number {
   const info = questionInfo(request, state)
-  if (!info) {
+  if (!info || info.kind === "text") {
     return 0
   }
 
@@ -264,6 +271,13 @@ export function questionSave(state: QuestionBodyState, request: QuestionRequest)
   const value = questionInput(state).trim()
   const prev = state.custom[state.tab]
   if (!value) {
+    // A text card has no other way to answer: stay editing, never submit
+    // empty text (submit is enabled only once the trimmed text is non-empty).
+    if (info.kind === "text") {
+      return {
+        state: questionSetEditing(state, true),
+      }
+    }
     if (!prev) {
       return {
         state: questionSetEditing(state, false),
@@ -324,6 +338,10 @@ export function questionHint(request: QuestionRequest, state: QuestionBodyState)
   }
 
   if (questionConfirm(request, state)) {
+    return "enter submit   esc dismiss"
+  }
+
+  if (questionText(request, state)) {
     return "enter submit   esc dismiss"
   }
 

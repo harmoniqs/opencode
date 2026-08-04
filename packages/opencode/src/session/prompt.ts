@@ -3,6 +3,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import path from "path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { producedUserVisibleOutput } from "./turn-output"
+import { askedQuestionInProse, PROSE_QUESTION_NUDGE } from "./prose-guard"
 import os from "os"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -1216,26 +1217,19 @@ const layer = Layer.effect(
             // stubborn turn can't loop forever.
             const askedInProse = (() => {
               if (!lastAssistantMsg || !lastAssistant) return false
-              // already nudged this exact assistant message? let it exit.
-              if (amicoNudged.has(lastAssistant.id)) return false
-              const askedQuestionTool = lastAssistantMsg.parts.some(
-                (p) => p.type === "tool" && p.tool === "question",
-              )
-              if (askedQuestionTool) return false
-              const text = lastAssistantMsg.parts
-                .filter((p): p is SessionV1.TextPart => p.type === "text")
-                .map((p) => p.text)
-                .join("\n")
-                .trimEnd()
-              // Heuristic: final non-empty line ends with "?" (a question to the user).
-              const endsWithQuestion = /\?["')\]]*\s*$/.test(text)
-              if (!endsWithQuestion) return false
               // Only within an active Amico interview: the session has recorded
               // at least one entity via an amicode_* tool this session.
               const interviewActive = msgs.some((m) =>
                 m.parts.some((p) => p.type === "tool" && typeof p.tool === "string" && p.tool.startsWith("amicode_")),
               )
-              return interviewActive
+              // The guard rule itself lives in prose-guard.ts so it is
+              // unit-testable (the turn-output.ts pattern).
+              return askedQuestionInProse({
+                // already nudged this exact assistant message? let it exit.
+                alreadyNudged: amicoNudged.has(lastAssistant.id),
+                parts: lastAssistantMsg.parts,
+                interviewActive,
+              })
             })()
 
             if (askedInProse && lastAssistant) {
@@ -1259,12 +1253,9 @@ const layer = Layer.effect(
                 messageID: nudgeMsg.id,
                 sessionID,
                 type: "text",
-                text:
-                  "[system] You just asked the user a question in plain text. The interview " +
-                  "requires the `question` tool for every question so the user gets a clickable " +
-                  "card — plain prose renders nothing to answer. Re-ask that exact question by " +
-                  "calling the `question` tool now (one question, default option first with " +
-                  "\"(Recommended)\"), and do not repeat the question in prose.",
+                // Bilingual nudge (amicode#245): options-with-recommended-first
+                // for choice questions, kind: "text" for free-form questions.
+                text: PROSE_QUESTION_NUDGE,
                 synthetic: true,
               } satisfies SessionV1.TextPart)
               step++

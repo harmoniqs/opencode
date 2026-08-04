@@ -38,6 +38,7 @@ import {
   questionSubmit,
   questionSync,
   questionTabs,
+  questionText,
   questionTotal,
 } from "./question.shared"
 import { footerWidthPolicy } from "./footer.width"
@@ -55,6 +56,11 @@ export function RunQuestionBody(props: {
   const single = createMemo(() => questionSingle(props.request))
   const confirm = createMemo(() => questionConfirm(props.request, state()))
   const info = createMemo(() => questionInfo(props.request, state()))
+  // A Free-form Question (amicode#245) renders as a text card: the header plus
+  // a bare text input with submit — no option rows, no pseudo-option. The card
+  // is always in editing mode; its answer rides the typed-custom-answer path.
+  const text = createMemo(() => !confirm() && questionText(props.request, state()))
+  const editing = createMemo(() => state().editing || text())
   const input = createMemo(() => questionInput(state()))
   const other = createMemo(() => questionOther(props.request, state()))
   const picked = createMemo(() => questionPicked(state()))
@@ -171,9 +177,15 @@ export function RunQuestionBody(props: {
       return
     }
 
-    if (cur.editing) {
+    if (editing()) {
       if (event.name === "escape") {
-        setState((prev) => questionSetEditing(prev, false))
+        // A text card has no non-editing mode: esc dismisses the card, the
+        // same rejection a choice card's esc performs outside editing.
+        if (text()) {
+          reject()
+        } else {
+          setState((prev) => questionSetEditing(prev, false))
+        }
         event.preventDefault()
         return
       }
@@ -248,7 +260,7 @@ export function RunQuestionBody(props: {
   })
 
   createEffect(() => {
-    if (!state().editing || !area || area.isDestroyed) {
+    if (!editing() || !area || area.isDestroyed) {
       return
     }
 
@@ -258,7 +270,7 @@ export function RunQuestionBody(props: {
     }
 
     queueMicrotask(() => {
-      if (!area || area.isDestroyed || !state().editing) {
+      if (!area || area.isDestroyed || !editing()) {
         return
       }
 
@@ -361,8 +373,41 @@ export function RunQuestionBody(props: {
               </text>
             </box>
 
-            <box flexGrow={1} flexShrink={1}>
-              <scrollbox
+            <Show
+              when={!text()}
+              fallback={
+                <box flexGrow={1} flexShrink={1}>
+                  <textarea
+                    width="100%"
+                    minHeight={1}
+                    maxHeight={4}
+                    wrapMode="word"
+                    placeholder="Type your answer"
+                    placeholderColor={props.theme.muted}
+                    textColor={props.theme.text}
+                    focusedTextColor={props.theme.text}
+                    backgroundColor={props.theme.surface}
+                    focusedBackgroundColor={props.theme.surface}
+                    cursorColor={props.theme.text}
+                    focused={!disabled()}
+                    onSubmit={saveCustom}
+                    onContentChange={() => {
+                      if (!area || area.isDestroyed || disabled()) {
+                        return
+                      }
+
+                      const value = area.plainText
+                      setState((prev) => questionStoreCustom(prev, prev.tab, value))
+                    }}
+                    ref={(item) => {
+                      area = item
+                    }}
+                  />
+                </box>
+              }
+            >
+              <box flexGrow={1} flexShrink={1}>
+                <scrollbox
                 width="100%"
                 height="100%"
                 verticalScrollbarOptions={{
@@ -506,7 +551,8 @@ export function RunQuestionBody(props: {
                   </Show>
                 </box>
               </scrollbox>
-            </box>
+              </box>
+            </Show>
           </box>
         </Show>
       </box>
@@ -536,16 +582,28 @@ export function RunQuestionBody(props: {
             width={narrow() ? "100%" : undefined}
           >
             <Show
-              when={!state().editing}
+              when={!editing()}
               fallback={
-                <>
+                <Show
+                  when={!text()}
+                  fallback={
+                    <>
+                      <text fg={props.theme.text}>
+                        enter <span style={{ fg: props.theme.muted }}>submit</span>
+                      </text>
+                      <text fg={props.theme.text}>
+                        esc <span style={{ fg: props.theme.muted }}>dismiss</span>
+                      </text>
+                    </>
+                  }
+                >
                   <text fg={props.theme.text}>
                     enter <span style={{ fg: props.theme.muted }}>save</span>
                   </text>
                   <text fg={props.theme.text}>
                     esc <span style={{ fg: props.theme.muted }}>cancel</span>
                   </text>
-                </>
+                </Show>
               }
             >
               <Show when={!single()}>

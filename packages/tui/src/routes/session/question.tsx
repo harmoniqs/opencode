@@ -35,6 +35,11 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   const question = createMemo(() => questions()[store.tab])
   const confirm = createMemo(() => !single() && store.tab === questions().length)
   const options = createMemo(() => question()?.options ?? [])
+  // A Free-form Question (amicode#245) renders as a text card: the header plus
+  // a bare text input with submit — no option rows, no pseudo-option. The card
+  // is always in editing mode; its answer rides the typed-custom-answer path.
+  const text = createMemo(() => !confirm() && question()?.kind === "text")
+  const editing = createMemo(() => store.editing || text())
   const custom = createMemo(() => question()?.custom !== false)
   const other = createMemo(() => custom() && store.selected === options().length)
   const input = createMemo(() => store.custom[store.tab] ?? "")
@@ -132,15 +137,15 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
 
   useBindings(() => ({
     mode: QUESTION_MODE,
-    enabled: store.editing && !confirm(),
+    enabled: editing() && !confirm(),
     commands: [
       {
         name: "prompt.clear",
         title: "Clear answer edit",
         category: "Question",
         run() {
-          const text = textarea?.plainText ?? ""
-          if (!text) {
+          const value = textarea?.plainText ?? ""
+          if (!value) {
             setStore("editing", false)
             return
           }
@@ -154,6 +159,12 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         desc: "Cancel answer edit",
         group: "Question",
         cmd: () => {
+          // A text card has no non-editing mode: esc dismisses the card, the
+          // same rejection a choice card's esc performs outside editing.
+          if (text()) {
+            reject()
+            return
+          }
           setStore("editing", false)
         },
       },
@@ -165,6 +176,12 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         cmd: () => {
           const text = textarea?.plainText?.trim() ?? ""
           const prev = store.custom[store.tab]
+
+          // A text card's submit is enabled only once the trimmed text is
+          // non-empty: stay editing instead of clearing the (empty) answer.
+          if (!text && question()?.kind === "text") {
+            return
+          }
 
           if (!text) {
             if (prev) {
@@ -213,7 +230,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
 
     return {
       mode: QUESTION_MODE,
-      enabled: !store.editing,
+      enabled: !editing(),
       commands: [
         {
           name: "app.exit",
@@ -360,8 +377,33 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                 {multi() ? " (select all that apply)" : ""}
               </text>
             </box>
-            <box>
-              <For each={options()}>
+            <Show
+              when={!text()}
+              fallback={
+                <box>
+                  <textarea
+                    ref={(val: TextareaRenderable) => {
+                      textarea = val
+                      val.traits = { status: "ANSWER" }
+                      queueMicrotask(() => {
+                        val.focus()
+                        val.gotoLineEnd()
+                      })
+                    }}
+                    initialValue={input()}
+                    placeholder="Type your answer"
+                    placeholderColor={theme.textMuted}
+                    minHeight={1}
+                    maxHeight={6}
+                    textColor={theme.text}
+                    focusedTextColor={theme.text}
+                    cursorColor={theme.primary}
+                  />
+                </box>
+              }
+            >
+              <box>
+                <For each={options()}>
                 {(opt, i) => {
                   const active = () => i() === store.selected
                   const picked = () => store.answers[store.tab]?.includes(opt.label) ?? false
@@ -451,7 +493,8 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                   </Show>
                 </box>
               </Show>
-            </box>
+              </box>
+            </Show>
           </box>
         </Show>
 
@@ -492,7 +535,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
               {"⇆"} <span style={{ fg: theme.textMuted }}>tab</span>
             </text>
           </Show>
-          <Show when={!confirm()}>
+          <Show when={!confirm() && !text()}>
             <text fg={theme.text}>
               {"↑↓"} <span style={{ fg: theme.textMuted }}>select</span>
             </text>
@@ -500,7 +543,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
           <text fg={theme.text}>
             enter{" "}
             <span style={{ fg: theme.textMuted }}>
-              {confirm() ? "submit" : multi() ? "toggle" : single() ? "submit" : "confirm"}
+              {confirm() || text() ? "submit" : multi() ? "toggle" : single() ? "submit" : "confirm"}
             </span>
           </text>
 

@@ -3,6 +3,9 @@ import type { QuestionRequest } from "@opencode-ai/sdk/v2"
 import {
   createQuestionBodyState,
   questionConfirm,
+  questionCustom,
+  questionHint,
+  questionOther,
   questionReject,
   questionSave,
   questionSelect,
@@ -10,6 +13,8 @@ import {
   questionStoreCustom,
   questionSubmit,
   questionSync,
+  questionText,
+  questionTotal,
 } from "@/cli/cmd/run/question.shared"
 
 function req(input: Partial<QuestionRequest> = {}): QuestionRequest {
@@ -101,6 +106,92 @@ describe("run question shared", () => {
       requestID: "question-1",
       answers: [["custom mode"]],
     })
+  })
+
+  test("a text-kind question renders no options and no pseudo-option", () => {
+    const ask = req({
+      questions: [
+        {
+          question: "What should we call you?",
+          header: "Name",
+          options: [],
+          kind: "text",
+        },
+      ],
+    })
+    const state = createQuestionBodyState("question-1")
+
+    expect(questionText(ask, state)).toBe(true)
+    expect(questionTotal(ask, state)).toBe(0)
+    expect(questionOther(ask, state)).toBe(false)
+    expect(questionCustom(ask, state)).toBe(false)
+    expect(questionSelect(state, ask).state).toBe(state)
+  })
+
+  test("a text-kind question submits typed text through the custom-answer path", () => {
+    const ask = req({
+      questions: [
+        {
+          question: "What should we call you?",
+          header: "Name",
+          options: [],
+          kind: "text",
+        },
+      ],
+    })
+
+    const state = questionStoreCustom(createQuestionBodyState("question-1"), 0, "  JJ  ")
+    const next = questionSave(state, ask)
+    expect(next.reply).toEqual({
+      requestID: "question-1",
+      answers: [["JJ"]],
+    })
+  })
+
+  test("a text-kind question does not submit empty text", () => {
+    const ask = req({
+      questions: [
+        {
+          question: "What should we call you?",
+          header: "Name",
+          options: [],
+          kind: "text",
+        },
+      ],
+    })
+
+    const next = questionSave(createQuestionBodyState("question-1"), ask)
+    expect(next.reply).toBeUndefined()
+    expect(next.state.editing).toBe(true)
+    expect(next.state.answers[0] ?? []).toEqual([])
+    expect(questionHint(ask, next.state)).toBe("enter submit   esc dismiss")
+  })
+
+  test("a choice question without kind keeps its options and pseudo-option", () => {
+    const state = createQuestionBodyState("question-1")
+    const ask = req()
+
+    expect(questionText(ask, state)).toBe(false)
+    expect(questionTotal(ask, state)).toBe(2)
+    expect(questionCustom(ask, state)).toBe(true)
+  })
+
+  test("a choice question with custom disabled shows no pseudo-option", () => {
+    const state = createQuestionBodyState("question-1")
+    const ask = req({
+      questions: [
+        {
+          question: "Mode?",
+          header: "Mode",
+          options: [{ label: "chunked", description: "Incremental output" }],
+          multiple: false,
+          custom: false,
+        },
+      ],
+    })
+
+    expect(questionTotal(ask, state)).toBe(1)
+    expect(questionOther(ask, state)).toBe(false)
   })
 
   test("resets state when the request id changes and builds reject payloads", () => {
