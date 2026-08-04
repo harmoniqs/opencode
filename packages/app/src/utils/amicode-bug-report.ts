@@ -17,3 +17,26 @@ export function adoptBugReportFlag(search: string): void {
 export function bugReportEnabled(): boolean {
   return enabled
 }
+
+/** UP kind: the app's boot catch-up for the bug-report dock. Posted once per
+ *  app-frame boot when the flag is on; the extension re-posts open-bug-report
+ *  when a bug session is live. Heals a lost one-shot open (cold-boot race,
+ *  webview reload) — the dock contract's pull half (QA: amicode#249 preview). */
+export const BUG_REPORT_POKE_KIND = "bug-report-poke"
+
+/** Post the boot poke to the extension host — only embedded (a webview parent
+ *  exists) and only with the flag on (standalone opencode never pokes). Safe
+ *  to call on every app boot: the extension treats it as cheap idempotent
+ *  noise when no bug session is live. */
+export function postBugReportPoke(post: (envelope: { source: string; kind: string }) => void = defaultPokePost): void {
+  if (!bugReportEnabled()) return
+  post({ source: "amicode", kind: BUG_REPORT_POKE_KIND })
+}
+
+function defaultPokePost(envelope: { source: string; kind: string }): void {
+  try {
+    if (window.parent && window.parent !== window) window.parent.postMessage(envelope, "*")
+  } catch {
+    /* a detached frame never blocks boot */
+  }
+}

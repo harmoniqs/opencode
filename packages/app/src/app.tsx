@@ -70,6 +70,7 @@ import { AmicodeSplash } from "@opencode-ai/ui/amicode-splash"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
 import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
+import { postBugReportPoke } from "@/utils/amicode-bug-report"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
@@ -418,8 +419,7 @@ function AmicodeThemeBridge() {
     if (d.kind === "open-bug-report" || d.kind === "close-bug-report") {
       bugDockController.handleBridgeMessage(d)
       return
-    }
-    if (d.kind !== "theme") return
+    }    if (d.kind !== "theme") return
     if (d.colorScheme === "light" || d.colorScheme === "dark") theme.setColorScheme(d.colorScheme)
   }
   window.addEventListener("message", onMsg)
@@ -438,6 +438,11 @@ function AmicodeThemeBridge() {
   }
   window.addEventListener("keydown", onKey, { capture: true })
   onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }))
+  // The boot poke — the dock contract's pull half (QA follow-up, amicode#249
+  // preview): posted once per app-frame boot when the flag is on; the
+  // extension re-posts open-bug-report if a bug session is live, so a lost
+  // one-shot open (cold-boot race, webview reload) self-heals.
+  postBugReportPoke()
   return null
 }
 
