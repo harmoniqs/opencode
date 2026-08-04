@@ -9,6 +9,7 @@ Merged sst/opencode `dev` @ `7fe99387` (v1.18.12; v1.18.11 + v1.18.12 together, 
 
 - **Adopted upstream's**, all bugfix-tier: MCP SSE reconnect-loop fix; provider configs with interleaved reasoning fields (`reasoning_text` / custom field names — same bucket as patch #24's provider/model port; verified landed in `packages/llm/src/protocols/openai-responses.ts`); Azure GPT-5.5+ reasoning fix; composer draft-store (large-image lag); project search across all known recent projects; stale-assistant-error clearing on resume; legacy-config skip for v2 servers; desktop fixes (external links, title bar, dir picker, file tree, gutter).
 - **Kept fork's**: everything — the merge touched no amicode-patched file; `session-side-panel.tsx` deletions (ADR 0001) stand.
+- **Fork deviation (e2e)**: upstream's new `project-picker-recent-search.spec.ts` **skipped** — it drives upstream's home-projects surface ("Add project" on the home page), which the fork doesn't render (NewHome has no add-project entry; the legacy interface is compile-time retired, `settings.tsx` `newLayoutDesigns = createMemo(() => true)`; `home-projects-view.tsx` is dead code here). The five-cap + search-all logic ships intact in `dialog-select-directory.tsx`; re-enable per harmoniqs/opencode#120.
 - Build + smoke-verify on the dev host before tagging `v1.18.12-amicode.1` (release ritual unchanged; channel gate gotcha 2 still applies: `OPENCODE_CHANNEL=dev`).
 
 ## Upstream sync 2026-08-01 (1.17.3 → 1.18.10, merge-base 2026-06-10)
