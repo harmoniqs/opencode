@@ -128,8 +128,11 @@ export function SessionBugDock() {
     const perm = bugPermission()
     if (!perm || deciding() === perm.id) return
     setDeciding(perm.id)
+    // Scoped by the requesting session's directory (amicode#249 QA) — the
+    // permission registry is instance-per-directory, same as questions.
+    const directory = serverSync().session.data.info[perm.sessionID]?.directory
     sdk()
-      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, location: { directory }, reply: response })
       .finally(() => setDeciding((id) => (id === perm.id ? undefined : id)))
   }
 
