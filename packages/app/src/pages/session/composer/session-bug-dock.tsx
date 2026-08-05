@@ -312,30 +312,44 @@ export function BugDockView(props: {
             opacity: `${Math.max(0, Math.min(1, 1 - value()))}`,
           }}
         >
+          {/* Startup placeholder — the model hasn't spoken yet. */}
+          <Show when={props.phase === "chat" && !props.agentText}>
+            <div
+              data-slot="bug-dock-init"
+              class="border-t-[0.5px] border-v2-border-border-base px-4 py-2.5 text-[13px] leading-5 text-v2-text-text-muted"
+            >
+              Starting bug reporter…
+            </div>
+          </Show>
           <Show
             when={props.phase === "chat"}
             fallback={
-              <div data-slot="bug-dock-filed" class="flex items-center gap-2 px-4 pt-1 pb-3">
-                <IconV2 name="check" size="small" class="shrink-0 text-v2-state-fg-success" />
-                <span class="text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
-                  Issue filed — this session is archived.
+              <div data-slot="bug-dock-filed" class="flex flex-col gap-1 px-4 pt-1 pb-3">
+                <div class="flex items-center gap-2">
+                  <IconV2 name="check" size="small" class="shrink-0 text-v2-state-fg-success" />
+                  <span class="text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
+                    Issue filed — this session is archived.
+                  </span>
+                  <Show when={props.filedUrl && props.filedUrl !== "filed-via-browser" ? props.filedUrl : undefined}>
+                    {(url) => (
+                      <ButtonV2
+                        type="button"
+                        size="small"
+                        variant="neutral"
+                        class="shrink-0"
+                        onClick={() => props.onOpenLink(url())}
+                      >
+                        <span class="flex items-center gap-1.5">
+                          <IconV2 name="outline-square-arrow" size="small" />
+                          Open issue
+                        </span>
+                      </ButtonV2>
+                    )}
+                  </Show>
+                </div>
+                <span class="text-[12px] font-[440] leading-5 text-v2-text-text-faint">
+                  Feel free to close this bug session.
                 </span>
-                <Show when={props.filedUrl && props.filedUrl !== "filed-via-browser" ? props.filedUrl : undefined}>
-                  {(url) => (
-                    <ButtonV2
-                      type="button"
-                      size="small"
-                      variant="neutral"
-                      class="shrink-0"
-                      onClick={() => props.onOpenLink(url())}
-                    >
-                      <span class="flex items-center gap-1.5">
-                        <IconV2 name="outline-square-arrow" size="small" />
-                        Open issue
-                      </span>
-                    </ButtonV2>
-                  )}
-                </Show>
               </div>
             }
           >
