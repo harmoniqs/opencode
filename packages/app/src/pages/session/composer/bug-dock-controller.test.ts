@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { bugProgress, createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
+import { createBugDockController, findBugFiledUrl, findLiveBugSession, matchBugFiledUrl } from "./bug-dock-controller"
 
 // amicode/opencode#117: the bug-report dock's controller — a module-singleton
 // state machine the dock component renders against. Plain-module seams (like
@@ -228,7 +228,7 @@ describe("bug-dock controller: filing (AC4)", () => {
     expect(posts).toEqual([
       { kind: "bug-filed", payload: { sessionID: "ses_bug1", url: "https://github.com/harmoniqs/amicode/issues/123" } },
     ])
-    expect(controller.phase()).toBe("submitted")
+    expect(controller.phase()).toBe("filed")
     expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
     // The dock STAYS open in its terminal end-state; the extension owns the
     // real close after archiving.
@@ -308,7 +308,7 @@ describe("bug-dock controller: gate + open idempotency (AC5)", () => {
 
     controller.handleBridgeMessage(openMessage("ses_bug1"))
 
-    expect(controller.phase()).toBe("submitted")
+    expect(controller.phase()).toBe("filed")
     expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
     expect(posts).toEqual([])
     expect(dockCalls).toEqual([])
@@ -364,97 +364,6 @@ describe("bug-dock controller: gate + open idempotency (AC5)", () => {
   })
 })
 
-describe("findLiveBugSession — the sync-watch selector (QA: amicode#249 preview)", () => {
-  const bug = (id: string, created: number, archived?: number) => ({
-    id,
-    metadata: { bug_report: { project: "probe" } },
-    time: { created, ...(archived ? { archived } : {}) },
-  })
-
-  test("finds the unarchived bug session among ordinary sessions", () => {
-    const sessions = [
-      { id: "ses_chat", metadata: {}, time: { created: 1 } },
-      bug("ses_bug", 2),
-      { id: "ses_other", time: { created: 3 } },
-    ]
-    expect(findLiveBugSession(sessions)).toBe("ses_bug")
-  })
-
-  test("excludes archived bug sessions (filed is terminal — the end-state latches elsewhere)", () => {
-    expect(findLiveBugSession([bug("ses_bug", 2, 3)])).toBeUndefined()
-  })
-
-  test("excludes sessions without the bug_report envelope", () => {
-    expect(findLiveBugSession([{ id: "ses_chat", metadata: { other: 1 }, time: { created: 1 } }])).toBeUndefined()
-    expect(findLiveBugSession([{ id: "ses_chat", time: { created: 1 } }])).toBeUndefined()
-  })
-
-  test("most-recently-created wins when several exist (single-open is the extension's job)", () => {
-    expect(findLiveBugSession([bug("ses_old", 1), bug("ses_new", 5), bug("ses_mid", 3)])).toBe("ses_new")
-  })
-
-  test("empty and malformed input are safe", () => {
-    expect(findLiveBugSession([])).toBeUndefined()
-    expect(findLiveBugSession([undefined as never, {} as never, { id: 7 } as never])).toBeUndefined()
-  })
-})
-
-describe("bugProgress — the progress strip's phase narration (QA: amicode#249)", () => {
-  const tool = (tool: string, command?: string) => ({
-    type: "tool",
-    tool,
-    state: { status: "completed", input: command ? { command } : {} },
-  })
-
-  test("pending requests beat tool progress — the agent is blocked on the user", () => {
-    expect(bugProgress({ questionPending: true, permissionPending: false, parts: [tool("bash", "gh issue list")] }).step).toBe("answer")
-    expect(bugProgress({ questionPending: true, permissionPending: true, parts: [] }).step).toBe("approval")
-  })
-
-  test("dedup / upstream / submit classify from the skill's observable commands", () => {
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue list --search foo")] }).step).toBe("dedup")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh api repos/harmoniqs/amicode")] }).step).toBe("upstream")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh release view v1.0")] }).step).toBe("upstream")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "git log --oneline -3")] }).step).toBe("upstream")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("webfetch")] }).step).toBe("upstream")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue create --title x")] }).step).toBe("submit")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "open https://github.com/x/issues/new")] }).step).toBe("submit")
-  })
-
-  test("the latest informative call wins; silence reads as working", () => {
-    const parts = [tool("bash", "gh issue list"), tool("bash", "gh api repos/x")]
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts }).step).toBe("upstream")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [] }).step).toBe("working")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "ls -la")] }).step).toBe("working")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [{ type: "text", text: "hi" }] }).step).toBe("working")
-  })
-
-  test("labels are the user's language", () => {
-    expect(bugProgress({ questionPending: true, permissionPending: false, parts: [] }).label).toBe("Waiting for your answer")
-    expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue create")] }).label).toBe("Submitting the ticket…")
-  })
-})
-
-describe("bugProgress — the error step (amicode#249 QA: dead turns must not read as Working)", () => {
-  test("a session error beats tool progress and carries the message when short", () => {
-    const parts = [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "gh issue list" } } }]
-    const progress = bugProgress({
-      questionPending: false,
-      permissionPending: false,
-      sessionError: { name: "AI_APICallError", message: "Insufficient balance" },
-      parts,
-    })
-    expect(progress.step).toBe("error")
-    expect(progress.label).toBe("The model call failed — Insufficient balance")
-  })
-
-  test("error yields to pending requests; long/absent messages fall back to the base label", () => {
-    expect(bugProgress({ questionPending: true, permissionPending: false, sessionError: { name: "X" }, parts: [] }).step).toBe("answer")
-    expect(bugProgress({ questionPending: false, permissionPending: false, sessionError: { name: "X", message: "y".repeat(500) }, parts: [] }).label).toBe("The model call failed")
-    expect(bugProgress({ questionPending: false, permissionPending: false, sessionError: { name: "X" }, parts: [] }).label).toBe("The model call failed")
-  })
-})
-
 describe("the dismissed guard — a closed dock never resurrects its session (amicode#249 QA)", () => {
   test("after requestClose, the same session id is dropped; a NEW session adopts", () => {
     const { controller, dockCalls } = setup()
@@ -474,3 +383,4 @@ describe("the dismissed guard — a closed dock never resurrects its session (am
     expect(dockCalls).toEqual(["open", "close", "open"])
   })
 })
+

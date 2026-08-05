@@ -22,7 +22,7 @@ export const BUG_REPORT_CLOSED_KIND = "bug-report-closed"
 
 /** "closed" — no dock. "chat" — dock live, iframe hosting the bug session.
  *  "filed" — terminal end-state (issue link) until the extension closes it. */
-export type BugDockPhase = "closed" | "chat" | "submitted" | "filed"
+export type BugDockPhase = "closed" | "chat" | "filed"
 
 // The skill's terminal sentinel (the run-telemetry idiom), printed ONLY after
 // actual filing — never at the confirm gate, so a veto never emits it. On the
@@ -71,30 +71,7 @@ export function findLiveBugSession(
 // so the dock narrates them instead of sitting silent between turns.
 // ---------------------------------------------------------------------------
 
-export type BugProgressStep = "answer" | "approval" | "error" | "submitted" | "dedup" | "upstream" | "submit" | "working"
-
-export type BugProgress = { step: BugProgressStep; label: string }
-
 /** Classify one bash command into a progress step, when it tells us anything. */
-export function classifyBashCommand(command: string): Exclude<BugProgressStep, "answer" | "approval" | "error" | "working"> | undefined {
-  if (/\bgh\s+issue\s+(create)\b/.test(command)) return "submit"
-  if (/\bgh\s+issue\s+(list|search|view|status)\b/.test(command)) return "dedup"
-  if (/\bgh\s+(api|release|repo)\b/.test(command)) return "upstream"
-  if (/\bgit\b[^|]*\b(log|remote|show|describe|tag)\b/.test(command)) return "upstream"
-  if (/\bopen\b|\bopen-url\b|\bbrowser\b/.test(command)) return "submit" // the browser-fallback filing path
-  return undefined
-}
-
-const PROGRESS_LABELS: Record<BugProgressStep, string> = {
-  answer: "Waiting for your answer",
-  approval: "Needs your approval",
-  error: "The model call failed",
-  submitted: "Submitted!",
-  dedup: "Checking for an existing ticket…",
-  upstream: "Investigating upstream…",
-  submit: "Submitting the ticket…",
-  working: "Launching agent…",
-}
 
 /** Where is the agent, from observable state. Priority: a pending request
  *  (the agent is blocked on the user) beats a turn error (the turn is OVER —
@@ -103,35 +80,6 @@ const PROGRESS_LABELS: Record<BugProgressStep, string> = {
  *  LATEST informative tool call wins; completed tools count as much as
  *  running ones (a finished dedup search still narrates "checking", until
  *  the next informative call supersedes it). */
-export function bugProgress(input: {
-  questionPending: boolean
-  permissionPending: boolean
-  sessionError?: { name?: string; message?: string } | undefined
-  parts: Iterable<
-    { type?: unknown; tool?: unknown; text?: unknown; state?: { status?: unknown; input?: unknown } | undefined } | undefined
-  >
-}): BugProgress {
-  if (input.permissionPending) return { step: "approval", label: PROGRESS_LABELS.approval }
-  if (input.questionPending) return { step: "answer", label: PROGRESS_LABELS.answer }
-  if (input.sessionError) {
-    const message = typeof input.sessionError.message === "string" ? input.sessionError.message.trim() : ""
-    const label = message && message.length <= 120 ? `${PROGRESS_LABELS.error} — ${message}` : PROGRESS_LABELS.error
-    return { step: "error", label }
-  }
-  let step: Exclude<BugProgressStep, "answer" | "approval" | "error" | "working"> | undefined
-  for (const part of input.parts) {
-    if (!part || part.type !== "tool") continue
-    const inputRecord = (part.state?.input ?? {}) as Record<string, unknown>
-    if (part.tool === "bash" && typeof inputRecord.command === "string") {
-      step = classifyBashCommand(inputRecord.command) ?? step
-      continue
-    }
-    if (part.tool === "webfetch" || part.tool === "web_fetch" || part.tool === "fetch") step = "upstream"
-  }
-  const resolved = step ?? "working"
-  return { step: resolved, label: PROGRESS_LABELS[resolved] }
-}
-
 /** Scan a session's message parts for the sentinel. Text parts only; the
  *  first match wins. The caller scopes the parts to the bug session — the
  *  watcher only ever observes the session the dock hosts. */
@@ -170,8 +118,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
   const [filedUrl, setFiledUrl] = createSignal<string>()
   /** amicode#249: a 2 s window between filing and the terminal end-state
    *  so the strip narrates "Submitted!" before the archive state lands. */
-  const [showSubmitted, setShowSubmitted] = createSignal(false)
-  let submittedTimer: ReturnType<typeof setTimeout> | undefined
   /** The last dismissed session — the sync watch must never resurrect it
    *  (amicode#249 QA): close dismisses locally BEFORE the extension's
    *  abort+delete lands, and an unguarded watch re-adopts the still-living
@@ -181,7 +127,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
 
   const phase = (): BugDockPhase => {
     if (!open()) return "closed"
-    if (showSubmitted()) return "submitted"
     return filedUrl() ? "filed" : "chat"
   }
 
@@ -189,7 +134,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(id)
     setCollapsed(false)
     setFiledUrl(undefined)
-    clearTimeout(submittedTimer)
     setShowSubmitted(false)
     setOpen(true)
     dock.open()
@@ -201,7 +145,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(undefined)
     setCollapsed(false)
     setFiledUrl(undefined)
-    clearTimeout(submittedTimer)
     setShowSubmitted(false)
     dock.close()
   }
@@ -264,17 +207,13 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
 
   /** The sentinel watcher matched — the skill filed. Posts bug-filed exactly
    *  once (latched: the sentinel keeps matching in the persisted transcript,
-   *  so the phase guard is load-bearing), shows "Submitted!" for 2 s, then
-   *  switches to the terminal end-state; the dock stays open until the
-   *  extension closes it. */
+   *  so the phase guard is load-bearing) and switches to the terminal
+   *  end-state; the dock stays open until the extension closes it. */
   const file = (url: string) => {
     const id = sessionID()
     if (!open() || !id || filedUrl()) return
     post(BUG_FILED_KIND, { sessionID: id, url })
-    setShowSubmitted(true)
     setFiledUrl(url)
-    clearTimeout(submittedTimer)
-    submittedTimer = setTimeout(() => setShowSubmitted(false), 2000)
   }
 
   return {
