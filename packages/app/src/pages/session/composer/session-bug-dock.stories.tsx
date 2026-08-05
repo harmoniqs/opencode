@@ -34,7 +34,6 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
       collapsed: false,
       agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
       progress: { step: "dedup", label: "Checking for an existing ticket…" },
-      onCancel: noop,
       onToggle: noop,
       onClose: noop,
       onOpenLink: noop,

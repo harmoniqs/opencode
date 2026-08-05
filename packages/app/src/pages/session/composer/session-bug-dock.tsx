@@ -20,6 +20,7 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { usePlatform } from "@/context/platform"
+import { useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
@@ -36,6 +37,7 @@ const HEADER_HEIGHT = 42
 export function SessionBugDock() {
   const controller = bugDockController
   const sync = useSync()
+  const server = useServer()
   const platform = usePlatform()
 
   // Bridge down-messages (open-bug-report / close-bug-report) are handled at
@@ -63,6 +65,27 @@ export function SessionBugDock() {
     const url = findBugFiledUrl(parts)
     if (url) controller.file(url)
   })
+
+  // Self-contained close (amicode#249 QA): the bridge's bug-report-closed
+  // postMessage can be lost (the relay, the extension, the window). The dock
+  // deletes the session directly through the app's own server API — abort
+  // the in-flight turn, then hard-delete. The bridge still posts
+  // (best-effort); the sync watch never resurrects (dismissed guard).
+  const selfClose = async () => {
+    const id = controller.sessionID()
+    if (!id) return
+    controller.requestClose()
+    const origin = window.location.origin
+    const creds = server.current?.http.password
+      ? btoa(`${server.current.http.username ?? "opencode"}:${server.current.http.password}`)
+      : undefined
+    const headers = creds ? { Authorization: `Basic ${creds}` } as Record<string, string> : undefined
+    const doFetch = async (method: string, path: string) => {
+      try { await fetch(`${origin}${path}`, { method, headers }) } catch {}
+    }
+    await doFetch("POST", `/session/${id}/abort`)
+    await doFetch("DELETE", `/session/${id}`)
+  }
 
   // The sync watch — the open path that cannot be lost (QA: amicode#249
   // preview). The bridge's open-bug-report rides a fire-and-forget webview
@@ -200,9 +223,8 @@ export function SessionBugDock() {
           agentText={lastAssistantText()}
           filedUrl={controller.filedUrl()}
           progress={progress()}
-          onCancel={controller.requestClose}
           onToggle={controller.toggleCollapsed}
-          onClose={controller.requestClose}
+          onClose={selfClose}
           onOpenLink={(url) => platform.openExternal(url)}
           footer={footer()}
         />
@@ -218,7 +240,6 @@ export function BugDockView(props: {
   agentText?: string
   filedUrl?: string
   progress?: { step: string; label: string }
-  onCancel?: () => void
   onToggle: () => void
   onClose: () => void
   onOpenLink: (url: string) => void
@@ -344,23 +365,6 @@ export function BugDockView(props: {
               <span class="min-w-0 flex-1 truncate text-[12px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
                 {progress().label}
               </span>
-              <Show when={props.onCancel}>
-                <button
-                  type="button"
-                  data-action="bug-dock-cancel"
-                  class="shrink-0 cursor-pointer rounded-md px-2 py-0.5 text-[12px] font-[480] leading-5 text-v2-text-text-muted hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base"
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    props.onCancel?.()
-                  }}
-                >
-                  Cancel
-                </button>
-              </Show>
             </div>
           )}
         </Show>
