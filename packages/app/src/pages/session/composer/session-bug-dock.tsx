@@ -251,6 +251,11 @@ export function SessionBugDock() {
             collapsed={controller.collapsed()}
             agentText={lastAssistantText()}
             filedUrl={controller.filedUrl()}
+            answerText={answerText()}
+            answering={answering()}
+            questionPending={!!bugQuestion()}
+            onAnswerChange={(v) => setAnswerText(v)}
+            onAnswerSubmit={answerQuestion}
             onToggle={controller.toggleCollapsed}
             onClose={selfClose}
             onOpenLink={(url) => platform.openExternal(url)}
@@ -270,6 +275,11 @@ export function BugDockView(props: {
   collapsed: boolean
   agentText?: string
   filedUrl?: string
+  answerText: string
+  answering: boolean
+  questionPending: boolean
+  onAnswerChange: (value: string) => void
+  onAnswerSubmit: () => void
   onToggle: () => void
   onClose: () => void
   onOpenLink: (url: string) => void
@@ -434,6 +444,40 @@ export function BugDockView(props: {
                 </div>
               )}
             </Show>
+            {/* The permanent textarea — always visible in chat phase. */}
+            <div data-slot="bug-dock-input" class="flex flex-col gap-1 border-t-[0.5px] border-v2-border-border-base px-4 pt-1.5 pb-2.5">
+              <span class="text-[11px] leading-4 text-v2-text-text-faint">
+                Type a response when the textbox glows yellow.
+              </span>
+              <div class="flex gap-2">
+                <textarea
+                  value={props.answerText}
+                  onInput={(e) => props.onAnswerChange(e.currentTarget.value)}
+                  placeholder="Type your answer…"
+                  disabled={props.answering}
+                  classList={{
+                    "flex-1 resize-none rounded-md border-[0.5px] bg-v2-background-bg-layer-02 px-3 py-1.5 text-[13px] leading-5 text-v2-text-text-base placeholder:text-v2-text-text-faint focus:outline-none": true,
+                    "border-v2-state-fg-warning shadow-[0_0_0_1px_var(--v2-state-fg-warning)]": props.questionPending,
+                    "border-v2-border-border-base": !props.questionPending,
+                  }}
+                  rows={2}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      if (props.answerText.trim()) props.onAnswerSubmit()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={props.answering || !props.answerText.trim()}
+                  onClick={props.onAnswerSubmit}
+                  class="shrink-0 self-end cursor-pointer rounded-md bg-v2-background-accent px-3 py-1.5 text-[13px] font-[480] leading-5 text-v2-text-text-on-accent hover:opacity-90"
+                >
+                  {props.answering ? "…" : "Send"}
+                </button>
+              </div>
+            </div>
           </Show>
         </div>
       </div>
