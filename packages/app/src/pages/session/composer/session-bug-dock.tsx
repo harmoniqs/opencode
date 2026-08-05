@@ -243,20 +243,24 @@ export function SessionBugDock() {
   }
 
   return (
-    <Show when={controller.phase() !== "closed"}>
-      <div class="pb-2">
-        <BugDockView
-          phase={controller.phase() === "filed" ? "filed" : "chat"}
-          collapsed={controller.collapsed()}
-          agentText={lastAssistantText()}
-          filedUrl={controller.filedUrl()}
-          onToggle={controller.toggleCollapsed}
-          onClose={selfClose}
-          onOpenLink={(url) => platform.openExternal(url)}
-          footer={footer()}
-        />
-      </div>
-    </Show>
+    <>
+      <Show when={controller.phase() !== "closed"}>
+        <div class="pb-2">
+          <BugDockView
+            phase={controller.phase() === "filed" ? "filed" : "chat"}
+            collapsed={controller.collapsed()}
+            agentText={lastAssistantText()}
+            filedUrl={controller.filedUrl()}
+            onToggle={controller.toggleCollapsed}
+            onClose={selfClose}
+            onOpenLink={(url) => platform.openExternal(url)}
+          />
+        </div>
+      </Show>
+      {/* The answer card lives OUTSIDE the dock's animated max-height
+          container — a sibling in the composer stack, never clipped. */}
+      {footer()}
+    </>
   )
 }
 
@@ -269,7 +273,6 @@ export function BugDockView(props: {
   onToggle: () => void
   onClose: () => void
   onOpenLink: (url: string) => void
-  footer?: JSX.Element
 }) {
   const [store, setStore] = createStore({ height: HEADER_HEIGHT + 120 })
   let contentRef: HTMLDivElement | undefined
@@ -431,7 +434,6 @@ export function BugDockView(props: {
                 </div>
               )}
             </Show>
-            {props.footer}
           </Show>
         </div>
       </div>
