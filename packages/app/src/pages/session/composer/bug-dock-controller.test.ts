@@ -228,7 +228,7 @@ describe("bug-dock controller: filing (AC4)", () => {
     expect(posts).toEqual([
       { kind: "bug-filed", payload: { sessionID: "ses_bug1", url: "https://github.com/harmoniqs/amicode/issues/123" } },
     ])
-    expect(controller.phase()).toBe("filed")
+    expect(controller.phase()).toBe("submitted")
     expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
     // The dock STAYS open in its terminal end-state; the extension owns the
     // real close after archiving.
@@ -308,7 +308,7 @@ describe("bug-dock controller: gate + open idempotency (AC5)", () => {
 
     controller.handleBridgeMessage(openMessage("ses_bug1"))
 
-    expect(controller.phase()).toBe("filed")
+    expect(controller.phase()).toBe("submitted")
     expect(controller.filedUrl()).toBe("https://github.com/harmoniqs/amicode/issues/123")
     expect(posts).toEqual([])
     expect(dockCalls).toEqual([])

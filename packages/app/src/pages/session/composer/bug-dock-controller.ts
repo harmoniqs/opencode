@@ -22,7 +22,7 @@ export const BUG_REPORT_CLOSED_KIND = "bug-report-closed"
 
 /** "closed" — no dock. "chat" — dock live, iframe hosting the bug session.
  *  "filed" — terminal end-state (issue link) until the extension closes it. */
-export type BugDockPhase = "closed" | "chat" | "filed"
+export type BugDockPhase = "closed" | "chat" | "submitted" | "filed"
 
 // The skill's terminal sentinel (the run-telemetry idiom), printed ONLY after
 // actual filing — never at the confirm gate, so a veto never emits it. On the
@@ -71,7 +71,7 @@ export function findLiveBugSession(
 // so the dock narrates them instead of sitting silent between turns.
 // ---------------------------------------------------------------------------
 
-export type BugProgressStep = "answer" | "approval" | "error" | "dedup" | "upstream" | "submit" | "working"
+export type BugProgressStep = "answer" | "approval" | "error" | "submitted" | "dedup" | "upstream" | "submit" | "working"
 
 export type BugProgress = { step: BugProgressStep; label: string }
 
@@ -89,6 +89,7 @@ const PROGRESS_LABELS: Record<BugProgressStep, string> = {
   answer: "Waiting for your answer",
   approval: "Needs your approval",
   error: "The model call failed",
+  submitted: "Submitted!",
   dedup: "Checking for an existing ticket…",
   upstream: "Investigating upstream…",
   submit: "Submitting the ticket…",
@@ -167,6 +168,10 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
   const [open, setOpen] = createSignal(false)
   const [collapsed, setCollapsed] = createSignal(false)
   const [filedUrl, setFiledUrl] = createSignal<string>()
+  /** amicode#249: a 2 s window between filing and the terminal end-state
+   *  so the strip narrates "Submitted!" before the archive state lands. */
+  const [showSubmitted, setShowSubmitted] = createSignal(false)
+  let submittedTimer: ReturnType<typeof setTimeout> | undefined
   /** The last dismissed session — the sync watch must never resurrect it
    *  (amicode#249 QA): close dismisses locally BEFORE the extension's
    *  abort+delete lands, and an unguarded watch re-adopts the still-living
@@ -176,6 +181,7 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
 
   const phase = (): BugDockPhase => {
     if (!open()) return "closed"
+    if (showSubmitted()) return "submitted"
     return filedUrl() ? "filed" : "chat"
   }
 
@@ -183,6 +189,8 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(id)
     setCollapsed(false)
     setFiledUrl(undefined)
+    clearTimeout(submittedTimer)
+    setShowSubmitted(false)
     setOpen(true)
     dock.open()
   }
@@ -193,6 +201,8 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(undefined)
     setCollapsed(false)
     setFiledUrl(undefined)
+    clearTimeout(submittedTimer)
+    setShowSubmitted(false)
     dock.close()
   }
 
@@ -254,13 +264,17 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
 
   /** The sentinel watcher matched — the skill filed. Posts bug-filed exactly
    *  once (latched: the sentinel keeps matching in the persisted transcript,
-   *  so the phase guard is load-bearing) and switches to the terminal
-   *  end-state; the dock stays open until the extension closes it. */
+   *  so the phase guard is load-bearing), shows "Submitted!" for 2 s, then
+   *  switches to the terminal end-state; the dock stays open until the
+   *  extension closes it. */
   const file = (url: string) => {
     const id = sessionID()
     if (!open() || !id || filedUrl()) return
     post(BUG_FILED_KIND, { sessionID: id, url })
+    setShowSubmitted(true)
     setFiledUrl(url)
+    clearTimeout(submittedTimer)
+    submittedTimer = setTimeout(() => setShowSubmitted(false), 2000)
   }
 
   return {

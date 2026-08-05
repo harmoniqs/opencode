@@ -28,12 +28,11 @@ const noop = () => {}
 
 const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
   {
-    label: "expanded — chat (iframe hosts the bug session's route) + progress strip & cancel",
+    label: "expanded — chat (the agent output IS the status)",
     props: {
       phase: "chat",
       collapsed: false,
       agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
-      progress: { step: "dedup", label: "Checking for an existing ticket…" },
       onToggle: noop,
       onClose: noop,
       onOpenLink: noop,

@@ -105,7 +105,6 @@ import { extractPromptFromParts } from "@/utils/prompt"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
-import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
 import { createSessionOwnership } from "./session/session-ownership"
 import { createSessionLineage } from "./session/session-lineage"
@@ -405,17 +404,9 @@ export default function Page() {
   })
 
   const composer = createSessionComposerController()
-  // amicode/opencode#117 (amicode#249 QA): while the bug-report dock hosts a
-  // live report, the composer belongs to the BUG session — typed messages,
-  // queued followups, and mid-turn clarifications all target it; the user's
-  // own session keeps the transcript above, untouched. Falls back to the
-  // route session the moment the dock is closed or filed.
-  const bugComposerTarget = () => (bugDockController.phase() === "chat" ? bugDockController.sessionID() : undefined)
-  const composerSessionID = () => bugComposerTarget() ?? params.id
-
   const inputController = createPromptInputController({
     sessionKey,
-    sessionID: () => composerSessionID(),
+    sessionID: () => params.id,
     queryOptions: serverSync().queryOptions,
   })
 
@@ -1748,13 +1739,13 @@ export default function Page() {
   const busy = (sessionID: string) => sync().data.session_working(sessionID)
 
   const queuedFollowups = createMemo(() => {
-    const id = composerSessionID()
+    const id = params.id
     if (!id) return emptyFollowups
     return followup.items[id] ?? emptyFollowups
   })
 
   const editingFollowup = createMemo(() => {
-    const id = composerSessionID()
+    const id = params.id
     if (!id) return
     return followup.edit[id]
   })
@@ -1790,14 +1781,14 @@ export default function Page() {
     followupMutation.isPending && followupMutation.variables?.sessionID === sessionID
 
   const sendingFollowup = createMemo(() => {
-    const id = composerSessionID()
+    const id = params.id
     if (!id) return
     if (!followupBusy(id)) return
     return followupMutation.variables?.id
   })
 
   const queueEnabled = createMemo(() => {
-    const id = composerSessionID()
+    const id = params.id
     if (!id) return false
     return settings.general.followup() === "queue" && busy(id) && !composer.blocked() && !isChildSession()
   })
@@ -1967,7 +1958,7 @@ export default function Page() {
   const actions = { revert, openAttachment }
 
   createEffect(() => {
-    const sessionID = composerSessionID()
+    const sessionID = params.id
     if (!sessionID) return
 
     const item = queuedFollowups()[0]
@@ -2187,7 +2178,7 @@ export default function Page() {
                 ? {
                     items: followupDock(),
                     sending: sendingFollowup(),
-                    onSend: (id) => void sendFollowup(composerSessionID()!, id, { manual: true }),
+                    onSend: (id) => void sendFollowup(params.id!, id, { manual: true }),
                     onEdit: editFollowup,
                   }
                 : undefined,
@@ -2240,7 +2231,7 @@ export default function Page() {
                       shouldQueue={queueEnabled}
                       onQueue={queueFollowup}
                       onAbort={() => {
-                        const id = composerSessionID()
+                        const id = params.id
                         if (!id) return
                         setFollowup("paused", id, true)
                       }}
@@ -2270,7 +2261,7 @@ export default function Page() {
                       shouldQueue: queueEnabled,
                       onQueue: queueFollowup,
                       onAbort: () => {
-                        const id = composerSessionID()
+                        const id = params.id
                         if (!id) return
                         setFollowup("paused", id, true)
                       },

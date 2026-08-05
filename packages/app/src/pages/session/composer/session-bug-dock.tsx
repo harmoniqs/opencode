@@ -27,7 +27,7 @@ import { useSDK } from "@/context/sdk"
 import { usePermission } from "@/context/permission"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { bugDock } from "./bug-dock"
-import { bugDockController, bugProgress, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
+import { bugDockController, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 import { SessionQuestionDock } from "./session-question-dock"
 import { SessionPermissionDock } from "./session-permission-dock"
@@ -128,26 +128,6 @@ export function SessionBugDock() {
     return undefined
   })
 
-  // The turn's failure, when the latest assistant message carries one
-  // (amicode#249 QA — a dead turn must never read as "Working…"). The
-  // message's error field holds provider/auth/balance failures; a retry
-  // starts a new message, so this clears itself on recovery.
-  const sessionError = createMemo(() => {
-    const id = controller.sessionID()
-    if (!id || controller.phase() !== "chat") return undefined
-    const messages = sync().data.message[id] ?? []
-    for (let m = messages.length - 1; m >= 0; m--) {
-      const message = messages[m]
-      if (message.role !== "assistant") continue
-      const err = (message as { error?: { name?: unknown; data?: { message?: unknown } } }).error
-      if (!err) return undefined
-      const name = typeof err.name === "string" ? err.name : undefined
-      const message_ = typeof err.data?.message === "string" ? err.data.message : undefined
-      return { name, message: message_ }
-    }
-    return undefined
-  })
-
   // The answer surface (amicode#249 QA): the bug session's question and
   // permission cards render IN THE DOCK — the dialogue box IS the window
   // where the user answers "what happened / what did you expect". Replies
@@ -179,23 +159,6 @@ export function SessionBugDock() {
       .finally(() => setDeciding((id) => (id === perm.id ? undefined : id)))
   }
 
-  // The progress strip: narrate the agent's phase from the bug session's own
-  // streamed tool calls (dedup → upstream → submit), priority to anything
-  // blocked on the user. Cancel reuses the close path — the extension aborts
-  // and hard-deletes the unfiled session; no orphans.
-  const progress = createMemo(() => {
-    const id = controller.sessionID()
-    if (!id || controller.phase() !== "chat") return undefined
-    const messages = sync().data.message[id] ?? []
-    const parts = messages.flatMap((message) => sync().data.part[message.id] ?? [])
-    return bugProgress({
-      questionPending: !!bugQuestion(),
-      permissionPending: !!bugPermission(),
-      sessionError: sessionError(),
-      parts,
-    })
-  })
-
   const footer = () => {
     const question = bugQuestion()
     const perm = bugPermission()
@@ -222,7 +185,6 @@ export function SessionBugDock() {
           collapsed={controller.collapsed()}
           agentText={lastAssistantText()}
           filedUrl={controller.filedUrl()}
-          progress={progress()}
           onToggle={controller.toggleCollapsed}
           onClose={selfClose}
           onOpenLink={(url) => platform.openExternal(url)}
@@ -239,7 +201,6 @@ export function BugDockView(props: {
   collapsed: boolean
   agentText?: string
   filedUrl?: string
-  progress?: { step: string; label: string }
   onToggle: () => void
   onClose: () => void
   onOpenLink: (url: string) => void
@@ -341,33 +302,6 @@ export function BugDockView(props: {
             </TooltipV2>
           </div>
         </div>
-
-        {/* The progress strip (amicode#249 QA): where the agent is, narrated
-            from its own tool calls, plus the always-available cancel — the
-            labeled, discoverable sibling of the header's close control. */}
-        <Show when={props.phase === "chat" && props.progress}>
-          {(progress) => (
-            <div
-              data-slot="bug-dock-progress"
-              data-step={progress().step}
-              aria-hidden={props.collapsed || off()}
-              class="flex items-center gap-2 border-t-[0.5px] border-v2-border-border-base px-4 py-1.5"
-              style={{ visibility: off() ? "hidden" : "visible" }}
-            >
-              <span
-                class="size-1.5 shrink-0 rounded-full"
-                classList={{
-                  "bg-v2-state-fg-danger": progress().step === "error",
-                  "bg-v2-state-fg-warning": progress().step !== "error",
-                }}
-                style={{ animation: progress().step === "error" ? "none" : "pulse 1.6s ease-in-out infinite" }}
-              />
-              <span class="min-w-0 flex-1 truncate text-[12px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
-                {progress().label}
-              </span>
-            </div>
-          )}
-        </Show>
 
         <div
           data-slot="bug-dock-body"

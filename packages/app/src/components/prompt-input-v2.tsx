@@ -14,7 +14,6 @@ import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
-import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 import { readClipboardImageViaBridge, readClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
@@ -136,20 +135,15 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     return text.trim().length === 0 && attachments().length === 0 && commentCount() === 0
   })
   const stopping = createMemo(() => working() && blank())
-  // amicode/opencode#117 (amicode#249): while the bug dock is live the
-  // composer targets the bug session — say so in the placeholder so the
-  // retarget is never a silent hijack.
-  const bugTargeted = createMemo(() => bugDockController.phase() === "chat" && !!bugDockController.sessionID())
-  const placeholder = createMemo(() => {
-    if (bugTargeted()) return "Answer the bug report — Enter sends to the bug session"
-    return promptPlaceholder({
+  const placeholder = createMemo(() =>
+    promptPlaceholder({
       mode: mode(),
       commentCount: commentCount(),
       example: mode() === "shell" ? "git status" : "",
       suggest: false,
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
-    })
-  })
+    }),
+  )
   const designPlaceholder = () => promptDesignPlaceholder(mode(), placeholder())
 
   const historyComments = () => {
