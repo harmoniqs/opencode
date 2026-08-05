@@ -92,7 +92,7 @@ const PROGRESS_LABELS: Record<BugProgressStep, string> = {
   dedup: "Checking for an existing ticket…",
   upstream: "Investigating upstream…",
   submit: "Submitting the ticket…",
-  working: "Working…",
+  working: "Launching agent…",
 }
 
 /** Where is the agent, from observable state. Priority: a pending request
