@@ -29,7 +29,6 @@ import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { bugDock } from "./bug-dock"
 import { bugDockController, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
-import { SessionQuestionDock } from "./session-question-dock"
 import { SessionPermissionDock } from "./session-permission-dock"
 
 const HEADER_HEIGHT = 42
@@ -159,14 +158,80 @@ export function SessionBugDock() {
       .finally(() => setDeciding((id) => (id === perm.id ? undefined : id)))
   }
 
+  // The answer input — a plain textarea so it's never clipped by the
+  // nested DockPrompt's animation fighting the dock's own max-height.
+  const [answerText, setAnswerText] = createSignal("")
+  const [answering, setAnswering] = createSignal(false)
+  const answerQuestion = async () => {
+    const q = bugQuestion()
+    if (!q) return
+    const id = controller.sessionID()
+    if (!id) return
+    const directory = serverSync().session.data.info[id]?.directory
+    setAnswering(true)
+    try {
+      await sdk().api.question.reply({
+        sessionID: q.sessionID,
+        requestID: q.id,
+        location: { directory },
+        answers: [[answerText()]],
+      })
+      setAnswerText("")
+    } finally {
+      setAnswering(false)
+    }
+  }
+  const dismissQuestion = async () => {
+    const q = bugQuestion()
+    if (!q) return
+    const id = controller.sessionID()
+    if (!id) return
+    const directory = serverSync().session.data.info[id]?.directory
+    try {
+      await sdk().api.question.reject({
+        sessionID: q.sessionID,
+        requestID: q.id,
+        location: { directory },
+      })
+    } catch {}
+  }
+
   const footer = () => {
     const question = bugQuestion()
     const perm = bugPermission()
     if (!question && !perm) return undefined
     return (
-      <div data-slot="bug-dock-answer" class="border-t-[0.5px] border-v2-border-border-base">
-        <Show when={question} keyed>
-          {(request) => <SessionQuestionDock request={request} onSubmit={() => {}} />}
+      <div data-slot="bug-dock-answer" class="shrink-0 border-t-[0.5px] border-v2-border-border-base">
+        <Show when={question}>
+          <div class="flex flex-col gap-2 px-4 py-2.5">
+            <p class="text-[13px] leading-5 text-v2-text-text-base">{question?.questions[0]?.question}</p>
+            <textarea
+              value={answerText()}
+              onInput={(e) => setAnswerText(e.currentTarget.value)}
+              placeholder="Type your answer…"
+              disabled={answering()}
+              class="w-full resize-none rounded-md border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-02 px-3 py-2 text-[13px] leading-5 text-v2-text-text-base placeholder:text-v2-text-text-faint focus:outline-none focus:border-v2-border-border-focus"
+              rows={3}
+            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={answering()}
+                onClick={dismissQuestion}
+                class="cursor-pointer rounded-md px-3 py-1.5 text-[13px] font-[480] leading-5 text-v2-text-text-muted hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                disabled={answering() || !answerText().trim()}
+                onClick={answerQuestion}
+                class="ml-auto cursor-pointer rounded-md bg-v2-background-accent px-4 py-1.5 text-[13px] font-[480] leading-5 text-v2-text-text-on-accent hover:opacity-90"
+              >
+                {answering() ? "Sending…" : "Submit"}
+              </button>
+            </div>
+          </div>
         </Show>
         <Show when={perm} keyed>
           {(request) => (
