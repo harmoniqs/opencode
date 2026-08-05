@@ -134,7 +134,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(id)
     setCollapsed(false)
     setFiledUrl(undefined)
-    setShowSubmitted(false)
     setOpen(true)
     dock.open()
   }
@@ -145,7 +144,6 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     setSessionID(undefined)
     setCollapsed(false)
     setFiledUrl(undefined)
-    setShowSubmitted(false)
     dock.close()
   }
 
