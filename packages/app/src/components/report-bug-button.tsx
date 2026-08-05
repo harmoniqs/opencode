@@ -7,12 +7,10 @@
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2, type IconButtonV2Props } from "@opencode-ai/ui/v2/icon-button-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { useLocal } from "@/context/local"
 import { reportBug } from "@/pages/session/composer/report-bug"
 import "./report-bug-button.css"
 
 export function ReportBugButton(props: { disabled?: boolean; /** stories only: force a visual state */ state?: IconButtonV2Props["state"] }) {
-  const local = useLocal()
   return (
     <TooltipV2 placement="top" value="Report a bug" inactive={props.disabled}>
       <IconButtonV2
@@ -24,16 +22,7 @@ export function ReportBugButton(props: { disabled?: boolean; /** stories only: f
         icon={<IconV2 name="bug" />}
         aria-label="Report a bug"
         disabled={props.disabled}
-        onClick={() => {
-          // The composer's live selection at click time (provider included) —
-          // the bug session runs what the user was running (amicode#249 QA).
-          const m = local.model.current()
-          const variant = local.model.variant.selected()
-          const model = m
-            ? { providerID: m.provider.id, modelID: m.id, ...(variant ? { variant } : {}) }
-            : undefined
-          reportBug(undefined, model)
-        }}
+        onClick={() => reportBug()}
       />
     </TooltipV2>
   )

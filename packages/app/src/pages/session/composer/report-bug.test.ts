@@ -71,28 +71,3 @@ describe("reportBug", () => {
     }
   })
 })
-
-describe("reportBug — the model envelope (amicode#249 QA)", () => {
-  afterEach(() => bugDock.close())
-
-  test("a model selection rides the command envelope; absent stays the plain shape", () => {
-    const spy = spyOn(window.parent, "postMessage").mockImplementation(() => {})
-    try {
-      reportBug(undefined, { providerID: "opencode-go", modelID: "kimi-k3", variant: "default" })
-      const [message] = spy.mock.calls[0] as unknown as [Record<string, unknown>]
-      expect(message).toEqual({
-        source: "amicode",
-        kind: "command",
-        command: REPORT_BUG_COMMAND,
-        model: { providerID: "opencode-go", modelID: "kimi-k3", variant: "default" },
-      })
-
-      spy.mockClear()
-      reportBug()
-      const [plain] = spy.mock.calls[0] as unknown as [Record<string, unknown>]
-      expect(plain).toEqual({ source: "amicode", kind: "command", command: REPORT_BUG_COMMAND })
-    } finally {
-      spy.mockRestore()
-    }
-  })
-})

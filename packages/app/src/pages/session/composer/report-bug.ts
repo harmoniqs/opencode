@@ -8,12 +8,7 @@ import { bugDock } from "./bug-dock"
 /** The bridge command the extension host relays to its bug-report flow. */
 export const REPORT_BUG_COMMAND = "amicode.reportBug"
 
-/** The composer's live model selection at click time (amicode#249 QA): the
- *  bug session should run the model the user was actually using — provider
- *  INCLUDED, so a Zen subscription model never silently becomes a Go one. */
-export type ReportBugModel = { providerID: string; modelID: string; variant?: string }
-
-export function reportBug(dock: Pick<typeof bugDock, "isOpen" | "reveal"> = bugDock, model?: ReportBugModel): void {
+export function reportBug(dock: Pick<typeof bugDock, "isOpen" | "reveal"> = bugDock): void {
   // Dock already open → reveal/re-expand it and post nothing; the flow is
   // already alive, a second bridge post would spawn a duplicate.
   if (dock.isOpen()) {
@@ -21,9 +16,6 @@ export function reportBug(dock: Pick<typeof bugDock, "isOpen" | "reveal"> = bugD
     return
   }
   try {
-    window.parent?.postMessage(
-      { source: "amicode", kind: "command", command: REPORT_BUG_COMMAND, ...(model ? { model } : {}) },
-      "*",
-    )
+    window.parent?.postMessage({ source: "amicode", kind: "command", command: REPORT_BUG_COMMAND }, "*")
   } catch {}
 }
