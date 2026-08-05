@@ -26,45 +26,46 @@ function schemeVars(scheme: "light" | "dark"): Record<string, string> {
 
 const noop = () => {}
 
+
 const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
   {
-    label: "expanded — chat (the agent output IS the status)",
+    label: "expanded — chat",
     props: {
-      phase: "chat",
-      collapsed: false,
+      phase: "chat", collapsed: false,
       agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
-      answerText: "", answering: false, questionPending: false, onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop,
-      onClose: noop,
-      onOpenLink: noop,
+      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
   {
-    label: "collapsed — session alive, no bridge traffic",
-    props: { phase: "chat", collapsed: true, agentText: "What happened, and what did you expect?", answerText: "", answering: false, questionPending: false, onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop },
+    label: "collapsed",
+    props: {
+      phase: "chat", collapsed: true,
+      agentText: "What happened, and what did you expect?",
+      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
+    },
   },
   {
-    label: "filed — terminal end-state with the issue link",
+    label: "filed — with link",
     props: {
-      phase: "filed",
-      collapsed: false,
+      phase: "filed", collapsed: false,
       filedUrl: "https://github.com/harmoniqs/amicode/issues/123",
-      answerText: "", answering: false, questionPending: false, onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop,
-      onClose: noop,
-      onOpenLink: noop,
+      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
   {
-    label: "filed via browser — end-state, no link",
+    label: "filed via browser",
     props: {
-      phase: "filed",
-      collapsed: false,
+      phase: "filed", collapsed: false,
       filedUrl: "filed-via-browser",
-      answerText: "", answering: false, questionPending: false, onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop,
-      onClose: noop,
-      onOpenLink: noop,
+      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
 ]
+
 
 function StateMatrix() {
   return (

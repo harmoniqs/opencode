@@ -253,6 +253,7 @@ export function SessionBugDock() {
             filedUrl={controller.filedUrl()}
             answerText={answerText()}
             answering={answering()}
+            questionText={bugQuestion()?.questions[0]?.question}
             questionPending={!!bugQuestion()}
             onAnswerChange={(v) => setAnswerText(v)}
             onAnswerSubmit={answerQuestion}
@@ -262,9 +263,13 @@ export function SessionBugDock() {
           />
         </div>
       </Show>
-      {/* The answer card lives OUTSIDE the dock's animated max-height
-          container — a sibling in the composer stack, never clipped. */}
-      {footer()}
+      <Show when={bugPermission()} keyed>
+        {(perm) => (
+          <div class="pb-2">
+            <SessionPermissionDock request={perm} responding={deciding() === perm.id} onDecide={decide} />
+          </div>
+        )}
+      </Show>
     </>
   )
 }
@@ -277,6 +282,7 @@ export function BugDockView(props: {
   filedUrl?: string
   answerText: string
   answering: boolean
+  questionText?: string
   questionPending: boolean
   onAnswerChange: (value: string) => void
   onAnswerSubmit: () => void
@@ -446,6 +452,9 @@ export function BugDockView(props: {
             </Show>
             {/* The permanent textarea — always visible in chat phase. */}
             <div data-slot="bug-dock-input" class="flex flex-col gap-1 border-t-[0.5px] border-v2-border-border-base px-4 pt-1.5 pb-2.5">
+              <Show when={props.questionText}>
+                <p class="text-[13px] leading-5 text-v2-text-text-base">{props.questionText}</p>
+              </Show>
               <span class="text-[11px] leading-4 text-v2-text-text-faint">
                 Type a response when the textbox glows yellow.
               </span>
