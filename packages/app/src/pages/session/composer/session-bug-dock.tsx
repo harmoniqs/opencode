@@ -105,6 +105,26 @@ export function SessionBugDock() {
     return undefined
   })
 
+  // The turn's failure, when the latest assistant message carries one
+  // (amicode#249 QA — a dead turn must never read as "Working…"). The
+  // message's error field holds provider/auth/balance failures; a retry
+  // starts a new message, so this clears itself on recovery.
+  const sessionError = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return undefined
+    const messages = sync().data.message[id] ?? []
+    for (let m = messages.length - 1; m >= 0; m--) {
+      const message = messages[m]
+      if (message.role !== "assistant") continue
+      const err = (message as { error?: { name?: unknown; data?: { message?: unknown } } }).error
+      if (!err) return undefined
+      const name = typeof err.name === "string" ? err.name : undefined
+      const message_ = typeof err.data?.message === "string" ? err.data.message : undefined
+      return { name, message: message_ }
+    }
+    return undefined
+  })
+
   // The answer surface (amicode#249 QA): the bug session's question and
   // permission cards render IN THE DOCK — the dialogue box IS the window
   // where the user answers "what happened / what did you expect". Replies
@@ -145,7 +165,12 @@ export function SessionBugDock() {
     if (!id || controller.phase() !== "chat") return undefined
     const messages = sync().data.message[id] ?? []
     const parts = messages.flatMap((message) => sync().data.part[message.id] ?? [])
-    return bugProgress({ questionPending: !!bugQuestion(), permissionPending: !!bugPermission(), parts })
+    return bugProgress({
+      questionPending: !!bugQuestion(),
+      permissionPending: !!bugPermission(),
+      sessionError: sessionError(),
+      parts,
+    })
   })
 
   const footer = () => {
@@ -309,8 +334,12 @@ export function BugDockView(props: {
               style={{ visibility: off() ? "hidden" : "visible" }}
             >
               <span
-                class="size-1.5 shrink-0 rounded-full bg-v2-state-fg-warning"
-                style={{ animation: "pulse 1.6s ease-in-out infinite" }}
+                class="size-1.5 shrink-0 rounded-full"
+                classList={{
+                  "bg-v2-state-fg-danger": progress().step === "error",
+                  "bg-v2-state-fg-warning": progress().step !== "error",
+                }}
+                style={{ animation: progress().step === "error" ? "none" : "pulse 1.6s ease-in-out infinite" }}
               />
               <span class="min-w-0 flex-1 truncate text-[12px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
                 {progress().label}

@@ -71,12 +71,12 @@ export function findLiveBugSession(
 // so the dock narrates them instead of sitting silent between turns.
 // ---------------------------------------------------------------------------
 
-export type BugProgressStep = "answer" | "approval" | "dedup" | "upstream" | "submit" | "working"
+export type BugProgressStep = "answer" | "approval" | "error" | "dedup" | "upstream" | "submit" | "working"
 
 export type BugProgress = { step: BugProgressStep; label: string }
 
 /** Classify one bash command into a progress step, when it tells us anything. */
-export function classifyBashCommand(command: string): Exclude<BugProgressStep, "answer" | "approval" | "working"> | undefined {
+export function classifyBashCommand(command: string): Exclude<BugProgressStep, "answer" | "approval" | "error" | "working"> | undefined {
   if (/\bgh\s+issue\s+(create)\b/.test(command)) return "submit"
   if (/\bgh\s+issue\s+(list|search|view|status)\b/.test(command)) return "dedup"
   if (/\bgh\s+(api|release|repo)\b/.test(command)) return "upstream"
@@ -88,6 +88,7 @@ export function classifyBashCommand(command: string): Exclude<BugProgressStep, "
 const PROGRESS_LABELS: Record<BugProgressStep, string> = {
   answer: "Waiting for your answer",
   approval: "Needs your approval",
+  error: "The model call failed",
   dedup: "Checking for an existing ticket…",
   upstream: "Investigating upstream…",
   submit: "Submitting the ticket…",
@@ -95,20 +96,28 @@ const PROGRESS_LABELS: Record<BugProgressStep, string> = {
 }
 
 /** Where is the agent, from observable state. Priority: a pending request
- *  (the agent is blocked on the user) beats tool progress; the LATEST
- *  informative tool call wins; completed tools count as much as running
- *  ones (a finished dedup search still narrates "checking", until the next
- *  informative call supersedes it). */
+ *  (the agent is blocked on the user) beats a turn error (the turn is OVER —
+ *  never narrate progress over a dead one; amicode#249 QA — a balance/auth
+ *  failure otherwise reads as "Working…" forever) beats tool progress; the
+ *  LATEST informative tool call wins; completed tools count as much as
+ *  running ones (a finished dedup search still narrates "checking", until
+ *  the next informative call supersedes it). */
 export function bugProgress(input: {
   questionPending: boolean
   permissionPending: boolean
+  sessionError?: { name?: string; message?: string } | undefined
   parts: Iterable<
     { type?: unknown; tool?: unknown; text?: unknown; state?: { status?: unknown; input?: unknown } | undefined } | undefined
   >
 }): BugProgress {
   if (input.permissionPending) return { step: "approval", label: PROGRESS_LABELS.approval }
   if (input.questionPending) return { step: "answer", label: PROGRESS_LABELS.answer }
-  let step: Exclude<BugProgressStep, "answer" | "approval" | "working"> | undefined
+  if (input.sessionError) {
+    const message = typeof input.sessionError.message === "string" ? input.sessionError.message.trim() : ""
+    const label = message && message.length <= 120 ? `${PROGRESS_LABELS.error} — ${message}` : PROGRESS_LABELS.error
+    return { step: "error", label }
+  }
+  let step: Exclude<BugProgressStep, "answer" | "approval" | "error" | "working"> | undefined
   for (const part of input.parts) {
     if (!part || part.type !== "tool") continue
     const inputRecord = (part.state?.input ?? {}) as Record<string, unknown>
@@ -158,6 +167,12 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
   const [open, setOpen] = createSignal(false)
   const [collapsed, setCollapsed] = createSignal(false)
   const [filedUrl, setFiledUrl] = createSignal<string>()
+  /** The last dismissed session — the sync watch must never resurrect it
+   *  (amicode#249 QA): close dismisses locally BEFORE the extension's
+   *  abort+delete lands, and an unguarded watch re-adopts the still-living
+   *  session in that window — the dock fought the close. A NEW session (a
+   *  different id) always adopts; a dismissed id never does. */
+  let dismissedID: string | undefined
 
   const phase = (): BugDockPhase => {
     if (!open()) return "closed"
@@ -173,6 +188,7 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
   }
 
   const dismiss = () => {
+    dismissedID = sessionID()
     setOpen(false)
     setSessionID(undefined)
     setCollapsed(false)
@@ -187,6 +203,11 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     if (message.kind === OPEN_BUG_REPORT_KIND) {
       if (!enabled()) return
       if (typeof message.sessionID !== "string" || !message.sessionID) return
+      if (!open() && message.sessionID === dismissedID) {
+        // A dismissed session is never resurrected — not by the bridge, not
+        // by the sync watch (which adopts through this same path).
+        return
+      }
       if (open()) {
         // One bug dock per window. A duplicate open for the hosted session is
         // a reveal (re-expand; crucially NOT a re-adopt — the filed end-state

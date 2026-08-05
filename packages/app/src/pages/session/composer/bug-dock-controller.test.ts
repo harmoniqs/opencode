@@ -434,3 +434,43 @@ describe("bugProgress — the progress strip's phase narration (QA: amicode#249)
     expect(bugProgress({ questionPending: false, permissionPending: false, parts: [tool("bash", "gh issue create")] }).label).toBe("Submitting the ticket…")
   })
 })
+
+describe("bugProgress — the error step (amicode#249 QA: dead turns must not read as Working)", () => {
+  test("a session error beats tool progress and carries the message when short", () => {
+    const parts = [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "gh issue list" } } }]
+    const progress = bugProgress({
+      questionPending: false,
+      permissionPending: false,
+      sessionError: { name: "AI_APICallError", message: "Insufficient balance" },
+      parts,
+    })
+    expect(progress.step).toBe("error")
+    expect(progress.label).toBe("The model call failed — Insufficient balance")
+  })
+
+  test("error yields to pending requests; long/absent messages fall back to the base label", () => {
+    expect(bugProgress({ questionPending: true, permissionPending: false, sessionError: { name: "X" }, parts: [] }).step).toBe("answer")
+    expect(bugProgress({ questionPending: false, permissionPending: false, sessionError: { name: "X", message: "y".repeat(500) }, parts: [] }).label).toBe("The model call failed")
+    expect(bugProgress({ questionPending: false, permissionPending: false, sessionError: { name: "X" }, parts: [] }).label).toBe("The model call failed")
+  })
+})
+
+describe("the dismissed guard — a closed dock never resurrects its session (amicode#249 QA)", () => {
+  test("after requestClose, the same session id is dropped; a NEW session adopts", () => {
+    const { controller, dockCalls } = setup()
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    expect(controller.phase()).toBe("chat")
+
+    controller.requestClose()
+    expect(controller.phase()).toBe("closed")
+
+    // The watch's adopt path (and the bridge's) must not bring ses_bug1 back.
+    controller.handleBridgeMessage(openMessage("ses_bug1"))
+    expect(controller.phase()).toBe("closed")
+
+    controller.handleBridgeMessage(openMessage("ses_bug2"))
+    expect(controller.phase()).toBe("chat")
+    expect(controller.sessionID()).toBe("ses_bug2")
+    expect(dockCalls).toEqual(["open", "close", "open"])
+  })
+})
