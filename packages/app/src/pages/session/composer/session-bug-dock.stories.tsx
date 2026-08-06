@@ -33,7 +33,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "chat", collapsed: false, busy: false,
       agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
-      answerText: "", answering: false, questionText: undefined,
+      answerText: "", answering: false,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
@@ -42,7 +42,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "chat", collapsed: false, busy: true,
       agentText: "Investigating the call stack…",
-      answerText: "", answering: false, questionText: undefined,
+      answerText: "", answering: false,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
@@ -51,7 +51,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "chat", collapsed: true, busy: false,
       agentText: "What happened, and what did you expect?",
-      answerText: "", answering: false, questionText: undefined,
+      answerText: "", answering: false,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
@@ -60,7 +60,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "filed", collapsed: false, busy: false,
       filedUrl: "https://github.com/harmoniqs/amicode/issues/123",
-      answerText: "", answering: false, questionText: undefined,
+      answerText: "", answering: false,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
@@ -69,7 +69,7 @@ const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
     props: {
       phase: "filed", collapsed: false, busy: false,
       filedUrl: "filed-via-browser",
-      answerText: "", answering: false, questionText: undefined,
+      answerText: "", answering: false,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },

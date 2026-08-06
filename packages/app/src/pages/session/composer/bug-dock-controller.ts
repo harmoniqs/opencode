@@ -31,12 +31,15 @@ export type BugDockPhase = "closed" | "chat" | "filed"
 // part's text carries whole chunks of the transcript); the separator is
 // HORIZONTAL whitespace only so a bare sentinel at end-of-line can't capture
 // the next line's first word.
-const BUG_FILED_SENTINEL = /^AMICODE_BUG_FILED[ \t]+(\S+)/m
+const BUG_FILED_SENTINEL = /AMICODE_BUG_FILED\s+(https?:\/\/\S+|filed-via-browser)/
 
 /** Match the terminal sentinel in a streamed text part — the issue URL, the
  *  `filed-via-browser` token, or undefined for non-matching traffic. */
 export function matchBugFiledUrl(text: string): string | undefined {
-  return BUG_FILED_SENTINEL.exec(text)?.[1]
+  const match = BUG_FILED_SENTINEL.exec(text)
+  if (!match) return undefined
+  // Strip trailing punctuation/backticks the model might append
+  return match[1].replace(/[`'")\].,;:!]+$/, "")
 }
 
 /** The sync-watch's selector: the live bug session in a synced session-info
@@ -52,6 +55,7 @@ export function matchBugFiledUrl(text: string): string | undefined {
 export function findLiveBugSession(
   sessions: Iterable<{ id?: unknown; metadata?: unknown; time?: { created?: unknown; archived?: unknown } } | undefined>,
 ): string | undefined {
+  const cutoff = Date.now() - 90 * 1000 // skip sessions older than 90 seconds
   let best: { id: string; created: number } | undefined
   for (const s of sessions) {
     if (!s || typeof s.id !== "string" || s.id === "") continue
@@ -59,6 +63,7 @@ export function findLiveBugSession(
     if (!meta || typeof meta !== "object" || !("bug_report" in meta)) continue
     if (s.time?.archived) continue
     const created = typeof s.time?.created === "number" ? s.time.created : 0
+    if (created < cutoff) continue // stale session from a previous run
     if (!best || created > best.created) best = { id: s.id, created }
   }
   return best?.id
@@ -122,8 +127,10 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
    *  (amicode#249 QA): close dismisses locally BEFORE the extension's
    *  abort+delete lands, and an unguarded watch re-adopts the still-living
    *  session in that window — the dock fought the close. A NEW session (a
-   *  different id) always adopts; a dismissed id never does. */
-  let dismissedID: string | undefined
+   *  different id) always adopts; a dismissed id never does. Tracks ALL
+   *  dismissed sessions (not just the last) so stale bug sessions from
+   *  previous runs can't resurrect the dock either. */
+  const dismissedIDs = new Set<string>()
 
   const phase = (): BugDockPhase => {
     if (!open()) return "closed"
@@ -139,7 +146,8 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
   }
 
   const dismiss = () => {
-    dismissedID = sessionID()
+    const id = sessionID()
+    if (id) dismissedIDs.add(id)
     setOpen(false)
     setSessionID(undefined)
     setCollapsed(false)
@@ -154,7 +162,7 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     if (message.kind === OPEN_BUG_REPORT_KIND) {
       if (!enabled()) return
       if (typeof message.sessionID !== "string" || !message.sessionID) return
-      if (!open() && message.sessionID === dismissedID) {
+      if (!open() && dismissedIDs.has(message.sessionID as string)) {
         // A dismissed session is never resurrected — not by the bridge, not
         // by the sync watch (which adopts through this same path).
         return
@@ -173,7 +181,10 @@ export function createBugDockController(deps: BugDockControllerDeps = {}) {
     if (message.kind === CLOSE_BUG_REPORT_KIND) {
       // Extension-initiated close (post-archive teardown): close quietly —
       // the extension already knows, posting bug-report-closed back would lie.
+      // BUT: never auto-close if the dock is showing the filed end-state —
+      // that IS the terminal state the user sees; only they close it.
       if (!open() || message.sessionID !== sessionID()) return
+      if (filedUrl()) return
       dismiss()
     }
   }

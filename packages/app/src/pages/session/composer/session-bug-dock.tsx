@@ -14,6 +14,7 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
@@ -53,16 +54,23 @@ export function SessionBugDock() {
     ),
   )
 
-  // The sentinel watcher — observes ONLY the hosted bug session's streamed
-  // message parts, matched per text part; file() latches (exactly one
-  // bug-filed post). Torn down with the dock.
+  // The sentinel watcher — checks the last assistant message's text parts
+  // once the session is idle. Skips single-message sessions (the first
+  // message is the skill announcement, not a filing). file() latches.
   createEffect(() => {
     const id = controller.sessionID()
     if (!id || controller.phase() !== "chat") return
+    const status = (sync().data as any).session_status?.[id]
+    if ((status?.type ?? "idle") !== "idle") return
     const messages = sync().data.message[id] ?? []
-    const parts = messages.flatMap((message) => sync().data.part[message.id] ?? [])
-    const url = findBugFiledUrl(parts)
-    if (url) controller.file(url)
+    if (messages.length <= 1) return
+    for (let m = messages.length - 1; m >= 0; m--) {
+      if (messages[m].role !== "assistant") continue
+      const parts = sync().data.part[messages[m].id] ?? []
+      const url = findBugFiledUrl(parts)
+      if (url) controller.file(url)
+      break
+    }
   })
 
   // Self-contained close (amicode#249 QA): the bridge's bug-report-closed
@@ -101,6 +109,17 @@ export function SessionBugDock() {
     if (bugDockController.phase() !== "closed") return
     const id = findLiveBugSession(Object.values(serverSync().session.data.info ?? {}))
     if (!id) return
+    // Don't adopt sessions that already filed — check the last assistant
+    // message (skip single-message sessions, same as the sentinel watcher).
+    const messages = sync().data.message[id] ?? []
+    if (messages.length > 1) {
+      for (let m = messages.length - 1; m >= 0; m--) {
+        if (messages[m].role !== "assistant") continue
+        const parts = sync().data.part[messages[m].id] ?? []
+        if (findBugFiledUrl(parts)) return
+        break
+      }
+    }
     bugDockController.handleBridgeMessage({ source: "amicode", kind: "open-bug-report", sessionID: id })
   })
 
@@ -127,14 +146,16 @@ export function SessionBugDock() {
     return undefined
   })
 
-  // Whether the bug-session agent is working. Plain session_working —
-  // the same signal the thinking indicator uses. No overrides needed:
-  // the bug reporter no longer uses the question tool (which blocks
-  // execution and keeps session_working pinned to true).
+  // Whether the bug-session agent is working. Reads session_status directly
+  // through the store proxy (NOT session_working() which is a method — its
+  // `this` is the raw object, not the proxy, so accesses inside it aren't
+  // tracked by SolidJS reactivity). This is the same signal the thinking
+  // indicator uses, just accessed correctly for a createMemo.
   const busy = createMemo(() => {
     const id = controller.sessionID()
     if (!id || controller.phase() !== "chat") return false
-    return sync().data.session_working(id)
+    const status = (sync().data as any).session_status?.[id]
+    return (status?.type ?? "idle") !== "idle"
   })
 
   // The answer surface (amicode#249 QA): the bug session's question and
@@ -168,8 +189,10 @@ export function SessionBugDock() {
   const [answerText, setAnswerText] = createSignal("")
   const [answering, setAnswering] = createSignal(false)
 
-  // Send a free-form follow-up to the bug session — the only send path
-  // now that the question tool is gone from the bug reporter skill.
+  // Send a free-form follow-up to the bug session — direct HTTP to the
+  // member route (/session/:id/prompt) which needs no directory scope.
+  // Bypasses the SDK compat layer (which routes through a directory-scoped
+  // client that may not reach the bug session).
   const sendFreeform = async () => {
     const id = controller.sessionID()
     if (!id || !answerText().trim()) return
@@ -177,12 +200,24 @@ export function SessionBugDock() {
     setAnswerText("")
     setAnswering(true)
     try {
-      await sdk().api.session.prompt({
-        sessionID: id,
-        id: crypto.randomUUID(),
-        text,
+      const origin = window.location.origin
+      const creds = server.current?.http.password
+        ? btoa(`${server.current.http.username ?? "opencode"}:${server.current.http.password}`)
+        : undefined
+      const res = await fetch(`${origin}/session/${id}/prompt_async`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(creds ? { Authorization: `Basic ${creds}` } : {}),
+        },
+        body: JSON.stringify({ parts: [{ type: "text", text }] }),
       })
-    } catch {
+      if (!res.ok) {
+        console.error("[bug-dock] prompt failed:", res.status, await res.text().catch(() => ""))
+        setAnswerText(text)
+      }
+    } catch (err) {
+      console.error("[bug-dock] sendFreeform failed:", err)
       setAnswerText(text)
     } finally {
       setAnswering(false)
@@ -197,7 +232,7 @@ export function SessionBugDock() {
   return (
     <>
       <Show when={controller.phase() !== "closed"}>
-        <div class="pb-2">
+        <div class="pt-2 pb-2">
           <BugDockView
             phase={controller.phase() === "filed" ? "filed" : "chat"}
             collapsed={controller.collapsed()}
@@ -206,7 +241,6 @@ export function SessionBugDock() {
             filedUrl={controller.filedUrl()}
             answerText={answerText()}
             answering={answering()}
-            questionText={lastAssistantText()}
             onAnswerChange={(v) => setAnswerText(v)}
             onAnswerSubmit={handleSubmit}
             onToggle={controller.toggleCollapsed}
@@ -235,7 +269,6 @@ export function BugDockView(props: {
   filedUrl?: string
   answerText: string
   answering: boolean
-  questionText?: string
   onAnswerChange: (value: string) => void
   onAnswerSubmit: () => void
   onToggle: () => void
@@ -360,11 +393,11 @@ export function BugDockView(props: {
           <Show
             when={props.phase === "chat"}
             fallback={
-              <div data-slot="bug-dock-filed" class="flex flex-col gap-1 px-4 pt-1 pb-3">
+              <div data-slot="bug-dock-filed" class="flex flex-col gap-1.5 px-4 pt-2 pb-3">
                 <div class="flex items-center gap-2">
                   <IconV2 name="check" size="small" class="shrink-0 text-v2-state-fg-success" />
-                  <span class="text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
-                    Issue filed — this session is archived.
+                  <span class="text-[13px] font-[480] leading-5 tracking-[-0.04px] text-v2-text-text-base">
+                    Ticket submitted!
                   </span>
                   <Show when={props.filedUrl && props.filedUrl !== "filed-via-browser" ? props.filedUrl : undefined}>
                     {(url) => (
@@ -383,8 +416,8 @@ export function BugDockView(props: {
                     )}
                   </Show>
                 </div>
-                <span class="text-[12px] font-[440] leading-5 text-v2-text-text-faint">
-                  Feel free to close this bug session.
+                <span class="text-[11px] leading-4 text-v2-text-text-faint">
+                  The reporter is now finished — please close the bug report.
                 </span>
               </div>
             }
@@ -396,17 +429,14 @@ export function BugDockView(props: {
               {(text) => (
                 <div
                   data-slot="bug-dock-agent"
-                  class="max-h-44 overflow-y-auto whitespace-pre-wrap border-t-[0.5px] border-v2-border-border-base px-4 py-2.5 text-[13px] leading-5 text-v2-text-text-base"
+                  class="max-h-52 overflow-y-auto border-t-[0.5px] border-v2-border-border-base px-4 py-3"
                 >
-                  {text()}
+                  <Markdown text={text()} class="text-[13px] leading-6 text-v2-text-text-base [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_code]:rounded [&_code]:bg-v2-background-bg-layer-02 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[12px]" />
                 </div>
               )}
             </Show>
             {/* The permanent textarea — always visible in chat phase. */}
             <div data-slot="bug-dock-input" class="flex flex-col gap-1 border-t-[0.5px] border-v2-border-border-base px-4 pt-1.5 pb-2.5">
-              <Show when={props.questionText}>
-                <p class="text-[13px] leading-5 text-v2-text-text-base">{props.questionText}</p>
-              </Show>
               <span class="text-[11px] leading-4 text-v2-text-text-faint">
                 {props.busy ? "The reporter is working…" : "The reporter is ready — send a reply or follow-up."}
               </span>
