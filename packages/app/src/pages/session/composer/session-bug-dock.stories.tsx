@@ -29,38 +29,47 @@ const noop = () => {}
 
 const STATES: { label: string; props: Parameters<typeof BugDockView>[0] }[] = [
   {
-    label: "expanded — chat",
+    label: "expanded — chat (idle)",
     props: {
-      phase: "chat", collapsed: false,
+      phase: "chat", collapsed: false, busy: false,
       agentText: "I reproduced it locally — the dock never opened on click. Drafting the report now…",
-      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      answerText: "", answering: false, questionText: undefined,
+      onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
+    },
+  },
+  {
+    label: "expanded — chat (busy)",
+    props: {
+      phase: "chat", collapsed: false, busy: true,
+      agentText: "Investigating the call stack…",
+      answerText: "", answering: false, questionText: undefined,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
   {
     label: "collapsed",
     props: {
-      phase: "chat", collapsed: true,
+      phase: "chat", collapsed: true, busy: false,
       agentText: "What happened, and what did you expect?",
-      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      answerText: "", answering: false, questionText: undefined,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
   {
     label: "filed — with link",
     props: {
-      phase: "filed", collapsed: false,
+      phase: "filed", collapsed: false, busy: false,
       filedUrl: "https://github.com/harmoniqs/amicode/issues/123",
-      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      answerText: "", answering: false, questionText: undefined,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },
   {
     label: "filed via browser",
     props: {
-      phase: "filed", collapsed: false,
+      phase: "filed", collapsed: false, busy: false,
       filedUrl: "filed-via-browser",
-      answerText: "", answering: false, questionText: undefined, questionPending: false,
+      answerText: "", answering: false, questionText: undefined,
       onAnswerChange: noop, onAnswerSubmit: noop, onToggle: noop, onClose: noop, onOpenLink: noop,
     },
   },

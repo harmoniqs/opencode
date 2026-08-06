@@ -28,7 +28,7 @@ import { usePermission } from "@/context/permission"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { bugDock } from "./bug-dock"
 import { bugDockController, findBugFiledUrl, findLiveBugSession } from "./bug-dock-controller"
-import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
+import { sessionPermissionRequest } from "./session-request-tree"
 import { SessionPermissionDock } from "./session-permission-dock"
 
 const HEADER_HEIGHT = 42
@@ -127,17 +127,22 @@ export function SessionBugDock() {
     return undefined
   })
 
+  // Whether the bug-session agent is working. Plain session_working —
+  // the same signal the thinking indicator uses. No overrides needed:
+  // the bug reporter no longer uses the question tool (which blocks
+  // execution and keeps session_working pinned to true).
+  const busy = createMemo(() => {
+    const id = controller.sessionID()
+    if (!id || controller.phase() !== "chat") return false
+    return sync().data.session_working(id)
+  })
+
   // The answer surface (amicode#249 QA): the bug session's question and
   // permission cards render IN THE DOCK — the dialogue box IS the window
   // where the user answers "what happened / what did you expect". Replies
   // route by the request's own sessionID.
   const sdk = useSDK()
   const permission = usePermission()
-  const bugQuestion = createMemo(() => {
-    const id = controller.sessionID()
-    if (!id || controller.phase() !== "chat") return undefined
-    return sessionQuestionRequest(sync().data.session, sync().data.question, id)
-  })
   const bugPermission = createMemo(() => {
     const id = controller.sessionID()
     if (!id || controller.phase() !== "chat") return undefined
@@ -162,84 +167,31 @@ export function SessionBugDock() {
   // nested DockPrompt's animation fighting the dock's own max-height.
   const [answerText, setAnswerText] = createSignal("")
   const [answering, setAnswering] = createSignal(false)
-  const answerQuestion = async () => {
-    const q = bugQuestion()
-    if (!q) return
+
+  // Send a free-form follow-up to the bug session — the only send path
+  // now that the question tool is gone from the bug reporter skill.
+  const sendFreeform = async () => {
     const id = controller.sessionID()
-    if (!id) return
-    const directory = serverSync().session.data.info[id]?.directory
+    if (!id || !answerText().trim()) return
+    const text = answerText()
+    setAnswerText("")
     setAnswering(true)
     try {
-      await sdk().api.question.reply({
-        sessionID: q.sessionID,
-        requestID: q.id,
-        location: { directory },
-        answers: [[answerText()]],
+      await sdk().api.session.prompt({
+        sessionID: id,
+        id: crypto.randomUUID(),
+        text,
       })
-      setAnswerText("")
+    } catch {
+      setAnswerText(text)
     } finally {
       setAnswering(false)
     }
   }
-  const dismissQuestion = async () => {
-    const q = bugQuestion()
-    if (!q) return
-    const id = controller.sessionID()
-    if (!id) return
-    const directory = serverSync().session.data.info[id]?.directory
-    try {
-      await sdk().api.question.reject({
-        sessionID: q.sessionID,
-        requestID: q.id,
-        location: { directory },
-      })
-    } catch {}
-  }
 
-  const footer = () => {
-    const question = bugQuestion()
-    const perm = bugPermission()
-    if (!question && !perm) return undefined
-    return (
-      <div data-slot="bug-dock-answer" class="shrink-0 border-t-[0.5px] border-v2-border-border-base">
-        <Show when={question}>
-          <div class="flex flex-col gap-2 px-4 py-2.5">
-            <p class="text-[13px] leading-5 text-v2-text-text-base">{question?.questions[0]?.question}</p>
-            <textarea
-              value={answerText()}
-              onInput={(e) => setAnswerText(e.currentTarget.value)}
-              placeholder="Type your answer…"
-              disabled={answering()}
-              class="w-full resize-none rounded-md border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-02 px-3 py-2 text-[13px] leading-5 text-v2-text-text-base placeholder:text-v2-text-text-faint focus:outline-none focus:border-v2-border-border-focus"
-              rows={3}
-            />
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={answering()}
-                onClick={dismissQuestion}
-                class="cursor-pointer rounded-md px-3 py-1.5 text-[13px] font-[480] leading-5 text-v2-text-text-muted hover:bg-v2-background-bg-layer-02 hover:text-v2-text-text-base"
-              >
-                Dismiss
-              </button>
-              <button
-                type="button"
-                disabled={answering() || !answerText().trim()}
-                onClick={answerQuestion}
-                class="ml-auto cursor-pointer rounded-md bg-v2-background-accent px-4 py-1.5 text-[13px] font-[480] leading-5 text-v2-text-text-on-accent hover:opacity-90"
-              >
-                {answering() ? "Sending…" : "Submit"}
-              </button>
-            </div>
-          </div>
-        </Show>
-        <Show when={perm} keyed>
-          {(request) => (
-            <SessionPermissionDock request={request} responding={deciding() === request.id} onDecide={decide} />
-          )}
-        </Show>
-      </div>
-    )
+  const handleSubmit = () => {
+    if (answering()) return
+    sendFreeform()
   }
 
   return (
@@ -249,14 +201,14 @@ export function SessionBugDock() {
           <BugDockView
             phase={controller.phase() === "filed" ? "filed" : "chat"}
             collapsed={controller.collapsed()}
+            busy={busy()}
             agentText={lastAssistantText()}
             filedUrl={controller.filedUrl()}
             answerText={answerText()}
             answering={answering()}
-            questionText={bugQuestion()?.questions[0]?.question}
-            questionPending={!!bugQuestion()}
+            questionText={lastAssistantText()}
             onAnswerChange={(v) => setAnswerText(v)}
-            onAnswerSubmit={answerQuestion}
+            onAnswerSubmit={handleSubmit}
             onToggle={controller.toggleCollapsed}
             onClose={selfClose}
             onOpenLink={(url) => platform.openExternal(url)}
@@ -278,12 +230,12 @@ export function SessionBugDock() {
 export function BugDockView(props: {
   phase: "chat" | "filed"
   collapsed: boolean
+  busy: boolean
   agentText?: string
   filedUrl?: string
   answerText: string
   answering: boolean
   questionText?: string
-  questionPending: boolean
   onAnswerChange: (value: string) => void
   onAnswerSubmit: () => void
   onToggle: () => void
@@ -456,7 +408,7 @@ export function BugDockView(props: {
                 <p class="text-[13px] leading-5 text-v2-text-text-base">{props.questionText}</p>
               </Show>
               <span class="text-[11px] leading-4 text-v2-text-text-faint">
-                Type a response when the textbox glows yellow.
+                {props.busy ? "The reporter is working…" : "The reporter is ready — send a reply or follow-up."}
               </span>
               <div class="flex gap-2">
                 <textarea
@@ -466,8 +418,8 @@ export function BugDockView(props: {
                   disabled={props.answering}
                   classList={{
                     "flex-1 resize-none rounded-md border-[0.5px] bg-v2-background-bg-layer-02 px-3 py-1.5 text-[13px] leading-5 text-v2-text-text-base placeholder:text-v2-text-text-faint focus:outline-none": true,
-                    "border-v2-state-fg-warning shadow-[0_0_0_1px_var(--v2-state-fg-warning)]": props.questionPending,
-                    "border-v2-border-border-base": !props.questionPending,
+                    "border-v2-state-fg-warning shadow-[0_0_0_1px_var(--v2-state-fg-warning)]": !props.busy,
+                    "border-v2-border-border-base": props.busy,
                   }}
                   rows={2}
                   onKeyDown={(e) => {
