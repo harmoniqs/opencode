@@ -188,8 +188,8 @@ describe("bug-dock sentinel matching (AC4)", () => {
     expect(matchBugFiledUrl(text)).toBe("https://github.com/harmoniqs/amicode/issues/123")
   })
 
-  test("no match: the sentinel mid-line is not a filing (line-start anchor)", () => {
-    expect(matchBugFiledUrl("the line AMICODE_BUG_FILED https://x is what I will print")).toBeUndefined()
+  test("match: the sentinel mid-line still matches (idle guard handles false positives)", () => {
+    expect(matchBugFiledUrl("the line AMICODE_BUG_FILED https://x is what I will print")).toBe("https://x")
   })
 
   test("no match: a confirm-gate veto prints no sentinel and triggers nothing", () => {
@@ -246,7 +246,7 @@ describe("bug-dock controller: filing (AC4)", () => {
     expect(controller.phase()).toBe("closed")
   })
 
-  test("filed, then the extension's close-bug-report tears the dock down silently", () => {
+  test("filed, then the extension's close-bug-report is ignored (end-state stays until user closes)", () => {
     const { controller, posts, dockCalls } = setup()
     controller.handleBridgeMessage(openMessage("ses_bug1"))
     controller.file("filed-via-browser")
@@ -255,9 +255,9 @@ describe("bug-dock controller: filing (AC4)", () => {
 
     controller.handleBridgeMessage({ source: "amicode", kind: "close-bug-report", sessionID: "ses_bug1" })
 
-    expect(controller.phase()).toBe("closed")
+    expect(controller.phase()).toBe("filed")
     expect(posts).toEqual([])
-    expect(dockCalls).toEqual(["close"])
+    expect(dockCalls).toEqual([])
   })
 
   test("the close control still works from the end-state — one bug-report-closed", () => {
