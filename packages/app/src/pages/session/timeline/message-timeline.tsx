@@ -324,6 +324,85 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
   )
 }
 
+/** LastMessageSticky - shows the most recent message fixed at the bottom
+ *  Like Claude Code, this keeps the latest message visible during scroll
+ */
+function LastMessageSticky() {
+  const sync = useSync()
+  const params = useParams<{ id?: string }>()
+  const language = useLanguage()
+  
+  // Get messages from sync store
+  const messages = () => {
+    const sessionID = params.id
+    if (!sessionID) return []
+    return sync().data.message[sessionID] ?? []
+  }
+  
+  // Get the last message
+  const lastMessage = () => {
+    const msgs = messages()
+    if (msgs.length === 0) return null
+    return msgs[msgs.length - 1]
+  }
+  
+  // Check if last message is from assistant and streaming
+  const isStreaming = () => {
+    const msg = lastMessage()
+    if (!msg) return false
+    if (msg.role !== "assistant") return false
+    // Message is streaming if no completed timestamp
+    return !(msg as any).metadata?.time?.completed
+  }
+  
+  // Get preview text from message
+  const previewText = () => {
+    const msg = lastMessage()
+    if (!msg) return ""
+    const parts = (msg as any).parts ?? []
+    return parts
+      .filter((p: any) => p.type === "text")
+      .map((p: any) => p.text)
+      .join("")
+      .slice(0, 200)
+  }
+  
+  return (
+    <Show when={isStreaming() && lastMessage()}>
+      <div
+        data-component="last-message-sticky"
+        style={{
+          position: "fixed",
+          bottom: "80px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          "z-index": "50",
+          "max-width": "800px",
+          width: "90%",
+          padding: "12px 16px",
+          "background-color": "var(--v2-background-bg-layer-01, #252525)",
+          "border-radius": "8px",
+          "box-shadow": "0 4px 12px rgba(0, 0, 0, 0.3)",
+          "border": "1px solid var(--v2-border-border-muted, #3c3c3c)",
+        }}
+      >
+        <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted, #8a8a8a)", "margin-bottom": "4px" }}>
+          {language.t("session.lastMessage")}
+        </div>
+        <div style={{ 
+          "font-size": "13px", 
+          "color": "var(--v2-text-text-base, #e0e0e0)",
+          "max-height": "100px",
+          "overflow": "hidden",
+          "text-overflow": "ellipsis",
+        }}>
+          {previewText()}
+        </div>
+      </div>
+    </Show>
+  )
+}
+
 export function MessageTimeline(props: {
   actions?: UserActions
   scroll: { overflow: boolean; bottom: boolean; jump: boolean }
@@ -2120,6 +2199,8 @@ export function MessageTimeline(props: {
           </Show>
         </div>
       </ScrollView>
+      {/* Sticky Last Message - always shows the most recent message at the bottom */}
+      <LastMessageSticky />
     </div>
   )
 }

@@ -27,7 +27,14 @@ function apply(zoom: number) {
   if (zoom === 1) document.documentElement.style.removeProperty("zoom")
   else document.documentElement.style.setProperty("zoom", String(zoom))
 }
+
+// Apply zoom immediately and also after a small delay to ensure DOM is ready
 apply(webZoom())
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => apply(webZoom()), { once: true })
+  // Fallback: also try after a short timeout in case DOMContentLoaded already fired
+  setTimeout(() => apply(webZoom()), 0)
+}
 
 export function setWebZoom(next: number) {
   const zoom = Math.round(clamp(next) * 100) / 100
