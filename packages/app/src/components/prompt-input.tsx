@@ -1526,6 +1526,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           >
             <div
               data-component="prompt-input"
+              // Opt out of the window-level clipboard fallback: this editor has
+              // its own ⌘V handler (handleKeyDown below, image-first then text
+              // over the bridge). Without the marker BOTH run — the fallback
+              // preventDefaults but does not stopPropagation, so the keystroke
+              // still reaches this element and the same text is inserted twice
+              // (harmoniqs/amicode#261). The marker owns PASTE only; ⌘C/⌘X keep
+              // mirroring through the global path.
+              data-amc-clipboard="self"
               ref={bindEditorRef}
               role="textbox"
               aria-multiline="true"
