@@ -30,6 +30,7 @@ import {
   Part as PartType,
   ReasoningPart,
   Session,
+  SkillPart,
   TextPart,
   ToolPart,
   UserMessage,
@@ -1583,6 +1584,8 @@ export function UserMessageDisplay(props: {
 
   const agents = createMemo(() => (props.parts?.filter((p) => p.type === "agent") as AgentPart[]) ?? [])
 
+  const skills = createMemo(() => (props.parts?.filter((p) => p.type === "skill") as SkillPart[]) ?? [])
+
   const model = createMemo(() => {
     const providerID = props.message.model?.providerID
     const modelID = props.message.model?.modelID
@@ -1688,7 +1691,7 @@ export function UserMessageDisplay(props: {
     <div data-component="user-message" data-timeline-part-id={textPart()?.id}>
       <Show when={!props.useV2Actions}>{renderAttachments()}</Show>
       <Show
-        when={text()}
+        when={text() || skills().length > 0}
         fallback={
           <Show when={messageComments().length > 0}>
             <UserMessageComments comments={messageComments()} bounded={false} />
@@ -1696,6 +1699,27 @@ export function UserMessageDisplay(props: {
         }
       >
         <div data-slot="user-message-body">
+          <For each={skills()}>
+            {(skill) => (
+              <BasicTool
+                icon="brain"
+                status="completed"
+                trigger={
+                  <div data-slot="basic-tool-tool-info-structured">
+                    <div data-slot="basic-tool-tool-info-main">
+                      <AmicoSkillChip kind={i18n.t("ui.tool.skill")} name={skill.name} status="completed" />
+                    </div>
+                  </div>
+                }
+              >
+                <Show when={skill.content}>
+                  <div class="amc-skill-file" data-component="tool-output" data-scrollable>
+                    <Markdown text={skillBody(skill.content)} />
+                  </div>
+                </Show>
+              </BasicTool>
+            )}
+          </For>
           <div data-slot="user-message-text" data-comments={messageComments().length > 0 ? "true" : undefined}>
             <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
             <Show when={messageComments().length > 0}>
@@ -1705,7 +1729,7 @@ export function UserMessageDisplay(props: {
         </div>
       </Show>
       <Show when={props.useV2Actions}>{renderAttachments()}</Show>
-      <Show when={text() || (props.useV2Actions && messageComments().length > 0)}>
+      <Show when={text() || skills().length > 0 || (props.useV2Actions && messageComments().length > 0)}>
         <div data-slot="user-message-copy-wrapper">
           <Show when={metaHead() || metaTail()}>
             <span data-slot="user-message-meta-wrap">
