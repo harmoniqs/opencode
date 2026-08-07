@@ -144,86 +144,10 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
-  const language = useLanguage()
-  const [isExpanded, setIsExpanded] = createSignal(true)
-  const [elapsedMs, setElapsedMs] = createSignal(0)
-
-  onMount(() => {
-    const start = Date.now()
-    const timer = setInterval(() => setElapsedMs(Date.now() - start), 1000)
-    onCleanup(() => clearInterval(timer))
-  })
-
-  const formatElapsed = (ms: number) => {
-    const seconds = Math.floor(ms / 1000)
-    if (seconds < 60) return `${seconds}s`
-    const minutes = Math.floor(seconds / 60)
-    return `${minutes}m ${seconds % 60}s`
-  }
-
-  const toggleExpanded = () => setIsExpanded(!isExpanded())
-
+  // Simple version - just show the ThinkingLine without collapsible dropdown
   return (
-    <div data-slot="session-turn-thinking" data-tethered="true">
-      {/* Clickable header row */}
-      <div
-        data-slot="session-turn-thinking-header"
-        data-expanded={isExpanded()}
-        onClick={toggleExpanded}
-        style={{
-          display: "flex",
-          "align-items": "center",
-          gap: "8px",
-          cursor: "pointer",
-          "user-select": "none",
-          padding: "4px 0",
-          position: "relative",
-        }}
-      >
-        {/* Chevron */}
-        <span 
-          data-slot="session-turn-thinking-chevron"
-          style={{
-            display: "inline-block",
-            transition: "transform 0.2s",
-            transform: isExpanded() ? "rotate(180deg)" : "rotate(0deg)",
-            "font-size": "10px",
-            color: "var(--v2-text-text-muted)",
-            width: "16px",
-            "text-align": "center",
-          }}
-        >
-          ▼
-        </span>
-
-        {/* Original ThinkingLine */}
-        <ThinkingLine tokens={props.tokens} />
-
-        {/* Duration */}
-        <span style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-left": "auto" }}>
-          {formatElapsed(elapsedMs())}
-        </span>
-      </div>
-
-      {/* Expanded content */}
-      {isExpanded() && !props.showReasoningSummaries && (
-        <div
-          data-slot="session-turn-thinking-content"
-          style={{
-            "margin-top": "8px",
-            "margin-left": "24px",
-            "padding-left": "12px",
-          }}
-        >
-          <TextReveal
-            text={props.reasoningHeading}
-            class="session-turn-thinking-heading"
-            travel={25}
-            duration={700}
-            truncate
-          />
-        </div>
-      )}
+    <div data-slot="session-turn-thinking">
+      <ThinkingLine tokens={props.tokens} />
     </div>
   )
 }
@@ -321,83 +245,6 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
     <div data-slot="session-turn-diff-view" data-scrollable>
       <Dynamic component={fileComponent} mode="diff" virtualize={false} fileDiff={view.fileDiff} />
     </div>
-  )
-}
-
-/** LastMessageSticky - shows the most recent message fixed at the TOP
- *  Like Claude Code, this keeps the latest message visible at top during scroll
- *  while older messages scroll underneath
- */
-function LastMessageSticky() {
-  const sync = useSync()
-  const params = useParams<{ id?: string }>()
-  const language = useLanguage()
-  
-  // Get messages from sync store
-  const messages = () => {
-    const sessionID = params.id
-    if (!sessionID) return []
-    return sync().data.message[sessionID] ?? []
-  }
-  
-  // Get the last message (most recent)
-  const lastMessage = () => {
-    const msgs = messages()
-    if (msgs.length === 0) return null
-    return msgs[msgs.length - 1]
-  }
-  
-  // Check if last message is from assistant and streaming
-  const isStreaming = () => {
-    const msg = lastMessage()
-    if (!msg) return false
-    if (msg.role !== "assistant") return false
-    // Message is streaming if no completed timestamp
-    return !(msg as any).metadata?.time?.completed
-  }
-  
-  // Get preview text from message
-  const previewText = () => {
-    const msg = lastMessage()
-    if (!msg) return ""
-    const parts = (msg as any).parts ?? []
-    return parts
-      .filter((p: any) => p.type === "text")
-      .map((p: any) => p.text)
-      .join("")
-      .slice(0, 200)
-  }
-  
-  return (
-    <Show when={isStreaming() && lastMessage()}>
-      <div
-        data-component="last-message-sticky"
-        style={{
-          position: "sticky",
-          top: "0",
-          left: "0",
-          right: "0",
-          "z-index": "50",
-          padding: "12px 16px",
-          "background-color": "var(--v2-background-bg-base, #1e1e1e)",
-          "border-bottom": "1px solid var(--v2-border-border-muted, #3c3c3c)",
-          "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.2)",
-        }}
-      >
-        <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted, #8a8a8a)", "margin-bottom": "4px" }}>
-          {language.t("session.lastMessage")}
-        </div>
-        <div style={{ 
-          "font-size": "13px", 
-          "color": "var(--v2-text-text-base, #e0e0e0)",
-          "max-height": "100px",
-          "overflow": "hidden",
-          "text-overflow": "ellipsis",
-        }}>
-          {previewText()}
-        </div>
-      </div>
-    </Show>
   )
 }
 
@@ -2197,8 +2044,6 @@ export function MessageTimeline(props: {
           </Show>
         </div>
       </ScrollView>
-      {/* Sticky Last Message - always shows the most recent message at the bottom */}
-      <LastMessageSticky />
     </div>
   )
 }
