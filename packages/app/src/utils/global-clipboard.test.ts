@@ -370,4 +370,119 @@ describe("installGlobalClipboardFallback", () => {
     expect(event.defaultPrevented).toBe(false)
     expect(bridge.posted).toHaveLength(0)
   })
+
+  // --- Select-all (Cmd+A) ---
+
+  test("mod+A selects all text in a form field", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = field("text", "hello world", 3, 3)
+
+    const event = keydown(el, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(el.selectionStart).toBe(0)
+    expect(el.selectionEnd).toBe(11)
+  })
+
+  test("mod+A selects all content in a contenteditable", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = editableDiv("hello world")
+
+    const event = keydown(el, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    expect(selection.toString()).toBe("hello world")
+  })
+
+  test("mod+A in a textarea selects all its text", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = document.createElement("textarea")
+    el.value = "line1\nline2"
+    document.body.appendChild(el)
+    el.setSelectionRange(2, 2)
+
+    const event = keydown(el, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(el.selectionStart).toBe(0)
+    expect(el.selectionEnd).toBe(11)
+  })
+
+  // --- Undo (Cmd+Z) ---
+
+  test("mod+Z calls execCommand undo on a contenteditable", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = editableDiv("hello")
+
+    const event = keydown(el, "z")
+
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  test("mod+Z calls execCommand undo on a form field", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = field("text", "hello world", 5, 5)
+
+    const event = keydown(el, "z")
+
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  // --- Redo (Cmd+Shift+Z / Cmd+Y) ---
+
+  test("mod+Shift+Z calls execCommand redo", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = editableDiv("hello")
+
+    const event = keydown(el, "z", { shiftKey: true })
+
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  test("mod+Y calls execCommand redo", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = editableDiv("hello")
+
+    const event = keydown(el, "y")
+
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  // --- Guard preservation ---
+
+  test("mod+A in an unframed window is not intercepted", () => {
+    install(window) // unframed: parent === self
+    const el = field("text", "hello", 2, 2)
+
+    const event = keydown(el, "a")
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test("mod+Z on a non-editable target is not intercepted", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const button = document.createElement("button")
+    document.body.appendChild(button)
+
+    const event = keydown(button, "z")
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test("shift+alt chords with editing keys are still ignored", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const el = field("text", "abc", 0, 3)
+
+    expect(keydown(el, "a", { altKey: true }).defaultPrevented).toBe(false)
+  })
 })
