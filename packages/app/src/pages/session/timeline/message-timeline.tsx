@@ -324,72 +324,6 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
   )
 }
 
-/** StickyLastMessage - shows the most recent message fixed at the bottom of the chat
- *  This ensures the latest message is always visible even when scrolling through history.
- *  Styled after Claude Code's interface. Optimized for performance.
- */
-function StickyLastMessage() {
-  const sync = useSync()
-  const params = useParams<{ id?: string }>()
-  
-  // Use a simpler approach - just get the last message without reactivity overhead
-  const lastMessage = () => {
-    const sessionID = params.id
-    if (!sessionID) return null
-    const msgs = sync().data.message[sessionID] ?? []
-    if (msgs.length === 0) return null
-    return msgs[msgs.length - 1]
-  }
-  
-  // Only show for streaming assistant messages
-  const shouldShow = () => {
-    const msg = lastMessage()
-    if (!msg) return false
-    if (msg.role !== "assistant") return false
-    // Check if message is still streaming (no completed timestamp)
-    const isComplete = (msg as any).metadata?.time?.completed
-    return !isComplete
-  }
-  
-  return (
-    <Show when={shouldShow()}>
-      {(message) => (
-        <div
-          data-component="sticky-last-message"
-          style={{
-            position: "sticky",
-            bottom: "0",
-            "z-index": "40",
-            "background-color": "var(--v2-background-bg-base, #1e1e1e)",
-            "border-top": "1px solid var(--v2-border-border-muted, #3c3c3c)",
-            padding: "12px 16px",
-            "max-height": "150px",
-            overflow: "auto",
-          }}
-        >
-          <div style={{ "font-size": "14px", "color": "var(--v2-text-text-base, #e0e0e0)" }}>
-            <MessageContentPreview message={message()} />
-          </div>
-        </div>
-      )}
-    </Show>
-  )
-}
-
-/** Preview component for message content in sticky footer - optimized */
-function MessageContentPreview(props: { message: any }) {
-  const text = () => {
-    const parts = props.message.parts ?? []
-    return parts
-      .filter((p: any) => p.type === "text")
-      .map((p: any) => p.text)
-      .join("")
-      .slice(0, 150)
-  }
-  
-  return <span>{text() || "..."}</span>
-}
-
 export function MessageTimeline(props: {
   actions?: UserActions
   scroll: { overflow: boolean; bottom: boolean; jump: boolean }
@@ -2186,8 +2120,6 @@ export function MessageTimeline(props: {
           </Show>
         </div>
       </ScrollView>
-      {/* Sticky Last Message - shows the most recent message even when scrolled up */}
-      <StickyLastMessage />
     </div>
   )
 }
