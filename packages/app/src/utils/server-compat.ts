@@ -35,9 +35,10 @@ type CompatiblePermissionApi = Omit<ServerApi["permission"], "reply"> & {
     input: Parameters<ServerApi["permission"]["reply"]>[0] & { location?: { directory?: string } },
   ) => ReturnType<ServerApi["permission"]["reply"]>
 }
-export type CompatibleApi = Omit<ServerApi, "session" | "permission"> & {
+export type CompatibleApi = Omit<ServerApi, "session" | "permission" | "question"> & {
   readonly session: CompatibleSessionApi
   readonly permission: CompatiblePermissionApi
+  readonly question: CompatibleQuestionApi
 }
 type LegacyPrompt = {
   agent?: string
@@ -46,6 +47,19 @@ type LegacyPrompt = {
   legacyParts?: (TextPartInput | FilePartInput | AgentPartInput)[]
 }
 type LegacyLocation = { directory?: string }
+type CompatibleQuestionApi = Omit<ServerApi["question"], "reply" | "reject"> & {
+  /** Both take the REQUESTING session's directory via `location` (amicode#249
+   *  QA): the server's pending-question registry is instance-per-directory,
+   *  and an unscoped reply lands on the server-cwd instance — "reply for
+   *  unknown request" for any session living elsewhere (every bug-dock
+   *  answer in the amicode preview). */
+  reply(
+    value: Parameters<ServerApi["question"]["reply"]>[0] & { location?: LegacyLocation },
+  ): ReturnType<ServerApi["question"]["reply"]>
+  reject(
+    value: Parameters<ServerApi["question"]["reject"]>[0] & { location?: LegacyLocation },
+  ): ReturnType<ServerApi["question"]["reject"]>
+}
 type CompatibleInput = {
   protocol: Promise<ServerProtocol>
   current: ServerApi
@@ -504,14 +518,14 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
     },
     question: {
       ...input.current.question,
-      async reply(value: Parameters<ServerApi["question"]["reply"]>[0]) {
-        await legacy().question.reply({
+      async reply(value: Parameters<ServerApi["question"]["reply"]>[0] & { location?: LegacyLocation }) {
+        await legacy(value.location).question.reply({
           requestID: value.requestID,
           answers: value.answers.map((answer) => [...answer]),
         })
       },
-      async reject(value: Parameters<ServerApi["question"]["reject"]>[0]) {
-        await legacy().question.reject({ requestID: value.requestID })
+      async reject(value: Parameters<ServerApi["question"]["reject"]>[0] & { location?: LegacyLocation }) {
+        await legacy(value.location).question.reject({ requestID: value.requestID })
       },
     },
   }

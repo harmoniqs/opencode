@@ -12,7 +12,9 @@ export interface IconButtonV2Props
   size?: "small" | "normal" | "large"
   // iconSize?: IconProps["size"]
   variant?: "neutral" | "contrast" | "ghost" | "ghost-muted"
-  state?: "rest" | "hover" | "pressed"
+  // forced-state hook for stories/tests — the css already handles [data-state="focus"]
+  // and [data-state="disabled"]; the union just exposes them (amicode/opencode#116)
+  state?: "rest" | "hover" | "pressed" | "focus" | "disabled"
 }
 
 export function IconButtonV2(props: ComponentProps<"button"> & IconButtonV2Props) {

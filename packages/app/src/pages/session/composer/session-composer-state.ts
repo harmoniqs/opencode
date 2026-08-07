@@ -81,8 +81,12 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
+    // Scoped by the requesting session's directory (amicode#249 QA): the
+    // permission registry is instance-per-directory — unscoped replies miss
+    // sessions outside the server's cwd.
+    const directory = serverSync().session.data.info[perm.sessionID]?.directory
     sdk()
-      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, location: { directory }, reply: response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })

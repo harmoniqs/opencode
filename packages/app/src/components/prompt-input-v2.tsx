@@ -9,6 +9,7 @@ import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createMemo, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
+import { ReportBugButton } from "@/components/report-bug-button"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
@@ -27,6 +28,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
+import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -59,6 +61,10 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
+        // amicode/opencode#116: report-a-bug, right-anchored immediately left
+        // of send. The boot-param gate lives HERE (not inside the button) so a
+        // gated-off button passes `undefined` and the row's layout never shifts.
+        trailingControl={bugReportEnabled() ? <ReportBugButton /> : undefined}
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}
