@@ -1,20 +1,34 @@
-// Framed-app editing fallback, generalized from the prompt input's bridge.
-// Inside the VS Code webview iframe, native editing shortcuts never fire:
-// paste never reaches the DOM, copy never writes the OS clipboard, and
-// select-all / undo / redo are suppressed by the Electron platform layer
-// (see prompt-input/clipboard-bridge.ts for the full why). This module
-// intercepts mod+V/C/X/A/Z/Y at the window's capture phase and implements
-// them explicitly in JS — clipboard ops route over the extension-host bridge,
-// and select-all / undo / redo call the DOM APIs directly. Unframed
-// (plain web/desktop), it does nothing — native editing behavior stands.
+// Framed-app clipboard fallback, generalized from the prompt input's bridge.
+// Inside the VS Code webview iframe, native paste never fires and native
+// copy never reaches the OS clipboard (see prompt-input/clipboard-bridge.ts
+// for the full why) — so every editable silently ignores ⌘V and poisons the
+// next paste on ⌘C. This module intercepts mod+V/C/X at the window's capture
+// phase and routes them over the existing extension-host bridge. It is the
+// SOLE ⌘V path in the webview: the prompt composers (v1 and v2) no longer
+// intercept the keystroke themselves, so the text lands exactly once.
+// Unframed (plain web/desktop), it does nothing — native clipboard behavior
+// stands.
 
-import { readClipboardViaBridge, writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
+import {
+  readClipboardImageViaBridge,
+  readClipboardViaBridge,
+  writeClipboardViaBridge,
+} from "@/components/prompt-input/clipboard-bridge"
 
-// Elements that carry their own bridged paste (the prompt input's ⌘V handler,
-// the profile fields' pasteFallback) mark themselves so the fallback doesn't
-// double-insert. The marker owns PASTE only: nothing element-local handles
-// copy/cut, so ⌘C/⌘X still mirror to the OS clipboard even inside marked
-// subtrees — otherwise copying from the prompt would paste stale content.
+// Single-slot media hook: a paste that carries no text is offered to the
+// registered consumer (the v2 composer's attachment pipeline) as an image.
+// Deliberately one slot — a list would invite two owners of one gesture.
+let clipboardImageHandler: ((file: File) => void) | undefined
+
+export function setClipboardImageHandler(handler?: (file: File) => void): void {
+  clipboardImageHandler = handler
+}
+
+// Elements that carry their own bridged paste (the profile fields'
+// pasteFallback) mark themselves so the fallback doesn't double-insert. The
+// marker owns PASTE only: nothing element-local handles copy/cut, so ⌘C/⌘X
+// still mirror to the OS clipboard even inside marked subtrees — otherwise
+// copying from the prompt would paste stale content.
 export const CLIPBOARD_SELF_SELECTOR = '[data-amc-clipboard="self"]'
 
 type FormField = HTMLInputElement | HTMLTextAreaElement
@@ -194,9 +208,18 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
       // Native paste never fires in-frame, so preventDefault loses nothing;
       // an empty or dead bridge reply degrades to a no-op (see clipboard-bridge).
       event.preventDefault()
-      void readClipboardViaBridge(win).then((text) => {
-        if (!text) return
-        insertTextAtSelection(target, text)
+      void readClipboardViaBridge(win).then(async (text) => {
+        if (text) {
+          insertTextAtSelection(target, text)
+          return
+        }
+        // No text on the clipboard: offer media. Mirrors the composer's own
+        // handlePaste precedence (image only when there is no plain text), so
+        // text pastes keep their exact single-value sequence with no extra
+        // round-trip.
+        if (!clipboardImageHandler) return
+        const file = await readClipboardImageViaBridge(win)
+        if (file) clipboardImageHandler(file)
       })
       return
     }
