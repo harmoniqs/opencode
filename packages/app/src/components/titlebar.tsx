@@ -390,21 +390,11 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     aria-pressed={layout.route().type === "home"}
                   />
                 </TooltipV2>
-                {/* amicode(workbench S1): the sessions-panel toggle, v2 titlebar
-                    edition — the legacy grid-branch button never rendered here,
-                    so the panel had no affordance (S1.4 probe). sidebar-LEFT:
-                    this one drives the left sessions panel. */}
-                <IconButtonV2
-                  type="button"
-                  variant="ghost-muted"
-                  size="large"
-                  class="!w-9 shrink-0"
-                  icon={<IconV2 name="sidebar-left" />}
-                  state={layout.sidebar.opened() ? "pressed" : undefined}
-                  onClick={() => layout.sidebar.toggle()}
-                  aria-label={language.t("command.sidebar.toggle")}
-                  aria-expanded={layout.sidebar.opened()}
-                />
+                {/* Removed: sidebar-left toggle button (harmoniqs/amicode#265).
+                    The button called layout.sidebar.toggle() but no component in
+                    NewLayout observes that signal — WorkbenchPanel only mounts in
+                    the legacy SplitFrame path. Re-add here when WorkbenchPanel is
+                    ported to layout-new.tsx. */}
 
                 <TitlebarTabStrip
                   tabs={tabsStore}
