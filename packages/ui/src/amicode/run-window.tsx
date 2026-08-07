@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { For, Show, createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { createStore, reconcile } from "solid-js/store"
 import { AmicoMark } from "./spinner"
 import { fetchAmicodeRunSeries, openAmicodeEntity } from "./ui-bridge"
 import { heroPaths, objectivePath } from "./run-plot"
@@ -89,8 +90,10 @@ function Chip(props: { label: string; value: string; color?: string }) {
   )
 }
 
+type RunWindowState = { view: RunSeriesView | undefined }
+
 export function RunWindow(props: { run: string; lab?: string }) {
-  const [view, setView] = createSignal<RunSeriesView | undefined>(undefined)
+  const [state, setState] = createStore<RunWindowState>({ view: undefined })
   let timer: ReturnType<typeof setInterval> | undefined
   const stop = () => {
     if (timer !== undefined) clearInterval(timer)
@@ -102,12 +105,12 @@ export function RunWindow(props: { run: string; lab?: string }) {
     if (!pending) return // no transport registered yet → keep last good
     const raw = await pending.catch(() => undefined)
     if (raw === undefined) return
-    setView(parseRunSeriesResponse(raw))
+    setState(reconcile({ view: parseRunSeriesResponse(raw) }))
   }
 
   onMount(() => void load())
   createEffect(() => {
-    const v = view()
+    const v = state.view
     // Poll through "stalled" too: a stalled run can resume (or get force-
     // finalized) and the window must converge instead of freezing forever.
     const live = v?.ok === true && (v.run.status === "solving" || v.run.status === "stalled")
@@ -117,7 +120,7 @@ export function RunWindow(props: { run: string; lab?: string }) {
   onCleanup(stop)
 
   const run = createMemo<RunSeries | undefined>(() => {
-    const v = view()
+    const v = state.view
     return v?.ok ? v.run : undefined
   })
   const plotPath = createMemo<string[] | undefined>(() => {
@@ -165,7 +168,7 @@ export function RunWindow(props: { run: string; lab?: string }) {
           when={run()}
           fallback={
             <span style={{ color: "var(--v2-text-text-muted)" }}>
-              {view()?.ok === false ? "unavailable" : "loading…"}
+              {state.view?.ok === false ? "unavailable" : "loading…"}
             </span>
           }
         >
