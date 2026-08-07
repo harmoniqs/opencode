@@ -169,6 +169,9 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   }
 
   const focus = (i: number) => {
+    // Text-card: the textarea is the only focusable element; focusCustom
+    // handles it via the ref callback — skip option routing entirely.
+    if (text()) return
     const next = clamp(i)
     setStore("focus", next)
     if (store.editing) return
@@ -431,6 +434,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     setTimeout(() => {
       el.focus()
       resizeInput(el)
+      // Sync the container measurement after the textarea has its final height
+      if (optionsRef) {
+        setStore("optionsHeight", (h) => Math.max(h, optionsRef!.scrollHeight))
+      }
     }, 0)
   }
 

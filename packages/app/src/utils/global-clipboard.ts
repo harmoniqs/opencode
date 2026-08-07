@@ -148,6 +148,23 @@ export function extractSelection(el: HTMLElement, opts: { cut?: boolean } = {}):
   return text
 }
 
+// Select all content in an editable element — the JS equivalent of the native
+// Cmd+A that the VS Code/Electron platform layer suppresses inside the iframe.
+function selectAll(target: HTMLElement): void {
+  if (isFormField(target)) {
+    target.select()
+    return
+  }
+  // contenteditable: select all children of the editable root
+  const selection = target.ownerDocument.defaultView?.getSelection()
+  if (selection) {
+    selection.removeAllRanges()
+    const range = target.ownerDocument.createRange()
+    range.selectNodeContents(target)
+    selection.addRange(range)
+  }
+}
+
 // Capture-phase so it sees the keystroke before any component handler, and
 // window-level so portaled UI (popovers, dialogs) is covered too. Returns an
 // uninstall function; the handler re-checks framing per event, so installing
@@ -155,13 +172,37 @@ export function extractSelection(el: HTMLElement, opts: { cut?: boolean } = {}):
 export function installGlobalClipboardFallback(win: Window = window): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (win.parent === win) return // unframed: native clipboard works — stay out
-    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return
     if (event.isComposing) return
     const key = event.key.toLowerCase()
-    if (key !== "v" && key !== "c" && key !== "x") return
+
+    // Redo: Cmd+Shift+Z (shift allowed only for this chord)
+    const isRedo = key === "z" && event.shiftKey
+    // All other editing shortcuts require NO shift
+    if (event.shiftKey && !isRedo) return
+
+    if (key !== "v" && key !== "c" && key !== "x" && key !== "a" && key !== "z" && key !== "y") return
     const target = event.target
     if (!isEditableTarget(target)) return // non-editables keep native behavior
 
+    // --- Select all ---
+    if (key === "a") {
+      event.preventDefault()
+      selectAll(target)
+      return
+    }
+
+    // --- Undo / Redo ---
+    if (key === "z" || key === "y") {
+      event.preventDefault()
+      const doc = target.ownerDocument
+      if (typeof doc.execCommand === "function") {
+        doc.execCommand(isRedo || key === "y" ? "redo" : "undo")
+      }
+      return
+    }
+
+    // --- Clipboard: paste, copy, cut ---
     if (key === "v") {
       if (target.closest(CLIPBOARD_SELF_SELECTOR)) return // element owns its own paste
       // Native paste never fires in-frame, so preventDefault loses nothing;

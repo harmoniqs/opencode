@@ -37,21 +37,31 @@ export const AgentAttachment = Schema.Struct({
   source: Source.pipe(optional),
 }).annotate({ identifier: "Prompt.AgentAttachment" })
 
+export interface SkillAttachment extends Schema.Schema.Type<typeof SkillAttachment> {}
+export const SkillAttachment = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String.pipe(optional),
+  content: Schema.String.pipe(optional),
+  source: Source.pipe(optional),
+}).annotate({ identifier: "Prompt.SkillAttachment" })
+
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
   text: Schema.String,
   files: Schema.Array(FileAttachment).pipe(optional),
   agents: Schema.Array(AgentAttachment).pipe(optional),
+  skills: Schema.Array(SkillAttachment).pipe(optional),
 })
   .annotate({ identifier: "Prompt" })
   .pipe(
     statics((schema) => ({
       equivalence: Schema.toEquivalence(schema),
-      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents">) =>
+      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents" | "skills">) =>
         schema.make({
           text: input.text,
           ...(input.files === undefined ? {} : { files: input.files }),
           ...(input.agents === undefined ? {} : { agents: input.agents }),
+          ...(input.skills === undefined ? {} : { skills: input.skills }),
         }),
     })),
   )
