@@ -95,7 +95,7 @@ function SessionTabEntry(props: {
   )
   const session = createMemo(() => cachedSession() ?? loadedSession())
   const missingSession = createMemo(() => !!props.serverCtx() && !loadedSession.loading && !session())
-  const visible = createMemo(() => !!session() || missingSession() || !!persisted()?.title)
+  const visible = createMemo(() => !!session() || loadedSession.loading || missingSession() || !!persisted()?.title)
   let prefetched = false
 
   const rename = async (title: string) => {
@@ -158,7 +158,7 @@ function SessionTabEntry(props: {
         active={props.active}
         forceTruncate={props.forceTruncate}
         session={session}
-        fallbackTitle={persisted()?.title ?? (missingSession() ? language.t("session.tab.unknown") : undefined)}
+        fallbackTitle={persisted()?.title ?? (missingSession() ? language.t("session.tab.unknown") : loadedSession.loading ? "\u2026" : undefined)}
         onRename={rename}
         onNavigate={props.onNavigate}
         onClose={props.onClose}
