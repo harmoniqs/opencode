@@ -156,6 +156,12 @@ export function PromptInputV2(props: PromptInputV2Props) {
               renderPromptInputV2Editor(element, props.controller.parts())
             }}
             data-component="prompt-input"
+            // amicode webview: this editor runs its own bridged mod+V handler
+            // (interaction.ts onKeyDown → attachments.handleFramedPaste), so the
+            // global window-level clipboard fallback must opt out here or both
+            // insert the same text (harmoniqs/amicode#261). Marker owns paste
+            // only — copy/cut still mirror through the fallback.
+            data-amc-clipboard="self"
             role="textbox"
             aria-multiline="true"
             aria-label="Prompt"
