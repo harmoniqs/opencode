@@ -9,7 +9,20 @@
 // Unframed (plain web/desktop), it does nothing — native clipboard behavior
 // stands.
 
-import { readClipboardViaBridge, writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
+import {
+  readClipboardImageViaBridge,
+  readClipboardViaBridge,
+  writeClipboardViaBridge,
+} from "@/components/prompt-input/clipboard-bridge"
+
+// Single-slot media hook: a paste that carries no text is offered to the
+// registered consumer (the v2 composer's attachment pipeline) as an image.
+// Deliberately one slot — a list would invite two owners of one gesture.
+let clipboardImageHandler: ((file: File) => void) | undefined
+
+export function setClipboardImageHandler(handler?: (file: File) => void): void {
+  clipboardImageHandler = handler
+}
 
 // Elements that carry their own bridged paste (the profile fields'
 // pasteFallback) mark themselves so the fallback doesn't double-insert. The
@@ -154,9 +167,18 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
       // Native paste never fires in-frame, so preventDefault loses nothing;
       // an empty or dead bridge reply degrades to a no-op (see clipboard-bridge).
       event.preventDefault()
-      void readClipboardViaBridge(win).then((text) => {
-        if (!text) return
-        insertTextAtSelection(target, text)
+      void readClipboardViaBridge(win).then(async (text) => {
+        if (text) {
+          insertTextAtSelection(target, text)
+          return
+        }
+        // No text on the clipboard: offer media. Mirrors the composer's own
+        // handlePaste precedence (image only when there is no plain text), so
+        // text pastes keep their exact single-value sequence with no extra
+        // round-trip.
+        if (!clipboardImageHandler) return
+        const file = await readClipboardImageViaBridge(win)
+        if (file) clipboardImageHandler(file)
       })
       return
     }
