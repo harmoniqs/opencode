@@ -27,6 +27,8 @@ export {
   ResourceSource,
   RetryPart,
   SessionInfo,
+  SkillPart,
+  SkillPartInput,
   SnapshotPart,
   StepFinishPart,
   StepStartPart,

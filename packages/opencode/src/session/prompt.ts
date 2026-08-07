@@ -991,6 +991,10 @@ const layer = Layer.effect(
           ]
         }
 
+        if (part.type === "skill") {
+          return [{ ...part, messageID: info.id, sessionID: input.sessionID }]
+        }
+
         return [{ ...part, messageID: info.id, sessionID: input.sessionID }]
       })
 
@@ -1579,12 +1583,20 @@ const layer = Layer.effect(
 
       const templateParts = yield* resolvePromptParts(template)
       const inputFiles = new Set(
-        input.parts?.filter((part) => new URL(part.url).protocol === "file:").map((part) => fileURLToPath(part.url)),
+        input.parts
+          ?.filter((part: { type: string; url?: string }) => new URL(part.url!).protocol === "file:")
+          .map((part: { url: string }) => fileURLToPath(part.url)),
       )
       const uniqueTemplateParts = templateParts.filter(
-        (part) => part.type !== "file" || !inputFiles.has(fileURLToPath(part.url)),
+        (part: (typeof templateParts)[number]) =>
+          part.type !== "file" || !inputFiles.has(fileURLToPath((part as { url: string }).url)),
       )
       const isSubtask = (agent.mode === "subagent" && cmd.subtask !== false) || cmd.subtask === true
+
+      // For skill-sourced commands, store as a compact SkillPart instead of
+      // expanding the entire template into the message text. The provider-turn
+      // projection layer expands it back for the model.
+      const isSkill = cmd.source === "skill" && !isSubtask
       const parts = isSubtask
         ? [
             {
@@ -1593,10 +1605,27 @@ const layer = Layer.effect(
               description: cmd.description ?? "",
               command: input.command,
               model: { providerID: taskModel.providerID, modelID: taskModel.modelID },
-              prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
+              prompt: templateParts.find((y: (typeof templateParts)[number]) => y.type === "text")?.text ?? "",
             },
           ]
-        : [...uniqueTemplateParts, ...(input.parts ?? [])]
+        : isSkill
+          ? [
+              // The user's own text (arguments after /skillname), if any
+              ...(input.arguments.trim()
+                ? [{ type: "text" as const, text: input.arguments.trim() }]
+                : []),
+              // The skill attachment — content stored for expand panel + model projection
+              {
+                type: "skill" as const,
+                name: input.command,
+                description: cmd.description ?? undefined,
+                content: template,
+              },
+              // Any file parts resolved from @-references in the template
+              ...uniqueTemplateParts.filter((p: (typeof templateParts)[number]) => p.type === "file"),
+              ...(input.parts ?? []),
+            ]
+          : [...uniqueTemplateParts, ...(input.parts ?? [])]
 
       const userAgent = isSubtask ? (input.agent ?? (yield* agents.defaultInfo()).name) : agent.name
       const userModel = isSubtask
@@ -1662,6 +1691,7 @@ export const PromptInput = Schema.Struct({
       SessionV1.TextPartInput,
       SessionV1.FilePartInput,
       SessionV1.AgentPartInput,
+      SessionV1.SkillPartInput,
       SessionV1.SubtaskPartInput,
     ]).annotate({ discriminator: "type" }),
   ),
