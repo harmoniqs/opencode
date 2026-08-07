@@ -80,7 +80,7 @@ export function AmicodeEntityRail(props: {
   messages: readonly { id: string; role?: string }[]
   partsFor: (messageID: string) => readonly RailPart[] | undefined
   fetchProblem: () => Promise<unknown>
-  fetchRunStatus: () => Promise<unknown>
+  fetchRunStatus: (slug?: string) => Promise<unknown>
   fetchRunSeries?: (run: string, lab?: string) => Promise<unknown>
   // Stage 2: transport for the in-chat widget preview (frame src + host
   // callbacks + pin). Optional so hosts that can't render widgets omit it.
@@ -162,7 +162,9 @@ export function AmicodeEntityRail(props: {
       hasRuns && !runStatuses().length ? true : runStatuses().some((status) => status.status === "solving")
     if (hasRuns && unfinished && timer === undefined) {
       timer = setInterval(async () => {
-        const statuses = parseRunStatusResponse(await props.fetchRunStatus().catch(() => undefined))
+        // Pass the problem slug to scope run-status to this session's problem (issue #272)
+        const slug = snapshot.kind === "ready" ? snapshot.view.slug : undefined
+        const statuses = parseRunStatusResponse(await props.fetchRunStatus(slug).catch(() => undefined))
         setRunStatuses(statuses)
         if (statuses.length > 0 && statuses.every((status) => status.status !== "solving")) stopPolling()
       }, RUN_POLL_MS)
