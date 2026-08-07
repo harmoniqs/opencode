@@ -165,88 +165,79 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
 
   return (
     <div data-slot="session-turn-thinking" data-tethered="true">
-      {/* Claude-style collapsible thinking block */}
+      {/* Visual tether line extending upward */}
       <div
-        data-slot="session-turn-thinking-container"
+        data-slot="session-turn-thinking-tether"
         style={{
-          "margin-left": "24px",
-          "padding-left": "12px",
-          "border-left": "2px solid var(--v2-border-border-base, #3c3c3c)",
+          position: "absolute",
+          top: "-16px",
+          left: "24px",
+          width: "2px",
+          height: "16px",
+          background: "var(--v2-border-border-base)",
+        }}
+      />
+      
+      {/* Clickable header row */}
+      <div
+        data-slot="session-turn-thinking-header"
+        data-expanded={isExpanded()}
+        onClick={toggleExpanded}
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "8px",
+          cursor: "pointer",
+          "user-select": "none",
+          padding: "4px 0",
+          position: "relative",
         }}
       >
-        {/* Clickable header */}
-        <div
-          data-slot="session-turn-thinking-header"
-          data-expanded={isExpanded()}
-          onClick={toggleExpanded}
+        {/* Chevron */}
+        <span 
+          data-slot="session-turn-thinking-chevron"
           style={{
-            display: "flex",
-            "align-items": "center",
-            gap: "8px",
-            cursor: "pointer",
-            "user-select": "none",
-            padding: "6px 8px",
-            "border-radius": "6px",
-            background: isExpanded() ? "transparent" : "var(--v2-background-bg-layer-02, #252525)",
-            transition: "background 0.15s ease",
-            "margin-left": "-14px",
+            display: "inline-block",
+            transition: "transform 0.2s",
+            transform: isExpanded() ? "rotate(180deg)" : "rotate(0deg)",
+            "font-size": "10px",
+            color: "var(--v2-text-text-muted)",
+            width: "16px",
+            "text-align": "center",
           }}
         >
-          {/* Chevron */}
-          <span 
-            data-slot="session-turn-thinking-chevron"
-            style={{
-              display: "inline-flex",
-              "align-items": "center",
-              "justify-content": "center",
-              width: "16px",
-              height: "16px",
-              transition: "transform 0.2s ease",
-              transform: isExpanded() ? "rotate(180deg)" : "rotate(0deg)",
-              "font-size": "10px",
-              color: "var(--v2-text-text-muted, #8a8a8a)",
-            }}
-          >
-            ▼
-          </span>
+          ▼
+        </span>
 
-          {/* Label */}
-          <span style={{ 
-            "font-size": "12px", 
-            "font-weight": "500",
-            color: "var(--v2-text-text-muted, #8a8a8a)",
-          }}>
-            Thinking
-          </span>
+        {/* Original ThinkingLine */}
+        <ThinkingLine tokens={props.tokens} />
 
-          {/* Duration */}
-          <span style={{ 
-            "font-size": "11px", 
-            color: "var(--v2-text-text-faint, #666)",
-            "margin-left": "auto",
-          }}>
-            {formatElapsed(elapsedMs())}
-            {props.tokens ? ` · ${props.tokens.toLocaleString()} tokens` : ""}
-          </span>
-        </div>
-
-        {/* Expandable content */}
-        {isExpanded() && !props.showReasoningSummaries && (
-          <div
-            data-slot="session-turn-thinking-content"
-            style={{
-              "margin-top": "8px",
-              "padding-top": "8px",
-              "border-top": "1px solid var(--v2-border-border-base, #3c3c3c)",
-              "font-size": "12px",
-              "line-height": "1.5",
-              color: "var(--v2-text-text-muted, #8a8a8a)",
-            }}
-          >
-            {props.reasoningHeading || "Working on your request..."}
-          </div>
-        )}
+        {/* Duration */}
+        <span style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-left": "auto" }}>
+          {formatElapsed(elapsedMs())}
+        </span>
       </div>
+
+      {/* Tethered content */}
+      {isExpanded() && !props.showReasoningSummaries && (
+        <div
+          data-slot="session-turn-thinking-content"
+          style={{
+            "margin-top": "8px",
+            "margin-left": "24px",
+            "padding-left": "12px",
+            "border-left": "2px solid var(--v2-border-border-base)",
+          }}
+        >
+          <TextReveal
+            text={props.reasoningHeading}
+            class="session-turn-thinking-heading"
+            travel={25}
+            duration={700}
+            truncate
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -2046,13 +2037,15 @@ export function MessageTimeline(props: {
               messages={sessionMessages()}
               partsFor={getMsgParts}
               fetchProblem={() => amicodeGet(server.current, "/amicode/problem")}
-              fetchRunStatus={(slug) => amicodeGet(server.current, slug ? `/amicode/run-status?slug=${encodeURIComponent(slug)}` : "/amicode/run-status")}
+              fetchRunStatus={() => amicodeGet(server.current, "/amicode/run-status")}
               fetchRunSeries={(run, lab) =>
                 amicodeGet(
                   server.current,
                   `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
                 )
               }
+              // Disable rail in chat sessions to prevent showing in unrelated sessions (issue #272)
+              disabled={true}
               widgetHost={{
                 // Stage 2: the in-chat widget preview reuses the home grid's
                 // frame kernel; server context is resolved live per call.

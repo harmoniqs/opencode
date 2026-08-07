@@ -80,7 +80,7 @@ export function AmicodeEntityRail(props: {
   messages: readonly { id: string; role?: string }[]
   partsFor: (messageID: string) => readonly RailPart[] | undefined
   fetchProblem: () => Promise<unknown>
-  fetchRunStatus: (slug?: string) => Promise<unknown>
+  fetchRunStatus: () => Promise<unknown>
   fetchRunSeries?: (run: string, lab?: string) => Promise<unknown>
   // Stage 2: transport for the in-chat widget preview (frame src + host
   // callbacks + pin). Optional so hosts that can't render widgets omit it.
@@ -105,6 +105,9 @@ export function AmicodeEntityRail(props: {
   // edit label — the rail forwards both to the ui bridge for the in-chat view.
   onDraftPrompt?: (text: string) => void
   editLabel?: string
+  // When true, the rail is completely hidden. Used to prevent the rail from
+  // showing in unrelated chat sessions (issue #272).
+  disabled?: boolean
 }) {
   if (props.onAsk) {
     const dispose = registerAmicodeAskBridge({
@@ -162,9 +165,7 @@ export function AmicodeEntityRail(props: {
       hasRuns && !runStatuses().length ? true : runStatuses().some((status) => status.status === "solving")
     if (hasRuns && unfinished && timer === undefined) {
       timer = setInterval(async () => {
-        // Pass the problem slug to scope run-status to this session's problem (issue #272)
-        const slug = snapshot.kind === "ready" ? snapshot.view.slug : undefined
-        const statuses = parseRunStatusResponse(await props.fetchRunStatus(slug).catch(() => undefined))
+        const statuses = parseRunStatusResponse(await props.fetchRunStatus().catch(() => undefined))
         setRunStatuses(statuses)
         if (statuses.length > 0 && statuses.every((status) => status.status !== "solving")) stopPolling()
       }, RUN_POLL_MS)
@@ -210,6 +211,9 @@ export function AmicodeEntityRail(props: {
   // The pulse chip is the ONLY inspector entry on the rail — the separate
   // "Inspect Run" button was redundant chrome next to it (Kate 2026-07-28).
   const opensInspector = (kind: string) => kind === "pulse" && props.onInspectRun !== undefined
+
+  // Don't render if disabled (issue #272: prevents rail in unrelated sessions)
+  if (props.disabled) return null
 
   return (
     <Show when={amicodeParts().any > 0}>
