@@ -433,6 +433,11 @@ function HomeDesign() {
       drives: run?.pulseMeta?.drives,
     }
   })
+  // Initial fetch on mount, then poll every 2.5s while solving
+  onMount(() => {
+    void refetchRunStatus()
+    void refetchRunSeries()
+  })
   createEffect(() => {
     // Standing slow poll while Home is mounted (a solve STARTED from chat must
     // surface here without a remount), tightening to 2.5s while one is live.
