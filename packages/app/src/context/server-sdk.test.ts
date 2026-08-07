@@ -4,25 +4,14 @@ import type { OpenCodeEvent } from "@opencode-ai/client/promise"
 import type { Event } from "@opencode-ai/sdk/v2/client"
 
 describe("resumeStreamAfterPageShow", () => {
-  test("restarts the stream on pageshow regardless of persisted flag", () => {
+  test("restarts a stream only after a back-forward cache restore", () => {
     let starts = 0
     const start = () => starts++
 
     resumeStreamAfterPageShow({ persisted: false } as PageTransitionEvent, start)
     resumeStreamAfterPageShow({ persisted: true } as PageTransitionEvent, start)
 
-    expect(starts).toBe(2)
-  })
-
-  test("is safe to call repeatedly (start is idempotent)", () => {
-    let starts = 0
-    const start = () => starts++
-
-    resumeStreamAfterPageShow({ persisted: false } as PageTransitionEvent, start)
-    resumeStreamAfterPageShow({ persisted: false } as PageTransitionEvent, start)
-    resumeStreamAfterPageShow({ persisted: false } as PageTransitionEvent, start)
-
-    expect(starts).toBe(3)
+    expect(starts).toBe(1)
   })
 })
 
