@@ -324,8 +324,9 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
   )
 }
 
-/** LastMessageSticky - shows the most recent message fixed at the bottom
- *  Like Claude Code, this keeps the latest message visible during scroll
+/** LastMessageSticky - shows the most recent message fixed at the TOP
+ *  Like Claude Code, this keeps the latest message visible at top during scroll
+ *  while older messages scroll underneath
  */
 function LastMessageSticky() {
   const sync = useSync()
@@ -339,7 +340,7 @@ function LastMessageSticky() {
     return sync().data.message[sessionID] ?? []
   }
   
-  // Get the last message
+  // Get the last message (most recent)
   const lastMessage = () => {
     const msgs = messages()
     if (msgs.length === 0) return null
@@ -372,18 +373,15 @@ function LastMessageSticky() {
       <div
         data-component="last-message-sticky"
         style={{
-          position: "fixed",
-          bottom: "80px",
-          left: "50%",
-          transform: "translateX(-50%)",
+          position: "sticky",
+          top: "0",
+          left: "0",
+          right: "0",
           "z-index": "50",
-          "max-width": "800px",
-          width: "90%",
           padding: "12px 16px",
-          "background-color": "var(--v2-background-bg-layer-01, #252525)",
-          "border-radius": "8px",
-          "box-shadow": "0 4px 12px rgba(0, 0, 0, 0.3)",
-          "border": "1px solid var(--v2-border-border-muted, #3c3c3c)",
+          "background-color": "var(--v2-background-bg-base, #1e1e1e)",
+          "border-bottom": "1px solid var(--v2-border-border-muted, #3c3c3c)",
+          "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.2)",
         }}
       >
         <div style={{ "font-size": "11px", "color": "var(--v2-text-text-muted, #8a8a8a)", "margin-bottom": "4px" }}>

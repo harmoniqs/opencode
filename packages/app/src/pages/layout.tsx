@@ -225,6 +225,32 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
+    
+    // Zoom keyboard shortcuts (web platform only)
+    if (platform.platform === "web") {
+      const handleZoomKey = (e: KeyboardEvent) => {
+        if (!e.ctrlKey && !e.metaKey) return
+        // Don't trigger if user is typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+        
+        switch (e.key) {
+          case "+":
+          case "=":
+            e.preventDefault()
+            webZoomIn()
+            break
+          case "-":
+            e.preventDefault()
+            webZoomOut()
+            break
+          case "0":
+            e.preventDefault()
+            webZoomReset()
+            break
+        }
+      }
+      makeEventListener(document, "keydown", handleZoomKey)
+    }
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
