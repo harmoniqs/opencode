@@ -386,7 +386,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       // the extension host where the framed app has no clipboard permission.
       // Bridge first (self-gates to null unframed), platform as fallback.
       readClipboardImage: async () => (await readClipboardImageViaBridge()) ?? (await platform.readClipboardImage?.()) ?? null,
-      // Text side of the same bridge — feeds session-ui's handleFramedPaste.
+      // Text side of the same bridge — feeds session-ui's handlePaste framed
+      // text fallback when the paste event carries nothing readable.
       readClipboardText: () => readClipboardViaBridge(),
       getPathForFile: platform.getPathForFile,
       store: platform.draftStore?.putBlob,

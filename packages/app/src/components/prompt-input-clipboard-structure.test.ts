@@ -4,83 +4,72 @@ import { join } from "node:path"
 
 // harmoniqs/amicode#261 — paste inserted the same text twice in the webview.
 //
-// Two mod+V handlers are live inside the framed app:
-//   1. utils/global-clipboard.ts — window-level, CAPTURE phase, for every
-//      editable that has no bridged paste of its own.
-//   2. The composer's own handler — the legacy prompt-input.tsx handleKeyDown
-//      or the v2 composer's onKeyDown (interaction.ts → handleFramedPaste).
+// Two mod+V handlers used to be live inside the framed app:
+//   1. utils/global-clipboard.ts — window-level, CAPTURE phase.
+//   2. The composer's own keydown handler (v1 handleKeyDown / v2 onKeyDown),
+//      which preventDefault'd but never stopPropagation'd, so BOTH bridge-
+//      inserted the same text. An opt-out marker (data-amc-clipboard="self")
+//      on the composer editors was tried, but the amicode fork hard-locks the
+//      v2 layout and the marker contract proved too fragile to maintain across
+//      the two composers.
 //
-// (1) exempts elements matching CLIPBOARD_SELF_SELECTOR. It calls
-// preventDefault() but deliberately NOT stopPropagation() — so an unmarked
-// composer receives BOTH insertions. The marker is the whole mechanism, and it
-// had been applied to the home-cards fields but never to the composers the
-// mechanism was written for. The amicode fork hard-locks the v2 layout
-// (settings.tsx newLayoutDesigns), so BOTH composers must carry the marker —
-// the v2 one is the one actually rendered in the webview.
+// The current design removes the composers' keydown interception entirely:
+// the window-level fallback is the SOLE ⌘V path in the webview (single
+// insert), and the native paste event path (composer onPaste → handlePaste)
+// remains for chords the fallback doesn't own (⌘⇧V). Image/screenshot paste
+// over ⌘V is knowingly sacrificed — the fallback reads text only.
 //
 // This is a SOURCE assertion rather than a rendered-DOM one because the app has
 // no component-render harness (no @solidjs/testing-library) — the same reason
-// global-clipboard.test.ts exercises the exemption against a synthetic element
+// global-clipboard.test.ts exercises the fallback against a synthetic element
 // it builds itself, which is exactly the gap that let #261 ship. Replace this
-// with a render assertion the day a harness lands; until then it is the only
-// thing standing between the composers and a silent regression.
+// with a render assertion the day a harness lands.
 const source = readFileSync(join(import.meta.dir, "prompt-input.tsx"), "utf8")
-const v2Source = readFileSync(
+const v2Interaction = readFileSync(
+  join(import.meta.dir, "../../../session-ui/src/v2/components/prompt-input/interaction.ts"),
+  "utf8",
+)
+const v2Attachments = readFileSync(
+  join(import.meta.dir, "../../../session-ui/src/v2/components/prompt-input/attachments.ts"),
+  "utf8",
+)
+const v2Editor = readFileSync(
   join(import.meta.dir, "../../../session-ui/src/v2/components/prompt-input/index.tsx"),
   "utf8",
 )
+const globalClipboard = readFileSync(join(import.meta.dir, "../utils/global-clipboard.ts"), "utf8")
 
-describe("composer opts out of the global clipboard fallback (amicode#261)", () => {
-  test('the editor element carries data-amc-clipboard="self"', () => {
-    expect(source).toContain('data-amc-clipboard="self"')
+describe("single ⌘V path in the webview (amicode#261)", () => {
+  test("the v1 composer no longer intercepts ⌘V at keydown", () => {
+    expect(source).not.toContain("inAmicode")
+    expect(source).not.toContain('event.key.toLowerCase() === "v"')
   })
 
-  test("the marker sits on the same element as the composer's own key handler", () => {
-    // Guard against the marker drifting onto a wrapper: closest() would still
-    // match, but a future refactor that moves the handler and not the marker
-    // (or vice versa) silently restores the double insert. Both attributes must
-    // live in the one editor element's prop block.
-    const editor = source.slice(
-      source.indexOf('data-component="prompt-input"'),
-      source.indexOf("classList={{", source.indexOf('data-component="prompt-input"')),
-    )
-    expect(editor).toContain('data-amc-clipboard="self"')
-    expect(editor).toContain("onKeyDown={handleKeyDown}")
+  test("the v2 composer no longer intercepts ⌘V at keydown", () => {
+    expect(v2Interaction).not.toContain('event.key.toLowerCase() === "v"')
+    expect(v2Interaction).not.toContain("handleFramedPaste")
+    expect(v2Attachments).not.toContain("handleFramedPaste")
   })
 
-  test("the composer still owns an image-first bridged paste", () => {
-    // The reason the marker is the correct fix and stopPropagation() in
-    // global-clipboard.ts is not: only this path tries the image bridge, so
-    // suppressing it would silently kill screenshot paste.
-    expect(source).toContain("readClipboardImageViaBridge")
-  })
-})
-
-describe("v2 composer opts out of the global clipboard fallback (amicode#261)", () => {
-  test('the editor element carries data-amc-clipboard="self"', () => {
-    expect(v2Source).toContain('data-amc-clipboard="self"')
+  test("neither composer editor carries the opt-out marker", () => {
+    // The marker contract is gone: the fallback owns ⌘V everywhere. A marker
+    // here would silently re-orphan the composer (nothing would paste on ⌘V).
+    expect(source).not.toContain('data-amc-clipboard="self"')
+    expect(v2Editor).not.toContain('data-amc-clipboard="self"')
   })
 
-  test("the marker sits on the same element as the composer's own key handler", () => {
-    // Same drift guard as the v1 case: both attributes must live in the one
-    // editor element's prop block.
-    const editor = v2Source.slice(
-      v2Source.indexOf('data-component="prompt-input"'),
-      v2Source.indexOf("onKeyUp={updateCursor}", v2Source.indexOf('data-component="prompt-input"')),
-    )
-    expect(editor).toContain('data-amc-clipboard="self"')
-    expect(editor).toContain("onKeyDown={")
+  test("the window-level fallback still owns the ⌘V branch for editables", () => {
+    expect(globalClipboard).toContain('key !== "v"')
+    expect(globalClipboard).toContain("installGlobalClipboardFallback")
+    expect(globalClipboard).toContain("readClipboardViaBridge")
   })
 
-  test("the composer still owns a bridged framed paste", () => {
-    // The marker's counterpart: interaction.ts intercepts mod+V in framed
-    // contexts and routes it over the extension-host bridge, so the global
-    // fallback's opt-out cannot strand the webview without paste.
-    const interaction = readFileSync(
-      join(import.meta.dir, "../../../session-ui/src/v2/components/prompt-input/interaction.ts"),
-      "utf8",
-    )
-    expect(interaction).toContain("handleFramedPaste")
-    expect(interaction).toContain("window.parent !== window")
+  test("the composers still wire the native paste path with bridge fallbacks", () => {
+    // ⌘⇧V (and any non-prevented paste event) flows: onPaste → handlePaste,
+    // which falls back to the host-clipboard bridges when the event carries
+    // nothing readable.
+    expect(source).toContain("onPaste={handlePaste}")
+    expect(v2Interaction).toContain("handlePaste")
+    expect(source).toContain("readClipboardViaBridge")
   })
 })

@@ -1,19 +1,21 @@
 // Framed-app clipboard fallback, generalized from the prompt input's bridge.
 // Inside the VS Code webview iframe, native paste never fires and native
 // copy never reaches the OS clipboard (see prompt-input/clipboard-bridge.ts
-// for the full why) — so every editable outside the prompt (Connections
-// credential fields, settings inputs, …) silently ignores ⌘V and poisons the
+// for the full why) — so every editable silently ignores ⌘V and poisons the
 // next paste on ⌘C. This module intercepts mod+V/C/X at the window's capture
-// phase and routes them over the existing extension-host bridge. Unframed
-// (plain web/desktop), it does nothing — native clipboard behavior stands.
+// phase and routes them over the existing extension-host bridge. It is the
+// SOLE ⌘V path in the webview: the prompt composers (v1 and v2) no longer
+// intercept the keystroke themselves, so the text lands exactly once.
+// Unframed (plain web/desktop), it does nothing — native clipboard behavior
+// stands.
 
 import { readClipboardViaBridge, writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 
-// Elements that carry their own bridged paste (the prompt input's ⌘V handler,
-// the profile fields' pasteFallback) mark themselves so the fallback doesn't
-// double-insert. The marker owns PASTE only: nothing element-local handles
-// copy/cut, so ⌘C/⌘X still mirror to the OS clipboard even inside marked
-// subtrees — otherwise copying from the prompt would paste stale content.
+// Elements that carry their own bridged paste (the profile fields'
+// pasteFallback) mark themselves so the fallback doesn't double-insert. The
+// marker owns PASTE only: nothing element-local handles copy/cut, so ⌘C/⌘X
+// still mirror to the OS clipboard even inside marked subtrees — otherwise
+// copying from the prompt would paste stale content.
 export const CLIPBOARD_SELF_SELECTOR = '[data-amc-clipboard="self"]'
 
 type FormField = HTMLInputElement | HTMLTextAreaElement
