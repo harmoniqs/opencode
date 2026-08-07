@@ -227,29 +227,38 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(document, "visibilitychange", hide)
     
     // Zoom keyboard shortcuts (web platform only)
+    // Use capture phase and window to ensure it catches events before other handlers
     if (platform.platform === "web") {
       const handleZoomKey = (e: KeyboardEvent) => {
         if (!e.ctrlKey && !e.metaKey) return
-        // Don't trigger if user is typing in an input
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+        // Don't trigger if user is typing in an input or contenteditable
+        const target = e.target as HTMLElement
+        if (target instanceof HTMLInputElement || 
+            target instanceof HTMLTextAreaElement ||
+            target.isContentEditable) return
         
         switch (e.key) {
           case "+":
           case "=":
             e.preventDefault()
+            e.stopPropagation()
             webZoomIn()
             break
           case "-":
             e.preventDefault()
+            e.stopPropagation()
             webZoomOut()
             break
           case "0":
             e.preventDefault()
+            e.stopPropagation()
             webZoomReset()
             break
         }
       }
-      makeEventListener(document, "keydown", handleZoomKey)
+      // Use capture phase to catch event before it bubbles
+      document.addEventListener("keydown", handleZoomKey, true)
+      onCleanup(() => document.removeEventListener("keydown", handleZoomKey, true))
     }
   })
 
