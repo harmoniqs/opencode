@@ -16,7 +16,7 @@ import {
   untrack,
 } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
 import { useQuery } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
@@ -391,11 +391,20 @@ function HomeDesign() {
     }
   })
   const solvingRunId = createMemo(() => solvingRun()?.runId)
-  const [runSeriesRaw, { refetch: refetchRunSeries }] = createResource(
-    () => solvingRunId(),
-    (runId) =>
-      amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`).catch(() => undefined),
-  )
+  // Store-based fetch with reconcile for granular updates — prevents flicker
+  // when polling every 2.5s (createResource replaces the whole object)
+  const [runSeriesStore, setRunSeriesStore] = createStore<{ raw: unknown | undefined }>({ raw: undefined })
+  const refetchRunSeries = async () => {
+    const runId = solvingRunId()
+    if (!runId) return
+    try {
+      const data = await amicodeGet(focusedServer(), `/amicode/run-series?run=${encodeURIComponent(runId)}`)
+      setRunSeriesStore(reconcile({ raw: data }))
+    } catch {
+      // keep existing data on error
+    }
+  }
+  const runSeriesRaw = () => runSeriesStore.raw
   const liveRun = createMemo<HomeLiveRun | undefined>(() => {
     const solving = solvingRun()
     if (!solving) return undefined
