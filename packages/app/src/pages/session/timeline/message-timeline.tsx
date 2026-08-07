@@ -145,29 +145,99 @@ const markBoundaryGesture = (input: {
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
   const language = useLanguage()
+  const [isExpanded, setIsExpanded] = createSignal(true)
+  const [elapsedMs, setElapsedMs] = createSignal(0)
+
+  onMount(() => {
+    const start = Date.now()
+    const timer = setInterval(() => setElapsedMs(Date.now() - start), 1000)
+    onCleanup(() => clearInterval(timer))
+  })
+
+  const formatElapsed = (ms: number) => {
+    const seconds = Math.floor(ms / 1000)
+    if (seconds < 60) return `${seconds}s`
+    const minutes = Math.floor(seconds / 60)
+    return `${minutes}m ${seconds % 60}s`
+  }
+
+  const toggleExpanded = () => setIsExpanded(!isExpanded())
 
   return (
-    <div data-slot="session-turn-thinking">
-      {/* amicode: the harmonic working indicator — a two-row block (H-mark +
-          AmicoWave glyph + cycling gerund; live elapsed/tokens meta below),
-          replacing the stock TextShimmer here. The block OWNS its mark now
-          (thinking-line.tsx) and is unsqueezable (flex-shrink: 0 in
-          session-turn.css): the sibling heading truncates via TextReveal's
-          `truncate` instead — a squeeze once shattered the meta line
-          mid-phrase across three lines.
-          This row IS the new-architecture mount; the old AssistantParts lane is
-          dead code on this timeline (recovered in the 2026-08-01 branch merges,
-          mount moved 2026-08-01). */}
-      <ThinkingLine tokens={props.tokens} />
-      <Show when={!props.showReasoningSummaries}>
-        <TextReveal
-          text={props.reasoningHeading}
-          class="session-turn-thinking-heading"
-          travel={25}
-          duration={700}
-          truncate
-        />
-      </Show>
+    <div data-slot="session-turn-thinking" data-tethered="true">
+      {/* Visual tether line extending upward */}
+      <div
+        data-slot="session-turn-thinking-tether"
+        style={{
+          position: "absolute",
+          top: "-16px",
+          left: "24px",
+          width: "2px",
+          height: "16px",
+          background: "var(--v2-border-border-base)",
+        }}
+      />
+      
+      {/* Clickable header row */}
+      <div
+        data-slot="session-turn-thinking-header"
+        data-expanded={isExpanded()}
+        onClick={toggleExpanded}
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "8px",
+          cursor: "pointer",
+          "user-select": "none",
+          padding: "4px 0",
+          position: "relative",
+        }}
+      >
+        {/* Chevron */}
+        <span 
+          data-slot="session-turn-thinking-chevron"
+          style={{
+            display: "inline-block",
+            transition: "transform 0.2s",
+            transform: isExpanded() ? "rotate(180deg)" : "rotate(0deg)",
+            "font-size": "10px",
+            color: "var(--v2-text-text-muted)",
+            width: "16px",
+            "text-align": "center",
+          }}
+        >
+          ▼
+        </span>
+
+        {/* Original ThinkingLine */}
+        <ThinkingLine tokens={props.tokens} />
+
+        {/* Duration */}
+        <span style={{ "font-size": "11px", color: "var(--v2-text-text-muted)", "margin-left": "auto" }}>
+          {formatElapsed(elapsedMs())}
+        </span>
+      </div>
+
+      {/* Tethered content */}
+      {isExpanded() && !props.showReasoningSummaries && (
+        <div
+          data-slot="session-turn-thinking-content"
+          style={{
+            "margin-top": "8px",
+            "margin-left": "24px",
+            "padding-left": "12px",
+            "border-left": "2px solid var(--v2-border-border-base)",
+          }}
+        >
+          <TextReveal
+            text={props.reasoningHeading}
+            class="session-turn-thinking-heading"
+            travel={25}
+            duration={700}
+            truncate
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -1327,7 +1397,11 @@ export function MessageTimeline(props: {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
         return (
           <TimelineRowFrame row={thinkingRow}>
-            <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
+            <div 
+              data-slot="session-turn-message-container" 
+              class="w-full px-4 md:px-5"
+              style={{ position: "relative" }}
+            >
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}

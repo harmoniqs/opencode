@@ -19,6 +19,22 @@ export function ConnectionBanner() {
 
   createEffect(() => {
     const status = sdk().event.status()
+    // Always clear wasDown when we're connected, even on first connect
+    if (status === "connected") {
+      if (wasDown()) {
+        setWasDown(false)
+        setFlash(true)
+        if (flashTimer !== undefined) clearTimeout(flashTimer)
+        flashTimer = setTimeout(() => {
+          setFlash(false)
+          flashTimer = undefined
+        }, 3000)
+      }
+      if (!connectedOnce()) {
+        setConnectedOnce(true)
+      }
+      return
+    }
     if (status === "disconnected") {
       // Only report drops after a first successful connect — boot renders
       // "disconnected" transiently while the stream is still being set up.
@@ -28,20 +44,6 @@ export function ConnectionBanner() {
         flashTimer = undefined
       }
       setFlash(false)
-      return
-    }
-    if (!connectedOnce()) {
-      setConnectedOnce(true)
-      return
-    }
-    if (wasDown()) {
-      setWasDown(false)
-      setFlash(true)
-      if (flashTimer !== undefined) clearTimeout(flashTimer)
-      flashTimer = setTimeout(() => {
-        setFlash(false)
-        flashTimer = undefined
-      }, 3000)
     }
   })
 
