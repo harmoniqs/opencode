@@ -165,19 +165,6 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
 
   return (
     <div data-slot="session-turn-thinking" data-tethered="true">
-      {/* Visual tether line extending upward */}
-      <div
-        data-slot="session-turn-thinking-tether"
-        style={{
-          position: "absolute",
-          top: "-16px",
-          left: "24px",
-          width: "2px",
-          height: "16px",
-          background: "var(--v2-border-border-base)",
-        }}
-      />
-      
       {/* Clickable header row */}
       <div
         data-slot="session-turn-thinking-header"
@@ -218,7 +205,7 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
         </span>
       </div>
 
-      {/* Tethered content */}
+      {/* Expanded content */}
       {isExpanded() && !props.showReasoningSummaries && (
         <div
           data-slot="session-turn-thinking-content"
@@ -226,7 +213,6 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
             "margin-top": "8px",
             "margin-left": "24px",
             "padding-left": "12px",
-            "border-left": "2px solid var(--v2-border-border-base)",
           }}
         >
           <TextReveal
@@ -340,43 +326,33 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
 
 /** StickyLastMessage - shows the most recent message fixed at the bottom of the chat
  *  This ensures the latest message is always visible even when scrolling through history.
- *  Styled after Claude Code's interface.
+ *  Styled after Claude Code's interface. Optimized for performance.
  */
 function StickyLastMessage() {
-  const language = useLanguage()
   const sync = useSync()
   const params = useParams<{ id?: string }>()
-  const [showSticky, setShowSticky] = createSignal(false)
   
-  const sessionID = createMemo(() => params.id)
-  const sessionMessages = createMemo(() => 
-    sessionID() ? (sync().data.message[sessionID()!] ?? []) : []
-  )
-  
-  const lastMessage = createMemo(() => {
-    const msgs = sessionMessages()
+  // Use a simpler approach - just get the last message without reactivity overhead
+  const lastMessage = () => {
+    const sessionID = params.id
+    if (!sessionID) return null
+    const msgs = sync().data.message[sessionID] ?? []
     if (msgs.length === 0) return null
     return msgs[msgs.length - 1]
-  })
+  }
   
-  // Check if user has scrolled up (not at bottom)
-  createEffect(() => {
-    // This is a simplified check - in reality we'd need access to scroll position
-    // For now, only show sticky message when there are messages and streaming is active
+  // Only show for streaming assistant messages
+  const shouldShow = () => {
     const msg = lastMessage()
-    if (!msg) {
-      setShowSticky(false)
-      return
-    }
-    // Show sticky message when the last message is an assistant message that's still streaming
-    const isAssistant = msg.role === "assistant"
-    const isComplete = (msg as any).metadata?.time?.completed ?? false
-    const isStreaming = isAssistant && !isComplete
-    setShowSticky(isStreaming)
-  })
+    if (!msg) return false
+    if (msg.role !== "assistant") return false
+    // Check if message is still streaming (no completed timestamp)
+    const isComplete = (msg as any).metadata?.time?.completed
+    return !isComplete
+  }
   
   return (
-    <Show when={showSticky() && lastMessage()}>
+    <Show when={shouldShow()}>
       {(message) => (
         <div
           data-component="sticky-last-message"
@@ -387,15 +363,11 @@ function StickyLastMessage() {
             "background-color": "var(--v2-background-bg-base, #1e1e1e)",
             "border-top": "1px solid var(--v2-border-border-muted, #3c3c3c)",
             padding: "12px 16px",
-            "max-height": "200px",
+            "max-height": "150px",
             overflow: "auto",
           }}
         >
-          <div style={{ "font-size": "13px", "color": "var(--v2-text-text-muted, #8a8a8a)", "margin-bottom": "4px" }}>
-            {language.t("session.lastMessage")}
-          </div>
           <div style={{ "font-size": "14px", "color": "var(--v2-text-text-base, #e0e0e0)" }}>
-            {/* Render message content preview */}
             <MessageContentPreview message={message()} />
           </div>
         </div>
@@ -404,20 +376,18 @@ function StickyLastMessage() {
   )
 }
 
-/** Preview component for message content in sticky footer */
+/** Preview component for message content in sticky footer - optimized */
 function MessageContentPreview(props: { message: any }) {
-  const parts = () => props.message.parts ?? []
-  const text = createMemo(() => {
-    return parts()
+  const text = () => {
+    const parts = props.message.parts ?? []
+    return parts
       .filter((p: any) => p.type === "text")
       .map((p: any) => p.text)
       .join("")
-      .slice(0, 200) // Limit to 200 chars for preview
-  })
+      .slice(0, 150)
+  }
   
-  return (
-    <span>{text() || "..."}</span>
-  )
+  return <span>{text() || "..."}</span>
 }
 
 export function MessageTimeline(props: {
