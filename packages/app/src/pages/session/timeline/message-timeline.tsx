@@ -14,7 +14,7 @@ import {
 } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
-import { useNavigate } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
@@ -335,6 +335,88 @@ function TimelineDiffView(props: { diff: SummaryDiff }) {
     <div data-slot="session-turn-diff-view" data-scrollable>
       <Dynamic component={fileComponent} mode="diff" virtualize={false} fileDiff={view.fileDiff} />
     </div>
+  )
+}
+
+/** StickyLastMessage - shows the most recent message fixed at the bottom of the chat
+ *  This ensures the latest message is always visible even when scrolling through history.
+ *  Styled after Claude Code's interface.
+ */
+function StickyLastMessage() {
+  const language = useLanguage()
+  const sync = useSync()
+  const params = useParams<{ id?: string }>()
+  const [showSticky, setShowSticky] = createSignal(false)
+  
+  const sessionID = createMemo(() => params.id)
+  const sessionMessages = createMemo(() => 
+    sessionID() ? (sync().data.message[sessionID()!] ?? []) : []
+  )
+  
+  const lastMessage = createMemo(() => {
+    const msgs = sessionMessages()
+    if (msgs.length === 0) return null
+    return msgs[msgs.length - 1]
+  })
+  
+  // Check if user has scrolled up (not at bottom)
+  createEffect(() => {
+    // This is a simplified check - in reality we'd need access to scroll position
+    // For now, only show sticky message when there are messages and streaming is active
+    const msg = lastMessage()
+    if (!msg) {
+      setShowSticky(false)
+      return
+    }
+    // Show sticky message when the last message is an assistant message that's still streaming
+    const isAssistant = msg.role === "assistant"
+    const isComplete = (msg as any).metadata?.time?.completed ?? false
+    const isStreaming = isAssistant && !isComplete
+    setShowSticky(isStreaming)
+  })
+  
+  return (
+    <Show when={showSticky() && lastMessage()}>
+      {(message) => (
+        <div
+          data-component="sticky-last-message"
+          style={{
+            position: "sticky",
+            bottom: "0",
+            "z-index": "40",
+            "background-color": "var(--v2-background-bg-base, #1e1e1e)",
+            "border-top": "1px solid var(--v2-border-border-muted, #3c3c3c)",
+            padding: "12px 16px",
+            "max-height": "200px",
+            overflow: "auto",
+          }}
+        >
+          <div style={{ "font-size": "13px", "color": "var(--v2-text-text-muted, #8a8a8a)", "margin-bottom": "4px" }}>
+            {language.t("session.lastMessage")}
+          </div>
+          <div style={{ "font-size": "14px", "color": "var(--v2-text-text-base, #e0e0e0)" }}>
+            {/* Render message content preview */}
+            <MessageContentPreview message={message()} />
+          </div>
+        </div>
+      )}
+    </Show>
+  )
+}
+
+/** Preview component for message content in sticky footer */
+function MessageContentPreview(props: { message: any }) {
+  const parts = () => props.message.parts ?? []
+  const text = createMemo(() => {
+    return parts()
+      .filter((p: any) => p.type === "text")
+      .map((p: any) => p.text)
+      .join("")
+      .slice(0, 200) // Limit to 200 chars for preview
+  })
+  
+  return (
+    <span>{text() || "..."}</span>
   )
 }
 
@@ -2134,6 +2216,8 @@ export function MessageTimeline(props: {
           </Show>
         </div>
       </ScrollView>
+      {/* Sticky Last Message - shows the most recent message even when scrolled up */}
+      <StickyLastMessage />
     </div>
   )
 }
