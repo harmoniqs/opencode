@@ -4,7 +4,7 @@ import type { ServerConnection } from "@/context/server"
 import { displayName, getProjectAvatarSource } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
-import { SessionProgressIndicatorV2 } from "@opencode-ai/session-ui/v2/session-progress-indicator-v2"
+import { AmicoMark } from "@opencode-ai/ui/amico-spinner"
 import { Show } from "solid-js"
 
 export function SessionTabAvatar(props: {
@@ -48,9 +48,11 @@ export function SessionTabAvatarView(props: {
   return (
     <Show when={props.loading} fallback={projectAvatar()}>
       <span class="relative block size-4 shrink-0">
-        <SessionProgressIndicatorV2
-          class={`absolute inset-0 ${props.revealProjectOnHover === false ? "" : "group-hover:invisible"}`}
-        />
+        <span
+          class={`absolute inset-0 flex items-center justify-center tab-mark-running ${props.revealProjectOnHover === false ? "" : "group-hover:invisible"}`}
+        >
+          <AmicoMark running />
+        </span>
         <Show when={props.revealProjectOnHover !== false}>
           <span class="invisible absolute inset-0 group-hover:visible">{projectAvatar()}</span>
         </Show>
