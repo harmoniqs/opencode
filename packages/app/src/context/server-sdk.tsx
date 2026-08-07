@@ -159,7 +159,8 @@ function currentDeltaFragment(event: CurrentDelta) {
   return event.type === "session.compaction.delta" ? event.data.text : event.data.delta
 }
 
-export function resumeStreamAfterPageShow(_event: PageTransitionEvent, start: () => unknown) {
+export function resumeStreamAfterPageShow(event: PageTransitionEvent, start: () => unknown) {
+  if (!event.persisted) return
   start()
 }
 
