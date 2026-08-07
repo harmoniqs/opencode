@@ -373,10 +373,17 @@ function HomeDesign() {
     window.parent.postMessage({ source: "amicode", kind: "save-file", filename, dataUrl }, "*")
   }
 
-  const [runStatusRaw, { refetch: refetchRunStatus }] = createResource(
-    () => state.selection.server,
-    () => amicodeGet(focusedServer(), "/amicode/run-status").catch(() => undefined),
-  )
+  // Store-based fetch with reconcile for run-status polling
+  const [runStatusStore, setRunStatusStore] = createStore<{ raw: unknown | undefined }>({ raw: undefined })
+  const refetchRunStatus = async () => {
+    try {
+      const data = await amicodeGet(focusedServer(), "/amicode/run-status")
+      setRunStatusStore(reconcile({ raw: data }))
+    } catch {
+      // keep existing data on error
+    }
+  }
+  const runStatusRaw = () => runStatusStore.raw
   const solvingRun = createMemo(() => {
     const raw = runStatusRaw()
     if (typeof raw !== "object" || raw === null) return undefined
