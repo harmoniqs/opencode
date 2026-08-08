@@ -811,15 +811,15 @@ function SessionChatsDropdown() {
 
   return (
     <div ref={flyoutRoot} style={{ position: "relative" }}>
-      <IconButtonV2
+      <button
         type="button"
-        variant="ghost-muted"
-        size="large"
-        class="shrink-0"
-        icon={<IconV2 name="menu" />}
+        data-action="session-chats-toggle-flyout"
+        class="flex shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent p-1.5 cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
         aria-label="Sessions"
         onClick={() => setOpen(!open())}
-      />
+      >
+        <IconV2 name="menu" />
+      </button>
       <Show when={open()}>
         <div
           data-slot="amicode-sessions-flyout"
