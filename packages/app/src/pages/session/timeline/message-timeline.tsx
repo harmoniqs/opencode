@@ -58,6 +58,7 @@ import type {
   AssistantMessage,
   Message as MessageType,
   Part as PartType,
+  TextPart,
   ToolPart,
   UserMessage,
 } from "@opencode-ai/sdk/v2"
@@ -617,6 +618,74 @@ export function MessageTimeline(props: {
     () => new Map(virtualizer.getVirtualItems().map((item) => [item.key, item] as const)),
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key as string))
+  // amicode#271: a signal tracking the scroll container's scrollTop, updated on
+  // every scroll event. Drives the last-prompt bubble reactivity.
+  const [scrollTop, setScrollTop] = createSignal(0)
+  createEffect(() => {
+    const root = listRoot()
+    if (root) setScrollTop(root.scrollTop)
+  })
+  // The bubble state: which user message text to show and link to.
+  // Computed from scroll position, but explicitly overridden on click.
+  const [bubbleOverride, setBubbleOverride] = createSignal<{ text: string; messageId: string } | undefined>(undefined)
+  const computeBubble = (): { text: string; messageId: string } | undefined => {
+    const range = virtualizer.range
+    if (!range) return undefined
+    const startIndex = range.startIndex
+    const messages = props.userMessages
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      const rowIndex = messageRowIndex().get(msg.id)
+      if (rowIndex === undefined) continue
+      if (rowIndex < startIndex) {
+        const parts = getMsgParts(msg.id)
+        const textPart = parts.find((p): p is TextPart => p.type === "text" && !(p as TextPart).synthetic)
+        const text = textPart?.text?.trim()
+        if (text) return { text, messageId: msg.id }
+        continue
+      }
+    }
+    return undefined
+  }
+  // Recompute on scroll; clears any override so the bubble tracks scroll position
+  const visiblePromptBubble = createMemo<{ text: string; messageId: string } | undefined>(() => {
+    scrollTop()
+    return computeBubble()
+  })
+  // What the bubble actually shows: override (from click) takes priority
+  const activeBubble = () => bubbleOverride() ?? visiblePromptBubble()
+
+  // Find the previous user message with text before a given message ID
+  const findPreviousBubble = (currentMessageId: string): { text: string; messageId: string } | undefined => {
+    const messages = props.userMessages
+    const currentIdx = messages.findIndex((m) => m.id === currentMessageId)
+    if (currentIdx <= 0) return undefined
+    for (let i = currentIdx - 1; i >= 0; i--) {
+      const msg = messages[i]
+      const parts = getMsgParts(msg.id)
+      const textPart = parts.find((p): p is TextPart => p.type === "text" && !(p as TextPart).synthetic)
+      const text = textPart?.text?.trim()
+      if (text) return { text, messageId: msg.id }
+    }
+    return undefined
+  }
+
+  // Flag to suppress override clearing during programmatic scrolls from bubble click
+  let bubbleScrolling = false
+
+  const scrollToBubbleMessage = () => {
+    const bubble = activeBubble()
+    if (!bubble) return
+    const rowIndex = messageRowIndex().get(bubble.messageId)
+    if (rowIndex !== undefined) {
+      const prev = findPreviousBubble(bubble.messageId)
+      setBubbleOverride(prev)
+      bubbleScrolling = true
+      virtualizer.scrollToIndex(rowIndex, { align: "center" })
+      // Allow the programmatic scroll to settle before re-enabling override clearing
+      setTimeout(() => { bubbleScrolling = false }, 300)
+    }
+  }
   createEffect(() => {
     props.setRevealMessage?.((id) => {
       const index = messageRowIndex().get(id)
@@ -753,7 +822,12 @@ export function MessageTimeline(props: {
     if (prependLoading) updatePrependAnchor()
     props.onScheduleScrollState(event.currentTarget)
     props.onHistoryScroll()
+    // amicode#271: update scroll offset for the last-prompt bubble
+    setScrollTop(event.currentTarget.scrollTop)
     if (!props.hasScrollGesture()) return
+    // User-initiated scroll — clear any click override so bubble tracks position
+    // (but not if we're mid-programmatic scroll from a bubble click)
+    if (!bubbleScrolling) setBubbleOverride(undefined)
     props.onUserScroll()
     props.onAutoScrollHandleScroll()
     props.onMarkScrollGesture(event.currentTarget)
@@ -2033,7 +2107,61 @@ export function MessageTimeline(props: {
             {/* amicode: the context tree, folded into the header (ADR 0003) —
                 closes the sticky block beneath the title row + chip rail */}
             <ContextTreePanel sessionID={sessionID()} />
+            {/* amicode#271: bubble inside the header — naturally below the context
+                tree in the flow. No offset math needed. */}
+            <Show when={activeBubble()}>
+              {(bubble) => (
+                <div
+                  data-slot="last-prompt-bubble"
+                  class="w-full px-4 md:px-5 pt-2"
+                  classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}
+                >
+                  <button
+                    type="button"
+                    class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
+                    style={{
+                      background: "color-mix(in srgb, var(--v2-background-bg-layer-02) 90%, transparent)",
+                      color: "var(--v2-text-text-muted)",
+                      "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
+                    }}
+                    onClick={scrollToBubbleMessage}
+                    title={bubble().text}
+                  >
+                    <span class="opacity-60 text-[11px] font-medium uppercase tracking-wider mr-2">You</span>
+                    {bubble().text}
+                  </button>
+                </div>
+              )}
+            </Show>
           </div>
+        </Show>
+        {/* amicode#271: no-header fallback (new untitled sessions only) */}
+        <Show when={!showHeader() && activeBubble()}>
+          {(_) => {
+            const bubble = () => activeBubble()!
+            return (
+              <div
+                data-slot="last-prompt-bubble"
+                class="sticky top-0 z-30 w-full px-4 md:px-5 py-2"
+                classList={{ "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered }}
+              >
+                <button
+                  type="button"
+                  class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
+                  style={{
+                    background: "color-mix(in srgb, var(--v2-background-bg-layer-02) 90%, transparent)",
+                    color: "var(--v2-text-text-muted)",
+                    "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
+                  }}
+                  onClick={scrollToBubbleMessage}
+                  title={bubble().text}
+                >
+                  <span class="opacity-60 text-[11px] font-medium uppercase tracking-wider mr-2">You</span>
+                  {bubble().text}
+                </button>
+              </div>
+            )
+          }}
         </Show>
         <div
           data-timeline-virtual-content
