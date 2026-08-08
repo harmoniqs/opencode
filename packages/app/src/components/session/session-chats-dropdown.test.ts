@@ -2,68 +2,109 @@ import { describe, expect, test } from "bun:test"
 
 /**
  * Tests for the Session Chats Dropdown logic (amicode#274).
- * Validates the session info derivation and tab-status indicators.
+ * Validates session sorting, search filtering, and tab-status derivation —
+ * the same behavior as the dashboard sessions flyout (amicode#273).
  */
 
-type SessionTab = { type: "session"; server: string; sessionId: string }
-type DraftTab = { type: "draft"; draftID: string; server: string; directory: string }
-type Tab = SessionTab | DraftTab
-
-function deriveSessionInfos(
-  tabs: Tab[],
-  getTitle: (id: string) => string | undefined,
-  currentSessionID: string | undefined,
-) {
-  return tabs
-    .filter((tab): tab is SessionTab => tab.type === "session")
-    .map((tab) => ({
-      id: tab.sessionId,
-      title: getTitle(tab.sessionId) || tab.sessionId,
-      isCurrent: tab.sessionId === currentSessionID,
-      server: tab.server,
-    }))
+type Session = {
+  id: string
+  title?: string
+  directory: string
+  parentID?: string
+  time: { created: number; updated?: number; archived?: number | null }
 }
 
+// --- Helpers under test (pure logic extracted from the component) ---
+
+/** Sort sessions: open-tab sessions first, preserving relative order within each group. */
+function sortSessionsByOpenTab(
+  sessions: Session[],
+  hasOpenTab: (session: Session) => boolean,
+): Session[] {
+  const open: Session[] = []
+  const rest: Session[] = []
+  for (const session of sessions) {
+    if (hasOpenTab(session)) {
+      open.push(session)
+    } else {
+      rest.push(session)
+    }
+  }
+  return [...open, ...rest]
+}
+
+/** Filter sessions by search query (matches title or id). */
+function filterSessionsByQuery(
+  sessions: Session[],
+  query: string,
+  getTitle: (session: Session) => string,
+): Session[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return sessions
+  return sessions.filter((session) => getTitle(session).toLowerCase().includes(q))
+}
+
+// --- Tests ---
+
 describe("Session Chats Dropdown", () => {
-  test("derives session infos from open tabs", () => {
-    const tabs: Tab[] = [
-      { type: "session", server: "local", sessionId: "ses_1" },
-      { type: "session", server: "local", sessionId: "ses_2" },
-      { type: "draft", draftID: "d1", server: "local", directory: "/proj" },
-    ]
-    const titles: Record<string, string> = { ses_1: "X gate optimization", ses_2: "CZ gate" }
+  const sessions: Session[] = [
+    { id: "ses_1", title: "X gate optimization", directory: "/proj", time: { created: 100 } },
+    { id: "ses_2", title: "CZ gate", directory: "/proj", time: { created: 200 } },
+    { id: "ses_3", title: "Cat state prep", directory: "/proj", time: { created: 300 } },
+  ]
 
-    const infos = deriveSessionInfos(tabs, (id) => titles[id], "ses_1")
+  describe("sortSessionsByOpenTab", () => {
+    test("moves sessions with open tabs to the front", () => {
+      const openIds = new Set(["ses_2"])
+      const sorted = sortSessionsByOpenTab(sessions, (s) => openIds.has(s.id))
 
-    expect(infos).toHaveLength(2)
-    expect(infos[0]).toEqual({ id: "ses_1", title: "X gate optimization", isCurrent: true, server: "local" })
-    expect(infos[1]).toEqual({ id: "ses_2", title: "CZ gate", isCurrent: false, server: "local" })
+      expect(sorted[0].id).toBe("ses_2")
+      expect(sorted.slice(1).map((s) => s.id)).toEqual(["ses_1", "ses_3"])
+    })
+
+    test("preserves order when no sessions have open tabs", () => {
+      const sorted = sortSessionsByOpenTab(sessions, () => false)
+      expect(sorted.map((s) => s.id)).toEqual(["ses_1", "ses_2", "ses_3"])
+    })
+
+    test("preserves order when all sessions have open tabs", () => {
+      const sorted = sortSessionsByOpenTab(sessions, () => true)
+      expect(sorted.map((s) => s.id)).toEqual(["ses_1", "ses_2", "ses_3"])
+    })
   })
 
-  test("falls back to session ID when title is undefined", () => {
-    const tabs: Tab[] = [{ type: "session", server: "local", sessionId: "ses_3" }]
-    const infos = deriveSessionInfos(tabs, () => undefined, undefined)
+  describe("filterSessionsByQuery", () => {
+    const getTitle = (s: Session) => s.title || s.id
 
-    expect(infos[0].title).toBe("ses_3")
-  })
+    test("returns all sessions when query is empty", () => {
+      const result = filterSessionsByQuery(sessions, "", getTitle)
+      expect(result).toHaveLength(3)
+    })
 
-  test("marks no session as current when currentSessionID is undefined", () => {
-    const tabs: Tab[] = [
-      { type: "session", server: "local", sessionId: "ses_1" },
-      { type: "session", server: "local", sessionId: "ses_2" },
-    ]
-    const infos = deriveSessionInfos(tabs, () => "Title", undefined)
+    test("filters by title substring (case-insensitive)", () => {
+      const result = filterSessionsByQuery(sessions, "gate", getTitle)
+      expect(result.map((s) => s.id)).toEqual(["ses_1", "ses_2"])
+    })
 
-    expect(infos.every((i) => !i.isCurrent)).toBe(true)
-  })
+    test("filters by session id when title is missing", () => {
+      const noTitleSessions: Session[] = [
+        { id: "ses_abc", directory: "/proj", time: { created: 100 } },
+        { id: "ses_xyz", directory: "/proj", time: { created: 200 } },
+      ]
+      const result = filterSessionsByQuery(noTitleSessions, "abc", getTitle)
+      expect(result).toHaveLength(1)
+      expect(result[0].id).toBe("ses_abc")
+    })
 
-  test("excludes draft tabs", () => {
-    const tabs: Tab[] = [
-      { type: "draft", draftID: "d1", server: "local", directory: "/proj" },
-      { type: "draft", draftID: "d2", server: "local", directory: "/proj2" },
-    ]
-    const infos = deriveSessionInfos(tabs, () => "Title", undefined)
+    test("returns empty when nothing matches", () => {
+      const result = filterSessionsByQuery(sessions, "nonexistent", getTitle)
+      expect(result).toHaveLength(0)
+    })
 
-    expect(infos).toHaveLength(0)
+    test("trims whitespace from query", () => {
+      const result = filterSessionsByQuery(sessions, "  cat  ", getTitle)
+      expect(result).toHaveLength(1)
+      expect(result[0].id).toBe("ses_3")
+    })
   })
 })
