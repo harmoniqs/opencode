@@ -594,7 +594,7 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
           class="!w-9 shrink-0"
           onClick={() => command.trigger("session.compact", "palette")}
           aria-label={language.t("command.session.compact")}
-          icon={<IconV2 name="arrow-down-to-line" />}
+          icon={<IconV2 name="collapse" />}
         />
       </TooltipV2>
       {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
@@ -816,7 +816,7 @@ function SessionChatsDropdown() {
         variant="ghost-muted"
         size="large"
         class="shrink-0"
-        icon={<IconV2 name="message-square" />}
+        icon={<IconV2 name="menu" />}
         aria-label="Sessions"
         onClick={() => setOpen(!open())}
       />
@@ -860,7 +860,7 @@ function SessionChatsDropdown() {
                 <IconButtonV2
                   variant="ghost-muted"
                   size="small"
-                  icon={<IconV2 name="x-mark" />}
+                  icon={<IconV2 name="xmark-small" />}
                   aria-label="Clear"
                   onClick={() => setSearch("")}
                 />
