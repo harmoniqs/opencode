@@ -24,8 +24,18 @@ const [webZoom, setSignal] = createSignal(readSaved())
 
 function apply(zoom: number) {
   if (typeof document === "undefined") return
-  if (zoom === 1) document.documentElement.style.removeProperty("zoom")
-  else document.documentElement.style.setProperty("zoom", String(zoom))
+  const html = document.documentElement
+  if (zoom === 1) {
+    html.style.removeProperty("zoom")
+    html.style.removeProperty("transform")
+    html.style.removeProperty("transform-origin")
+  } else {
+    // Try CSS zoom first (better text rendering), fallback to transform
+    html.style.setProperty("zoom", String(zoom))
+    // Also set transform as backup for browsers that don't support zoom
+    html.style.setProperty("transform", `scale(${zoom})`)
+    html.style.setProperty("transform-origin", "top left")
+  }
 }
 
 // Apply zoom immediately and also after a small delay to ensure DOM is ready
