@@ -661,11 +661,19 @@ function SessionChatsDropdown() {
 
   const currentSessionID = createMemo(() => params.id)
 
-  // Active sessions — load from server sync (same as home page)
-  const directory = createMemo(() => serverSync().data.path.directory || "")
+  // Active sessions — only computed when the flyout is open to avoid
+  // triggering reactive subscriptions (serverSync().child pins the directory
+  // and can cascade re-renders to the parent Portal).
+  const directory = createMemo(() => {
+    if (!open()) return ""
+    return serverSync().data.path.directory || ""
+  })
   const activeSessions = createMemo(() => {
+    if (!open()) return []
     try {
-      const [store] = serverSync().child(directory(), { bootstrap: false })
+      const dir = directory()
+      if (!dir) return []
+      const [store] = serverSync().child(dir, { bootstrap: false })
       return sortedRootSessions(store, Date.now())
     } catch {
       return []
@@ -674,6 +682,7 @@ function SessionChatsDropdown() {
 
   // Sort: open-tab sessions first
   const sortedActiveSessions = createMemo(() => {
+    if (!open()) return []
     const all = activeSessions()
     const openTabs: Session[] = []
     const rest: Session[] = []
@@ -690,6 +699,7 @@ function SessionChatsDropdown() {
   // Search filtering
   const searchQuery = createMemo(() => search().trim().toLowerCase())
   const filteredActiveSessions = createMemo(() => {
+    if (!open()) return []
     const q = searchQuery()
     if (!q) return sortedActiveSessions()
     return sortedActiveSessions().filter((session) => {
