@@ -17,9 +17,10 @@ import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
-import { useServer } from "@/context/server"
+import { useServer, ServerConnection } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
+import { useTabs } from "@/context/tabs"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
@@ -27,6 +28,7 @@ import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
+import { sessionTitle } from "@/utils/session-title"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 import { statusTriggerVisibility } from "../status-popover-model"
 
@@ -589,6 +591,8 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
           icon={<IconV2 name="minimize" />}
         />
       </TooltipV2>
+      {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
+      <SessionChatsDropdown />
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
@@ -622,5 +626,145 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
         </TooltipV2>
       </Show>
     </div>
+  )
+}
+
+// amicode#274: Session Chats Dropdown — provides new-chat, session switching,
+// and tab-status indicators from within the session view.
+function SessionChatsDropdown() {
+  const tabs = useTabs()
+  const server = useServer()
+  const sync = useSync()
+  const language = useLanguage()
+  const { params } = useSessionLayout()
+  const [open, setOpen] = createSignal(false)
+
+  const currentSessionID = createMemo(() => params.id)
+
+  // Active sessions from open tabs
+  const sessionTabs = createMemo(() =>
+    tabs.store.filter((tab): tab is import("@/context/tabs").SessionTab => tab.type === "session"),
+  )
+
+  // Get session info for each open tab
+  const sessionInfos = createMemo(() =>
+    sessionTabs().map((tab) => {
+      const info = sync().session.get(tab.sessionId)
+      return {
+        id: tab.sessionId,
+        title: sessionTitle(info?.title) || tab.sessionId,
+        isCurrent: tab.sessionId === currentSessionID(),
+        server: tab.server,
+      }
+    }),
+  )
+
+  function handleNewChat() {
+    const sdk = sync()
+    const dir = sdk.data.path.directory || ""
+    void tabs.newDraft({ server: server.key, directory: dir })
+    setOpen(false)
+  }
+
+  function handleSelectSession(sessionId: string) {
+    if (sessionId === currentSessionID()) {
+      setOpen(false)
+      return
+    }
+    const tab = sessionTabs().find((t) => t.sessionId === sessionId)
+    if (tab) {
+      tabs.select(tab)
+    }
+    setOpen(false)
+  }
+
+  return (
+    <DropdownMenu
+      gutter={8}
+      placement="bottom-end"
+      open={open()}
+      onOpenChange={setOpen}
+    >
+      <DropdownMenu.Trigger
+        as={IconButtonV2}
+        variant="ghost-muted"
+        size="large"
+        class="shrink-0"
+        icon={<IconV2 name="message-square" />}
+        aria-label="Chats"
+      />
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          style={{
+            width: "280px",
+            "max-height": "420px",
+            "overflow-y": "auto",
+            padding: "8px",
+          }}
+        >
+          {/* New Chat button */}
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded-[6px] border-none bg-transparent px-2.5 py-2 text-left text-[13px] font-medium cursor-pointer hover:bg-v2-overlay-simple-overlay-hover"
+            style={{ color: "var(--v2-accent-accent-text)" }}
+            onClick={handleNewChat}
+          >
+            <IconV2 name="edit" />
+            <span>{language.t("command.session.new")}</span>
+          </button>
+
+          {/* Separator */}
+          <div
+            class="my-1.5 h-px w-full"
+            style={{ background: "var(--v2-border-border-base)" }}
+          />
+
+          {/* Active sessions list */}
+          <div class="flex flex-col gap-px">
+            <Show
+              when={sessionInfos().length > 0}
+              fallback={
+                <div class="px-2.5 py-2 text-[12px] text-v2-text-text-faint">
+                  No open sessions
+                </div>
+              }
+            >
+              <For each={sessionInfos()}>
+                {(info) => (
+                  <button
+                    type="button"
+                    class="flex w-full min-w-0 items-center gap-2 rounded-[6px] border-none px-2.5 py-1.5 text-left text-[13px] cursor-pointer transition-[background-color] duration-100"
+                    classList={{
+                      "bg-v2-background-bg-layer-02": info.isCurrent,
+                      "bg-transparent hover:bg-v2-overlay-simple-overlay-hover": !info.isCurrent,
+                    }}
+                    onClick={() => handleSelectSession(info.id)}
+                  >
+                    {/* Tab-status dot */}
+                    <span
+                      class="shrink-0 h-1.5 w-1.5 rounded-full"
+                      classList={{
+                        "bg-v2-accent-accent-text": true,
+                        "opacity-100": true,
+                        "opacity-0": false,
+                      }}
+                    />
+                    <span
+                      class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+                      classList={{
+                        "text-v2-text-text-base font-medium": info.isCurrent,
+                        "text-v2-text-text-muted": !info.isCurrent,
+                      }}
+                    >
+                      {info.title}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </Show>
+          </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
   )
 }
