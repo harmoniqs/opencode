@@ -43,6 +43,8 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
+import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { Dialog } from "@opencode-ai/ui/dialog"
@@ -71,6 +73,7 @@ import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
+import { useCommand } from "@/context/command"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { useServerSDK } from "@/context/server-sdk"
 import { usePlatform } from "@/context/platform"
@@ -280,6 +283,7 @@ export function MessageTimeline(props: {
   const tabs = useTabs()
   const dialog = useDialog()
   const language = useLanguage()
+  const command = useCommand()
   const { params, sessionKey } = useSessionKey()
 
   // ── amicode: problem-UI wiring (ported from the pre-merge message-timeline;
@@ -1691,6 +1695,21 @@ export function MessageTimeline(props: {
                       placement="bottom"
                       buttonAppearance={settings.general.newLayoutDesigns() ? "v2" : "default"}
                     />
+                    <TooltipV2
+                      class="shrink-0"
+                      placement="bottom"
+                      value={<>{language.t("command.session.compact")}<KeybindV2 keys={["mod", "shift", "c"]} variant="neutral" /></>}
+                    >
+                      <IconButtonV2
+                        type="button"
+                        variant="ghost-muted"
+                        size="large"
+                        class="!w-9 shrink-0"
+                        onClick={() => command.trigger("session.compact", "palette")}
+                        aria-label={language.t("command.session.compact")}
+                        icon={<IconV2 name="collapse" />}
+                      />
+                    </TooltipV2>
                     <Show when={!parentID()}>
                       <Show
                         when={settings.general.newLayoutDesigns()}
