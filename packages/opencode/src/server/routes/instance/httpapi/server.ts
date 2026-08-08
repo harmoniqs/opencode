@@ -72,6 +72,7 @@ import { serveUIEffect } from "@/server/shared/ui"
 import * as AmicodeVaults from "@/server/amicode/vaults"
 import * as AmicodeWarrants from "@/server/amicode/warrants"
 import * as AmicodeVaultBrowser from "@/server/amicode/vault-browser"
+import * as AmicodeFileResolve from "@/server/amicode/file-resolve"
 import * as AmicodeProblems from "@/server/amicode/problems"
 import * as AmicodeWidgets from "@/server/amicode/widgets"
 import * as AmicodeDashboard from "@/server/amicode/dashboard"
@@ -259,6 +260,17 @@ const amicodeVaultsRoute = HttpRouter.use((router) =>
         return HttpServerResponse.text(AmicodeVaultBrowser.vaultFileBody(mount, file), {
           contentType: "application/json",
         })
+      }),
+    )
+    // Chat file-reference linkifier: resolve a path-like string from chat
+    // markdown (inline-code pill, relative authored link) to an absolute
+    // on-disk path so the app can render it as a file:// link — the VS Code
+    // bridge opens the file from there. Same loopback gate as the vault
+    // browser; RESOLVES only, never reads.
+    yield* router.add("GET", "/amicode/resolve-file", (request) =>
+      Effect.sync(() => {
+        const p = new URL(request.url, "http://localhost").searchParams.get("path") ?? undefined
+        return HttpServerResponse.text(AmicodeFileResolve.resolveFileBody(p), { contentType: "application/json" })
       }),
     )
     // amicode#203: New-project creation — mkdir + best-effort git init. JSON

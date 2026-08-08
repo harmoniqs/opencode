@@ -494,28 +494,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                           "opacity-0 duration-120 ease-in delay-0 pointer-events-none": layout.sidebar.opened(),
                         }}
                       >
-                        <TooltipKeybind
-                          placement="bottom"
-                          title={language.t("command.session.new")}
-                          keybind={command.keybind("session.new")}
-                          openDelay={800}
-                        >
-                          <Button
-                            variant="ghost"
-                            class="titlebar-icon w-8 h-6 p-0 box-border"
-                            disabled={layout.sidebar.opened()}
-                            tabIndex={layout.sidebar.opened() ? -1 : undefined}
-                            onClick={() => {
-                              if (!params.dir) return
-                              navigate(`/${params.dir}/session`)
-                            }}
-                            aria-label={language.t("command.session.new")}
-                            aria-current={creating() ? "page" : undefined}
-                          >
-                            <IconV2 name="edit" size="small" />
-                          </Button>
-                        </TooltipKeybind>
-                      </div>
+                       </div>
                     </div>
                   </Show>
                   <div

@@ -44,6 +44,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { type UiI18n, useI18n } from "@opencode-ai/ui/context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
 import { AmicodeToolCard, AmicoSkillChip } from "@opencode-ai/ui/amicode-card"
+import { openFileInEditor } from "@opencode-ai/ui/amicode-bridge"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
@@ -2182,6 +2183,29 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   )
 }
 
+// AMICODE: the filename in an edit/write trigger opens the file in the editor
+// via the bridge (the chat iframe can't). stopPropagation so the tool body's
+// expand/collapse doesn't fire alongside.
+function OpenableFilename(props: { filename: string; path: string }) {
+  return (
+    <Show when={props.path} fallback={<span data-slot="message-part-title-filename">{props.filename}</span>}>
+      <button
+        type="button"
+        data-slot="message-part-title-filename"
+        data-clickable="true"
+        title={props.path}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          openFileInEditor(props.path)
+        }}
+      >
+        {props.filename}
+      </button>
+    </Show>
+  )
+}
+
 ToolRegistry.register({
   name: "read",
   render(props) {
@@ -2209,12 +2233,22 @@ ToolRegistry.register({
         />
         <For each={loaded()}>
           {(filepath) => (
-            <div data-component="tool-loaded-file">
+            <button
+              type="button"
+              data-component="tool-loaded-file"
+              data-clickable="true"
+              title={filepath}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                openFileInEditor(filepath)
+              }}
+            >
               <Icon name="enter" size="small" />
               <span>
                 {i18n.t("ui.tool.loaded")} {relativizeProjectPath(filepath, data.directory)}
               </span>
-            </div>
+            </button>
           )}
         </For>
       </>
@@ -2624,7 +2658,7 @@ ToolRegistry.register({
                     <TextShimmer text={i18n.t("ui.messagePart.title.edit")} active={pending()} />
                   </span>
                   <Show when={!pending()}>
-                    <span data-slot="message-part-title-filename">{filename()}</span>
+                    <OpenableFilename filename={filename()} path={path()} />
                   </Show>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>
@@ -2691,7 +2725,7 @@ ToolRegistry.register({
                     <TextShimmer text={i18n.t("ui.messagePart.title.write")} active={pending()} />
                   </span>
                   <Show when={!pending()}>
-                    <span data-slot="message-part-title-filename">{filename()}</span>
+                    <OpenableFilename filename={filename()} path={path()} />
                   </Show>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>
@@ -3038,11 +3072,17 @@ ToolRegistry.register({
     // always renders, with the skill's own name beside it.
     const name = createMemo(() => props.input.name?.trim() || "")
     const body = createMemo(() => skillBody(props.output))
+    // AMICODE: the skill tool result carries its base dir in metadata — the chip
+    // links to the SKILL.md source file (opens in the editor via the bridge).
+    const skillPath = createMemo(() => {
+      const dir = props.metadata?.dir
+      return typeof dir === "string" && dir !== "" ? `${dir}/SKILL.md` : undefined
+    })
 
     const trigger = () => (
       <div data-slot="basic-tool-tool-info-structured">
         <div data-slot="basic-tool-tool-info-main">
-          <AmicoSkillChip kind={i18n.t("ui.tool.skill")} name={name()} status={props.status} />
+          <AmicoSkillChip kind={i18n.t("ui.tool.skill")} name={name()} status={props.status} path={skillPath()} />
         </div>
       </div>
     )

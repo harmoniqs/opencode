@@ -105,6 +105,9 @@ export function AmicodeEntityRail(props: {
   // edit label — the rail forwards both to the ui bridge for the in-chat view.
   onDraftPrompt?: (text: string) => void
   editLabel?: string
+  // When true, the rail is completely hidden. Used to prevent the rail from
+  // showing in unrelated chat sessions (issue #272).
+  disabled?: boolean
 }) {
   if (props.onAsk) {
     const dispose = registerAmicodeAskBridge({
@@ -208,6 +211,9 @@ export function AmicodeEntityRail(props: {
   // The pulse chip is the ONLY inspector entry on the rail — the separate
   // "Inspect Run" button was redundant chrome next to it (Kate 2026-07-28).
   const opensInspector = (kind: string) => kind === "pulse" && props.onInspectRun !== undefined
+
+  // Don't render if disabled (issue #272: prevents rail in unrelated sessions)
+  if (props.disabled) return null
 
   return (
     <Show when={amicodeParts().any > 0}>
