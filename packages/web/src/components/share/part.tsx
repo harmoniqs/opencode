@@ -529,7 +529,16 @@ export function ReadTool(props: ToolProps) {
           </Match>
           <Match when={typeof props.state.metadata?.preview === "string"}>
             <ResultsButton showCopy={messages.show_preview} hideCopy={messages.hide_preview}>
-              <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.metadata?.preview} />
+              {(() => {
+                const path = filePath() || ""
+                const ext = path.split(".").pop()?.toLowerCase()
+                const isMarkdown = ext === "md" || ext === "markdown" || ext === "mdx"
+                return isMarkdown ? (
+                  <ContentMarkdown expand text={props.state.metadata?.preview} />
+                ) : (
+                  <ContentCode lang={getShikiLang(path)} code={props.state.metadata?.preview} />
+                )
+              })()}
             </ResultsButton>
           </Match>
           <Match when={typeof props.state.metadata?.preview !== "string" && props.state.output}>
@@ -568,7 +577,16 @@ export function WriteTool(props: ToolProps) {
           </Match>
           <Match when={props.state.input?.content}>
             <ResultsButton showCopy={messages.show_contents} hideCopy={messages.hide_contents}>
-              <ContentCode lang={getShikiLang(filePath() || "")} code={props.state.input?.content} />
+              {(() => {
+                const path = filePath() || ""
+                const ext = path.split(".").pop()?.toLowerCase()
+                const isMarkdown = ext === "md" || ext === "markdown" || ext === "mdx"
+                return isMarkdown ? (
+                  <ContentMarkdown expand text={props.state.input?.content} />
+                ) : (
+                  <ContentCode lang={getShikiLang(path)} code={props.state.input?.content} />
+                )
+              })()}
             </ResultsButton>
           </Match>
         </Switch>

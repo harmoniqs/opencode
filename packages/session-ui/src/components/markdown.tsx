@@ -335,9 +335,25 @@ function decorate(root: HTMLDivElement, labels: CopyLabels) {
   for (const block of blocks) {
     ensureCodeWrapper(block, labels)
   }
+  // Fix for issue #270: Mark all external links for bridge handling
+  // This must run unconditionally, not just in new-layout mode
+  markExternalLinks(root)
+  markCodeLinks(root)
   if (!document.body.hasAttribute("data-new-layout")) return
   markInlineCode(root)
-  markCodeLinks(root)
+}
+
+// Issue #270: Mark regular markdown links as external so they open via the bridge
+function markExternalLinks(root: HTMLDivElement) {
+  const links = Array.from(root.querySelectorAll('a[href^="http"], a[href^="mailto:"]'))
+  for (const link of links) {
+    if (!(link instanceof HTMLAnchorElement)) continue
+    // Skip if already marked
+    if (link.classList.contains("external-link")) continue
+    link.classList.add("external-link")
+    link.target = "_blank"
+    link.rel = "noopener noreferrer"
+  }
 }
 
 function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {

@@ -14,7 +14,7 @@ import {
 } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
-import { useNavigate } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
@@ -145,30 +145,10 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
-  const language = useLanguage()
-
+  // Simple version - just show the ThinkingLine without collapsible dropdown
   return (
     <div data-slot="session-turn-thinking">
-      {/* amicode: the harmonic working indicator — a two-row block (H-mark +
-          AmicoWave glyph + cycling gerund; live elapsed/tokens meta below),
-          replacing the stock TextShimmer here. The block OWNS its mark now
-          (thinking-line.tsx) and is unsqueezable (flex-shrink: 0 in
-          session-turn.css): the sibling heading truncates via TextReveal's
-          `truncate` instead — a squeeze once shattered the meta line
-          mid-phrase across three lines.
-          This row IS the new-architecture mount; the old AssistantParts lane is
-          dead code on this timeline (recovered in the 2026-08-01 branch merges,
-          mount moved 2026-08-01). */}
       <ThinkingLine tokens={props.tokens} />
-      <Show when={!props.showReasoningSummaries}>
-        <TextReveal
-          text={props.reasoningHeading}
-          class="session-turn-thinking-heading"
-          travel={25}
-          duration={700}
-          truncate
-        />
-      </Show>
     </div>
   )
 }
@@ -698,13 +678,11 @@ export function MessageTimeline(props: {
 
   let overscanFrame: number | undefined
   onMount(() => {
+    // Single scroll to end after initial render to prevent flicker
     overscanFrame = requestAnimationFrame(() => {
+      overscanFrame = undefined
+      if (renderOverscan() < 20) setRenderOverscan(20)
       if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
-      overscanFrame = requestAnimationFrame(() => {
-        overscanFrame = undefined
-        if (renderOverscan() < 20) setRenderOverscan(20)
-        if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
-      })
     })
   })
 
@@ -1401,7 +1379,11 @@ export function MessageTimeline(props: {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
         return (
           <TimelineRowFrame row={thinkingRow}>
-            <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
+            <div 
+              data-slot="session-turn-message-container" 
+              class="w-full px-4 md:px-5"
+              style={{ position: "relative" }}
+            >
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
@@ -2044,6 +2026,8 @@ export function MessageTimeline(props: {
                   `/amicode/run-series?run=${encodeURIComponent(run)}${lab ? `&lab=${encodeURIComponent(lab)}` : ""}`,
                 )
               }
+              // Disable rail in chat sessions to prevent showing in unrelated sessions (issue #272)
+              disabled={true}
               widgetHost={{
                 // Stage 2: the in-chat widget preview reuses the home grid's
                 // frame kernel; server context is resolved live per call.

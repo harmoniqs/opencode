@@ -15,7 +15,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { VaultPanel } from "@/components/vault-panel"
-import { ConnectionBanner } from "@/components/connection-banner"
+
 import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
@@ -225,6 +225,50 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
+    
+    // Zoom keyboard shortcuts - always active
+    const handleZoomKey = (e: KeyboardEvent) => {
+      // Require Cmd (Mac) or Ctrl (Windows/Linux)
+      if (!e.ctrlKey && !e.metaKey) return
+      
+      // Don't trigger if user is typing in an input
+      const target = e.target as HTMLElement
+      if (target.tagName === "INPUT" || 
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable) {
+        return
+      }
+      
+      // Use code for physical key detection (works with Shift)
+      // Equal key produces + when Shift is held
+      const code = e.code
+      const key = e.key
+      
+      // Debug logging
+      console.log("[Zoom] Keydown:", { code, key, shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey })
+      
+      // Plus/Equal: Zoom in (works with Cmd+Shift+Plus or Cmd+Equal)
+      if (code === "Equal" || code === "NumpadAdd" || key === "+" || (key === "=" && e.shiftKey)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom in")
+        webZoomIn()
+      } else if (code === "Minus" || code === "NumpadSubtract" || key === "-" || key === "_") {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom out")
+        webZoomOut()
+      } else if (code === "Digit0" || code === "Numpad0" || key === "0") {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom reset")
+        webZoomReset()
+      }
+    }
+    
+    // Use window with capture phase for maximum reliability
+    window.addEventListener("keydown", handleZoomKey, true)
+    onCleanup(() => window.removeEventListener("keydown", handleZoomKey, true))
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -2241,8 +2285,7 @@ export default function LegacyLayout(props: ParentProps) {
               <SplitFrame titlebar={<Titlebar update={titlebarUpdate} />}>{props.children}</SplitFrame>
             </Show>
           </main>
-          <VaultPanel />
-          <ConnectionBanner />
+           <VaultPanel />
           <ToastRegion v2={newDesign()} />
           {/* amicode(workbench S2): every instance reports its tab list to the
               parent's mirror and (panes) obeys its commands. */}
