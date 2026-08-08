@@ -2201,6 +2201,20 @@ export default function Page() {
                   : legacySessionHref(sdk().directory, id),
               )
             },
+            onUnarchive: async () => {
+              const id = params.id
+              if (!id) return
+              if ((await sdk().protocol) !== "v1") return
+              try {
+                await (sdk().client.session.update as Function)({ sessionID: id, directory: sdk().directory, time: { archived: null } })
+                void sync().session.sync(id, { force: true })
+              } catch (err: unknown) {
+                showToast({
+                  title: language.t("common.requestFailed"),
+                  description: formatServerError(err, language.t),
+                })
+              }
+            },
             setPromptRef: (el) => {
               inputRef = el
             },

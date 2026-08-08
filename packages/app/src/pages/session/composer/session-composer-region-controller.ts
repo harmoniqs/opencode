@@ -36,6 +36,7 @@ export function createSessionComposerRegionController(input: {
   revert: Accessor<SessionComposerRevertDock | undefined>
   onResponseSubmit: () => void
   openParent: () => void
+  onUnarchive?: () => void
   setPromptRef: (el: HTMLDivElement) => void
   setDockRef: (el: HTMLDivElement) => void
 }) {
@@ -106,6 +107,10 @@ export function createSessionComposerRegionController(input: {
     const id = input.sessionID()
     return id ? sync().session.get(id)?.parentID : undefined
   })
+  const archived = createMemo(() => {
+    const id = input.sessionID()
+    return id ? !!sync().session.get(id)?.time?.archived : false
+  })
   const open = createMemo(() => store.ready && input.state.dock() && !input.state.closing())
   const progress = useSpring(
     () => (open() ? 1 : 0),
@@ -127,11 +132,13 @@ export function createSessionComposerRegionController(input: {
     revert: input.revert,
     onResponseSubmit: input.onResponseSubmit,
     openParent: input.openParent,
+    onUnarchive: input.onUnarchive,
     setPromptRef: input.setPromptRef,
     setDockRef: input.setDockRef,
     parentID,
     child: () => !!parentID(),
-    showComposer: () => !input.state.blocked() || !!parentID(),
+    archived,
+    showComposer: () => !input.state.blocked() || !!parentID() || archived(),
     handoffPrompt: () => getSessionHandoff(input.sessionKey())?.prompt,
     promptReady: () => input.prompt.ready() || promptReady(),
     dock: () => (store.ready && input.state.dock()) || value() > 0.001,
