@@ -1,6 +1,6 @@
 # 0004 — Context tree relocates from the top panel to the context side panel
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-08
 - Deciders: Aaron Trowbridge (design), JJ Lee
 - Supersedes: ADR 0003 (positioning clause only — interactivity, data model, vault browsability unchanged)
