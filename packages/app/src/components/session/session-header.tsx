@@ -553,6 +553,27 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
 
   return (
     <div class="flex items-center gap-2">
+      {/* Compact button - compacts the chat session */}
+      <TooltipV2
+        class="shrink-0"
+        placement="bottom"
+        value={
+          <>
+            {language.t("command.session.compact")}
+            <KeybindV2 keys={["mod", "shift", "c"]} variant="neutral" />
+          </>
+        }
+      >
+        <IconButtonV2
+          type="button"
+          variant="ghost-muted"
+          size="large"
+          class="!w-9 shrink-0"
+          onClick={() => command.trigger("session.compact", "palette")}
+          aria-label={language.t("command.session.compact")}
+          icon={<IconV2 name="minimize" />}
+        />
+      </TooltipV2>
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
