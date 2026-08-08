@@ -277,11 +277,12 @@ function decorate(root: HTMLDivElement, labels: CopyLabels) {
   for (const block of blocks) {
     ensureCodeWrapper(block, labels)
   }
+  // Fix for issue #270: Mark all external links for bridge handling
+  // This must run unconditionally, not just in new-layout mode
+  markExternalLinks(root)
+  markCodeLinks(root)
   if (!document.body.hasAttribute("data-new-layout")) return
   markInlineCode(root)
-  markCodeLinks(root)
-  // Fix for issue #270: Mark all external links (not just code links) for bridge handling
-  markExternalLinks(root)
 }
 
 // Issue #270: Mark regular markdown links as external so they open via the bridge
