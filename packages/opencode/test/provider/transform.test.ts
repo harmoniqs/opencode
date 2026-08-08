@@ -681,34 +681,14 @@ describe("ProviderTransform.options - gpt-5 reasoningEffort", () => {
     expect(result.reasoningEffort).toBeUndefined()
   })
 
-  test("gpt-5.5 should NOT set reasoningEffort for the completions API", () => {
+  test("gpt-5.5 should NOT set reasoningEffort", () => {
     const result = ProviderTransform.options({
       model: createModel("gpt-5.5"),
-      sessionID,
-      providerOptions: { useCompletionUrls: true },
-    })
-
-    expect(result.reasoningEffort).toBeUndefined()
-  })
-
-  test("gpt-5.6 should NOT set reasoningEffort for the completions API", () => {
-    const result = ProviderTransform.options({
-      model: createModel("gpt-5.6"),
-      sessionID,
-      providerOptions: { useCompletionUrls: true },
-    })
-
-    expect(result.reasoningEffort).toBeUndefined()
-  })
-
-  test("gpt-5.6 should set reasoningEffort for the responses API", () => {
-    const result = ProviderTransform.options({
-      model: createModel("gpt-5.6"),
       sessionID,
       providerOptions: {},
     })
 
-    expect(result.reasoningEffort).toBe("medium")
+    expect(result.reasoningEffort).toBeUndefined()
   })
 })
 

@@ -69,12 +69,11 @@ import { useCheckServerHealth } from "./utils/server-health"
 import { AmicodeSplash } from "@opencode-ai/ui/amicode-splash"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
-import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
-import { postBugReportPoke } from "@/utils/amicode-bug-report"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
+import { AmicodeFileRefBridge } from "@/components/amicode-file-ref-bridge"
 
 const NewSession = lazy(() => import("@/pages/new-session"))
 
@@ -175,7 +174,10 @@ function SelectedServerProviders(props: ParentProps) {
   return (
     <ServerKey>
       <ServerSDKProvider>
-        <ServerSyncProvider>{props.children}</ServerSyncProvider>
+        <ServerSyncProvider>
+          <AmicodeFileRefBridge />
+          {props.children}
+        </ServerSyncProvider>
       </ServerSDKProvider>
     </ServerKey>
   )
@@ -413,13 +415,7 @@ function AmicodeThemeBridge() {
       requestComputeConnect()
       return
     }
-    // amicode/opencode#117: bug-report dock open/close down-messages. Handled
-    // at app level (not in the dock) so an open can't be missed between
-    // pages; the controller self-gates on the boot param + kind.
-    if (d.kind === "open-bug-report" || d.kind === "close-bug-report") {
-      bugDockController.handleBridgeMessage(d)
-      return
-    }    if (d.kind !== "theme") return
+    if (d.kind !== "theme") return
     if (d.colorScheme === "light" || d.colorScheme === "dark") theme.setColorScheme(d.colorScheme)
   }
   window.addEventListener("message", onMsg)
@@ -438,11 +434,6 @@ function AmicodeThemeBridge() {
   }
   window.addEventListener("keydown", onKey, { capture: true })
   onCleanup(() => window.removeEventListener("keydown", onKey, { capture: true }))
-  // The boot poke — the dock contract's pull half (QA follow-up, amicode#249
-  // preview): posted once per app-frame boot when the flag is on; the
-  // extension re-posts open-bug-report if a bug session is live, so a lost
-  // one-shot open (cold-boot race, webview reload) self-heals.
-  postBugReportPoke()
   return null
 }
 

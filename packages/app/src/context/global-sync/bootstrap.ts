@@ -105,13 +105,10 @@ function showErrors(input: {
   })
 }
 
-export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient, protocol?: Promise<ServerProtocol>) =>
+export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient) =>
   queryOptions({
     queryKey: [scope, "config"],
-    queryFn: async () => {
-      if ((await protocol) !== "v1") return {}
-      return retry(() => sdk.global.config.get().then((x) => x.data!))
-    },
+    queryFn: () => retry(() => sdk.global.config.get().then((x) => x.data!)),
   })
 
 type ProjectApi = {
@@ -152,7 +149,7 @@ export async function bootstrapGlobal(input: {
   queryClient: QueryClient
 }) {
   const slow = [
-    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.serverSDK, input.protocol)),
+    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.serverSDK)),
     () =>
       input.queryClient.fetchQuery(
         loadProvidersQuery(input.scope, null, input.serverAPI, input.serverSDK, input.protocol),
@@ -379,10 +376,7 @@ export async function bootstrapDirectory(input: {
           .ensureQueryData(loadAgentsQuery(input.scope, input.directory, input.api.agent, input.sdk, input.protocol))
           .then((data) => input.setStore("agent", data)),
       () =>
-        retry(async () => {
-          if ((await input.protocol) !== "v1") return
-          return input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))
-        }),
+        retry(() => input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))),
       () =>
         retry(() =>
           (async () => {

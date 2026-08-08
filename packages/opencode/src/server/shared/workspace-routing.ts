@@ -22,12 +22,6 @@ export function getWorkspaceRouteSessionID(url: URL) {
 
   const id =
     url.pathname.match(/^\/session\/([^/]+)(?:\/|$)/)?.[1] ??
-    // The vendored v2 client posts session-member calls under /api/session/…
-    // (e.g. question reply/reject). Without this arm those never resolve the
-    // session's instance — an unscoped reply fell through to the server-cwd
-    // instance and 404'd ("reply for unknown request") whenever the session
-    // lived in another directory (amicode#249 preview dogfood).
-    url.pathname.match(/^\/api\/session\/([^/]+)(?:\/|$)/)?.[1] ??
     url.pathname.match(/^\/experimental\/session\/([^/]+)\/background$/)?.[1]
   if (!id) return null
 

@@ -21,8 +21,6 @@ import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useProviders } from "@/hooks/use-providers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
-import { SessionBugDock } from "@/pages/session/composer/session-bug-dock"
-import { bugReportEnabled } from "@/utils/amicode-bug-report"
 import { Persist, persisted } from "@/utils/persist"
 import type { NewSessionDraftController } from "./new-session-draft-controller"
 import type { NewSessionWorkspaceController } from "./new-session-workspace-controller"
@@ -56,16 +54,7 @@ export function NewSessionView(props: {
               <WordmarkV2 class="h-auto w-52 max-w-full text-v2-background-bg-inverse" />
             </div>
             <div class="mt-8 flex flex-col gap-8">
-              {/* amicode/opencode#117: the bug-report dock rides the draft
-                  composer too — the #116 button renders here, and without the
-                  dock its click would look dead. Singleton state; never
-                  co-mounts with the session region (separate routes). */}
-              <div class="flex flex-col gap-2">
-                <Show when={bugReportEnabled()}>
-                  <SessionBugDock />
-                </Show>
-                <PromptInputV2Composer controller={props.input} />
-              </div>
+              <PromptInputV2Composer controller={props.input} />
               <Show when={props.gettingStarted}>
                 <div class="flex justify-center -mt-2">{props.gettingStarted}</div>
               </Show>

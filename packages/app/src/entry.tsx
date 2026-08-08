@@ -4,9 +4,7 @@ import * as Sentry from "@sentry/solid"
 import { render } from "solid-js/web"
 import { AppBaseProviders, AppInterface } from "@/app"
 import { adoptHiddenProject } from "@/utils/amicode-hidden-project"
-import { adoptBugReportFlag } from "@/utils/amicode-bug-report"
 import { type Platform, PlatformProvider } from "@/context/platform"
-import { createBrowserDraftStore } from "@/utils/draft-store"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
@@ -170,7 +168,6 @@ const clearAuthToken = () => {
 
 const platform: Platform = {
   platform: "web",
-  draftStore: createBrowserDraftStore(),
   version: pkg.version,
   openExternal,
   restart,
@@ -210,7 +207,6 @@ if (root instanceof HTMLElement) {
   installGlobalClipboardFallback(window)
   installWebviewContextMenu()
   adoptHiddenProject(location.search) // amicode#203: hide the extension's scaffold project
-  adoptBugReportFlag(location.search) // opencode#116: gate the composer's report-a-bug button
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {

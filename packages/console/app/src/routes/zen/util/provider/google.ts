@@ -65,7 +65,7 @@ export const googleHelper: ProviderHelper = ({ providerModel }) => ({
     const cacheReadTokens = usage.cachedContentTokenCount ?? 0
     return {
       inputTokens: inputTokens - cacheReadTokens,
-      outputTokens: outputTokens + reasoningTokens,
+      outputTokens,
       reasoningTokens,
       cacheReadTokens,
       cacheWrite5mTokens: undefined,

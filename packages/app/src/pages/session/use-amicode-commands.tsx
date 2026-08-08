@@ -1,5 +1,4 @@
 import { useCommand, type CommandOption } from "@/context/command"
-import { inAmicode, postAmicode } from "@/utils/amicode-bridge"
 
 // amicode: ops commands bridged to the VS Code extension host. Registered on BOTH
 // the session and the new-session (draft) pages so they work everywhere inside
@@ -11,10 +10,16 @@ import { inAmicode, postAmicode } from "@/utils/amicode-bridge"
 // Each command posts {source:"amicode",kind:"command",command} to window.parent;
 // chat_panel.ts relays it to an ALLOWLISTED vscode command.
 
-// The bridge helpers live in @/utils/amicode-bridge (extracted so surfaces like
-// the report-a-bug button can post without this registry); re-exported here for
-// the existing importers (pulse chip, prompt inputs) and their contract test.
-export { inAmicode, postAmicode }
+// Exported so non-palette surfaces (e.g. the pulse chip on the entity rail —
+// the rail's one inspector entry) can fire the same host-bridged commands. inAmicode() gates them out of
+// the public web/share build, where there is no extension host to relay to.
+export const inAmicode = () => typeof window !== "undefined" && window.self !== window.top
+
+export const postAmicode = (command: string) => {
+  try {
+    window.parent?.postMessage({ source: "amicode", kind: "command", command }, "*")
+  } catch {}
+}
 
 export function useAmicodeCommands() {
   const command = useCommand()

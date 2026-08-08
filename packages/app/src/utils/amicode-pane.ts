@@ -9,4 +9,3 @@ export const AMICODE_PANE_ID: string | undefined =
   new URLSearchParams(window.location.search).get("amicode_pane") || undefined
 
 export const IS_AMICODE_PANE = AMICODE_PANE_ID !== undefined
-

@@ -22,7 +22,7 @@ type ContextFile = {
 type BuildRequestPartsInput = {
   prompt: Prompt
   context: ContextFile[]
-  images: (Omit<ImageAttachmentPart, "blob"> & { dataUrl: string })[]
+  images: ImageAttachmentPart[]
   text: string
   messageID: string
   sessionID: string

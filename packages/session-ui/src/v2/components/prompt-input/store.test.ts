@@ -13,7 +13,7 @@ function createPromptStore() {
           id: "attachment-1",
           filename: "notes.txt",
           mime: "text/plain",
-          blob: { id: "a", url: "blob:a" },
+          dataUrl: "data:text/plain;base64,",
         },
       ],
       cursor: 3,
@@ -50,7 +50,7 @@ describe("prompt input v2 store", () => {
         id: "attachment-1",
         filename: "notes.txt",
         mime: "text/plain",
-        blob: { id: "a", url: "blob:a" },
+        dataUrl: "data:text/plain;base64,",
       },
     ])
     expect(prompt.state.cursor).toBe(7)

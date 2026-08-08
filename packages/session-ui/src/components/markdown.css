@@ -263,6 +263,19 @@
     text-underline-offset: 2px;
   }
 
+  /* AMICODE: a resolved file reference keeps the path-pill tint and earns a
+   *  quiet underline + pointer — a link that looks like a pill, not a URL. */
+  a.external-link > code[data-inline-code-kind="path"] {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklch, var(--markdown-inline-code-path-color) 30%, transparent);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  a.external-link:hover > code[data-inline-code-kind="path"] {
+    text-decoration-color: var(--markdown-inline-code-path-color);
+  }
+
   /* Tables */
   table {
     width: 100%;

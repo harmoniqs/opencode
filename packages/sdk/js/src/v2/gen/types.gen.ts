@@ -602,21 +602,6 @@ export type AgentPart = {
   }
 }
 
-export type SkillPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "skill"
-  name: string
-  description?: string
-  content?: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
 export type RetryPart = {
   id: string
   sessionID: string
@@ -650,7 +635,6 @@ export type Part =
   | SnapshotPart
   | PatchPart
   | AgentPart
-  | SkillPart
   | RetryPart
   | CompactionPart
 
@@ -658,7 +642,6 @@ export type Prompt = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  skills?: Array<PromptSkillAttachment>
 }
 
 export type Pty = {
@@ -2603,19 +2586,6 @@ export type AgentPartInput = {
   }
 }
 
-export type SkillPartInput = {
-  id?: string
-  type: "skill"
-  name: string
-  description?: string
-  content?: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
 export type SubtaskPartInput = {
   id?: string
   type: "subtask"
@@ -2743,7 +2713,6 @@ export type PromptInput = {
   text: string
   files?: Array<PromptInputFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  skills?: Array<PromptSkillAttachment>
 }
 
 export type ConflictError = {
@@ -3097,13 +3066,6 @@ export type PromptFileAttachment = {
 
 export type PromptAgentAttachment = {
   name: string
-  source?: PromptSource
-}
-
-export type PromptSkillAttachment = {
-  name: string
-  description?: string
-  content?: string
   source?: PromptSource
 }
 
@@ -4027,7 +3989,6 @@ export type SessionMessageUser = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  skills?: Array<PromptSkillAttachment>
   type: "user"
 }
 
@@ -9853,7 +9814,7 @@ export type SessionPromptData = {
     format?: OutputFormat
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SkillPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
     sessionID: string
@@ -10200,7 +10161,7 @@ export type SessionPromptAsyncData = {
     format?: OutputFormat
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SkillPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
     sessionID: string

@@ -1,6 +1,5 @@
 import type { AgentPart as MessageAgentPart, FilePart, Part, TextPart } from "@opencode-ai/sdk/v2"
 import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
-import { createLegacyBlobReference } from "@/utils/draft-store"
 
 type Inline =
   | {
@@ -108,7 +107,7 @@ export function extractPromptFromParts(parts: Part[], opts?: { directory?: strin
           id: filePart.id,
           filename: filePart.filename ?? attachmentName,
           mime: filePart.mime,
-          blob: createLegacyBlobReference(filePart.url),
+          dataUrl: filePart.url,
         })
       }
     }

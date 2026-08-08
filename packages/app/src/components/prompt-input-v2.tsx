@@ -6,10 +6,9 @@ import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
-import { createEffect, createMemo, on, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
-import { ReportBugButton } from "@/components/report-bug-button"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
@@ -28,8 +27,6 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
-import { bugReportEnabled } from "@/utils/amicode-bug-report"
-import { setClipboardImageHandler } from "@/utils/global-clipboard"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -62,10 +59,6 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
-        // amicode/opencode#116: report-a-bug, right-anchored immediately left
-        // of send. The boot-param gate lives HERE (not inside the button) so a
-        // gated-off button passes `undefined` and the row's layout never shifts.
-        trailingControl={bugReportEnabled() ? <ReportBugButton /> : undefined}
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}
@@ -352,7 +345,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       if (item?.commentID) comments.remove(item.path, item.commentID)
     },
     openAttachment: (attachment) =>
-      dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />),
+      dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />),
     openContext(key) {
       const item = controller.contextItem(key)
       if (item) openComment(item, props, sync, layout, files, comments)
@@ -387,11 +380,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       // the extension host where the framed app has no clipboard permission.
       // Bridge first (self-gates to null unframed), platform as fallback.
       readClipboardImage: async () => (await readClipboardImageViaBridge()) ?? (await platform.readClipboardImage?.()) ?? null,
-      // Text side of the same bridge — feeds session-ui's handlePaste framed
-      // text fallback when the paste event carries nothing readable.
+      // Text side of the same bridge — feeds session-ui's handleFramedPaste.
       readClipboardText: () => readClipboardViaBridge(),
       getPathForFile: platform.getPathForFile,
-      store: platform.draftStore?.putBlob,
     },
     view: {
       placeholder: designPlaceholder,
@@ -420,12 +411,6 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
-
-  // Framed webview: the window-level fallback (global-clipboard.ts) is the
-  // sole ⌘V owner. When the clipboard carries no text it offers the media to
-  // this slot, landing it in the composer's attachment pipeline.
-  setClipboardImageHandler((file) => controller.addAttachments([file]))
-  onCleanup(() => setClipboardImageHandler(undefined))
 
   command.register("prompt-input", () => [
     {
