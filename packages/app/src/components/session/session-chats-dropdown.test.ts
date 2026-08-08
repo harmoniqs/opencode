@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test"
 
 /**
  * Tests for the Session Chats Dropdown logic (amicode#274).
- * Validates session sorting, search filtering, and tab-status derivation —
- * the same behavior as the dashboard sessions flyout (amicode#273).
+ * Validates session sorting, search filtering, open/close state, and
+ * tab-status derivation — the same behavior as the dashboard sessions
+ * flyout (amicode#273).
  */
 
 type Session = {
@@ -44,6 +45,32 @@ function filterSessionsByQuery(
   return sessions.filter((session) => getTitle(session).toLowerCase().includes(q))
 }
 
+/**
+ * Simulates the flyout open/close state machine — the same pattern used
+ * in the component. Verifies the toggle works and the dismiss handler
+ * (outside click / Escape) doesn't race with the opening click.
+ */
+function createFlyoutState() {
+  let open = false
+  let dismissListener: ((e: { target: unknown }) => void) | null = null
+  const flyoutRoot = { contains: (target: unknown) => target === "inside" }
+
+  return {
+    get open() { return open },
+    toggle() { open = !open },
+    /** Simulates the deferred dismiss listener attachment (setTimeout(0)) */
+    attachDismissListener() {
+      if (!open) { dismissListener = null; return }
+      dismissListener = (e) => {
+        if (!flyoutRoot.contains(e.target)) open = false
+      }
+    },
+    /** Simulates a mousedown event after the listener is attached */
+    simulateOutsideClick() { dismissListener?.({ target: "outside" }) },
+    simulateInsideClick() { dismissListener?.({ target: "inside" }) },
+  }
+}
+
 // --- Tests ---
 
 describe("Session Chats Dropdown", () => {
@@ -52,6 +79,46 @@ describe("Session Chats Dropdown", () => {
     { id: "ses_2", title: "CZ gate", directory: "/proj", time: { created: 200 } },
     { id: "ses_3", title: "Cat state prep", directory: "/proj", time: { created: 300 } },
   ]
+
+  describe("open/close state", () => {
+    test("toggle opens the flyout", () => {
+      const state = createFlyoutState()
+      expect(state.open).toBe(false)
+      state.toggle()
+      expect(state.open).toBe(true)
+    })
+
+    test("toggle closes when already open", () => {
+      const state = createFlyoutState()
+      state.toggle() // open
+      state.toggle() // close
+      expect(state.open).toBe(false)
+    })
+
+    test("dismiss listener does NOT fire before attachment (deferred)", () => {
+      const state = createFlyoutState()
+      state.toggle() // open
+      // Before attachDismissListener, an outside click should NOT close
+      state.simulateOutsideClick()
+      expect(state.open).toBe(true)
+    })
+
+    test("dismiss listener closes on outside click after attachment", () => {
+      const state = createFlyoutState()
+      state.toggle() // open
+      state.attachDismissListener() // simulates the setTimeout(0) firing
+      state.simulateOutsideClick()
+      expect(state.open).toBe(false)
+    })
+
+    test("dismiss listener does NOT close on inside click", () => {
+      const state = createFlyoutState()
+      state.toggle() // open
+      state.attachDismissListener()
+      state.simulateInsideClick()
+      expect(state.open).toBe(true)
+    })
+  })
 
   describe("sortSessionsByOpenTab", () => {
     test("moves sessions with open tabs to the front", () => {

@@ -35,7 +35,6 @@ import { useServerSync } from "@/context/server-sync"
 import { useGlobal } from "@/context/global"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { sortedRootSessions } from "@/pages/layout/helpers"
-import { useNavigate } from "@solidjs/router"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 // AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
@@ -647,7 +646,6 @@ function SessionChatsDropdown() {
   const serverSync = useServerSync()
   const globalCtx = useGlobal()
   const language = useLanguage()
-  const navigate = useNavigate()
   const { params } = useSessionLayout()
 
   const [open, setOpen] = createSignal(false)
@@ -666,8 +664,12 @@ function SessionChatsDropdown() {
   // Active sessions — load from server sync (same as home page)
   const directory = createMemo(() => serverSync().data.path.directory || "")
   const activeSessions = createMemo(() => {
-    const [store] = serverSync().child(directory(), { bootstrap: false })
-    return sortedRootSessions(store, Date.now())
+    try {
+      const [store] = serverSync().child(directory(), { bootstrap: false })
+      return sortedRootSessions(store, Date.now())
+    } catch {
+      return []
+    }
   })
 
   // Sort: open-tab sessions first
@@ -795,23 +797,33 @@ function SessionChatsDropdown() {
   // Dismiss on outside click or Escape
   createEffect(() => {
     if (!open()) return
-    const onDown = (e: MouseEvent) => {
-      if (flyoutRoot && !flyoutRoot.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", onDown)
-    document.addEventListener("keydown", onKey)
-    onCleanup(() => {
-      document.removeEventListener("mousedown", onDown)
-      document.removeEventListener("keydown", onKey)
-    })
+    // Defer listener attachment so the opening mousedown doesn't immediately dismiss
+    const timer = setTimeout(() => {
+      const onDown = (e: MouseEvent) => {
+        const target = e.target as Node
+        if (flyoutRoot?.contains(target)) return
+        if (triggerRef?.contains(target)) return
+        setOpen(false)
+      }
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setOpen(false)
+      }
+      document.addEventListener("mousedown", onDown)
+      document.addEventListener("keydown", onKey)
+      onCleanup(() => {
+        document.removeEventListener("mousedown", onDown)
+        document.removeEventListener("keydown", onKey)
+      })
+    }, 0)
+    onCleanup(() => clearTimeout(timer))
   })
 
+  let triggerRef: HTMLButtonElement | undefined
+
   return (
-    <div ref={flyoutRoot} style={{ position: "relative" }}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         data-action="session-chats-toggle-flyout"
         class="flex shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent p-1.5 cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
@@ -821,28 +833,30 @@ function SessionChatsDropdown() {
         <IconV2 name="menu" />
       </button>
       <Show when={open()}>
-        <div
-          data-slot="amicode-sessions-flyout"
-          role="dialog"
-          aria-label={language.t("sidebar.project.recentSessions")}
-          style={{
-            position: "absolute",
-            right: "0",
-            top: "calc(100% + 8px)",
-            "z-index": "40",
-            width: "min(440px, 88vw)",
-            "max-height": "min(70vh, 680px)",
-            display: "flex",
-            "flex-direction": "column",
-            gap: "12px",
-            overflow: "hidden auto",
-            border: "1px solid var(--v2-border-border-base)",
-            "border-radius": "10px",
-            background: "var(--v2-background-bg-base)",
-            "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
-            padding: "14px",
-          }}
-        >
+        <Portal>
+          <div
+            ref={flyoutRoot}
+            data-slot="amicode-sessions-flyout"
+            role="dialog"
+            aria-label={language.t("sidebar.project.recentSessions")}
+            style={{
+              position: "fixed",
+              top: `${(triggerRef?.getBoundingClientRect().bottom ?? 0) + 8}px`,
+              right: `${document.documentElement.clientWidth - (triggerRef?.getBoundingClientRect().right ?? 0)}px`,
+              "z-index": "9999",
+              width: "min(440px, 88vw)",
+              "max-height": "min(70vh, 680px)",
+              display: "flex",
+              "flex-direction": "column",
+              gap: "12px",
+              overflow: "hidden auto",
+              border: "1px solid var(--v2-border-border-base)",
+              "border-radius": "10px",
+              background: "var(--v2-background-bg-base)",
+              "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
+              padding: "14px",
+            }}
+          >
           <section class="isolate min-h-0 min-w-0 flex flex-col" aria-label={language.t("sidebar.project.recentSessions")}>
             {/* Search */}
             <label
@@ -977,8 +991,9 @@ function SessionChatsDropdown() {
             </div>
           </section>
         </div>
+        </Portal>
       </Show>
-    </div>
+    </>
   )
 }
 
