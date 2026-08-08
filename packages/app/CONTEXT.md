@@ -23,14 +23,15 @@ another surface, only overlaid. There is no view in which the Chat is absent.
 _Avoid_: Main view, editor, session pane (as the whole hub)
 
 **Context tree**:
-The collapsible band folded into the session header, beneath the title row and entity
-chips — an organic graph of what the agent is actually holding in mind: root = amico at
-center, the session's turns orbiting it (one per user prompt, however many assistant
-messages it spans), and the markdown, source, skills, and agents each turn pulled into
-context clustering around their turn. Shared context sits between the turns that recall it.
-Interactive: clicking a file node opens the real file (project files as a session tab,
-vault files in the **Vault panel**). One per session view; absent until the session holds
-context, and absent on the Landing. See ADR 0003.
+The organic graph of what the agent is actually holding in mind, rendered inside the
+**context side panel** (opened from the progress-circle ring button in the session
+header). Root = amico at center, the session's turns orbiting it (one per user prompt,
+however many assistant messages it spans), and the markdown, source, skills, and agents
+each turn pulled into context clustering around their turn. Shared context sits between
+the turns that recall it. Interactive: clicking a file node opens the real file (project
+files as a session tab, vault files in the **Vault panel**). One per session view; absent
+until the session holds context. On-demand — visible only when the context panel is open,
+never persistent. See ADR 0004 (relocated from the former top panel of ADR 0003).
 _Avoid_: Brain (that was the ambient, non-interactive strip), knowledge graph, minimap
 
 **Vault panel**:
@@ -86,10 +87,10 @@ only surfaces its state), setup wall
 ## Relationships
 
 - The **Landing** is a **Chat**; the window never opens on anything else.
-- The **Context tree** sits above the **Chat** and belongs to one session; the **Vault
-  panel** belongs to the window and opens beside whatever Chat is showing. A Context-tree
-  click on a vault node opens the Vault panel on that file — the two surfaces reference
-  each other but neither owns the other.
+- The **Context tree** lives inside the context side panel and belongs to one session;
+  the **Vault panel** belongs to the window and opens beside whatever Chat is showing. A
+  Context-tree click on a vault node opens the Vault panel on that file — the two surfaces
+  reference each other but neither owns the other.
 - Every **Rail surface** opens as a **Panel** beside the **Chat**; the Chat is never
   replaced, only overlaid, and at most one Panel is open at a time.
 - The **Rail** carries navigation surfaces above and the **Account zone** below; both
