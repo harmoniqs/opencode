@@ -793,9 +793,13 @@ function SessionChatsDropdown() {
   }
 
   function openSession(session: Session) {
-    const path = `/${base64Encode(session.directory)}/session/${session.id}`
-    tabs.openPath(path, { activate: true })
+    // Close flyout first so its Portal unmounts before navigation causes
+    // the session header to remount (avoids brief button duplication).
     setOpen(false)
+    requestAnimationFrame(() => {
+      const path = `/${base64Encode(session.directory)}/session/${session.id}`
+      tabs.openPath(path, { activate: true })
+    })
   }
 
   function handleNewChat() {
