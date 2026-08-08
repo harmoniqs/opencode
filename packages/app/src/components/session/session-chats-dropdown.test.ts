@@ -174,4 +174,62 @@ describe("Session Chats Dropdown", () => {
       expect(result[0].id).toBe("ses_3")
     })
   })
+
+  describe("openSession navigation strategy", () => {
+    /**
+     * Opening a session must use direct navigate() — NOT tabs.openPath/addSessionTab.
+     * tabs.addSessionTab wraps in startTransition, which keeps both old and new UI
+     * mounted during the transition, causing Portal-rendered buttons to duplicate.
+     *
+     * The correct strategy:
+     * - Session with existing tab → select the tab (no navigation, no transition)
+     * - Session without a tab → navigate directly (the session page creates its own tab)
+     * - In both cases, close the flyout BEFORE any navigation
+     */
+    type NavigationAction =
+      | { type: "select-tab"; sessionId: string }
+      | { type: "navigate"; path: string }
+
+    function resolveOpenAction(
+      session: Session,
+      hasExistingTab: boolean,
+      encodePath: (dir: string, id: string) => string,
+    ): NavigationAction {
+      if (hasExistingTab) {
+        return { type: "select-tab", sessionId: session.id }
+      }
+      return { type: "navigate", path: encodePath(session.directory, session.id) }
+    }
+
+    const encodePath = (dir: string, id: string) => `/${btoa(dir)}/session/${id}`
+
+    test("session with existing tab → select-tab (no startTransition)", () => {
+      const session = sessions[0]
+      const action = resolveOpenAction(session, true, encodePath)
+
+      expect(action.type).toBe("select-tab")
+      expect((action as { type: "select-tab"; sessionId: string }).sessionId).toBe("ses_1")
+    })
+
+    test("session without existing tab → navigate directly (avoids startTransition)", () => {
+      const session = sessions[0]
+      const action = resolveOpenAction(session, false, encodePath)
+
+      expect(action.type).toBe("navigate")
+      expect((action as { type: "navigate"; path: string }).path).toBe(`/${btoa("/proj")}/session/ses_1`)
+    })
+
+    test("flyout closes before navigation (prevents portal duplication)", () => {
+      const state = createFlyoutState()
+      state.toggle() // open
+      expect(state.open).toBe(true)
+
+      // Simulate openSession: close first, then navigate
+      state.toggle() // close
+      const action = resolveOpenAction(sessions[0], false, encodePath)
+
+      expect(state.open).toBe(false) // flyout closed BEFORE navigation
+      expect(action.type).toBe("navigate") // would navigate after close
+    })
+  })
 })

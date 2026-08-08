@@ -35,6 +35,7 @@ import { useServerSync } from "@/context/server-sync"
 import { useGlobal } from "@/context/global"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { sortedRootSessions } from "@/pages/layout/helpers"
+import { useNavigate } from "@solidjs/router"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 // AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
@@ -646,6 +647,7 @@ function SessionChatsDropdown() {
   const serverSync = useServerSync()
   const globalCtx = useGlobal()
   const language = useLanguage()
+  const navigate = useNavigate()
   const { params } = useSessionLayout()
 
   const [open, setOpen] = createSignal(false)
@@ -793,13 +795,21 @@ function SessionChatsDropdown() {
   }
 
   function openSession(session: Session) {
-    // Close flyout first so its Portal unmounts before navigation causes
-    // the session header to remount (avoids brief button duplication).
+    // Close flyout first so its Portal unmounts cleanly.
     setOpen(false)
-    requestAnimationFrame(() => {
+    // Use tabs.select for sessions that already have an open tab (no transition).
+    // For sessions without a tab, navigate directly — DO NOT use tabs.openPath
+    // which calls addSessionTab(startTransition), keeping both old and new UI
+    // mounted during the transition and duplicating Portal-rendered buttons.
+    const existingTab = tabs.store.find(
+      (t) => t.type === "session" && t.sessionId === session.id,
+    )
+    if (existingTab) {
+      tabs.select(existingTab)
+    } else {
       const path = `/${base64Encode(session.directory)}/session/${session.id}`
-      tabs.openPath(path, { activate: true })
-    })
+      navigate(path)
+    }
   }
 
   function handleNewChat() {
