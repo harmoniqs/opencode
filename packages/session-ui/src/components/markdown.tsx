@@ -33,7 +33,6 @@ import { markdownBlockKey, type MarkdownToken } from "./markdown-worker-protocol
 import { shouldResetCodeTokens, type RenderedCodeState } from "./markdown-code-state"
 import { getCachedMarkdown, sanitizeMarkdown, touchCachedMarkdown, type MarkdownCacheEntry } from "./markdown-cache"
 import { inlineCodeKind } from "./markdown-inline-code-kind"
-import { cachedFileRef, fileRefResolver, fileRefUrl, resolveFileRefCached } from "./markdown-file-refs"
 
 type RenderedBlock =
   | (MarkdownCacheEntry & { key: string; mode: Exclude<Block["mode"], "code"> })
@@ -270,63 +269,6 @@ function markInlineCode(root: HTMLDivElement) {
     delete code.dataset.inlineCodeKind
     const kind = inlineCodeKind(code.textContent ?? "")
     if (kind) code.dataset.inlineCodeKind = kind
-  }
-}
-
-// AMICODE: linkify file references. Path-kind inline-code pills get wrapped in
-// file:// anchors when the app-registered resolver finds them on disk; authored
-// relative links ([x](plans/foo.md)) get their sandbox-dead relative href
-// rewritten to file://. Unresolvable references stay plain pills/links — never
-// a dead anchor. Runs on the LIVE container after morphdom (unlike the other
-// decorators, which run on the detached block): async resolutions patch nodes
-// in place when they land, and morphdom rebuilds get re-wrapped from the
-// (synchronous) cache on the next pass. Must stay AFTER markCodeLinks in any
-// shared pass — that function unwraps code spans inside anchors when the text
-// isn't a URL.
-function wrapCodeInFileLink(code: HTMLElement, abs: string) {
-  const link = document.createElement("a")
-  link.href = fileRefUrl(abs)
-  link.className = "external-link"
-  link.title = abs
-  code.parentNode?.replaceChild(link, code)
-  link.appendChild(code)
-}
-
-function markFileLinks(root: HTMLDivElement) {
-  if (!fileRefResolver()) return
-  const codes = Array.from(root.querySelectorAll(":not(pre) > code[data-inline-code-kind=\"path\"]"))
-  for (const code of codes) {
-    if (!(code instanceof HTMLElement)) continue
-    if (code.parentElement instanceof HTMLAnchorElement) continue
-    const text = code.textContent ?? ""
-    if (!text) continue
-    const cached = cachedFileRef(text)
-    if (cached !== undefined) {
-      if (cached) wrapCodeInFileLink(code, cached)
-      continue
-    }
-    void resolveFileRefCached(text).then((abs) => {
-      if (!abs || !code.isConnected) return
-      if (code.parentElement instanceof HTMLAnchorElement) return
-      wrapCodeInFileLink(code, abs)
-    })
-  }
-  // authored relative links — DOMPurify keeps relative hrefs, but a relative
-  // navigation is dead in the sandboxed iframe. Rewrite to file:// on resolve.
-  const anchors = Array.from(root.querySelectorAll("a.external-link"))
-  for (const anchor of anchors) {
-    if (!(anchor instanceof HTMLAnchorElement)) continue
-    const href = anchor.getAttribute("href") ?? ""
-    if (!href || href.startsWith("#") || /^(https?:\/\/|mailto:|file:)/i.test(href)) continue
-    const cached = cachedFileRef(href)
-    if (cached !== undefined) {
-      if (cached) anchor.href = fileRefUrl(cached)
-      continue
-    }
-    void resolveFileRefCached(href).then((abs) => {
-      if (!abs || !anchor.isConnected) return
-      anchor.href = fileRefUrl(abs)
-    })
   }
 }
 
@@ -579,9 +521,6 @@ export function Markdown(
         copied: i18n.t("ui.message.copied"),
       }))
     if (!linkCleanup) linkCleanup = setupExternalLinks(container)
-    // File-reference linkification rides the same new-layout gate as the
-    // inline-code pill tagging (decorate) whose data attributes it consumes.
-    if (document.body.hasAttribute("data-new-layout")) markFileLinks(container)
   })
 
   onCleanup(() => {

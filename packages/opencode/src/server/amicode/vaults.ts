@@ -20,19 +20,19 @@ const KIND_RANK: Record<string, number> = { personal: 0, engagement: 1, project:
 const kindRank = (k: string) => KIND_RANK[k] ?? 6
 const writableByKind = (k: string) => k === "personal" || k === "project" || k === "engagement"
 
-export type MountInfo = { id: string; kind: string; writable: boolean; dir: string }
-
-/** Structured mount listing (precedence-ordered: kind-rank then name) for
- *  in-process consumers — the chat file-ref resolver walks this for
- *  first-hit resolution. `dir` is the mount's on-disk directory. */
-export function listMounts(root: string = vaultsRoot()): MountInfo[] {
+/** CLI-less mount listing: scan each vault dir under the vaults root for its
+ *  `.amico-vault.toml` marker and emit the same `{ok,mounts}` wire shape the
+ *  Vaults tab parses. Parity with the extension's resolveMountStack (kind rank +
+ *  writable-by-kind); ordering is kind-rank then name. `last_sync` is unknown
+ *  without the CLI. Never throws. */
+export function scanMounts(root: string = vaultsRoot()): string {
   let entries: string[]
   try {
     entries = readdirSync(root).sort()
   } catch {
-    return []
+    return JSON.stringify({ ok: true, mounts: [], error: null })
   }
-  const mounts: MountInfo[] = []
+  const mounts: { id: string; kind: string; writable: boolean; last_sync: string }[] = []
   for (const base of entries) {
     let text: string
     try {
@@ -43,19 +43,9 @@ export function listMounts(root: string = vaultsRoot()): MountInfo[] {
     const kind = text.match(/^\s*kind\s*=\s*"([^"]*)"/m)?.[1] ?? ""
     if (!kind) continue
     const name = text.match(/^\s*name\s*=\s*"([^"]*)"/m)?.[1] || base
-    mounts.push({ id: name, kind, writable: writableByKind(kind), dir: path.join(root, base) })
+    mounts.push({ id: name, kind, writable: writableByKind(kind), last_sync: "unknown" })
   }
   mounts.sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  return mounts
-}
-
-/** CLI-less mount listing: scan each vault dir under the vaults root for its
- *  `.amico-vault.toml` marker and emit the same `{ok,mounts}` wire shape the
- *  Vaults tab parses. Parity with the extension's resolveMountStack (kind rank +
- *  writable-by-kind); ordering is kind-rank then name. `last_sync` is unknown
- *  without the CLI. Never throws. */
-export function scanMounts(root: string = vaultsRoot()): string {
-  const mounts = listMounts(root).map(({ id, kind, writable }) => ({ id, kind, writable, last_sync: "unknown" }))
   return JSON.stringify({ ok: true, mounts, error: null })
 }
 

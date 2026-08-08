@@ -237,6 +237,14 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
             text: "The following tool was executed by the user",
           })
         }
+        // Skill attachments are stored compactly on the user message but the
+        // model MUST receive the full skill content — expand here.
+        if (part.type === "skill" && part.content) {
+          userMessage.parts.push({
+            type: "text",
+            text: part.content,
+          })
+        }
       }
       if (userMessage.parts.length > 0) result.push(userMessage)
     }

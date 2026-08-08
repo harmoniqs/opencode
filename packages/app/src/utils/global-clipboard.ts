@@ -1,19 +1,34 @@
 // Framed-app clipboard fallback, generalized from the prompt input's bridge.
 // Inside the VS Code webview iframe, native paste never fires and native
 // copy never reaches the OS clipboard (see prompt-input/clipboard-bridge.ts
-// for the full why) — so every editable outside the prompt (Connections
-// credential fields, settings inputs, …) silently ignores ⌘V and poisons the
+// for the full why) — so every editable silently ignores ⌘V and poisons the
 // next paste on ⌘C. This module intercepts mod+V/C/X at the window's capture
-// phase and routes them over the existing extension-host bridge. Unframed
-// (plain web/desktop), it does nothing — native clipboard behavior stands.
+// phase and routes them over the existing extension-host bridge. It is the
+// SOLE ⌘V path in the webview: the prompt composers (v1 and v2) no longer
+// intercept the keystroke themselves, so the text lands exactly once.
+// Unframed (plain web/desktop), it does nothing — native clipboard behavior
+// stands.
 
-import { readClipboardViaBridge, writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
+import {
+  readClipboardImageViaBridge,
+  readClipboardViaBridge,
+  writeClipboardViaBridge,
+} from "@/components/prompt-input/clipboard-bridge"
 
-// Elements that carry their own bridged paste (the prompt input's ⌘V handler,
-// the profile fields' pasteFallback) mark themselves so the fallback doesn't
-// double-insert. The marker owns PASTE only: nothing element-local handles
-// copy/cut, so ⌘C/⌘X still mirror to the OS clipboard even inside marked
-// subtrees — otherwise copying from the prompt would paste stale content.
+// Single-slot media hook: a paste that carries no text is offered to the
+// registered consumer (the v2 composer's attachment pipeline) as an image.
+// Deliberately one slot — a list would invite two owners of one gesture.
+let clipboardImageHandler: ((file: File) => void) | undefined
+
+export function setClipboardImageHandler(handler?: (file: File) => void): void {
+  clipboardImageHandler = handler
+}
+
+// Elements that carry their own bridged paste (the profile fields'
+// pasteFallback) mark themselves so the fallback doesn't double-insert. The
+// marker owns PASTE only: nothing element-local handles copy/cut, so ⌘C/⌘X
+// still mirror to the OS clipboard even inside marked subtrees — otherwise
+// copying from the prompt would paste stale content.
 export const CLIPBOARD_SELF_SELECTOR = '[data-amc-clipboard="self"]'
 
 type FormField = HTMLInputElement | HTMLTextAreaElement
@@ -133,6 +148,23 @@ export function extractSelection(el: HTMLElement, opts: { cut?: boolean } = {}):
   return text
 }
 
+// Select all content in an editable element — the JS equivalent of the native
+// Cmd+A that the VS Code/Electron platform layer suppresses inside the iframe.
+function selectAll(target: HTMLElement): void {
+  if (isFormField(target)) {
+    target.select()
+    return
+  }
+  // contenteditable: select all children of the editable root
+  const selection = target.ownerDocument.defaultView?.getSelection()
+  if (selection) {
+    selection.removeAllRanges()
+    const range = target.ownerDocument.createRange()
+    range.selectNodeContents(target)
+    selection.addRange(range)
+  }
+}
+
 // Capture-phase so it sees the keystroke before any component handler, and
 // window-level so portaled UI (popovers, dialogs) is covered too. Returns an
 // uninstall function; the handler re-checks framing per event, so installing
@@ -140,21 +172,54 @@ export function extractSelection(el: HTMLElement, opts: { cut?: boolean } = {}):
 export function installGlobalClipboardFallback(win: Window = window): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (win.parent === win) return // unframed: native clipboard works — stay out
-    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return
     if (event.isComposing) return
     const key = event.key.toLowerCase()
-    if (key !== "v" && key !== "c" && key !== "x") return
+
+    // Redo: Cmd+Shift+Z (shift allowed only for this chord)
+    const isRedo = key === "z" && event.shiftKey
+    // All other editing shortcuts require NO shift
+    if (event.shiftKey && !isRedo) return
+
+    if (key !== "v" && key !== "c" && key !== "x" && key !== "a" && key !== "z" && key !== "y") return
     const target = event.target
     if (!isEditableTarget(target)) return // non-editables keep native behavior
 
+    // --- Select all ---
+    if (key === "a") {
+      event.preventDefault()
+      selectAll(target)
+      return
+    }
+
+    // --- Undo / Redo ---
+    if (key === "z" || key === "y") {
+      event.preventDefault()
+      const doc = target.ownerDocument
+      if (typeof doc.execCommand === "function") {
+        doc.execCommand(isRedo || key === "y" ? "redo" : "undo")
+      }
+      return
+    }
+
+    // --- Clipboard: paste, copy, cut ---
     if (key === "v") {
       if (target.closest(CLIPBOARD_SELF_SELECTOR)) return // element owns its own paste
       // Native paste never fires in-frame, so preventDefault loses nothing;
       // an empty or dead bridge reply degrades to a no-op (see clipboard-bridge).
       event.preventDefault()
-      void readClipboardViaBridge(win).then((text) => {
-        if (!text) return
-        insertTextAtSelection(target, text)
+      void readClipboardViaBridge(win).then(async (text) => {
+        if (text) {
+          insertTextAtSelection(target, text)
+          return
+        }
+        // No text on the clipboard: offer media. Mirrors the composer's own
+        // handlePaste precedence (image only when there is no plain text), so
+        // text pastes keep their exact single-value sequence with no extra
+        // round-trip.
+        if (!clipboardImageHandler) return
+        const file = await readClipboardImageViaBridge(win)
+        if (file) clipboardImageHandler(file)
       })
       return
     }

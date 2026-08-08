@@ -82,6 +82,7 @@ export type PromptInputV2AttachmentConfig = {
    *  Resolves "" when unavailable. */
   readClipboardText?: () => Promise<string>
   getPathForFile?: (file: File) => string
+  store?: (file: File) => Promise<{ id: string; url: string }>
 }
 
 export function createPromptInputV2Attachments(
@@ -106,8 +107,7 @@ export function createPromptInputV2Attachments(
       if (toast) input.warn()
       return false
     }
-    const url = await dataUrl(file, mime)
-    if (!url) return false
+    const blob = input.store ? await input.store(file) : await blobReference(file)
     const sourcePath = input.getPathForFile?.(file) || undefined
     // Native clipboard images arrive with a fresh timestamped filename on every paste, so identical
     // clipboard content is matched on bytes alone.
@@ -116,7 +116,7 @@ export function createPromptInputV2Attachments(
       .some(
         (part) =>
           part.type === "image" &&
-          part.dataUrl === url &&
+          part.blob.id === blob.id &&
           (sourcePath
             ? part.sourcePath === sourcePath
             : !part.sourcePath && (clipboard || part.filename === file.name)),
@@ -131,7 +131,7 @@ export function createPromptInputV2Attachments(
       filename: file.name,
       sourcePath,
       mime,
-      dataUrl: url,
+      blob,
     }
     target.prompt.set([...target.prompt.current(), attachment], target.cursor)
     return true
@@ -199,26 +199,6 @@ export function createPromptInputV2Attachments(
     if (files) await addAttachments(Array.from(files))
   }
 
-  // Amicode webview ⌘V: a framed host whose paste event never fires at all
-  // (the VS Code webview grants no clipboard-read to the iframe), so the paste
-  // flow above never starts. Read the host clipboard through the wired bridge
-  // hooks instead — image first (screenshots), then text, same precedence as
-  // handlePaste. Both hooks self-gate to empty outside the webview.
-  const handleFramedPaste = async () => {
-    const target = capture()
-    if (!target) return
-    if (input.readClipboardImage) {
-      const file = await input.readClipboardImage()
-      if (file && (await add(file, true, target, true))) return
-    }
-    const plain = input.readClipboardText ? await input.readClipboardText() : ""
-    if (!plain) return
-    const text = plain.includes("\r") ? plain.replace(/\r\n?/g, "\n") : plain
-    if (input.addPart({ type: "text", content: text, start: 0, end: 0 })) return
-    input.focusEditor()
-    input.addPart({ type: "text", content: text, start: 0, end: 0 })
-  }
-
   onMount(() => {
     makeEventListener(document, "dragover", (event) => {
       if (input.isDialogActive()) return
@@ -235,7 +215,6 @@ export function createPromptInputV2Attachments(
   return {
     addAttachments,
     handlePaste,
-    handleFramedPaste,
     handleDrop,
     pick(fallback: () => void) {
       if (!input.picker) {
@@ -249,20 +228,14 @@ export function createPromptInputV2Attachments(
   }
 }
 
-function dataUrl(file: File, mime: string) {
-  return new Promise<string>((resolve) => {
-    const reader = new FileReader()
-    reader.addEventListener("error", () => resolve(""))
-    reader.addEventListener("load", () => {
-      const value = typeof reader.result === "string" ? reader.result : ""
-      const index = value.indexOf(",")
-      resolve(index === -1 ? value : `data:${mime};base64,${value.slice(index + 1)}`)
-    })
-    reader.readAsDataURL(file)
-  })
-}
-
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+
+async function blobReference(file: File) {
+  const id = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+  return { id, url: URL.createObjectURL(file) }
+}
 const imageExtensions = new Map([
   ["gif", "image/gif"],
   ["jpeg", "image/jpeg"],

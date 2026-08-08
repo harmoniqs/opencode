@@ -1,10 +1,8 @@
 import type { LocalProject } from "@/context/layout"
-import { getProjectAvatarVariant } from "@/context/layout"
 import type { ServerConnection } from "@/context/server"
-import { displayName, getProjectAvatarSource } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
-import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
-import { SessionProgressIndicatorV2 } from "@opencode-ai/session-ui/v2/session-progress-indicator-v2"
+import { Mark } from "@opencode-ai/ui/logo"
+import { AmicoMark } from "@opencode-ai/ui/amico-spinner"
 import { Show } from "solid-js"
 
 export function SessionTabAvatar(props: {
@@ -37,23 +35,26 @@ export function SessionTabAvatarView(props: {
   unread: boolean
   loading: boolean
 }) {
-  const projectAvatar = () => (
-    <ProjectAvatar
-      fallback={displayName(props.project ?? { worktree: props.directory })}
-      src={getProjectAvatarSource(props.project?.id, props.project?.icon)}
-      variant={getProjectAvatarVariant(props.project?.icon?.color)}
-      unread={props.unread}
-    />
-  )
   return (
-    <Show when={props.loading} fallback={projectAvatar()}>
+    <Show
+      when={props.loading}
+      fallback={
+        <span class="relative inline-flex size-4 shrink-0 items-center justify-center">
+          <Mark class="size-4" />
+          <Show when={props.unread}>
+            <span
+              aria-hidden="true"
+              class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
+              style={{ background: "var(--v2-icon-icon-accent)" }}
+            />
+          </Show>
+        </span>
+      }
+    >
       <span class="relative block size-4 shrink-0">
-        <SessionProgressIndicatorV2
-          class={`absolute inset-0 ${props.revealProjectOnHover === false ? "" : "group-hover:invisible"}`}
-        />
-        <Show when={props.revealProjectOnHover !== false}>
-          <span class="invisible absolute inset-0 group-hover:visible">{projectAvatar()}</span>
-        </Show>
+        <span class="absolute inset-0 flex items-center justify-center tab-mark-running">
+          <AmicoMark running />
+        </span>
       </span>
     </Show>
   )

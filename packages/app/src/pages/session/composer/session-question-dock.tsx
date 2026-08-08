@@ -9,6 +9,7 @@ import { showToast } from "@/utils/toast"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
+import { useServerSync } from "@/context/server-sync"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useServerSDK } from "@/context/server-sdk"
@@ -168,6 +169,9 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   }
 
   const focus = (i: number) => {
+    // Text-card: the textarea is the only focusable element; focusCustom
+    // handles it via the ref callback — skip option routing entirely.
+    if (text()) return
     const next = clamp(i)
     setStore("focus", next)
     if (store.editing) return
@@ -228,9 +232,24 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     showToast({ title: language.t("common.requestFailed"), description: message })
   }
 
+  // amicode/opencode#117 (amicode#249 QA): scope the reply by the REQUESTING
+  // session's directory — the server's pending-question registry is
+  // instance-per-directory, and an unscoped call lands on the server-cwd
+  // instance ("reply for unknown request") for any session living elsewhere.
+  const serverSync = useServerSync()
+  const requestDirectory = createMemo(() => {
+    const info = serverSync().session.data.info[props.request.sessionID]
+    return info?.directory
+  })
+
   const replyMutation = useMutation(() => ({
     mutationFn: (answers: QuestionAnswer[]) =>
-      sdk().api.question.reply({ sessionID: props.request.sessionID, requestID: props.request.id, answers }),
+      sdk().api.question.reply({
+        sessionID: props.request.sessionID,
+        requestID: props.request.id,
+        location: { directory: requestDirectory() },
+        answers,
+      }),
     onMutate: () => {
       props.onSubmit()
     },
@@ -242,7 +261,12 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   }))
 
   const rejectMutation = useMutation(() => ({
-    mutationFn: () => sdk().api.question.reject({ sessionID: props.request.sessionID, requestID: props.request.id }),
+    mutationFn: () =>
+      sdk().api.question.reject({
+        sessionID: props.request.sessionID,
+        requestID: props.request.id,
+        location: { directory: requestDirectory() },
+      }),
     onMutate: () => {
       props.onSubmit()
     },
@@ -410,6 +434,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     setTimeout(() => {
       el.focus()
       resizeInput(el)
+      // Sync the container measurement after the textarea has its final height
+      if (optionsRef) {
+        setStore("optionsHeight", (h) => Math.max(h, optionsRef!.scrollHeight))
+      }
     }, 0)
   }
 

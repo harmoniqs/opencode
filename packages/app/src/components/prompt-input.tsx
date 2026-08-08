@@ -51,11 +51,9 @@ import { usePermission } from "@/context/permission"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { createSessionTabs } from "@/pages/session/helpers"
-import { inAmicode } from "@/pages/session/use-amicode-commands"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
-import { readClipboardViaBridge, readClipboardImageViaBridge } from "./prompt-input/clipboard-bridge"
-import { normalizePaste } from "./prompt-input/paste"
+import { readClipboardViaBridge } from "./prompt-input/clipboard-bridge"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
@@ -1218,31 +1216,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     })
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Amicode webview: the framed app has no clipboard-read permission, so the
-    // browser dispatches no usable paste event on ⌘V (unlike plain web/desktop,
-    // where onPaste handles it). Intercept the keystroke and read the OS
-    // clipboard over the extension bridge instead (see clipboard-bridge.ts).
-    // Image first (screenshots), then text — mirrors handlePaste's precedence.
-    if (
-      (event.metaKey || event.ctrlKey) &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.key.toLowerCase() === "v" &&
-      inAmicode()
-    ) {
-      event.preventDefault()
-      void (async () => {
-        const image = await readClipboardImageViaBridge()
-        if (image) {
-          await addAttachment(image)
-          return
-        }
-        const text = await readClipboardViaBridge()
-        if (text) addPart({ type: "text", content: normalizePaste(text), start: 0, end: 0 })
-      })()
-      return
-    }
-
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
       if (store.mode !== "normal") return
@@ -1502,7 +1475,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         <PromptImageAttachments
           attachments={imageAttachments()}
           onOpen={(attachment) =>
-            dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)
+            dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />)
           }
           onRemove={removeAttachment}
           removeLabel={language.t("prompt.attachment.remove")}
