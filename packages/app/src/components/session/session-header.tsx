@@ -520,11 +520,26 @@ export function SessionHeader() {
                             />
                           </div>
                         </Button>
-                      </TooltipKeybind>
-                    </div>
-                  </div>
-                </div>
-              }
+                       </TooltipKeybind>
+
+                       {/* Compact button for legacy layout */}
+                       <TooltipKeybind
+                         title={language.t("command.session.compact")}
+                         keybind={command.keybind("session.compact")}
+                       >
+                         <Button
+                           variant="ghost"
+                           class="titlebar-icon w-8 h-6 p-0 box-border"
+                           onClick={() => command.trigger("session.compact", "palette")}
+                           aria-label={language.t("command.session.compact")}
+                         >
+                           <Icon size="small" name="minimize" />
+                         </Button>
+                       </TooltipKeybind>
+                     </div>
+                   </div>
+                 </div>
+               }
             >
               <SessionHeaderV2Actions state={v2ActionsState()} />
             </Show>
