@@ -1011,6 +1011,18 @@ export function MessageTimeline(props: {
       })
   }
 
+  const unarchiveSession = async (sessionID: string) => {
+    if ((await sdk().protocol) !== "v1") return
+    await (sdk().client.session.update as Function)({ sessionID, directory: sdk().directory, time: { archived: null } })
+      .then(() => void sync().session.sync(sessionID, { force: true }))
+      .catch((err: unknown) => {
+        showToast({
+          title: language.t("common.requestFailed"),
+          description: errorMessage(err),
+        })
+      })
+  }
+
   const deleteSession = async (sessionID: string) => {
     const session = sync().session.get(sessionID)
     if (!session) return false
@@ -1744,9 +1756,18 @@ export function MessageTimeline(props: {
                                     </DropdownMenu.ItemLabel>
                                   </DropdownMenu.Item>
                                 </Show>
-                                <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
-                                  <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
+                                <Show
+                                  when={sync().session.get(id)?.time?.archived}
+                                  fallback={
+                                    <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
+                                      <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
+                                    </DropdownMenu.Item>
+                                  }
+                                >
+                                  <DropdownMenu.Item onSelect={() => void unarchiveSession(id)}>
+                                    <DropdownMenu.ItemLabel>{language.t("common.unarchive")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                </Show>
                                 <DropdownMenu.Separator />
                                 <DropdownMenu.Item
                                   onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
@@ -1815,9 +1836,18 @@ export function MessageTimeline(props: {
                                   {language.t("session.share.action.share")}...
                                 </MenuV2.Item>
                               </Show>
-                              <MenuV2.Item onSelect={() => void archiveSession(id)}>
-                                {language.t("common.archive")}
-                              </MenuV2.Item>
+                              <Show
+                                when={sync().session.get(id)?.time?.archived}
+                                fallback={
+                                  <MenuV2.Item onSelect={() => void archiveSession(id)}>
+                                    {language.t("common.archive")}
+                                  </MenuV2.Item>
+                                }
+                              >
+                                <MenuV2.Item onSelect={() => void unarchiveSession(id)}>
+                                  {language.t("common.unarchive")}
+                                </MenuV2.Item>
+                              </Show>
                               <MenuV2.Separator />
                               <MenuV2.Item onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}>
                                 {language.t("common.delete")}...

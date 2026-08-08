@@ -151,7 +151,28 @@ export function SessionComposerRegion(props: {
               </Show>
               <Show
                 when={controller.child()}
-                fallback={<Show when={!controller.state.blocked()}>{props.promptInput}</Show>}
+                fallback={
+                  <Show
+                    when={controller.archived()}
+                    fallback={<Show when={!controller.state.blocked()}>{props.promptInput}</Show>}
+                  >
+                    <div
+                      ref={controller.setPromptRef}
+                      class="w-full rounded-[12px] border border-border-weak-base bg-background-base p-3 text-16-regular text-text-weak"
+                    >
+                      <span>{language.t("session.archived.readOnly")} </span>
+                      <Show when={controller.onUnarchive}>
+                        <button
+                          type="button"
+                          class="text-text-base transition-colors hover:text-text-strong"
+                          onClick={() => controller.onUnarchive?.()}
+                        >
+                          {language.t("session.archived.unarchive")}
+                        </button>
+                      </Show>
+                    </div>
+                  </Show>
+                }
               >
                 <div
                   ref={controller.setPromptRef}

@@ -18,7 +18,7 @@ import { NotFoundError } from "@/storage/storage"
 import { eq } from "drizzle-orm"
 import { and } from "drizzle-orm"
 import { gte } from "drizzle-orm"
-import { isNull } from "drizzle-orm"
+import { isNull, isNotNull } from "drizzle-orm"
 import { desc } from "drizzle-orm"
 import { like } from "drizzle-orm"
 import { sql } from "drizzle-orm"
@@ -561,7 +561,8 @@ const layer: Layer.Layer<
       if (input?.start) conditions.push(gte(SessionTable.time_updated, input.start))
       if (input?.cursor) conditions.push(lt(SessionTable.time_updated, input.cursor))
       if (input?.search) conditions.push(like(SessionTable.title, `%${input.search}%`))
-      if (!input?.archived) conditions.push(isNull(SessionTable.time_archived))
+      if (input?.archived) conditions.push(isNotNull(SessionTable.time_archived))
+      else conditions.push(isNull(SessionTable.time_archived))
 
       const query =
         conditions.length > 0
@@ -757,7 +758,18 @@ const layer: Layer.Layer<
     })
 
     const setArchived = Effect.fn("Session.setArchived")(function* (input: { sessionID: SessionID; time?: number }) {
-      yield* patch(input.sessionID, { time: { archived: input.time } }).pipe(Effect.orDie)
+      const current = yield* get(input.sessionID)
+      const next = {
+        ...current,
+        time: { ...current.time, archived: input.time, updated: Date.now() },
+      } as Info
+      yield* db
+        .update(SessionTable)
+        .set({ time_archived: input.time ?? null, time_updated: next.time.updated })
+        .where(eq(SessionTable.id, input.sessionID))
+        .run()
+        .pipe(Effect.orDie)
+      yield* events.publish(SessionV1.Event.Updated, { sessionID: input.sessionID, info: next })
     })
 
     const setMetadata = Effect.fn("Session.setMetadata")(function* (input: typeof SetMetadataInput.Type) {

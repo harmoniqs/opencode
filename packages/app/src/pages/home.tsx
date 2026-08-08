@@ -22,8 +22,9 @@ import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
-import { useTabs } from "@/context/tabs"
+import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { useLayout, type HomeProjectSelection, type LocalProject } from "@/context/layout"
 import { useLocation, useNavigate } from "@solidjs/router"
@@ -43,6 +44,7 @@ import { useNotification } from "@/context/notification"
 import {
   closeHomeProject,
   displayName,
+  errorMessage,
   homeProjectDirectories,
   homeProjectNavigation,
   projectForSession,
@@ -302,14 +304,130 @@ function HomeDesign() {
       isHidden: isHiddenProject,
     }),
   )
-  const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
+  const tabs = useTabs()
+  const records = createMemo(() => {
+    const all = allRecords().slice(0, HOME_SESSION_LIMIT)
+    const serverKey = state.selection.server
+    // Sort open-tab sessions to the top, preserving relative order within each group
+    const open: HomeSessionRecord[] = []
+    const rest: HomeSessionRecord[] = []
+    for (const record of all) {
+      if (sessionHasOpenTab(tabs.store, serverKey, record.session)) {
+        open.push(record)
+      } else {
+        rest.push(record)
+      }
+    }
+    return [...open, ...rest]
+  })
   const searchResults = createMemo(() => {
     const query = search().toLowerCase()
     if (!query) return []
     return allRecords().filter((record) => matchesHomeSessionSearch(record, query))
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
-  const tabs = useTabs()
+
+  // amicode#273: flyout tab state — Active vs Archived
+  const [flyoutTab, setFlyoutTab] = createSignal<"active" | "archived">("active")
+
+  // amicode#273 AC4: archived sessions — loads on tab switch via v2 API.
+  const [archivedSessions, setArchivedSessions] = createSignal<Session[]>([])
+  const [archivedLoading, setArchivedLoading] = createSignal(false)
+  const [archivedCursor, setArchivedCursor] = createSignal<string | undefined>(undefined)
+  const [archivedHasMore, setArchivedHasMore] = createSignal(true)
+  const ARCHIVED_PAGE_SIZE = 20
+
+  async function loadArchivedSessions(reset = false) {
+    const ctx = focusedServerCtx()
+    if (!ctx) return
+    setArchivedLoading(true)
+    try {
+      const cursor = reset ? undefined : archivedCursor()
+      const result = await ctx.sdk.client.experimental.session.list(
+        { archived: true, limit: ARCHIVED_PAGE_SIZE, ...(cursor ? { cursor: Number(cursor) } : {}) },
+      )
+      const sessions: Session[] = (result.data ?? []) as Session[]
+      if (reset) {
+        setArchivedSessions(sessions)
+      } else {
+        setArchivedSessions((prev) => [...prev, ...sessions])
+      }
+      // Cursor-based pagination: if we got a full page, there may be more
+      const lastSession = sessions[sessions.length - 1]
+      if (sessions.length >= ARCHIVED_PAGE_SIZE && lastSession) {
+        setArchivedCursor(String(lastSession.time.updated ?? lastSession.time.created))
+        setArchivedHasMore(true)
+      } else {
+        setArchivedCursor(undefined)
+        setArchivedHasMore(false)
+      }
+    } catch {
+      // degrade gracefully — section stays empty
+    } finally {
+      setArchivedLoading(false)
+    }
+  }
+
+  async function unarchiveSession(session: Session) {
+    const ctx = focusedServerCtx()
+    if (!ctx) return
+    try {
+      // Unarchive via the v1 session.update endpoint (same as archive, but nulling the timestamp)
+      await (ctx.sdk.client.session.update as Function)({
+        sessionID: session.id,
+        directory: session.directory,
+        time: { archived: null },
+      })
+      // Remove from archived list
+      setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
+      // Reload active sessions
+      await Promise.all(
+        projectDirectories().map((directory) =>
+          focusedSync().project.loadSessions(directory, { limit: HOME_SESSION_LIMIT }),
+        ),
+      )
+    } catch (cause) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: errorMessage(cause, language.t("common.requestFailed")),
+      })
+    }
+  }
+
+  async function archiveSession(session: Session) {
+    const ctx = focusedServerCtx()
+    if (!ctx) return
+    try {
+      await (ctx.sdk.client.session.update as Function)({
+        sessionID: session.id,
+        directory: session.directory,
+        time: { archived: Date.now() },
+      })
+      // Add to archived list
+      setArchivedSessions((prev) => [session, ...prev])
+      // Reload active sessions so it disappears from the open list
+      await Promise.all(
+        projectDirectories().map((directory) =>
+          focusedSync().project.loadSessions(directory, { limit: HOME_SESSION_LIMIT }),
+        ),
+      )
+    } catch (cause) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: errorMessage(cause, language.t("common.requestFailed")),
+      })
+    }
+  }
+
+  // amicode#273 AC7: extend search results to include archived sessions with badge.
+  const archivedSearchResults = createMemo(() => {
+    const query = search().toLowerCase()
+    if (!query) return []
+    return archivedSessions().filter((session) => {
+      const title = sessionTitle(session.title) || session.id
+      return title.toLowerCase().includes(query)
+    })
+  })
 
   // amicode: home-card data. All read from the focused server's /amicode/* raw
   // routes (~/.amico). Each degrades to undefined on failure so a card simply
@@ -973,8 +1091,8 @@ function HomeDesign() {
                     cursor: "pointer",
                   }}
                 >
-                  Projects
-                  {/* amicode#203: no counter/badge on the entry — just the label. */}
+                   Sessions
+                  {/* amicode#273: renamed from "Projects" — the rail's Projects surface owns project switching. */}
                   <span aria-hidden="true" style={{ "font-size": "9px", color: "var(--v2-text-text-muted)" }}>
                     ▾
                   </span>
@@ -1009,36 +1127,8 @@ function HomeDesign() {
                       padding: "14px",
                     }}
                   >
-                    {/* amicode#203 (Kate): Projects section at the top, then the
-                        search + Recent-sessions list below. */}
-                    <HomeProjectColumn
-                      compact
-                      projects={visibleProjects()}
-                      selected={state.selection}
-                      focusServer={focusServer}
-                      selectProject={selectProject}
-                      openNewSession={openProjectNewSession}
-                      chooseProject={(conn) => void chooseProject(conn)}
-                      newProject={(conn) => void newProject(conn)}
-                      editProject={editProject}
-                      closeProject={(conn, directory) => {
-                        const next = closeHomeProject(
-                          state.selection,
-                          ServerConnection.key(conn),
-                          global.ensureServerCtx(conn).projects,
-                          directory,
-                        )
-                        if (next) setSelection(next)
-                      }}
-                      clearNotifications={clearNotifications}
-                      unseenCount={unseenCount}
-                      sessionsFor={(worktree) => allRecords().filter((r) => r.project.worktree === worktree)}
-                      onOpenSession={openSession}
-                      activeServerKey={server.key}
-                      openSettings={openSettings}
-                      language={language}
-                    />
-                    <div style={{ height: "1px", background: "var(--v2-border-border-base)", "flex-shrink": "0" }} />
+                    {/* amicode#273: Projects section removed — project switching moves
+                        to the Rail's Projects surface per ADR 0001. */}
                     <section
                       class="isolate min-h-0 min-w-0 flex flex-col"
                       aria-label={language.t("sidebar.project.recentSessions")}
@@ -1049,6 +1139,7 @@ function HomeDesign() {
                         open={searchOpen()}
                         loading={sessionLoad.isLoading}
                         results={searchResults()}
+                        archivedResults={archivedSearchResults()}
                         server={state.selection.server}
                         activeServer={state.selection.server === server.key}
                         noResultsLabel={language.t("home.sessions.search.noResults", { query: search() })}
@@ -1060,69 +1151,119 @@ function HomeDesign() {
                         onClose={closeSearch}
                         onSelect={selectSearchSession}
                       />
-                      {/* The scroll container must be this element itself (used flex
-                      size + overflow-y), NOT ScrollView: its viewport needs
-                      height:100%, and percentage heights never resolve under the
-                      flyout's max-height-only auto-height chain — the viewport
-                      inflates to content size and the root just clips it. Same
-                      pattern as the project list / search results lists. */}
+                      {/* amicode#273: tab bar — Active vs Archived */}
+                      <div class="flex items-center gap-0.5 pt-3 pb-2">
+                        <button
+                          type="button"
+                          class="rounded-md px-2.5 py-1 text-[11px] font-semibold border-none cursor-pointer transition-colors"
+                          style={{
+                            background: flyoutTab() === "active" ? "var(--v2-background-bg-layer-02)" : "transparent",
+                            color: flyoutTab() === "active" ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                          }}
+                          onClick={() => setFlyoutTab("active")}
+                        >
+                          Active
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-md px-2.5 py-1 text-[11px] font-semibold border-none cursor-pointer transition-colors"
+                          style={{
+                            background: flyoutTab() === "archived" ? "var(--v2-background-bg-layer-02)" : "transparent",
+                            color: flyoutTab() === "archived" ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                          }}
+                          onClick={() => {
+                            setFlyoutTab("archived")
+                            if (archivedSessions().length === 0) void loadArchivedSessions(true)
+                          }}
+                        >
+                          Archived
+                        </button>
+                        <div class="flex-1" />
+                        <Show when={flyoutTab() === "active" && newSessionProject()}>
+                          <IconButtonV2
+                            data-action="home-new-session"
+                            variant="ghost-muted"
+                            size="large"
+                            class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                            icon={<IconV2 name="edit" />}
+                            onClick={openNewSession}
+                            aria-label={language.t("command.session.new")}
+                          />
+                        </Show>
+                      </div>
+                      {/* Tab content */}
                       <div class="min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        <div class="pt-3 flex flex-col gap-6">
+                        <Show when={flyoutTab() === "active"}>
                           <Show
                             when={!sessionLoad.isLoading}
                             fallback={<HomeSessionSkeleton label={language.t("common.loading")} />}
                           >
-                            <div class="flex min-w-0 flex-col gap-1">
-                              {/* amicode#203 (Kate): header matches the PROJECTS
-                                  header — uppercase faint label + ghost icon button. */}
-                              <div class="flex h-7 min-w-0 items-center justify-between">
-                                <span
-                                  style={{
-                                    "font-size": "10px",
-                                    "font-weight": "700",
-                                    "letter-spacing": "0.08em",
-                                    "text-transform": "uppercase",
-                                    color: "var(--v2-text-text-faint)",
-                                  }}
-                                >
-                                  {language.t("sidebar.project.recentSessions")}
-                                </span>
-                                <Show when={newSessionProject()}>
-                                  <IconButtonV2
-                                    data-action="home-new-session"
-                                    variant="ghost-muted"
-                                    size="large"
-                                    class="titlebar-icon [&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
-                                    icon={<IconV2 name="edit" />}
-                                    onClick={openNewSession}
-                                    aria-label={language.t("command.session.new")}
-                                  />
-                                </Show>
-                              </div>
-                              <Show
-                                when={records().length > 0}
-                                fallback={
-                                  <div class="pl-1.5 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
-                                    {language.t("home.sessions.empty")}
-                                  </div>
-                                }
-                              >
-                                <div class="flex min-w-0 flex-col gap-px">
-                                  <For each={records()}>
-                                    {(record) => (
-                                      <HomeSessionRow
-                                        record={record}
-                                        server={state.selection.server}
-                                        activeServer={state.selection.server === server.key}
-                                        openSession={openSession}
-                                      />
-                                    )}
-                                  </For>
+                            <Show
+                              when={records().length > 0}
+                              fallback={
+                                <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                                  {language.t("home.sessions.empty")}
                                 </div>
-                              </Show>
-                            </div>
+                              }
+                            >
+                              <div class="flex min-w-0 flex-col gap-px">
+                                <For each={records()}>
+                                  {(record) => (
+                                    <HomeSessionRow
+                                      record={record}
+                                      server={state.selection.server}
+                                      activeServer={state.selection.server === server.key}
+                                      openSession={openSession}
+                                      archiveSession={archiveSession}
+                                      isOpenTab={sessionHasOpenTab(tabs.store, state.selection.server, record.session)}
+                                    />
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
                           </Show>
-                        </div>
+                        </Show>
+                        <Show when={flyoutTab() === "archived"}>
+                          <Show
+                            when={!archivedLoading() || archivedSessions().length > 0}
+                            fallback={
+                              <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                                {language.t("common.loading")}
+                              </div>
+                            }
+                          >
+                            <Show
+                              when={archivedSessions().length > 0}
+                              fallback={
+                                <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                                  No archived sessions
+                                </div>
+                              }
+                            >
+                              <div class="flex min-w-0 flex-col gap-px">
+                                <For each={archivedSessions()}>
+                                  {(session) => (
+                                    <ArchivedSessionRow
+                                      session={session}
+                                      openSession={openSession}
+                                      onUnarchive={unarchiveSession}
+                                    />
+                                  )}
+                                </For>
+                              </div>
+                              <Show when={archivedHasMore()}>
+                                <button
+                                  type="button"
+                                  class="mt-2 w-full text-center text-[12px] text-v2-text-text-muted cursor-pointer border-none bg-transparent hover:text-v2-text-text-base"
+                                  onClick={() => void loadArchivedSessions()}
+                                  disabled={archivedLoading()}
+                                >
+                                  {archivedLoading() ? language.t("common.loading") : "Show more"}
+                                </button>
+                              </Show>
+                            </Show>
+                          </Show>
+                        </Show>
                       </div>
                     </section>
                   </div>
@@ -1605,6 +1746,7 @@ function HomeSessionSearch(props: {
   open: boolean
   loading: boolean
   results: HomeSessionRecord[]
+  archivedResults?: Session[]
   server: ServerConnection.Key
   activeServer: boolean
   noResultsLabel: string
@@ -1705,32 +1847,55 @@ function HomeSessionSearch(props: {
                   }
                 >
                   <Show
-                    when={props.results.length > 0}
+                    when={props.results.length > 0 || (props.archivedResults?.length ?? 0) > 0}
                     fallback={
                       <p class="my-1.5 px-4 text-[13px] leading-4 tracking-[-0.04px] text-v2-text-text-muted [font-weight:440]">
                         {props.noResultsLabel}
                       </p>
                     }
                   >
-                    <div class="flex flex-col">
-                      <p class="my-1.5 px-4 text-[13px] leading-4 tracking-[-0.04px] text-v2-text-text-muted [font-weight:440]">
-                        {language.t("home.sessions.search.sessions")}
-                      </p>
-                      <div ref={listRef} class="flex max-h-80 flex-col gap-px overflow-y-auto">
-                        <For each={props.results}>
-                          {(record) => (
-                            <HomeSessionSearchResultRow
-                              record={record}
-                              server={props.server}
-                              activeServer={props.activeServer}
-                              selected={store.active === homeSessionSearchKey(record)}
-                              onHighlight={() => setStore("active", homeSessionSearchKey(record))}
-                              onSelect={(session) => props.onSelect(session)}
-                            />
-                          )}
-                        </For>
+                    <Show when={props.results.length > 0}>
+                      <div class="flex flex-col">
+                        <p class="my-1.5 px-4 text-[13px] leading-4 tracking-[-0.04px] text-v2-text-text-muted [font-weight:440]">
+                          {language.t("home.sessions.search.sessions")}
+                        </p>
+                        <div ref={listRef} class="flex max-h-80 flex-col gap-px overflow-y-auto">
+                          <For each={props.results}>
+                            {(record) => (
+                              <HomeSessionSearchResultRow
+                                record={record}
+                                server={props.server}
+                                activeServer={props.activeServer}
+                                selected={store.active === homeSessionSearchKey(record)}
+                                onHighlight={() => setStore("active", homeSessionSearchKey(record))}
+                                onSelect={(session) => props.onSelect(session)}
+                              />
+                            )}
+                          </For>
+                        </div>
                       </div>
-                    </div>
+                    </Show>
+                    {/* amicode#273 AC7: archived results with badge */}
+                    <Show when={(props.archivedResults?.length ?? 0) > 0}>
+                      <div class="flex flex-col mt-2">
+                        <div class="flex max-h-40 flex-col gap-px overflow-y-auto">
+                          <For each={props.archivedResults}>
+                            {(session) => (
+                              <button
+                                type="button"
+                                class={`${HOME_SESSION_ROW} opacity-70`}
+                                onClick={() => props.onSelect(session!)}
+                              >
+                                <IconV2 name="archive" size="small" class="shrink-0 text-v2-icon-icon-faint" />
+                                <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
+                                  {sessionTitle(session!.title) || session!.id}
+                                </span>
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
                   </Show>
                 </Show>
               </div>
@@ -1852,30 +2017,67 @@ function HomeSessionRow(props: {
   server: ServerConnection.Key
   activeServer: boolean
   openSession: (session: Session) => void
+  archiveSession?: (session: Session) => void
+  isOpenTab?: boolean
   /** nested under a project → the project name is redundant, so hide it */
   hideLabel?: boolean
 }) {
+  const language = useLanguage()
   const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
   const showLabel = () => !props.hideLabel && !!props.record.projectName
 
   return (
-    <button
-      type="button"
-      data-component="home-session-row"
-      class={HOME_SESSION_ROW}
-      onClick={() => props.openSession(props.record.session)}
-    >
-      <span
-        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${showLabel() ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+    <div class="group/session relative flex h-7 min-w-0 items-center rounded-[6px]">
+      <button
+        type="button"
+        data-component="home-session-row"
+        class={HOME_SESSION_ROW}
+        onClick={() => props.openSession(props.record.session)}
       >
-        {title()}
-      </span>
-      <Show when={showLabel()}>
-        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-faint [font-weight:440]">
-          {props.record.projectName}
+        <Show when={props.isOpenTab}>
+          <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
+            <span
+              class="shrink-0 size-[6px] rounded-full"
+              style={{
+                background: "#34d399",
+                "box-shadow": "0 0 3px #34d39980",
+                animation: "session-open-glow 2.4s ease-in-out infinite",
+              }}
+            />
+          </TooltipV2>
+        </Show>
+        <span
+          class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${showLabel() ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+        >
+          {title()}
         </span>
+        <Show when={showLabel()}>
+          <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-faint [font-weight:440]">
+            {props.record.projectName}
+          </span>
+        </Show>
+      </button>
+      <Show when={props.archiveSession}>
+        <div
+          class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/session:opacity-100 focus-within:opacity-100 transition-opacity"
+        >
+          <TooltipV2 placement="top" value={language.t("common.archive")}>
+            <IconButtonV2
+              data-action="home-session-archive"
+              variant="ghost-muted"
+              size="large"
+              icon={<IconV2 name="archive" />}
+              aria-label={language.t("common.archive")}
+              onClick={(event: MouseEvent) => {
+                event.preventDefault()
+                event.stopPropagation()
+                void props.archiveSession?.(props.record.session)
+              }}
+            />
+          </TooltipV2>
+        </div>
       </Show>
-    </button>
+    </div>
   )
 }
 
@@ -1915,6 +2117,49 @@ function HomeCardsSkeleton() {
           />
         )}
       </For>
+    </div>
+  )
+}
+
+// amicode#273 AC5: archived session row — click opens read-only, hover shows unarchive.
+function ArchivedSessionRow(props: {
+  session: Session
+  openSession: (session: Session) => void
+  onUnarchive: (session: Session) => void
+}) {
+  const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+
+  return (
+    <div class="group/archived relative flex h-7 min-w-0 items-center rounded-[6px]">
+      <button
+        type="button"
+        data-component="archived-session-row"
+        class={`${HOME_SESSION_ROW} opacity-70`}
+        onClick={() => props.openSession(props.session)}
+      >
+        <IconV2 name="archive" size="small" class="shrink-0 text-v2-icon-icon-faint" />
+        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
+          {title()}
+        </span>
+      </button>
+      <div
+        class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity"
+      >
+        <TooltipV2 placement="top" value="Unarchive">
+          <IconButtonV2
+            data-action="home-session-unarchive"
+            variant="ghost-muted"
+            size="large"
+            icon={<Icon name="arrow-undo-down" size="small" />}
+            aria-label="Unarchive"
+            onClick={(event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void props.onUnarchive(props.session)
+            }}
+          />
+        </TooltipV2>
+      </div>
     </div>
   )
 }

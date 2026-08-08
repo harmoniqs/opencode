@@ -25,3 +25,17 @@ export async function archiveHomeSession(input: {
     })
     .catch((error) => input.onError?.(error))
 }
+
+export async function unarchiveHomeSession(input: {
+  session: HomeSession
+  unarchive: (sessionID: string) => Promise<unknown>
+  add: () => void
+  onError?: (error: unknown) => void
+}) {
+  await input
+    .unarchive(input.session.id)
+    .then(() => {
+      input.add()
+    })
+    .catch((error) => input.onError?.(error))
+}
