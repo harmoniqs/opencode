@@ -104,6 +104,21 @@ export function SessionBugDock() {
   // hard-deleted (they vanish from the map), filed ones archive (excluded) —
   // so a dismissed or terminal dock never re-opens from the watch.
   const serverSync = useServerSync()
+
+  // Liveness watch (amicode#296): if the dock's session vanishes from the
+  // synced session map externally (arm-failure cleanup, or any unexpected
+  // deletion), auto-dismiss silently — no user action required, no wedged
+  // composer. No toast: the extension already showed an error.
+  createEffect(() => {
+    if (controller.phase() !== "chat") return
+    const id = controller.sessionID()
+    if (!id) return
+    const info = serverSync().session.data.info ?? {}
+    if (!(id in info)) {
+      controller.requestClose()
+    }
+  })
+
   createEffect(() => {
     if (!bugReportEnabled()) return
     if (bugDockController.phase() !== "closed") return
