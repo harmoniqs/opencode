@@ -487,6 +487,23 @@
     font-weight: var(--font-weight-regular);
   }
 
+  /* AMICODE: the clickable variant (opens the file via the bridge) — strip the
+   *  button chrome, keep the filename look, earn a hover underline. */
+  button[data-slot="message-part-title-filename"] {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  button[data-slot="message-part-title-filename"]:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   [data-slot="message-part-path"] {
     display: flex;
     flex-grow: 1;
@@ -1141,26 +1158,6 @@
     }
   }
 
-  /* Text-card (kind: "text") — the textarea is the ONLY affordance, so it
-     needs visible chrome (border + background) unlike the choice-card's
-     secondary custom-input which is borderless/transparent. */
-  [data-slot="question-text-form"] {
-    padding: 4px 8px;
-  }
-
-  [data-slot="question-text-form"] > [data-slot="question-custom-input"] {
-    border: 1px solid var(--v2-border-border-base);
-    border-radius: var(--radius-md);
-    padding: 8px 12px;
-    background: var(--v2-background-bg-layer-02);
-    min-height: 36px;
-
-    &:focus-visible {
-      border-color: var(--v2-border-border-focus);
-      outline: none;
-    }
-  }
-
   [data-slot="question-footer"] {
     display: flex;
     align-items: center;
@@ -1395,6 +1392,23 @@
   }
 }
 
+/* AMICODE: loaded-file rows are buttons now (open the file via the bridge) —
+ *  strip the button chrome, keep the row look, earn a hover tint. */
+button[data-component="tool-loaded-file"] {
+  appearance: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+button[data-component="tool-loaded-file"]:hover span {
+  color: var(--v2-text-text-base);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 body[data-new-layout] [data-component="user-message"] {
   font-weight: 440;
 
@@ -1607,16 +1621,6 @@ body:not([data-new-layout]) {
 
       &:focus-visible {
         outline: 1px solid var(--border-interactive-base);
-      }
-    }
-
-    [data-slot="question-text-form"] > [data-slot="question-custom-input"] {
-      border-color: var(--border-weak-base);
-      background: var(--surface-weak);
-
-      &:focus-visible {
-        border-color: var(--border-interactive-base);
-        outline: none;
       }
     }
   }

@@ -75,6 +75,7 @@ import { postBugReportPoke } from "@/utils/amicode-bug-report"
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
+import { AmicodeFileRefBridge } from "@/components/amicode-file-ref-bridge"
 
 const NewSession = lazy(() => import("@/pages/new-session"))
 
@@ -175,7 +176,10 @@ function SelectedServerProviders(props: ParentProps) {
   return (
     <ServerKey>
       <ServerSDKProvider>
-        <ServerSyncProvider>{props.children}</ServerSyncProvider>
+        <ServerSyncProvider>
+          <AmicodeFileRefBridge />
+          {props.children}
+        </ServerSyncProvider>
       </ServerSDKProvider>
     </ServerKey>
   )

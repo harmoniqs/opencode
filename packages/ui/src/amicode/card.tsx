@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, createMemo } from "solid-js"
+import { openFileInEditor } from "./bridge"
 import { amicodeStage } from "./stage"
 import { parseAskInput } from "./ask"
 import { AmicodeAskCard } from "./ask-card"
@@ -262,22 +263,32 @@ function Chip(props: { tool: string; status?: string; output?: string; count?: n
 // receipts wear. Reads "<kind> <specific>" like every other chip: the label names the kind,
 // the detail names the skill.
 //
-// Inert by construction. Unlike a receipt there is no entity to open, so this is the plain
-// shell with no chevron rather than the clickable <button> one. The expandable instruction
-// body stays with BasicTool at the mount site; this is only the trigger's face. Nesting it
-// there is safe because BasicTool declares an `icon` prop and never renders it (verified —
-// nothing in basic-tool.tsx reads props.icon), so the H-mark is the row's only glyph.
+// Inert by default; when the mount site passes the skill's `path` (the skill tool result
+// carries its base dir in metadata) the chip becomes a <button> that opens the SKILL.md in
+// the editor via the amicode bridge — the skill IS a file, so its face links to it. The
+// expandable instruction body stays with BasicTool at the mount site; this is only the
+// trigger's face. Nesting it there is safe because BasicTool declares an `icon` prop and
+// never renders it (verified — nothing in basic-tool.tsx reads props.icon), so the H-mark
+// is the row's only glyph. The chip's click stops propagation so the tool body's own
+// expand/collapse doesn't fire alongside the file open.
 //
-// A <span> shell rather than Chip's <div>: this sits inside a trigger's inline context, and
-// [data-component="amicode-card"] is already display:inline-flex, so nothing is lost.
-export function AmicoSkillChip(props: { kind: string; name?: string; status?: string }) {
+// A <span>/<button> shell rather than Chip's <div>: this sits inside a trigger's inline
+// context, and [data-component="amicode-card"] is already display:inline-flex, so nothing
+// is lost.
+export function AmicoSkillChip(props: { kind: string; name?: string; status?: string; path?: string }) {
   const running = () => props.status === "pending" || props.status === "running"
   const errored = () => props.status === "error" || props.status === "failed"
   const state = () =>
     errored() ? "error" : running() ? "running" : props.status === "completed" ? "done" : "idle"
 
-  return (
-    <span data-component="amicode-card" data-tool="skill" data-state={state()} data-clickable="false">
+  const open = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (props.path) openFileInEditor(props.path)
+  }
+
+  const inner = (
+    <>
       <span class="amc-sig">
         <AmicoMark running={running()} />
       </span>
@@ -310,7 +321,31 @@ export function AmicoSkillChip(props: { kind: string; name?: string; status?: st
           </Match>
         </Switch>
       </span>
-    </span>
+    </>
+  )
+
+  return (
+    <Show
+      when={props.path}
+      fallback={
+        <span data-component="amicode-card" data-tool="skill" data-state={state()} data-clickable="false">
+          {inner}
+        </span>
+      }
+    >
+      <button
+        type="button"
+        data-component="amicode-card"
+        data-tool="skill"
+        data-state={state()}
+        data-clickable="true"
+        title={props.path}
+        aria-label={`Open ${props.name ?? "skill"} source`}
+        onClick={open}
+      >
+        {inner}
+      </button>
+    </Show>
   )
 }
 
