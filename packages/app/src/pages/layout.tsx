@@ -15,7 +15,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { VaultPanel } from "@/components/vault-panel"
-import { ConnectionBanner } from "@/components/connection-banner"
+
 import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
@@ -226,40 +226,46 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
     
-    // Zoom keyboard shortcuts (web platform only)
-    // Use capture phase and window to ensure it catches events before other handlers
-    if (platform.platform === "web") {
-      const handleZoomKey = (e: KeyboardEvent) => {
-        if (!e.ctrlKey && !e.metaKey) return
-        // Don't trigger if user is typing in an input or contenteditable
-        const target = e.target as HTMLElement
-        if (target instanceof HTMLInputElement || 
-            target instanceof HTMLTextAreaElement ||
-            target.isContentEditable) return
-        
-        switch (e.key) {
-          case "+":
-          case "=":
-            e.preventDefault()
-            e.stopPropagation()
-            webZoomIn()
-            break
-          case "-":
-            e.preventDefault()
-            e.stopPropagation()
-            webZoomOut()
-            break
-          case "0":
-            e.preventDefault()
-            e.stopPropagation()
-            webZoomReset()
-            break
-        }
+    // Zoom keyboard shortcuts - always active
+    const handleZoomKey = (e: KeyboardEvent) => {
+      // Require Cmd (Mac) or Ctrl (Windows/Linux)
+      if (!e.ctrlKey && !e.metaKey) return
+      
+      // Don't trigger if user is typing in an input
+      const target = e.target as HTMLElement
+      if (target.tagName === "INPUT" || 
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable) {
+        return
       }
-      // Use capture phase to catch event before it bubbles
-      document.addEventListener("keydown", handleZoomKey, true)
-      onCleanup(() => document.removeEventListener("keydown", handleZoomKey, true))
+      
+      switch (e.key) {
+        case "+":
+        case "=":
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          webZoomIn()
+          console.log("[Zoom] Zoom in:", (window as any).__amicodeZoom)
+          break
+        case "-":
+        case "_":
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          webZoomOut()
+          console.log("[Zoom] Zoom out:", (window as any).__amicodeZoom)
+          break
+        case "0":
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          webZoomReset()
+          console.log("[Zoom] Reset:", (window as any).__amicodeZoom)
+          break
+      }
     }
+    
+    // Use window with capture phase for maximum reliability
+    window.addEventListener("keydown", handleZoomKey, true)
+    onCleanup(() => window.removeEventListener("keydown", handleZoomKey, true))
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -2276,8 +2282,7 @@ export default function LegacyLayout(props: ParentProps) {
               <SplitFrame titlebar={<Titlebar update={titlebarUpdate} />}>{props.children}</SplitFrame>
             </Show>
           </main>
-          <VaultPanel />
-          <ConnectionBanner />
+           <VaultPanel />
           <ToastRegion v2={newDesign()} />
           {/* amicode(workbench S2): every instance reports its tab list to the
               parent's mirror and (panes) obeys its commands. */}
