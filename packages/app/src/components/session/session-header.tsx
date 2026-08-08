@@ -9,7 +9,7 @@ import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bri
 import { showToast } from "@/utils/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
-import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Portal } from "solid-js/web"
@@ -17,9 +17,10 @@ import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
-import { useServer } from "@/context/server"
+import { useServer, ServerConnection } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
+import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
@@ -27,8 +28,15 @@ import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
+import { sessionTitle } from "@/utils/session-title"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 import { statusTriggerVisibility } from "../status-popover-model"
+import { useServerSync } from "@/context/server-sync"
+import { useGlobal } from "@/context/global"
+import { base64Encode } from "@opencode-ai/core/util/encode"
+import { sortedRootSessions } from "@/pages/layout/helpers"
+import { useNavigate } from "@solidjs/router"
+import type { Session } from "@opencode-ai/sdk/v2/client"
 
 // AMICODE: the MCP/LSP/Plugins/Vaults status popover is opencode-operator
 // noise here ("No MCPs configured"). Hidden, not deleted — the trigger slot is
@@ -533,7 +541,7 @@ export function SessionHeader() {
                            onClick={() => command.trigger("session.compact", "palette")}
                            aria-label={language.t("command.session.compact")}
                          >
-                           <Icon size="small" name="minimize" />
+                           <Icon size="small" name="arrow-down-to-line" />
                          </Button>
                        </TooltipKeybind>
                      </div>
@@ -586,9 +594,11 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
           class="!w-9 shrink-0"
           onClick={() => command.trigger("session.compact", "palette")}
           aria-label={language.t("command.session.compact")}
-          icon={<IconV2 name="minimize" />}
+          icon={<IconV2 name="collapse" />}
         />
       </TooltipV2>
+      {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
+      <SessionChatsDropdown />
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
@@ -621,6 +631,486 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
           />
         </TooltipV2>
       </Show>
+    </div>
+  )
+}
+
+// amicode#274: Session Chats Dropdown — mirrors the dashboard sessions flyout
+// (amicode#273) inside the session header: tabbed Active/Archived, search,
+// open-tab indicators, archive/unarchive actions, and cursor-based pagination.
+const SESSION_DROPDOWN_ROW =
+  "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-[6px] bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base"
+
+function SessionChatsDropdown() {
+  const tabs = useTabs()
+  const server = useServer()
+  const serverSync = useServerSync()
+  const globalCtx = useGlobal()
+  const language = useLanguage()
+  const navigate = useNavigate()
+  const { params } = useSessionLayout()
+
+  const [open, setOpen] = createSignal(false)
+  const [flyoutTab, setFlyoutTab] = createSignal<"active" | "archived">("active")
+  const [search, setSearch] = createSignal("")
+  const [archivedSessions, setArchivedSessions] = createSignal<Session[]>([])
+  const [archivedLoading, setArchivedLoading] = createSignal(false)
+  const [archivedCursor, setArchivedCursor] = createSignal<string | undefined>(undefined)
+  const [archivedHasMore, setArchivedHasMore] = createSignal(true)
+  const ARCHIVED_PAGE_SIZE = 20
+
+  let flyoutRoot: HTMLDivElement | undefined
+
+  const currentSessionID = createMemo(() => params.id)
+
+  // Active sessions — only computed when the flyout is open to avoid
+  // triggering reactive subscriptions (serverSync().child pins the directory
+  // and can cascade re-renders to the parent Portal).
+  const directory = createMemo(() => {
+    if (!open()) return ""
+    return serverSync().data.path.directory || ""
+  })
+  const activeSessions = createMemo(() => {
+    if (!open()) return []
+    try {
+      const dir = directory()
+      if (!dir) return []
+      const [store] = serverSync().child(dir, { bootstrap: false })
+      return sortedRootSessions(store, Date.now())
+    } catch {
+      return []
+    }
+  })
+
+  // Sort: open-tab sessions first
+  const sortedActiveSessions = createMemo(() => {
+    if (!open()) return []
+    const all = activeSessions()
+    const openTabs: Session[] = []
+    const rest: Session[] = []
+    for (const session of all) {
+      if (sessionHasOpenTab(tabs.store, server.key, session)) {
+        openTabs.push(session)
+      } else {
+        rest.push(session)
+      }
+    }
+    return [...openTabs, ...rest]
+  })
+
+  // Search filtering
+  const searchQuery = createMemo(() => search().trim().toLowerCase())
+  const filteredActiveSessions = createMemo(() => {
+    if (!open()) return []
+    const q = searchQuery()
+    if (!q) return sortedActiveSessions()
+    return sortedActiveSessions().filter((session) => {
+      const title = sessionTitle(session.title) || session.id
+      return title.toLowerCase().includes(q)
+    })
+  })
+  const filteredArchivedSessions = createMemo(() => {
+    const q = searchQuery()
+    if (!q) return archivedSessions()
+    return archivedSessions().filter((session) => {
+      const title = sessionTitle(session.title) || session.id
+      return title.toLowerCase().includes(q)
+    })
+  })
+
+  // SDK access for archived sessions
+  function getServerCtx() {
+    const conn = server.current
+    if (!conn) return
+    return globalCtx.ensureServerCtx(conn)
+  }
+
+  async function loadArchivedSessions(reset = false) {
+    const ctx = getServerCtx()
+    if (!ctx) return
+    setArchivedLoading(true)
+    try {
+      const cursor = reset ? undefined : archivedCursor()
+      const result = await ctx.sdk.client.experimental.session.list(
+        { archived: true, limit: ARCHIVED_PAGE_SIZE, ...(cursor ? { cursor: Number(cursor) } : {}) },
+      )
+      const sessions: Session[] = (result.data ?? []) as Session[]
+      if (reset) {
+        setArchivedSessions(sessions)
+      } else {
+        setArchivedSessions((prev) => [...prev, ...sessions])
+      }
+      const lastSession = sessions[sessions.length - 1]
+      if (sessions.length >= ARCHIVED_PAGE_SIZE && lastSession) {
+        setArchivedCursor(String(lastSession.time.updated ?? lastSession.time.created))
+        setArchivedHasMore(true)
+      } else {
+        setArchivedCursor(undefined)
+        setArchivedHasMore(false)
+      }
+    } catch {
+      // degrade gracefully
+    } finally {
+      setArchivedLoading(false)
+    }
+  }
+
+  async function archiveSession(session: Session) {
+    const ctx = getServerCtx()
+    if (!ctx) return
+    try {
+      await (ctx.sdk.client.session.update as Function)({
+        sessionID: session.id,
+        directory: session.directory,
+        time: { archived: Date.now() },
+      })
+      setArchivedSessions((prev) => [session, ...prev])
+      // Reload active sessions
+      await serverSync().project.loadSessions(directory(), { limit: 64 })
+    } catch (cause) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: String(cause),
+      })
+    }
+  }
+
+  async function unarchiveSession(session: Session) {
+    const ctx = getServerCtx()
+    if (!ctx) return
+    try {
+      await (ctx.sdk.client.session.update as Function)({
+        sessionID: session.id,
+        directory: session.directory,
+        time: { archived: null },
+      })
+      setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
+      await serverSync().project.loadSessions(directory(), { limit: 64 })
+    } catch (cause) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: String(cause),
+      })
+    }
+  }
+
+  function openSession(session: Session) {
+    // Close flyout first so its Portal unmounts cleanly.
+    setOpen(false)
+    // Use tabs.select for sessions that already have an open tab (no transition).
+    // For sessions without a tab, navigate directly — DO NOT use tabs.openPath
+    // which calls addSessionTab(startTransition), keeping both old and new UI
+    // mounted during the transition and duplicating Portal-rendered buttons.
+    const existingTab = tabs.store.find(
+      (t) => t.type === "session" && t.sessionId === session.id,
+    )
+    if (existingTab) {
+      tabs.select(existingTab)
+    } else {
+      const path = `/${base64Encode(session.directory)}/session/${session.id}`
+      navigate(path)
+    }
+  }
+
+  function handleNewChat() {
+    const dir = directory()
+    void tabs.newDraft({ server: server.key, directory: dir })
+    setOpen(false)
+  }
+
+  // Dismiss on outside click or Escape
+  createEffect(() => {
+    if (!open()) return
+    // Defer listener attachment so the opening mousedown doesn't immediately dismiss
+    const timer = setTimeout(() => {
+      const onDown = (e: MouseEvent) => {
+        const target = e.target as Node
+        if (flyoutRoot?.contains(target)) return
+        if (triggerRef?.contains(target)) return
+        setOpen(false)
+      }
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setOpen(false)
+      }
+      document.addEventListener("mousedown", onDown)
+      document.addEventListener("keydown", onKey)
+      onCleanup(() => {
+        document.removeEventListener("mousedown", onDown)
+        document.removeEventListener("keydown", onKey)
+      })
+    }, 0)
+    onCleanup(() => clearTimeout(timer))
+  })
+
+  let triggerRef: HTMLButtonElement | undefined
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        data-action="session-chats-toggle-flyout"
+        class="flex shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent p-1.5 cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
+        aria-label="Sessions"
+        onClick={() => setOpen(!open())}
+      >
+        <IconV2 name="menu" />
+      </button>
+      <Show when={open()}>
+        <Portal>
+          <div
+            ref={flyoutRoot}
+            data-slot="amicode-sessions-flyout"
+            role="dialog"
+            aria-label={language.t("sidebar.project.recentSessions")}
+            style={{
+              position: "fixed",
+              top: `${(triggerRef?.getBoundingClientRect().bottom ?? 0) + 8}px`,
+              right: `${document.documentElement.clientWidth - (triggerRef?.getBoundingClientRect().right ?? 0)}px`,
+              "z-index": "9999",
+              width: "min(440px, 88vw)",
+              "max-height": "min(70vh, 680px)",
+              display: "flex",
+              "flex-direction": "column",
+              gap: "12px",
+              overflow: "hidden auto",
+              border: "1px solid var(--v2-border-border-base)",
+              "border-radius": "10px",
+              background: "var(--v2-background-bg-base)",
+              "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
+              padding: "14px",
+            }}
+          >
+          <section class="isolate min-h-0 min-w-0 flex flex-col" aria-label={language.t("sidebar.project.recentSessions")}>
+            {/* Search */}
+            <label
+              class="relative z-20 flex h-9 w-full items-center gap-2 rounded-[6px] py-1 pl-3 pr-2 text-v2-icon-icon-muted bg-v2-background-bg-deep focus-within:bg-v2-background-bg-base focus-within:shadow-[0_0_0_0.5px_var(--v2-border-border-focus),var(--v2-elevation-raised)] transition-[background-color,box-shadow] duration-[120ms] ease-in-out"
+            >
+              <IconV2 name="magnifying-glass" />
+              <input
+                class="relative z-20 min-w-0 flex-1 border-0 bg-transparent text-v2-text-text-base outline-0 [font-weight:440] placeholder:text-v2-text-text-faint"
+                value={search()}
+                placeholder={language.t("home.sessions.search.placeholder")}
+                aria-label={language.t("home.sessions.search.placeholder")}
+                onInput={(e) => setSearch(e.currentTarget.value)}
+              />
+              <Show when={search().length > 0}>
+                <IconButtonV2
+                  variant="ghost-muted"
+                  size="small"
+                  icon={<IconV2 name="xmark-small" />}
+                  aria-label="Clear"
+                  onClick={() => setSearch("")}
+                />
+              </Show>
+            </label>
+
+            {/* Tab bar — Active vs Archived */}
+            <div class="flex items-center gap-0.5 pt-3 pb-2">
+              <button
+                type="button"
+                class="rounded-md px-2.5 py-1 text-[11px] font-semibold border-none cursor-pointer transition-colors"
+                style={{
+                  background: flyoutTab() === "active" ? "var(--v2-background-bg-layer-02)" : "transparent",
+                  color: flyoutTab() === "active" ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                }}
+                onClick={() => setFlyoutTab("active")}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                class="rounded-md px-2.5 py-1 text-[11px] font-semibold border-none cursor-pointer transition-colors"
+                style={{
+                  background: flyoutTab() === "archived" ? "var(--v2-background-bg-layer-02)" : "transparent",
+                  color: flyoutTab() === "archived" ? "var(--v2-text-text-base)" : "var(--v2-text-text-muted)",
+                }}
+                onClick={() => {
+                  setFlyoutTab("archived")
+                  if (archivedSessions().length === 0) void loadArchivedSessions(true)
+                }}
+              >
+                Archived
+              </button>
+              <div class="flex-1" />
+              <Show when={flyoutTab() === "active"}>
+                <IconButtonV2
+                  variant="ghost-muted"
+                  size="large"
+                  class="[&_[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                  icon={<IconV2 name="edit" />}
+                  onClick={handleNewChat}
+                  aria-label={language.t("command.session.new")}
+                />
+              </Show>
+            </div>
+
+            {/* Tab content */}
+            <div class="min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Show when={flyoutTab() === "active"}>
+                <Show
+                  when={filteredActiveSessions().length > 0}
+                  fallback={
+                    <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                      {searchQuery() ? language.t("home.sessions.search.noResults", { query: search() }) : language.t("home.sessions.empty")}
+                    </div>
+                  }
+                >
+                  <div class="flex min-w-0 flex-col gap-px">
+                    <For each={filteredActiveSessions()}>
+                      {(session) => (
+                        <SessionDropdownRow
+                          session={session}
+                          isOpenTab={sessionHasOpenTab(tabs.store, server.key, session)}
+                          isCurrent={session.id === currentSessionID()}
+                          onOpen={openSession}
+                          onArchive={archiveSession}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </Show>
+              <Show when={flyoutTab() === "archived"}>
+                <Show
+                  when={!archivedLoading() || archivedSessions().length > 0}
+                  fallback={
+                    <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                      {language.t("common.loading")}
+                    </div>
+                  }
+                >
+                  <Show
+                    when={filteredArchivedSessions().length > 0}
+                    fallback={
+                      <div class="pl-1.5 py-2 text-v2-text-text-faint" style={{ "font-size": "12px" }}>
+                        No archived sessions
+                      </div>
+                    }
+                  >
+                    <div class="flex min-w-0 flex-col gap-px">
+                      <For each={filteredArchivedSessions()}>
+                        {(session) => (
+                          <ArchivedSessionDropdownRow
+                            session={session}
+                            onOpen={openSession}
+                            onUnarchive={unarchiveSession}
+                          />
+                        )}
+                      </For>
+                    </div>
+                    <Show when={archivedHasMore() && !searchQuery()}>
+                      <button
+                        type="button"
+                        class="mt-2 w-full text-center text-[12px] text-v2-text-text-muted cursor-pointer border-none bg-transparent hover:text-v2-text-text-base"
+                        onClick={() => void loadArchivedSessions()}
+                        disabled={archivedLoading()}
+                      >
+                        {archivedLoading() ? language.t("common.loading") : "Show more"}
+                      </button>
+                    </Show>
+                  </Show>
+                </Show>
+              </Show>
+            </div>
+          </section>
+        </div>
+        </Portal>
+      </Show>
+    </>
+  )
+}
+
+function SessionDropdownRow(props: {
+  session: Session
+  isOpenTab: boolean
+  isCurrent: boolean
+  onOpen: (session: Session) => void
+  onArchive: (session: Session) => void
+}) {
+  const language = useLanguage()
+  const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+
+  return (
+    <div class="group/session relative flex h-7 min-w-0 items-center rounded-[6px]">
+      <button
+        type="button"
+        data-component="session-dropdown-row"
+        class={SESSION_DROPDOWN_ROW}
+        onClick={() => props.onOpen(props.session)}
+      >
+        <Show when={props.isOpenTab}>
+          <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
+            <span
+              class="shrink-0 size-[6px] rounded-full"
+              style={{
+                background: "#34d399",
+                "box-shadow": "0 0 3px #34d39980",
+                animation: "session-open-glow 2.4s ease-in-out infinite",
+              }}
+            />
+          </TooltipV2>
+        </Show>
+        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
+          {title()}
+        </span>
+      </button>
+      <div class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/session:opacity-100 focus-within:opacity-100 transition-opacity">
+        <TooltipV2 placement="top" value={language.t("common.archive")}>
+          <IconButtonV2
+            data-action="session-dropdown-archive"
+            variant="ghost-muted"
+            size="large"
+            icon={<IconV2 name="archive" />}
+            aria-label={language.t("common.archive")}
+            onClick={(event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void props.onArchive(props.session)
+            }}
+          />
+        </TooltipV2>
+      </div>
+    </div>
+  )
+}
+
+function ArchivedSessionDropdownRow(props: {
+  session: Session
+  onOpen: (session: Session) => void
+  onUnarchive: (session: Session) => void
+}) {
+  const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+
+  return (
+    <div class="group/archived relative flex h-7 min-w-0 items-center rounded-[6px]">
+      <button
+        type="button"
+        data-component="archived-session-dropdown-row"
+        class={`${SESSION_DROPDOWN_ROW} opacity-70`}
+        onClick={() => props.onOpen(props.session)}
+      >
+        <IconV2 name="archive" size="small" class="shrink-0 text-v2-icon-icon-faint" />
+        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
+          {title()}
+        </span>
+      </button>
+      <div class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity">
+        <TooltipV2 placement="top" value="Unarchive">
+          <IconButtonV2
+            data-action="session-dropdown-unarchive"
+            variant="ghost-muted"
+            size="large"
+            icon={<Icon name="arrow-undo-down" size="small" />}
+            aria-label="Unarchive"
+            onClick={(event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void props.onUnarchive(props.session)
+            }}
+          />
+        </TooltipV2>
+      </div>
     </div>
   )
 }
