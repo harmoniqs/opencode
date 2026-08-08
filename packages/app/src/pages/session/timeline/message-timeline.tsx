@@ -609,13 +609,11 @@ export function MessageTimeline(props: {
 
   let overscanFrame: number | undefined
   onMount(() => {
+    // Single scroll to end after initial render to prevent flicker
     overscanFrame = requestAnimationFrame(() => {
+      overscanFrame = undefined
+      if (renderOverscan() < 20) setRenderOverscan(20)
       if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
-      overscanFrame = requestAnimationFrame(() => {
-        overscanFrame = undefined
-        if (renderOverscan() < 20) setRenderOverscan(20)
-        if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
-      })
     })
   })
 

@@ -553,27 +553,6 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
 
   return (
     <div class="flex items-center gap-2">
-      {/* New Session button - issue #275 */}
-      <TooltipV2
-        class="shrink-0"
-        placement="bottom"
-        value={
-          <>
-            {language.t("command.session.new")}
-            <KeybindV2 keys={["mod", "shift", "s"]} variant="neutral" />
-          </>
-        }
-      >
-        <IconButtonV2
-          type="button"
-          variant="ghost-muted"
-          size="large"
-          class="!w-9 shrink-0"
-          onClick={() => command.trigger("session.new", "palette")}
-          aria-label={language.t("command.session.new")}
-          icon={<IconV2 name="plus" />}
-        />
-      </TooltipV2>
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 healthDot={props.state.statusDotVisible} />

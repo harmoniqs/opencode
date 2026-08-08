@@ -239,27 +239,30 @@ export default function LegacyLayout(props: ParentProps) {
         return
       }
       
-      switch (e.key) {
-        case "+":
-        case "=":
-          e.preventDefault()
-          e.stopImmediatePropagation()
-          webZoomIn()
-          console.log("[Zoom] Zoom in:", (window as any).__amicodeZoom)
-          break
-        case "-":
-        case "_":
-          e.preventDefault()
-          e.stopImmediatePropagation()
-          webZoomOut()
-          console.log("[Zoom] Zoom out:", (window as any).__amicodeZoom)
-          break
-        case "0":
-          e.preventDefault()
-          e.stopImmediatePropagation()
-          webZoomReset()
-          console.log("[Zoom] Reset:", (window as any).__amicodeZoom)
-          break
+      // Use code for physical key detection (works with Shift)
+      // Equal key produces + when Shift is held
+      const code = e.code
+      const key = e.key
+      
+      // Debug logging
+      console.log("[Zoom] Keydown:", { code, key, shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey })
+      
+      // Plus/Equal: Zoom in (works with Cmd+Shift+Plus or Cmd+Equal)
+      if (code === "Equal" || code === "NumpadAdd" || key === "+" || (key === "=" && e.shiftKey)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom in")
+        webZoomIn()
+      } else if (code === "Minus" || code === "NumpadSubtract" || key === "-" || key === "_") {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom out")
+        webZoomOut()
+      } else if (code === "Digit0" || code === "Numpad0" || key === "0") {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        console.log("[Zoom] Triggering zoom reset")
+        webZoomReset()
       }
     }
     
