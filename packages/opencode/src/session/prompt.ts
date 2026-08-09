@@ -205,7 +205,7 @@ const layer = Layer.effect(
         m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
       const idx = input.history.findIndex(real)
       if (idx === -1) return
-      if (input.history.filter(real).length !== 1) return
+      if (input.history.filter(real).length < 1) return
 
       const context = input.history.slice(0, idx + 1)
       const firstUser = context[idx]
@@ -217,10 +217,12 @@ const layer = Layer.effect(
 
       const ag = yield* agents.get("title")
       if (!ag) return
+      // Use the session's proven model (it just completed the main response).
+      // getSmallModel can resolve catalog models the account can't actually reach
+      // (e.g. cross-region Haiku on Bedrock), causing silent hangs.
       const mdl = ag.model
         ? yield* provider.getModel(ag.model.providerID, ag.model.modelID)
-        : ((yield* provider.getSmallModel(input.providerID)) ??
-          (yield* provider.getModel(input.providerID, input.modelID)))
+        : yield* provider.getModel(input.providerID, input.modelID)
       const msgs = onlySubtasks
         ? [{ role: "user" as const, content: subtasks.map((p) => p.prompt).join("\n") }]
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
@@ -240,7 +242,6 @@ const layer = Layer.effect(
           Stream.filter(LLMEvent.is.textDelta),
           Stream.map((e) => e.text),
           Stream.mkString,
-          Effect.orDie,
         )
       const cleaned = text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
@@ -251,7 +252,7 @@ const layer = Layer.effect(
       const t = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
       yield* sessions
         .setTitle({ sessionID: input.session.id, title: t })
-        .pipe(Effect.catchCause((cause) => Effect.logError("failed to generate title", { error: Cause.squash(cause) })))
+        .pipe(Effect.catchCause((cause) => Effect.logError("failed to set title", { error: Cause.squash(cause) })))
     })
 
     const handleSubtask = Effect.fn("SessionPrompt.handleSubtask")(function* (input: {
@@ -1089,6 +1090,10 @@ const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         let structured: unknown
         let step = 0
+        // Title generation: decoupled from `step` so that silent-turn and
+        // prose-question guards (which pre-increment step) don't permanently
+        // prevent it. Retries up to 3 times per session; stops on success.
+        let titleAttempts = 0
         // Amico interview guard: assistant message IDs already nudged to re-ask
         // via the `question` tool, so a stubborn turn is nudged at most once
         // (the Assistant info schema has no metadata field to persist this on).
@@ -1282,13 +1287,18 @@ const layer = Layer.effect(
           }
 
           step++
-          if (step === 1)
+          if (Session.isDefaultTitle(session.title) && titleAttempts < 3) {
+            titleAttempts++
             yield* title({
               session,
               modelID: lastUser.model.modelID,
               providerID: lastUser.model.providerID,
               history: msgs,
-            }).pipe(Effect.ignore, Effect.forkIn(scope))
+            }).pipe(
+              Effect.ignoreCause({ log: "Warn", message: "title generation failed" }),
+              Effect.forkIn(scope),
+            )
+          }
 
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const task = tasks.pop()
