@@ -16,7 +16,6 @@ import { useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { VaultPanel } from "@/components/vault-panel"
 
-import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -226,10 +225,11 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
 
-    // Zoom keyboard handling lives in the command registry below (amicode#266).
-    // A window-capture keydown handler here would swallow the chords BEFORE the
-    // command dispatch, and inside the webview the host intercepts them anyway —
-    // both routes end at web-zoom.ts, which routes to the workbench when framed.
+    // Zoom keyboard handling lives in web-zoom.ts: each app document (main
+    // frame and split panes) captures the zoom chords itself and applies its
+    // own CSS zoom (amicode#266). It must NOT be a command here — the registry's
+    // exact key matching is layout-sensitive, and inside the webview the
+    // chords never reach this document from the host anyway.
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -918,46 +918,12 @@ export default function LegacyLayout(props: ParentProps) {
         keybind: "mod+comma",
         onSelect: () => openSettings(),
       },
-      // web host only: the desktop build zooms through Electron (menu roles
-      // were retired for the action path), and registering the same chords
-      // here would double-fire against its renderer keydown handler. Inside
-      // the amicode webview the commands route through web-zoom.ts to the
-      // workbench (the host owns zoom there — its chords never reach this
-      // document); on a plain browser they own the in-app CSS zoom.
-      // Keybind matching is an exact (key, modifier-mask) lookup, so every
-      // chord that physically means "zoom in" must be registered
-      // (harmoniqs/amicode#266). On a US layout Ctrl/Cmd + Plus IS
-      // shift+"=", which arrives as key "+" (normalized "plus") WITH the
-      // shift bit — matching neither the key nor the mask of a bare "mod+=".
-      // The numpad's "+" arrives unshifted, and on layouts where "=" itself
-      // is shifted (DE/FR/Nordic) even the canonical chord carries shift.
-      // Only the first is shown in tooltips (displayKeybind takes
-      // parseKeybind(config)[0]).
-      ...(platform.platform === "web"
-        ? [
-            {
-              id: "view.zoomIn",
-              title: language.t("amicode.zoomIn"),
-              category: language.t("command.category.view"),
-              keybind: "mod+=,mod+shift+=,mod+plus,mod+shift+plus",
-              onSelect: () => webZoomIn(),
-            },
-            {
-              id: "view.zoomOut",
-              title: language.t("amicode.zoomOut"),
-              category: language.t("command.category.view"),
-              keybind: "mod+-,mod+shift+_",
-              onSelect: () => webZoomOut(),
-            },
-            {
-              id: "view.zoomReset",
-              title: language.t("amicode.zoomReset"),
-              category: language.t("command.category.view"),
-              keybind: "mod+0",
-              onSelect: () => webZoomReset(),
-            },
-          ]
-        : []),
+      // Zoom (Cmd/Ctrl+=/-/0) is deliberately NOT a command: web-zoom.ts
+      // captures the chords at each document and applies the in-app CSS zoom
+      // directly (harmoniqs/amicode#266) — the registry's exact key matching
+      // cannot express the layout variants of "+", and inside the webview the
+      // chords never reach this document from the host anyway. The desktop
+      // build keeps zooming through Electron.
       ...(platform.platform === "desktop" && platform.exportDebugLogs
         ? [
             {

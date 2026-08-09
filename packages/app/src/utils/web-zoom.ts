@@ -6,15 +6,14 @@
 // per-window, and feeds the same platform.webviewZoom signal the titlebar
 // and terminal already watch.
 //
-// Two hosts, two zoom owners (amicode#266):
-//  - Framed (the amicode VS Code webview): the WORKBENCH owns zoom. The host
-//    intercepts the zoom chords before the webview document ever sees the
-//    keydown, so in-app CSS zoom cannot fire there — the app posts a zoom
-//    intent over the extension bridge instead and the extension executes the
-//    matching workbench.action.zoomIn/Out/Reset. The app's own zoom signal
-//    stays at 1: the host's zoom level is not observable from inside the
-//    webview.
-//  - Unframed (plain browser): CSS zoom on the document root, as before.
+// One zoom owner (harmoniqs/amicode#266): the app document itself. The
+// workbench can never see keydowns from inside the webview documents
+// (cross-origin iframe; the host page's forwarding covers only the host
+// page), so the extension cannot translate them into workbench zoom actions.
+// Instead every app document — the main frame and each split pane — captures
+// the zoom chords itself and applies its own CSS zoom: with the webview
+// panel focused, the zoomed content is the webview; with an editor tab
+// focused, the workbench's own native window zoom applies, unchanged.
 import { createSignal } from "solid-js"
 
 const KEY = "amicode-zoom"
@@ -31,83 +30,6 @@ function readSaved(): number {
 }
 
 const [webZoom, setSignal] = createSignal(readSaved())
-
-/** Framed = inside the amicode VS Code webview, extension host present. */
-export const inWebview = () => typeof window !== "undefined" && window.parent !== window
-
-/** The bridge envelope the extension answers with a workbench zoom action. */
-export const ZOOM_BRIDGE_KIND = "zoom"
-export type ZoomAction = "in" | "out" | "reset"
-
-function postZoom(action: ZoomAction) {
-  // TEMP-DIAG (amicode#266 remote test): hop log — the chord reached a
-  // document and is about to leave it. Remove after the diagnosis.
-  console.log("[zoom] post:", action)
-  try {
-    window.parent?.postMessage({ source: "amicode", kind: ZOOM_BRIDGE_KIND, action }, "*")
-  } catch {}
-}
-
-// Pane relay (amicode#266): a split-frame pane is a FULL second app instance
-// (same bundle, same origin). Its zoom envelopes post to ITS window.parent —
-// this window — because that is the farthest a framed child can reach. No
-// other listener forwards amicode envelopes from a child up, so relay zoom
-// intents onward to the webview host page. Guard: only messages arriving from
-// a child window (event.source is not the host page) — our own posts go
-// straight to window.parent and extension-originated envelopes arrive from
-// window.parent, so neither can loop here.
-export function installZoomPaneRelay(): () => void {
-  if (!inWebview()) return () => {}
-  const onMsg = (e: MessageEvent) => {
-    const d = e.data as { source?: unknown; kind?: unknown; action?: unknown; level?: unknown; message?: unknown } | undefined
-    if (!d || d.source !== "amicode") return
-    if (!e.source || e.source === window.parent) return
-    if (d.kind === ZOOM_BRIDGE_KIND) {
-      const action = d.action
-      if (action !== "in" && action !== "out" && action !== "reset") return
-      // TEMP-DIAG (amicode#266 remote test): a pane's zoom intent arrived here.
-      // Remove after the diagnosis.
-      console.log("[zoom] relayed from pane:", action)
-      postZoom(action)
-      return
-    }
-    // TEMP-DIAG (amicode#266 remote test): a pane's relayed console line
-    // arrived — forward it up to the host page like the zoom intents.
-    if (d.kind === "diag-log") {
-      window.parent?.postMessage(
-        { source: "amicode", kind: "diag-log", level: d.level, message: d.message },
-        "*",
-      )
-    }
-  }
-  window.addEventListener("message", onMsg)
-  return () => window.removeEventListener("message", onMsg)
-}
-
-installZoomPaneRelay()
-
-// TEMP-DIAG (amicode#266 remote test): forward our [zoom]-prefixed console
-// lines to the extension host so a remote session can hand back a log file
-// (Output panel → "Amicode — webview diag" → "Open Log File") instead of
-// webview devtools. Remove after the diagnosis.
-function installDiagRelay(): void {
-  if (!inWebview()) return
-  const fwd = (level: "log" | "warn" | "error") => {
-    const orig = console[level].bind(console)
-    return (...args: unknown[]) => {
-      orig(...args)
-      const text = args.find((a): a is string => typeof a === "string")
-      if (text?.startsWith("[zoom]")) {
-        window.parent?.postMessage({ source: "amicode", kind: "diag-log", level, message: text }, "*")
-      }
-    }
-  }
-  console.log = fwd("log")
-  console.warn = fwd("warn")
-  console.error = fwd("error")
-}
-
-installDiagRelay()
 
 function apply(zoom: number) {
   if (typeof document === "undefined") return
@@ -144,10 +66,39 @@ export function setWebZoom(next: number) {
   }
 }
 
-// Zoom routes to the workbench when framed (the host owns zoom there — its
-// chords never reach this document) and to the in-app CSS zoom otherwise
-// (plain-browser host, where this module is the only zoom owner).
-export const webZoomIn = () => (inWebview() ? postZoom("in") : setWebZoom(webZoom() + STEP))
-export const webZoomOut = () => (inWebview() ? postZoom("out") : setWebZoom(webZoom() - STEP))
-export const webZoomReset = () => (inWebview() ? postZoom("reset") : setWebZoom(1))
+export const webZoomIn = () => setWebZoom(webZoom() + STEP)
+export const webZoomOut = () => setWebZoom(webZoom() - STEP)
+export const webZoomReset = () => setWebZoom(1)
 export { webZoom }
+
+// Raw chord capture (harmoniqs/amicode#266). The command registry's exact
+// (normalized-key, modifier-mask) lookup cannot express "the key that means
+// +" across layouts: Ctrl+Plus on US IS Ctrl+Shift+"=", arriving as key "+"
+// with the shift bit — wrong key AND wrong mask — while the numpad "+"
+// arrives unshifted and on DE/FR/Nordic layouts even the canonical "="
+// carries shift. Rather than widen the registry's chords (and its tooltips,
+// palette, and collision surface), the zoom chords are captured directly by
+// each app document, matching the key the layout PRODUCES — the same
+// physical key yields one of "="/"+"/"-"/"_" on every layout, with the shift
+// bit deliberately ignored. "0" is unshifted on every layout we ship to and
+// stays unambiguous.
+const ZOOM_IN_KEYS = new Set(["=", "+"])
+const ZOOM_OUT_KEYS = new Set(["-", "_"])
+const ZOOM_RESET_KEYS = new Set(["0"])
+
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!event.metaKey && !event.ctrlKey) return
+      const key = event.key
+      if (ZOOM_IN_KEYS.has(key)) setWebZoom(webZoom() + STEP)
+      else if (ZOOM_OUT_KEYS.has(key)) setWebZoom(webZoom() - STEP)
+      else if (ZOOM_RESET_KEYS.has(key)) setWebZoom(1)
+      else return
+      event.preventDefault()
+      event.stopPropagation()
+    },
+    { capture: true },
+  )
+}
