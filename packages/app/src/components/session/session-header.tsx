@@ -646,17 +646,28 @@ function SessionChatsDropdown() {
   // Active sessions — only computed when the flyout is open to avoid
   // triggering reactive subscriptions (serverSync().child pins the directory
   // and can cascade re-renders to the parent Portal).
-  const directory = createMemo(() => {
-    if (!open()) return ""
-    return serverSync().data.path.directory || ""
-  })
+  // Source from ALL project directories (same as dashboard) — not just the
+  // server's cwd, which may not be where sessions live (amicode#138).
   const activeSessions = createMemo(() => {
     if (!open()) return []
     try {
-      const dir = directory()
-      if (!dir) return []
-      const [store] = serverSync().child(dir, { bootstrap: false })
-      return sortedRootSessions(store, Date.now())
+      const conn = server.current
+      if (!conn) return []
+      const ctx = globalCtx.ensureServerCtx(conn)
+      if (!ctx) return []
+      const projects = ctx.projects.list()
+      const directories = projects.flatMap((p) => [p.worktree, ...(p.sandboxes ?? [])])
+      const seen = new Set<string>()
+      const sessions: Session[] = []
+      for (const dir of directories) {
+        const [store] = ctx.sync.child(dir, { bootstrap: false })
+        for (const session of sortedRootSessions(store, Date.now())) {
+          if (seen.has(session.id)) continue
+          seen.add(session.id)
+          sessions.push(session)
+        }
+      }
+      return sessions.sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     } catch {
       return []
     }
@@ -745,8 +756,8 @@ function SessionChatsDropdown() {
         time: { archived: Date.now() },
       })
       setArchivedSessions((prev) => [session, ...prev])
-      // Reload active sessions
-      await serverSync().project.loadSessions(directory(), { limit: 64 })
+      // Reload active sessions for this session's directory
+      await serverSync().project.loadSessions(session.directory, { limit: 64 })
     } catch (cause) {
       showToast({
         title: language.t("common.requestFailed"),
@@ -765,7 +776,7 @@ function SessionChatsDropdown() {
         time: { archived: null },
       })
       setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
-      await serverSync().project.loadSessions(directory(), { limit: 64 })
+      await serverSync().project.loadSessions(session.directory, { limit: 64 })
     } catch (cause) {
       showToast({
         title: language.t("common.requestFailed"),
@@ -793,7 +804,7 @@ function SessionChatsDropdown() {
   }
 
   function handleNewChat() {
-    const dir = directory()
+    const dir = serverSync().data.path.directory || ""
     void tabs.newDraft({ server: server.key, directory: dir })
     setOpen(false)
   }
