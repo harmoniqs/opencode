@@ -797,7 +797,7 @@
     },
     "packages/session-ui": {
       "name": "@opencode-ai/session-ui",
-      "version": "1.18.10",
+      "version": "1.18.12",
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@opencode-ai/client": "file:../app/vendor/opencode-ai-client-1.17.13-v2.tgz",
