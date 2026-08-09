@@ -59,21 +59,55 @@ function postZoom(action: ZoomAction) {
 export function installZoomPaneRelay(): () => void {
   if (!inWebview()) return () => {}
   const onMsg = (e: MessageEvent) => {
-    const d = e.data as { source?: unknown; kind?: unknown; action?: unknown } | undefined
-    if (!d || d.source !== "amicode" || d.kind !== ZOOM_BRIDGE_KIND) return
+    const d = e.data as { source?: unknown; kind?: unknown; action?: unknown; level?: unknown; message?: unknown } | undefined
+    if (!d || d.source !== "amicode") return
     if (!e.source || e.source === window.parent) return
-    const action = d.action
-    if (action !== "in" && action !== "out" && action !== "reset") return
-    // TEMP-DIAG (amicode#266 remote test): a pane's zoom intent arrived here.
-    // Remove after the diagnosis.
-    console.log("[zoom] relayed from pane:", action)
-    postZoom(action)
+    if (d.kind === ZOOM_BRIDGE_KIND) {
+      const action = d.action
+      if (action !== "in" && action !== "out" && action !== "reset") return
+      // TEMP-DIAG (amicode#266 remote test): a pane's zoom intent arrived here.
+      // Remove after the diagnosis.
+      console.log("[zoom] relayed from pane:", action)
+      postZoom(action)
+      return
+    }
+    // TEMP-DIAG (amicode#266 remote test): a pane's relayed console line
+    // arrived — forward it up to the host page like the zoom intents.
+    if (d.kind === "diag-log") {
+      window.parent?.postMessage(
+        { source: "amicode", kind: "diag-log", level: d.level, message: d.message },
+        "*",
+      )
+    }
   }
   window.addEventListener("message", onMsg)
   return () => window.removeEventListener("message", onMsg)
 }
 
 installZoomPaneRelay()
+
+// TEMP-DIAG (amicode#266 remote test): forward our [zoom]-prefixed console
+// lines to the extension host so a remote session can hand back a log file
+// (Output panel → "Amicode — webview diag" → "Open Log File") instead of
+// webview devtools. Remove after the diagnosis.
+function installDiagRelay(): void {
+  if (!inWebview()) return
+  const fwd = (level: "log" | "warn" | "error") => {
+    const orig = console[level].bind(console)
+    return (...args: unknown[]) => {
+      orig(...args)
+      const text = args.find((a): a is string => typeof a === "string")
+      if (text?.startsWith("[zoom]")) {
+        window.parent?.postMessage({ source: "amicode", kind: "diag-log", level, message: text }, "*")
+      }
+    }
+  }
+  console.log = fwd("log")
+  console.warn = fwd("warn")
+  console.error = fwd("error")
+}
+
+installDiagRelay()
 
 function apply(zoom: number) {
   if (typeof document === "undefined") return
