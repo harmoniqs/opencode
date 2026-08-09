@@ -1,10 +1,20 @@
-// amicode: in-app zoom for the WEB host (the amicode VS Code webview and the
-// plain browser at :3002). The desktop build zooms through Electron
-// (webview-zoom.ts); the web build had NO zoom at all — Cmd+=/-/0 fell
-// through to the host, which zooms the whole editor window (or the browser
-// tab), never the app. This module owns a CSS zoom on the document root,
-// persisted per-window, and feeds the same platform.webviewZoom signal the
-// titlebar and terminal already watch.
+// amicode: in-app zoom for the WEB host (the plain browser at :3002 and the
+// amicode VS Code webview). The desktop build zooms through Electron (menu
+// roles); the web build had NO zoom at all — Cmd+=/-/0 fell through to the
+// host, which zooms the whole editor window (or the browser tab), never the
+// app. This module owns a CSS zoom on the document root, persisted
+// per-window, and feeds the same platform.webviewZoom signal the titlebar
+// and terminal already watch.
+//
+// Two hosts, two zoom owners (amicode#266):
+//  - Framed (the amicode VS Code webview): the WORKBENCH owns zoom. The host
+//    intercepts the zoom chords before the webview document ever sees the
+//    keydown, so in-app CSS zoom cannot fire there — the app posts a zoom
+//    intent over the extension bridge instead and the extension executes the
+//    matching workbench.action.zoomIn/Out/Reset. The app's own zoom signal
+//    stays at 1: the host's zoom level is not observable from inside the
+//    webview.
+//  - Unframed (plain browser): CSS zoom on the document root, as before.
 import { createSignal } from "solid-js"
 
 const KEY = "amicode-zoom"
@@ -21,6 +31,19 @@ function readSaved(): number {
 }
 
 const [webZoom, setSignal] = createSignal(readSaved())
+
+/** Framed = inside the amicode VS Code webview, extension host present. */
+export const inWebview = () => typeof window !== "undefined" && window.parent !== window
+
+/** The bridge envelope the extension answers with a workbench zoom action. */
+export const ZOOM_BRIDGE_KIND = "zoom"
+export type ZoomAction = "in" | "out" | "reset"
+
+function postZoom(action: ZoomAction) {
+  try {
+    window.parent?.postMessage({ source: "amicode", kind: ZOOM_BRIDGE_KIND, action }, "*")
+  } catch {}
+}
 
 function apply(zoom: number) {
   if (typeof document === "undefined") return
@@ -57,7 +80,10 @@ export function setWebZoom(next: number) {
   }
 }
 
-export const webZoomIn = () => setWebZoom(webZoom() + STEP)
-export const webZoomOut = () => setWebZoom(webZoom() - STEP)
-export const webZoomReset = () => setWebZoom(1)
+// Zoom routes to the workbench when framed (the host owns zoom there — its
+// chords never reach this document) and to the in-app CSS zoom otherwise
+// (plain-browser host, where this module is the only zoom owner).
+export const webZoomIn = () => (inWebview() ? postZoom("in") : setWebZoom(webZoom() + STEP))
+export const webZoomOut = () => (inWebview() ? postZoom("out") : setWebZoom(webZoom() - STEP))
+export const webZoomReset = () => (inWebview() ? postZoom("reset") : setWebZoom(1))
 export { webZoom }

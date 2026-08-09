@@ -225,50 +225,11 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
-    
-    // Zoom keyboard shortcuts - always active
-    const handleZoomKey = (e: KeyboardEvent) => {
-      // Require Cmd (Mac) or Ctrl (Windows/Linux)
-      if (!e.ctrlKey && !e.metaKey) return
-      
-      // Don't trigger if user is typing in an input
-      const target = e.target as HTMLElement
-      if (target.tagName === "INPUT" || 
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable) {
-        return
-      }
-      
-      // Use code for physical key detection (works with Shift)
-      // Equal key produces + when Shift is held
-      const code = e.code
-      const key = e.key
-      
-      // Debug logging
-      console.log("[Zoom] Keydown:", { code, key, shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey })
-      
-      // Plus/Equal: Zoom in (works with Cmd+Shift+Plus or Cmd+Equal)
-      if (code === "Equal" || code === "NumpadAdd" || key === "+" || (key === "=" && e.shiftKey)) {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom in")
-        webZoomIn()
-      } else if (code === "Minus" || code === "NumpadSubtract" || key === "-" || key === "_") {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom out")
-        webZoomOut()
-      } else if (code === "Digit0" || code === "Numpad0" || key === "0") {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom reset")
-        webZoomReset()
-      }
-    }
-    
-    // Use window with capture phase for maximum reliability
-    window.addEventListener("keydown", handleZoomKey, true)
-    onCleanup(() => window.removeEventListener("keydown", handleZoomKey, true))
+
+    // Zoom keyboard handling lives in the command registry below (amicode#266).
+    // A window-capture keydown handler here would swallow the chords BEFORE the
+    // command dispatch, and inside the webview the host intercepts them anyway —
+    // both routes end at web-zoom.ts, which routes to the workbench when framed.
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -959,21 +920,33 @@ export default function LegacyLayout(props: ParentProps) {
       },
       // web host only: the desktop build zooms through Electron (menu roles
       // were retired for the action path), and registering the same chords
-      // here would double-fire against its renderer keydown handler
+      // here would double-fire against its renderer keydown handler. Inside
+      // the amicode webview the commands route through web-zoom.ts to the
+      // workbench (the host owns zoom there — its chords never reach this
+      // document); on a plain browser they own the in-app CSS zoom.
+      // Keybind matching is an exact (key, modifier-mask) lookup, so every
+      // chord that physically means "zoom in" must be registered
+      // (harmoniqs/amicode#266). On a US layout Ctrl/Cmd + Plus IS
+      // shift+"=", which arrives as key "+" (normalized "plus") WITH the
+      // shift bit — matching neither the key nor the mask of a bare "mod+=".
+      // The numpad's "+" arrives unshifted, and on layouts where "=" itself
+      // is shifted (DE/FR/Nordic) even the canonical chord carries shift.
+      // Only the first is shown in tooltips (displayKeybind takes
+      // parseKeybind(config)[0]).
       ...(platform.platform === "web"
         ? [
             {
               id: "view.zoomIn",
               title: language.t("amicode.zoomIn"),
               category: language.t("command.category.view"),
-              keybind: "mod+=",
+              keybind: "mod+=,mod+shift+=,mod+plus,mod+shift+plus",
               onSelect: () => webZoomIn(),
             },
             {
               id: "view.zoomOut",
               title: language.t("amicode.zoomOut"),
               category: language.t("command.category.view"),
-              keybind: "mod+-",
+              keybind: "mod+-,mod+shift+_",
               onSelect: () => webZoomOut(),
             },
             {
