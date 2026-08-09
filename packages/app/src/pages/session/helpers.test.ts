@@ -10,6 +10,7 @@ import {
   getTabReorderIndex,
   shouldShowFileTree,
 } from "./helpers"
+import { closeSessionTab, openSessionTab } from "@/context/layout-tabs"
 
 describe("shouldShowFileTree", () => {
   test("does not reserve space for a disabled file tree", () => {
@@ -208,6 +209,68 @@ describe("createSessionTabs", () => {
       expect(result.openFileOpen()).toBe(false)
       expect(result.panelTabs()).toEqual(["file://src/a.ts"])
       expect(result.activeTab()).toBe("file://src/a.ts")
+      dispose()
+    })
+  })
+
+  test("close context then re-open: activeTab returns context", () => {
+    // Step 1: context is open and active
+    const initial = { tabs: { all: ["context"], active: "context" as string | undefined }, preview: undefined }
+
+    createRoot((dispose) => {
+      const tabs = createMemo(() => ({ active: () => initial.tabs.active, all: () => initial.tabs.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: () => undefined,
+        normalizeTab: (tab) => tab,
+        review: () => true,
+        hasReview: () => true,
+      })
+      expect(result.activeTab()).toBe("context")
+      expect(result.contextOpen()).toBe(true)
+      dispose()
+    })
+
+    // Step 2: close context — active falls to review
+    const afterClose = closeSessionTab(initial, "context")
+    expect(afterClose.tabs.all).toEqual([])
+    expect(afterClose.tabs.active).toBeUndefined()
+
+    createRoot((dispose) => {
+      const tabs = createMemo(() => ({ active: () => afterClose.tabs.active, all: () => afterClose.tabs.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: () => undefined,
+        normalizeTab: (tab) => tab,
+        review: () => true,
+        hasReview: () => true,
+      })
+      // Context is gone — activeTab falls to "review" via the hasReview fallback
+      expect(result.contextOpen()).toBe(false)
+      expect(result.activeTab()).toBe("review")
+      dispose()
+    })
+
+    // Step 3: re-open context — simulates openSessionContext calling tabs.open("context")
+    const afterReopen = openSessionTab(
+      { tabs: afterClose.tabs, preview: afterClose.preview },
+      "context",
+    )
+    expect(afterReopen.tabs.all).toContain("context")
+    expect(afterReopen.tabs.active).toBe("context")
+
+    createRoot((dispose) => {
+      const tabs = createMemo(() => ({ active: () => afterReopen.tabs.active, all: () => afterReopen.tabs.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: () => undefined,
+        normalizeTab: (tab) => tab,
+        review: () => true,
+        hasReview: () => true,
+      })
+      // After re-open: activeTab MUST be "context"
+      expect(result.contextOpen()).toBe(true)
+      expect(result.activeTab()).toBe("context")
       dispose()
     })
   })

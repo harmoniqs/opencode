@@ -390,7 +390,7 @@ export function SessionSidePanel(props: {
                                   docs/adr/0001). Do not re-add a tab here:
                                   two hosts mirrored through two stores was the
                                   desync this column's toggle got blamed for. */}
-                              <Show when={contextOpen()}>
+                              <div style={{ display: contextOpen() ? undefined : "none" }}>
                                 <Tabs.Trigger
                                   value="context"
                                   closeButton={
@@ -417,7 +417,7 @@ export function SessionSidePanel(props: {
                                     <div>{language.t("session.tab.context")}</div>
                                   </div>
                                 </Tabs.Trigger>
-                              </Show>
+                              </div>
                               <SortableProvider ids={openedTabs()}>
                                 <For each={panelTabs()}>
                                   {(tab) => (
@@ -598,7 +598,7 @@ export function SessionSidePanel(props: {
                                   : language.t("session.tab.review")}
                               </Tabs.Trigger>
                             </Show>
-                            <Show when={contextOpen()}>
+                            <div style={{ display: contextOpen() ? undefined : "none" }}>
                               <Tabs.Trigger
                                 value="context"
                                 closeButton={
@@ -631,7 +631,7 @@ export function SessionSidePanel(props: {
                                   <div>{language.t("session.tab.context")}</div>
                                 </div>
                               </Tabs.Trigger>
-                            </Show>
+                            </div>
                             <For each={panelTabs()}>
                               {(tab) => (
                                 <Show
