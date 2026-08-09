@@ -40,7 +40,6 @@
 // mapping from its source file, so it tracks theme changes instead of a hand-copied hex.
 import { createSignal, For, onMount } from "solid-js"
 import { AmicoWave } from "./amico-wave"
-import { AmicoMark } from "./spinner"
 import { MODE_WAVELENGTHS, WAVE_BOX } from "./wave-geometry"
 import oc2ThemeJson from "../theme/themes/oc-2.json"
 import { resolveThemeVariantV2 } from "../theme/v2/resolve"
@@ -111,14 +110,13 @@ function SchemePane(props: { scheme: "light" | "dark"; children: unknown }) {
   )
 }
 
-// Mimics the real mount site (thinking-line.tsx): H-mark, glyph and bold gerund
-// on the top row; the muted meta below, starting under the glyph — reusing the
-// actual .amc-thinking* classes from amicode.css. DOM order is word-first so
-// the block's first baseline is the verb's (see thinking-line.tsx).
+// Mimics the real mount site (thinking-line.tsx): glyph and bold gerund on the
+// top row; the muted meta below, starting under the glyph — reusing the actual
+// .amc-thinking* classes from amicode.css. DOM order is word-first so the
+// block's first baseline is the verb's (see thinking-line.tsx).
 const ThinkingRow = () => (
   <span class="amc-thinking">
     <span class="amc-thinking-word">Percolating…</span>
-    <AmicoMark />
     <AmicoWave />
     <span class="amc-thinking-meta">5m 13s · ↑ 2.4k tokens</span>
   </span>
