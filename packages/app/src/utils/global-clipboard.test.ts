@@ -4,6 +4,7 @@ import {
   insertTextAtSelection,
   installGlobalClipboardFallback,
   isEditableTarget,
+  setSessionCopyProvider,
 } from "./global-clipboard"
 
 // Every install/listener attaches to the real happy-dom window or document, so
@@ -12,6 +13,7 @@ const cleanups: Array<() => void> = []
 afterEach(() => {
   while (cleanups.length) cleanups.pop()!()
   document.body.innerHTML = ""
+  window.getSelection()?.removeAllRanges()
 })
 
 // A framed window: the real happy-dom window's event plumbing (so DOM events
@@ -314,6 +316,8 @@ describe("installGlobalClipboardFallback", () => {
   test("mod+C with nothing selected posts nothing and leaves the event alone", () => {
     const bridge = framedWindow()
     install(bridge.win)
+    // Clear any lingering document selection from prior tests
+    window.getSelection()?.removeAllRanges()
     const el = field("text", "abc", 1, 1)
 
     const event = keydown(el, "c")
@@ -322,16 +326,48 @@ describe("installGlobalClipboardFallback", () => {
     expect(bridge.posted).toHaveLength(0)
   })
 
-  test("non-editable targets are never intercepted", () => {
+  test("non-editable targets: mod+C/X with a selection bridges the text to clipboard", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const div = document.createElement("div")
+    div.textContent = "chat message"
+    document.body.appendChild(div)
+    // Place a document selection on the div's text
+    const range = document.createRange()
+    range.selectNodeContents(div)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const event = keydown(div, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([{ source: "amicode", kind: "clipboard-write", text: "chat message" }])
+  })
+
+  test("non-editable targets: mod+C with no selection is a no-op", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const button = document.createElement("button")
+    document.body.appendChild(button)
+    // Explicitly clear any lingering selection
+    window.getSelection()?.removeAllRanges()
+
+    const event = keydown(button, "c")
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(bridge.posted).toHaveLength(0)
+  })
+
+  test("non-editable targets: mod+V is a no-op (nothing to paste into)", () => {
     const bridge = framedWindow()
     install(bridge.win)
     const button = document.createElement("button")
     document.body.appendChild(button)
 
-    for (const key of ["v", "c", "x"]) {
-      const event = keydown(button, key)
-      expect(event.defaultPrevented).toBe(false)
-    }
+    const event = keydown(button, "v")
+
+    expect(event.defaultPrevented).toBe(false)
     expect(bridge.posted).toHaveLength(0)
   })
 
@@ -410,6 +446,180 @@ describe("installGlobalClipboardFallback", () => {
     expect(event.defaultPrevented).toBe(true)
     expect(el.selectionStart).toBe(0)
     expect(el.selectionEnd).toBe(11)
+  })
+
+  test("mod+A on an EMPTY prompt-input selects the timeline (full session intent)", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    // Simulate the DOM structure: a timeline container + a prompt input
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "Assistant: Here is the answer."
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    const event = keydown(prompt, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    expect(selection.toString()).toBe("Assistant: Here is the answer.")
+  })
+
+  test("mod+A on a NON-EMPTY prompt-input selects the prompt text (standard behavior)", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = "my draft message"
+    document.body.appendChild(prompt)
+
+    const event = keydown(prompt, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    // Selects the prompt text, not the timeline
+    expect(selection.toString()).toBe("my draft message")
+  })
+
+  test("mod+A then mod+C on an EMPTY prompt-input bridges the timeline content to clipboard", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    // Simulate the DOM structure: a timeline container + a prompt input
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "User: hello\nAssistant: world"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    // Cmd+A selects the timeline (prompt is empty)
+    keydown(prompt, "a")
+    // Cmd+C copies it via bridge
+    const event = keydown(prompt, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "User: hello\nAssistant: world" },
+    ])
+  })
+
+  // --- Session copy provider (data-model full copy) ---
+
+  test("mod+A then mod+C with a session copy provider uses the provider text", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "visible portion only"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    // Register a provider that returns the FULL session (as if from the store)
+    setSessionCopyProvider(() => "User:\nWhat is 2+2?\n\nAssistant:\n4")
+    cleanups.push(() => setSessionCopyProvider(undefined))
+
+    // Cmd+A arms the flag, Cmd+C reads from the provider
+    keydown(prompt, "a")
+    const event = keydown(prompt, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "User:\nWhat is 2+2?\n\nAssistant:\n4" },
+    ])
+  })
+
+  test("provider text is preferred over DOM selection (virtualised content)", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "only visible rows"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    setSessionCopyProvider(() => "FULL SESSION with 100 messages")
+    cleanups.push(() => setSessionCopyProvider(undefined))
+
+    keydown(prompt, "a")
+    const event = keydown(prompt, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    // Provider text wins over the DOM "only visible rows"
+    expect(bridge.posted[0]!.text).toBe("FULL SESSION with 100 messages")
+  })
+
+  test("fullSessionCopyPending flag is cleared by intervening keystrokes", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    setSessionCopyProvider(() => "full session")
+    cleanups.push(() => setSessionCopyProvider(undefined))
+
+    // Cmd+A arms the flag
+    keydown(prompt, "a")
+    // An intervening Cmd+Z clears the flag (it's not C/X)
+    keydown(prompt, "z")
+    // Now Cmd+C should NOT use the provider (flag was cleared)
+    window.getSelection()?.removeAllRanges()
+    const event = keydown(prompt, "c")
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(bridge.posted).toHaveLength(0)
+  })
+
+  test("without a provider, mod+A then mod+C falls back to DOM selection", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "DOM fallback text"
+    document.body.appendChild(timeline)
+    const prompt = document.createElement("div")
+    prompt.setAttribute("data-component", "prompt-input")
+    prompt.setAttribute("contenteditable", "true")
+    prompt.textContent = ""
+    document.body.appendChild(prompt)
+
+    // No provider registered
+    setSessionCopyProvider(undefined)
+
+    keydown(prompt, "a")
+    const event = keydown(prompt, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    // Falls back to DOM selection text
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "DOM fallback text" },
+    ])
   })
 
   // --- Undo (Cmd+Z) ---

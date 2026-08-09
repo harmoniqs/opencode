@@ -105,6 +105,8 @@ import { extractPromptFromParts } from "@/utils/prompt"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
+import { setSessionCopyProvider } from "@/utils/global-clipboard"
+import { serializeSession } from "@/utils/serialize-session"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
 import { createSessionOwnership } from "./session/session-ownership"
 import { createSessionLineage } from "./session/session-lineage"
@@ -2033,6 +2035,16 @@ export default function Page() {
   onMount(() => {
     makeEventListener(document, "keydown", handleKeyDown)
   })
+
+  // Register the session copy provider so Cmd+A → Cmd+C copies the full
+  // session from the data model (not limited by DOM virtualization).
+  setSessionCopyProvider(() => {
+    const id = params.id
+    if (!id) return ""
+    const messages = sync().data.message[id] ?? []
+    return serializeSession(messages, (msgId) => sync().data.part[msgId] ?? [])
+  })
+  onCleanup(() => setSessionCopyProvider(undefined))
 
   onCleanup(() => {
     if (reviewFrame !== undefined) cancelAnimationFrame(reviewFrame)
