@@ -11,11 +11,11 @@ export default {
         component: `### Thinking block
 
 The Claude-Code-esque "working" indicator shown while a reply streams. A
-two-row grid block that OWNS its H-mark: the mark, harmonic wave glyph and
-cycling gerund ride the top row; the live meta line (elapsed · tokens · esc)
-sits below, starting under the wave. The verb reserves the longest gerund's
-width so word rotation never shifts the layout, and the meta can never wrap
-mid-phrase.
+two-row grid block: the harmonic wave glyph and cycling gerund ride the top
+row; the live meta line (elapsed · tokens · esc) sits below, starting under
+the wave. The verb reserves the longest gerund's width so word rotation never
+shifts the layout, and the meta can never wrap mid-phrase. Verbs are shuffled
+per mount so each turn opens on a different word.
 
 Under \`prefers-reduced-motion\` the wave and word are static; the elapsed
 counter still advances (it's information, not decoration).`,
