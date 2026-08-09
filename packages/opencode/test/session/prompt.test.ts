@@ -2400,3 +2400,43 @@ noLLMServer.instance(
     }),
   30_000,
 )
+
+// Title generation
+
+it.instance(
+  "title generation fires on new session with default title",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      // Create session WITHOUT an explicit title — gets default "New session - <ISO>"
+      const chat = yield* sessions.create({})
+      expect(Session.isDefaultTitle(chat.title)).toBe(true)
+
+      // Queue the main conversation response
+      yield* llm.text("hello back")
+
+      // Send a prompt — this triggers the loop, which fires title generation
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        parts: [{ type: "text", text: "hello" }],
+      })
+
+      // Title generation is forked — poll until the session title changes
+      yield* pollWithTimeout(
+        Effect.gen(function* () {
+          const updated = yield* sessions.get(chat.id).pipe(Effect.orDie)
+          if (!Session.isDefaultTitle(updated.title)) return updated.title
+          return undefined
+        }),
+        "title was never generated",
+        "5 seconds",
+      )
+
+      const final = yield* sessions.get(chat.id).pipe(Effect.orDie)
+      expect(final.title).toBe("E2E Title")
+    }),
+  30_000,
+)

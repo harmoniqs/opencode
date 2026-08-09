@@ -217,10 +217,12 @@ const layer = Layer.effect(
 
       const ag = yield* agents.get("title")
       if (!ag) return
+      // Use the session's proven model (it just completed the main response).
+      // getSmallModel can resolve catalog models the account can't actually reach
+      // (e.g. cross-region Haiku on Bedrock), causing silent hangs.
       const mdl = ag.model
         ? yield* provider.getModel(ag.model.providerID, ag.model.modelID)
-        : ((yield* provider.getSmallModel(input.providerID)) ??
-          (yield* provider.getModel(input.providerID, input.modelID)))
+        : yield* provider.getModel(input.providerID, input.modelID)
       const msgs = onlySubtasks
         ? [{ role: "user" as const, content: subtasks.map((p) => p.prompt).join("\n") }]
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
@@ -240,7 +242,6 @@ const layer = Layer.effect(
           Stream.filter(LLMEvent.is.textDelta),
           Stream.map((e) => e.text),
           Stream.mkString,
-          Effect.orDie,
         )
       const cleaned = text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
@@ -251,7 +252,7 @@ const layer = Layer.effect(
       const t = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
       yield* sessions
         .setTitle({ sessionID: input.session.id, title: t })
-        .pipe(Effect.catchCause((cause) => Effect.logError("failed to generate title", { error: Cause.squash(cause) })))
+        .pipe(Effect.catchCause((cause) => Effect.logError("failed to set title", { error: Cause.squash(cause) })))
     })
 
     const handleSubtask = Effect.fn("SessionPrompt.handleSubtask")(function* (input: {
@@ -1293,7 +1294,10 @@ const layer = Layer.effect(
               modelID: lastUser.model.modelID,
               providerID: lastUser.model.providerID,
               history: msgs,
-            }).pipe(Effect.ignore, Effect.forkIn(scope))
+            }).pipe(
+              Effect.ignoreCause({ log: "Warn", message: "title generation failed" }),
+              Effect.forkIn(scope),
+            )
           }
 
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)

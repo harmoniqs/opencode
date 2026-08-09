@@ -758,7 +758,7 @@ const layer: Layer.Layer<
     })
 
     const setArchived = Effect.fn("Session.setArchived")(function* (input: { sessionID: SessionID; time?: number }) {
-      const current = yield* get(input.sessionID)
+      const current = yield* get(input.sessionID).pipe(Effect.orDie)
       const next = {
         ...current,
         time: { ...current.time, archived: input.time, updated: Date.now() },
