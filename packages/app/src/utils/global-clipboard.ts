@@ -183,7 +183,35 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
 
     if (key !== "v" && key !== "c" && key !== "x" && key !== "a" && key !== "z" && key !== "y") return
     const target = event.target
-    if (!isEditableTarget(target)) return // non-editables keep native behavior
+
+    // --- Non-editable targets (rendered messages, code blocks) ---
+    // Inside the VS Code webview iframe, Electron intercepts Cmd+C at the host
+    // level before a `copy` event fires in the iframe DOM. Route C/X/A through
+    // the same bridge the context menu uses successfully.
+    if (!isEditableTarget(target)) {
+      if (key === "c" || key === "x") {
+        // Cmd+X on non-editable = copy-only (cannot delete from rendered DOM)
+        const selection = win.getSelection()
+        const text = selection?.toString() ?? ""
+        if (!text) return // no selection: no-op (clipboard unchanged)
+        event.preventDefault()
+        writeClipboardViaBridge(text, win)
+        return
+      }
+      if (key === "a") {
+        event.preventDefault()
+        const selection = win.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          const range = win.document.createRange()
+          range.selectNodeContents(win.document.body)
+          selection.addRange(range)
+        }
+        return
+      }
+      // V/Z/Y on non-editables: no-op (nothing to paste into or undo)
+      return
+    }
 
     // --- Select all ---
     if (key === "a") {
