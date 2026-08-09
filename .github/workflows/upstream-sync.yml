@@ -1,0 +1,275 @@
+# Upstream sync: keep harmoniqs/opencode current with anomalyco/opencode.
+# Weekly + manual dispatch. Opens notturno/merge-upstream-YYYY-MM-DD against local/amicode.
+# Keeps the fork — never drops amicode surfaces. One-off hand-merges still happen on the PR.
+name: upstream-sync
+on:
+  schedule:
+    # Mondays 09:00 UTC — offset from publish.yml (dev push) so upstream has landed.
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream ref to merge (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+      dry_run:
+        description: "Dry run — report overlap/conflicts but don't push a branch or open a PR"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # checkout the fork's default branch head so push has a base
+          ref: local/amicode
+
+      - name: Setup git committer
+        run: |
+          git config user.name "amico-sync-bot"
+          git config user.email "amico-sync@harmoniqs.local"
+
+      - name: Add upstream and fetch
+        id: upstream
+        run: |
+          set -euo pipefail
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/anomalyco/opencode.git
+          else
+            git remote add upstream https://github.com/anomalyco/opencode.git
+          fi
+          # sst/opencode → anomalyco/opencode (0cf029478). Keep sst as fallback fetch if anomalyco is slow.
+          git fetch upstream "${{ inputs.upstream_ref || 'dev' }}" --prune
+          SHA=$(git rev-parse "upstream/${{ inputs.upstream_ref || 'dev' }}")
+          SHORT=$(git rev-parse --short "$SHA")
+          DATE=$(date -u +%Y-%m-%d)
+          # version from upstream package.json if present
+          VER=$(git show "upstream/${{ inputs.upstream_ref || 'dev' }}:packages/opencode/package.json" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('version',''))" || echo "")
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "upstream SHA=$SHA ($SHORT) version=$VER date=$DATE"
+
+      - name: Create sync branch
+        id: branch
+        run: |
+          set -euo pipefail
+          BRANCH="notturno/merge-upstream-${{ steps.upstream.outputs.date }}"
+          # if branch already exists locally or on origin, suffix with short SHA
+          if git rev-parse --verify "$BRANCH" >/dev/null 2>&1 || git ls-remote --exit-code origin "$BRANCH" >/dev/null 2>&1; then
+            BRANCH="${BRANCH}-${{ steps.upstream.outputs.short }}"
+          fi
+          git checkout -b "$BRANCH" "origin/local/amicode"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "created $BRANCH from origin/local/amicode"
+
+      - name: Attempt merge (no commit)
+        id: merge
+        run: |
+          set -euo pipefail
+          set +e
+          git merge --no-ff --no-commit "upstream/${{ inputs.upstream_ref || 'dev' }}"
+          EC=$?
+          set -e
+          echo "exit_code=$EC" >> "$GITHUB_OUTPUT"
+          if [ "$EC" -eq 0 ]; then
+            echo "conflicts=0" >> "$GITHUB_OUTPUT"
+            echo "conflict_files=" >> "$GITHUB_OUTPUT"
+            echo "merge clean"
+          else
+            # collect conflicted paths
+            FILES=$(git diff --name-only --diff-filter=U | tr '\n' ' ' | xargs || true)
+            COUNT=$(git diff --name-only --diff-filter=U | wc -l | xargs)
+            echo "conflicts=$COUNT" >> "$GITHUB_OUTPUT"
+            echo "conflict_files=$FILES" >> "$GITHUB_OUTPUT"
+            echo "conflicts=$COUNT files: $FILES"
+            # keep working tree conflicted for report step, then abort after report
+          fi
+          # overlap stats for report (even on clean merges)
+          git diff --name-only --diff-filter=U > /tmp/conflicted.txt 2>/dev/null || true
+          # overall diff stats upstream..HEAD
+          git diff --stat "upstream/${{ inputs.upstream_ref || 'dev' }}" -- . > /tmp/upstream-stat.txt 2>/dev/null || true
+
+      - name: Dry run — report only
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          cat <<'EOF'
+          Dry run — no branch pushed, no PR opened.
+          EOF
+          echo "upstream=${{ steps.upstream.outputs.sha }} (${{ steps.upstream.outputs.short }}) version=${{ steps.upstream.outputs.version }}"
+          echo "branch=${{ steps.branch.outputs.branch }}"
+          echo "exit_code=${{ steps.merge.outputs.exit_code }}"
+          echo "conflicts=${{ steps.merge.outputs.conflicts }}"
+          echo "files=${{ steps.merge.outputs.conflict_files }}"
+          echo "--- upstream diff stat (first 50 lines) ---"
+          head -n 50 /tmp/upstream-stat.txt || true
+          if [ "${{ steps.merge.outputs.exit_code }}" -ne 0 ]; then
+            git merge --abort || true
+          else
+            git merge --abort || true
+          fi
+
+      - name: Commit clean merge
+        if: ${{ inputs.dry_run != true && steps.merge.outputs.exit_code == 0 }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          SHA="${{ steps.upstream.outputs.sha }}"
+          SHORT="${{ steps.upstream.outputs.short }}"
+          VER="${{ steps.upstream.outputs.version }}"
+          DATE="${{ steps.upstream.outputs.date }}"
+          cat > /tmp/commit-msg.txt <<EOF
+          merge: sync anomalyco/opencode ${VER:-dev} @ ${SHORT} (${DATE})
+
+          Merged anomalyco/opencode ${{ inputs.upstream_ref || 'dev' }} @ ${SHA} into local/amicode.
+          Automated by .github/workflows/upstream-sync.yml (notturno sentinel).
+
+          Verification:
+          - OPENCODE_CHANNEL=dev gate still required before tagging (see AMICODE-PATCHES.md gotcha 2)
+          - Run: env -u OPENCODE_CONFIG_CONTENT -u OPENCODE_SERVER_PASSWORD bun test
+
+          Co-authored-by: amico-sync-bot <amico-sync@harmoniqs.local>
+          EOF
+          git commit -m "$(cat /tmp/commit-msg.txt)"
+          git log --oneline -2
+          git push -u origin "$BRANCH"
+
+      - name: Commit conflict report (hand-merge needed)
+        if: ${{ inputs.dry_run != true && steps.merge.outputs.exit_code != 0 }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          SHA="${{ steps.upstream.outputs.sha }}"
+          SHORT="${{ steps.upstream.outputs.short }}"
+          VER="${{ steps.upstream.outputs.version }}"
+          COUNT="${{ steps.merge.outputs.conflicts }}"
+          FILES="${{ steps.merge.outputs.conflict_files }}"
+          # abort the conflicted merge state — we push a report branch, not conflict markers
+          git merge --abort || true
+          mkdir -p .upstream-sync
+          cat > .upstream-sync/report.md <<EOF
+          # Upstream sync report — ${{ steps.upstream.outputs.date }}
+
+          Upstream: anomalyco/opencode \`${{ inputs.upstream_ref || 'dev' }}\` @ \`${SHA}\` (\`${SHORT}\`, version \`${VER}\`)
+          Base: harmoniqs/opencode \`local/amicode\` @ $(git rev-parse --short origin/local/amicode)
+          Branch: \`${BRANCH}\`
+
+          ## Result
+          Merge exited with conflicts — **hand-merge required** (${COUNT} files).
+
+          ## Conflict files
+          \`\`\`
+          ${FILES:-<none>}
+          \`\`\`
+
+          ## Full conflict list
+          \`\`\`
+          $(git diff --name-only --diff-filter=U 2>/dev/null || cat /tmp/conflicted.txt 2>/dev/null || echo "<after abort — see FILES above>")
+          \`\`\`
+
+          ## Next steps
+          1. \`git fetch upstream && git checkout ${BRANCH} && git merge upstream/${{ inputs.upstream_ref || 'dev' }}\`
+          2. Resolve per AMICODE-PATCHES.md policy:
+             - adopt upstream bugfixes wholesale
+             - keep fork branding/KaTeX/AmicoSpinner/entity-rail/bug-dock (\`vaults.ts\`, \`draft-store.ts\`, \`marked\` macros)
+             - re-delete \`debug-bar.tsx\` (fork keeps it deleted)
+             - \`bun.lock\` → theirs + \`bun install\`
+             - i18n: re-run \`script/translate-app.ts\` or copy EN fallbacks
+          3. Update \`AMICODE-PATCHES.md\` header + new sync section, bump \`package.json\` versions to \`${VER}\`.
+          4. Verify: \`env -u OPENCODE_CONFIG_CONTENT -u OPENCODE_SERVER_PASSWORD bun test\`, \`bun run typecheck\`, and \`OPENCODE_CHANNEL=dev\` build gate (\`grep newLayoutDesigns\`).
+          5. Push — PR auto-updates.
+
+          _Generated by .github/workflows/upstream-sync.yml_
+          EOF
+          cat .upstream-sync/report.md
+          git add .upstream-sync/report.md
+          git commit -m "chore: upstream sync report for ${VER:-dev} @ ${SHORT} — ${COUNT} conflicts need hand-merge
+
+          Upstream ${SHA} into ${BRANCH}. See .upstream-sync/report.md.
+          Automated by .github/workflows/upstream-sync.yml"
+          git push -u origin "$BRANCH"
+
+      - name: Open PR (clean merge)
+        if: ${{ inputs.dry_run != true && steps.merge.outputs.exit_code == 0 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          SHA="${{ steps.upstream.outputs.sha }}"
+          SHORT="${{ steps.upstream.outputs.short }}"
+          VER="${{ steps.upstream.outputs.version }}"
+          cat > /tmp/pr-body.md <<EOF
+          Automated upstream sync — clean merge.
+
+          Upstream: \`anomalyco/opencode\` \`${{ inputs.upstream_ref || 'dev' }}\` @ \`${SHA}\` (\`${SHORT}\`, \`${VER}\`) → \`local/amicode\`
+          Branch: \`${BRANCH}\`
+
+          This merge had **zero conflicts**. Ready for CI + review.
+
+          **Checklist before merge to \`local/amicode\`:**
+          - [ ] \`env -u OPENCODE_CONFIG_CONTENT -u OPENCODE_SERVER_PASSWORD bun test\` + \`bun run typecheck\`
+          - [ ] \`OPENCODE_CHANNEL=dev bun run script/build.ts --single --skip-install\` and binary gate \`grep newLayoutDesigns\` (gotcha 2)
+          - [ ] Update \`AMICODE-PATCHES.md\` (header + new sync section) and bump workspace versions to \`${VER}\` if not already
+          - [ ] Smoke launch — entity rail / ask cards / vaults mount
+
+          Closes harmoniqs/opencode#159 (or links to it).
+
+          _Generated by .github/workflows/upstream-sync.yml — notturno sentinel._
+          EOF
+          gh pr create --base local/amicode --head "$BRANCH" --title "notturno: upstream merge ${{ steps.upstream.outputs.date }} (${VER:-dev} @ ${SHORT}) — clean" --body-file /tmp/pr-body.md --label hitl || gh pr create --base local/amicode --head "$BRANCH" --title "notturno: upstream merge ${{ steps.upstream.outputs.date }} (${VER:-dev} @ ${SHORT}) — clean" --body-file /tmp/pr-body.md --draft
+
+      - name: Open PR (conflicts)
+        if: ${{ inputs.dry_run != true && steps.merge.outputs.exit_code != 0 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          SHA="${{ steps.upstream.outputs.sha }}"
+          SHORT="${{ steps.upstream.outputs.short }}"
+          VER="${{ steps.upstream.outputs.version }}"
+          COUNT="${{ steps.merge.outputs.conflicts }}"
+          FILES="${{ steps.merge.outputs.conflict_files }}"
+          cat > /tmp/pr-body.md <<EOF
+          Automated upstream sync — **hand-merge required** (${COUNT} conflict files).
+
+          Upstream: \`anomalyco/opencode\` \`${{ inputs.upstream_ref || 'dev' }}\` @ \`${SHA}\` (\`${SHORT}\`, \`${VER}\`) → \`local/amicode\`
+          Branch: \`${BRANCH}\`
+
+          This branch contains \`.upstream-sync/report.md\` with the conflict list. The merge was aborted — **no conflict markers were committed**.
+
+          **Conflict files:**
+          \`\`\`
+          ${FILES}
+          \`\`\`
+
+          **To resolve:**
+          \`\`\`bash
+          git fetch upstream && git checkout ${BRANCH} && git merge upstream/${{ inputs.upstream_ref || 'dev' }}
+          # resolve each file per AMICODE-PATCHES.md policy, then:
+          git add -A && git commit
+          git push
+          \`\`\`
+
+          **Policy (AMICODE-PATCHES.md):** adopt upstream bugfixes, keep fork branding/KaTeX/entity-rail/bug-dock, re-delete \`debug-bar.tsx\`, \`bun.lock\` theirs + \`bun install\`, i18n via \`script/translate-app.ts\`.
+
+          Related: #159
+
+          _Generated by .github/workflows/upstream-sync.yml — notturno sentinel._
+          EOF
+          gh pr create --base local/amicode --head "$BRANCH" --title "notturno: upstream merge ${{ steps.upstream.outputs.date }} (${VER:-dev} @ ${SHORT}) — ${COUNT} conflicts" --body-file /tmp/pr-body.md --label hitl || gh pr create --base local/amicode --head "$BRANCH" --title "notturno: upstream merge ${{ steps.upstream.outputs.date }} (${VER:-dev} @ ${SHORT}) — ${COUNT} conflicts" --body-file /tmp/pr-body.md --draft
