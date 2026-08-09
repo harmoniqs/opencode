@@ -24,6 +24,20 @@ export function setClipboardImageHandler(handler?: (file: File) => void): void {
   clipboardImageHandler = handler
 }
 
+// Session copy provider: registered by the session page to serialize the full
+// session from the data model (messages + parts → text). The clipboard handler
+// calls this on Cmd+C after a "select all" instead of reading from the DOM
+// (which is incomplete due to virtualization).
+let sessionCopyProvider: (() => string) | undefined
+
+export function setSessionCopyProvider(provider?: () => string): void {
+  sessionCopyProvider = provider
+}
+
+// Flag: set by Cmd+A when targeting the prompt (signals "user wants the full
+// session"), consumed by the next Cmd+C, cleared on any other keystroke.
+let fullSessionCopyPending = false
+
 // Elements that carry their own bridged paste (the profile fields'
 // pasteFallback) mark themselves so the fallback doesn't double-insert. The
 // marker owns PASTE only: nothing element-local handles copy/cut, so ⌘C/⌘X
@@ -184,6 +198,12 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     if (key !== "v" && key !== "c" && key !== "x" && key !== "a" && key !== "z" && key !== "y") return
     const target = event.target
 
+    // Clear the full-session flag on any keystroke that isn't the copy that
+    // consumes it. Cmd+A sets it; only the immediately following Cmd+C uses it.
+    if (!(key === "c" || key === "x")) {
+      fullSessionCopyPending = false
+    }
+
     // --- Non-editable targets (rendered messages, code blocks) ---
     // Inside the VS Code webview iframe, Electron intercepts Cmd+C at the host
     // level before a `copy` event fires in the iframe DOM. Route C/X/A through
@@ -191,6 +211,17 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     if (!isEditableTarget(target)) {
       if (key === "c" || key === "x") {
         // Cmd+X on non-editable = copy-only (cannot delete from rendered DOM)
+        // If fullSessionCopyPending, prefer the provider (full data-model copy)
+        if (fullSessionCopyPending && sessionCopyProvider) {
+          const fullText = sessionCopyProvider()
+          if (fullText) {
+            event.preventDefault()
+            writeClipboardViaBridge(fullText, win)
+            fullSessionCopyPending = false
+            return
+          }
+        }
+        fullSessionCopyPending = false
         const selection = win.getSelection()
         const text = selection?.toString() ?? ""
         if (!text) return // no selection: no-op (clipboard unchanged)
@@ -200,11 +231,27 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
       }
       if (key === "a") {
         event.preventDefault()
+        // Scope select-all to the preview panel if the target is inside one
+        const panel = target instanceof Element && target.closest('#review-panel:not([aria-hidden="true"])')
+        if (panel) {
+          const content = panel.querySelector('[data-slot="session-review-v2-preview"]') ?? panel
+          const selection = win.getSelection()
+          if (selection) {
+            selection.removeAllRanges()
+            const range = win.document.createRange()
+            range.selectNodeContents(content)
+            selection.addRange(range)
+          }
+          return
+        }
+        // Otherwise select the full chat area + arm the session copy flag
+        fullSessionCopyPending = !!sessionCopyProvider
         const selection = win.getSelection()
         if (selection) {
           selection.removeAllRanges()
           const range = win.document.createRange()
-          range.selectNodeContents(win.document.body)
+          const timeline = win.document.querySelector("[data-timeline-virtual-content]")
+          range.selectNodeContents(timeline ?? win.document.body)
           selection.addRange(range)
         }
         return
@@ -216,6 +263,39 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     // --- Select all ---
     if (key === "a") {
       event.preventDefault()
+      // If the target is inside the review/file panel, select that panel's content
+      const panel = target.closest('#review-panel:not([aria-hidden="true"])')
+      if (panel) {
+        const content = panel.querySelector('[data-slot="session-review-v2-preview"]') ?? panel
+        const selection = win.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          const range = win.document.createRange()
+          range.selectNodeContents(content)
+          selection.addRange(range)
+        }
+        return
+      }
+      // If the prompt composer is EMPTY, "select all" means the full chat session.
+      // If the prompt has content, standard select-all (select the draft text).
+      const promptEl = target.closest('[data-component="prompt-input"]')
+      if (promptEl) {
+        const hasContent = (promptEl.textContent ?? "").trim().length > 0
+        if (!hasContent) {
+          fullSessionCopyPending = !!sessionCopyProvider
+          // Visual feedback: select the timeline DOM (best-effort, may be partial
+          // due to virtualization — the actual copy comes from the provider)
+          const timeline = win.document.querySelector("[data-timeline-virtual-content]")
+          const selection = win.getSelection()
+          if (selection && timeline) {
+            selection.removeAllRanges()
+            const range = win.document.createRange()
+            range.selectNodeContents(timeline)
+            selection.addRange(range)
+          }
+          return
+        }
+      }
       selectAll(target)
       return
     }
@@ -253,7 +333,37 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     }
 
     const text = extractSelection(target, { cut: key === "x" })
-    if (!text) return // nothing selected: the native no-op stands
+    if (!text) {
+      // Full-session copy: if Cmd+A armed the flag and a provider exists, use
+      // the data model (complete, not limited by DOM virtualization).
+      if (fullSessionCopyPending && sessionCopyProvider) {
+        const fullText = sessionCopyProvider()
+        if (fullText) {
+          event.preventDefault()
+          writeClipboardViaBridge(fullText, win)
+        }
+        fullSessionCopyPending = false
+        return
+      }
+      fullSessionCopyPending = false
+      // Fallback: a prior Cmd+A may have placed the selection on the chat session
+      // content (outside this editable). Copy whatever is selected in the DOM.
+      const selection = win.getSelection()
+      if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+        const range = selection.getRangeAt(0)
+        // Only bridge-copy when the selection lives OUTSIDE this editable — if it
+        // were inside, extractSelection above would have found it already.
+        if (!target.contains(range.commonAncestorContainer)) {
+          const docText = selection.toString()
+          if (docText) {
+            event.preventDefault()
+            writeClipboardViaBridge(docText, win)
+          }
+        }
+      }
+      return
+    }
+    fullSessionCopyPending = false
     event.preventDefault()
     writeClipboardViaBridge(text, win)
   }
