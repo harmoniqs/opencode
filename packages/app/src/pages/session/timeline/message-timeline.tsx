@@ -81,7 +81,6 @@ import { useServer } from "@/context/server"
 import { usePrompt } from "@/context/prompt"
 import { useSettings } from "@/context/settings"
 import { useTabs } from "@/context/tabs"
-import { ContextTreePanel } from "@/pages/session/context-tree-panel"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { draftPrompt } from "@/utils/start-prompt"
 import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
@@ -2137,11 +2136,8 @@ export function MessageTimeline(props: {
                   .catch(() => void refetchWarrants())
               }}
             />
-            {/* amicode: the context tree, folded into the header (ADR 0003) —
-                closes the sticky block beneath the title row + chip rail */}
-            <ContextTreePanel sessionID={sessionID()} />
-            {/* amicode#271: bubble inside the header — naturally below the context
-                tree in the flow. No offset math needed. */}
+            {/* amicode#271: bubble inside the header — naturally below the
+                title row + chip rail */}
             <Show when={activeBubble()}>
               {(bubble) => (
                 <div

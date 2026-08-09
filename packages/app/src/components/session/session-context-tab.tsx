@@ -1,10 +1,11 @@
-import { createMemo, createEffect, on, onCleanup, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, on, onCleanup, onMount, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { useSync } from "@/context/sync"
 import { checksum } from "@opencode-ai/core/util/encode"
 import { findLast } from "@opencode-ai/core/util/array"
 import { same } from "@/utils/same"
 import { Icon } from "@opencode-ai/ui/icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { File } from "@opencode-ai/session-ui/file"
@@ -14,7 +15,23 @@ import type { Message, Part, UserMessage } from "@opencode-ai/sdk/v2/client"
 import { useLanguage } from "@/context/language"
 import { useProviders } from "@/hooks/use-providers"
 import { useSDK } from "@/context/sdk"
+import { useServer } from "@/context/server"
+import { useFile } from "@/context/file"
 import { useSessionLayout } from "@/pages/session/session-layout"
+import { amicodeGet } from "@/utils/amicode-fetch"
+import { amicoBrainRef } from "@opencode-ai/ui/brain-ref"
+import {
+  createContextTreeEngine,
+  contextTreeKindColor,
+  type ContextTreeEngine,
+  type ContextTreeKind,
+  type ContextTreeNodeInput,
+  type ContextTreeScheme,
+  type ContextTreeSelection,
+} from "@opencode-ai/ui/context-tree-engine"
+import { buildContextTree, vaultRefFromPath, type ContextTurn } from "@opencode-ai/ui/context-tree-data"
+import { vaultPanel } from "@/context/vault-panel"
+import { createOpenSessionFileTab } from "@/pages/session/helpers"
 import { getSessionContext } from "./session-context-metrics"
 import { estimateSessionContextBreakdown, type SessionContextBreakdownKey } from "./session-context-breakdown"
 import { createSessionContextFormatter } from "./session-context-format"
@@ -26,6 +43,29 @@ const BREAKDOWN_COLOR: Record<SessionContextBreakdownKey, string> = {
   tool: "var(--syntax-warning)",
   other: "var(--syntax-comment)",
 }
+
+/** Gate for the graph section: ≥1 committed (non-consider) brain ref in the session. */
+export function sessionHasContextItems(
+  messages: readonly { id: string; role?: string }[],
+  partsFor: (messageID: string) => readonly { type?: string; tool?: string; state?: { input?: unknown } }[],
+): boolean {
+  for (const m of messages) {
+    if (m.role !== "assistant") continue
+    for (const p of partsFor(m.id) ?? []) {
+      if (p?.type !== "tool" || typeof p.tool !== "string") continue
+      const ref = amicoBrainRef(p.tool, (p.state?.input as Record<string, unknown>) ?? {})
+      if (ref && !ref.consider) return true
+    }
+  }
+  return false
+}
+
+const LEGEND: { kind: ContextTreeKind; label: string }[] = [
+  { kind: "note", label: "notes" },
+  { kind: "source", label: "source" },
+  { kind: "skill", label: "skills" },
+  { kind: "agent", label: "agents" },
+]
 
 function Stat(props: { label: string; value: JSX.Element }) {
   return (
@@ -95,8 +135,10 @@ export function SessionContextTab() {
   const sync = useSync()
   const language = useLanguage()
   const sdk = useSDK()
+  const server = useServer()
+  const file = useFile()
   const providers = useProviders(() => sdk().directory)
-  const { params, view } = useSessionLayout()
+  const { params, tabs, view } = useSessionLayout()
 
   const info = createMemo(() => (params.id ? sync().session.get(params.id) : undefined))
 
@@ -109,6 +151,8 @@ export function SessionContextTab() {
     emptyMessages,
     { equals: same },
   )
+
+  const getParts = (id: string) => (sync().data.part[id] ?? []) as Part[]
 
   const userMessages = createMemo(
     () => messages().filter((m) => m.role === "user") as UserMessage[],
@@ -220,10 +264,179 @@ export function SessionContextTab() {
     { label: "context.stats.lastActivity", value: () => formatter().time(ctx()?.message.time.created) },
   ] satisfies { label: string; value: () => JSX.Element }[]
 
+  // ─── Context tree (relocated from the top panel per ADR 0004) ────────────
+  // per-mount browsability from GET /amicode/vaults
+  const [vaultsRaw] = createResource(
+    () => server.current,
+    (conn) => amicodeGet(conn, "/amicode/vaults").catch(() => undefined),
+  )
+  const browsableMounts = createMemo<Map<string, boolean | undefined> | undefined>(() => {
+    const raw = vaultsRaw() as { mounts?: { id?: string; browsable?: boolean }[] } | undefined
+    if (!raw || !Array.isArray(raw.mounts)) return undefined
+    return new Map(
+      raw.mounts.filter((m) => typeof m?.id === "string").map((m) => [m.id as string, m.browsable]),
+    )
+  })
+  const vaultLocked = (mount: string) => {
+    const map = browsableMounts()
+    if (!map) return false
+    if (!map.has(mount)) return true
+    return map.get(mount) === false
+  }
+
+  const busy = createMemo(() => (sync().data.session_status[params.id ?? ""]?.type ?? "idle") !== "idle")
+
+  const turns = createMemo<ContextTurn[]>(() => {
+    const byPrompt = new Map<string, ContextTurn>()
+    const out: ContextTurn[] = []
+    for (const m of messages()) {
+      if (m.role !== "assistant") continue
+      const key = (m as { parentID?: string }).parentID ?? m.id
+      let turn = byPrompt.get(key)
+      if (!turn) {
+        turn = { id: key, refs: [], busy: false }
+        byPrompt.set(key, turn)
+        out.push(turn)
+      }
+      for (const p of getParts(m.id)) {
+        if (p.type !== "tool") continue
+        const ref = amicoBrainRef((p as { tool: string }).tool, ((p as { state?: { input?: unknown } }).state?.input ?? {}) as Record<string, unknown>)
+        if (!ref || ref.consider) continue
+        turn.refs.push(ref)
+      }
+      if (typeof (m as { time?: { completed?: number } }).time?.completed !== "number" && busy()) turn.busy = true
+    }
+    return out.filter((t) => t.refs.length > 0)
+  })
+
+  const treeItemCount = createMemo(() => {
+    const seen = new Set<string>()
+    for (const t of turns()) for (const r of t.refs) seen.add(r.path ?? r.label.toLowerCase())
+    return seen.size
+  })
+
+  const hasTreeItems = createMemo(() => treeItemCount() > 0)
+
+  const [engine, setEngine] = createSignal<ContextTreeEngine>()
+  const currentScheme = (): ContextTreeScheme =>
+    document.documentElement.dataset.colorScheme === "light" ? "light" : "dark"
+  const [scheme, setScheme] = createSignal<ContextTreeScheme>(
+    typeof document === "undefined" ? "dark" : currentScheme(),
+  )
+
+  // node clicks open the real thing
+  const openTab = createOpenSessionFileTab({
+    normalizeTab: (tab) => (tab.startsWith("file://") ? file.tab(tab) : tab),
+    openTab: (tab) => tabs().open(tab),
+    pathFromTab: file.pathFromTab,
+    loadFile: file.load,
+    openReviewPanel: () => {
+      if (!view().reviewPanel.opened()) view().reviewPanel.open()
+    },
+    setActive: (tab) => tabs().setActive(tab),
+  })
+  const onTreeSelect = (node: ContextTreeSelection) => {
+    if (!node.path || node.locked) return
+    const vaultRef = vaultRefFromPath(node.path)
+    if (vaultRef) {
+      vaultPanel.open({ mount: vaultRef.mount, path: vaultRef.rel })
+      return
+    }
+    openTab(file.tab(node.path))
+  }
+
+  // theme observer
+  const themeObserver = new MutationObserver(() => {
+    setScheme(currentScheme())
+    engine()?.setTheme(currentScheme())
+  })
+  onMount(() => {
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] })
+    engine()?.resize()
+    engine()?.resume()
+  })
+  onCleanup(() => {
+    themeObserver.disconnect()
+    engine()?.destroy()
+  })
+
+  // hover glance from tool rows in the log
+  const onToolHover = (e: Event) => {
+    const d = (e as CustomEvent).detail as { label?: string } | undefined
+    if (d?.label) engine()?.highlight(d.label)
+  }
+  window.addEventListener("amicode:brain-hover", onToolHover)
+  onCleanup(() => window.removeEventListener("amicode:brain-hover", onToolHover))
+
+  const tree = createMemo(() => buildContextTree(turns(), { vaultLocked }))
+  createEffect(() => {
+    const brain = engine()
+    if (!brain) return
+    brain.setTree(tree())
+  })
+
+  // keyboard navigation
+  const flatNodes = createMemo(() => {
+    const out: ContextTreeSelection[] = []
+    const walk = (n: ContextTreeNodeInput) => {
+      if (n.kind !== "root")
+        out.push({ id: n.id, label: n.label, kind: n.kind, path: n.path, vault: n.vault, locked: n.locked })
+      for (const c of n.children ?? []) walk(c)
+    }
+    walk(tree())
+    return out
+  })
+  const [kbIndex, setKbIndex] = createSignal(-1)
+  const [announce, setAnnounce] = createSignal("")
+  const kbFocus = (index: number) => {
+    const list = flatNodes()
+    if (!list.length) return
+    const next = Math.min(Math.max(index, 0), list.length - 1)
+    setKbIndex(next)
+    const node = list[next]
+    engine()?.focus(node.id)
+    setAnnounce(
+      `${node.label} — ${node.kind}${
+        node.locked ? ", locked — this vault does not allow browsing" : node.path ? ", press Enter to open" : ""
+      }`,
+    )
+  }
+  const onCanvasKeyDown = (e: KeyboardEvent) => {
+    const list = flatNodes()
+    if (!list.length) return
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        e.preventDefault()
+        kbFocus(kbIndex() + 1)
+        return
+      case "ArrowLeft":
+      case "ArrowUp":
+        e.preventDefault()
+        kbFocus(kbIndex() - 1)
+        return
+      case "Home":
+        e.preventDefault()
+        kbFocus(0)
+        return
+      case "End":
+        e.preventDefault()
+        kbFocus(list.length - 1)
+        return
+      case "Enter":
+      case " ": {
+        if (kbIndex() < 0) return
+        e.preventDefault()
+        onTreeSelect(list[kbIndex()])
+        return
+      }
+    }
+  }
+  // ─── End context tree ────────────────────────────────────────────────────
+
   let scroll: HTMLDivElement | undefined
   let frame: number | undefined
   let pending: { x: number; y: number } | undefined
-  const getParts = (id: string) => (sync().data.part[id] ?? []) as Part[]
 
   const restoreScroll = () => {
     const el = scroll
@@ -279,6 +492,61 @@ export function SessionContextTab() {
       onScroll={handleScroll}
     >
       <div class="px-6 pt-4 pb-10 flex flex-col gap-10">
+        {/* Context tree graph — ADR 0004: relocated from the top panel */}
+        <Show when={hasTreeItems()}>
+          <div data-component="amico-context-tree" class="flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+              <div class="text-12-medium text-text-base">{language.t("amicode.contextTree.title")}</div>
+              <div class="text-12-regular text-text-weak">
+                {language.t("amicode.contextTree.count", { count: treeItemCount() })}
+              </div>
+              <div class="ml-2 hidden items-center gap-3 sm:flex">
+                <For each={LEGEND}>
+                  {(item) => (
+                    <div class="flex items-center gap-1.5">
+                      <span
+                        class="inline-block size-2 rounded-full"
+                        style={{ background: contextTreeKindColor(scheme(), item.kind) }}
+                      />
+                      <span class="text-12-regular text-text-weak">{item.label}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+              <div class="flex-1" />
+              <IconButton
+                icon="expand"
+                variant="ghost"
+                onClick={() => engine()?.fit()}
+                aria-label={language.t("amicode.contextTree.fit")}
+              />
+            </div>
+            <div class="overflow-hidden rounded-md border border-border-base bg-background-stronger" style={{ height: "192px" }}>
+              <canvas
+                ref={(el) =>
+                  setEngine(
+                    createContextTreeEngine(el, {
+                      scheme: currentScheme(),
+                      size: { width: 400, height: 192 },
+                      onSelect: onTreeSelect,
+                    }),
+                  )
+                }
+                role="application"
+                aria-roledescription="context tree"
+                aria-label={language.t("amicode.contextTree.canvasLabel")}
+                tabIndex={0}
+                onKeyDown={onCanvasKeyDown}
+                onBlur={() => setKbIndex(-1)}
+                class="block h-full w-full focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-border-focus-base"
+              />
+            </div>
+            <div aria-live="polite" class="sr-only">
+              {announce()}
+            </div>
+          </div>
+        </Show>
+
         <div class="grid grid-cols-1 @[32rem]:grid-cols-2 gap-4">
           <For each={stats}>
             {(stat) => <Stat label={language.t(stat.label as Parameters<typeof language.t>[0])} value={stat.value()} />}
