@@ -40,10 +40,40 @@ export const ZOOM_BRIDGE_KIND = "zoom"
 export type ZoomAction = "in" | "out" | "reset"
 
 function postZoom(action: ZoomAction) {
+  // TEMP-DIAG (amicode#266 remote test): hop log — the chord reached a
+  // document and is about to leave it. Remove after the diagnosis.
+  console.log("[zoom] post:", action)
   try {
     window.parent?.postMessage({ source: "amicode", kind: ZOOM_BRIDGE_KIND, action }, "*")
   } catch {}
 }
+
+// Pane relay (amicode#266): a split-frame pane is a FULL second app instance
+// (same bundle, same origin). Its zoom envelopes post to ITS window.parent —
+// this window — because that is the farthest a framed child can reach. No
+// other listener forwards amicode envelopes from a child up, so relay zoom
+// intents onward to the webview host page. Guard: only messages arriving from
+// a child window (event.source is not the host page) — our own posts go
+// straight to window.parent and extension-originated envelopes arrive from
+// window.parent, so neither can loop here.
+export function installZoomPaneRelay(): () => void {
+  if (!inWebview()) return () => {}
+  const onMsg = (e: MessageEvent) => {
+    const d = e.data as { source?: unknown; kind?: unknown; action?: unknown } | undefined
+    if (!d || d.source !== "amicode" || d.kind !== ZOOM_BRIDGE_KIND) return
+    if (!e.source || e.source === window.parent) return
+    const action = d.action
+    if (action !== "in" && action !== "out" && action !== "reset") return
+    // TEMP-DIAG (amicode#266 remote test): a pane's zoom intent arrived here.
+    // Remove after the diagnosis.
+    console.log("[zoom] relayed from pane:", action)
+    postZoom(action)
+  }
+  window.addEventListener("message", onMsg)
+  return () => window.removeEventListener("message", onMsg)
+}
+
+installZoomPaneRelay()
 
 function apply(zoom: number) {
   if (typeof document === "undefined") return
