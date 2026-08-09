@@ -16,7 +16,6 @@ import { useNavigate, useParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { VaultPanel } from "@/components/vault-panel"
 
-import { webZoomIn, webZoomOut, webZoomReset } from "@/utils/web-zoom"
 import { useServerSync } from "@/context/server-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -225,50 +224,12 @@ export default function LegacyLayout(props: ParentProps) {
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
     makeEventListener(document, "visibilitychange", hide)
-    
-    // Zoom keyboard shortcuts - always active
-    const handleZoomKey = (e: KeyboardEvent) => {
-      // Require Cmd (Mac) or Ctrl (Windows/Linux)
-      if (!e.ctrlKey && !e.metaKey) return
-      
-      // Don't trigger if user is typing in an input
-      const target = e.target as HTMLElement
-      if (target.tagName === "INPUT" || 
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable) {
-        return
-      }
-      
-      // Use code for physical key detection (works with Shift)
-      // Equal key produces + when Shift is held
-      const code = e.code
-      const key = e.key
-      
-      // Debug logging
-      console.log("[Zoom] Keydown:", { code, key, shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey })
-      
-      // Plus/Equal: Zoom in (works with Cmd+Shift+Plus or Cmd+Equal)
-      if (code === "Equal" || code === "NumpadAdd" || key === "+" || (key === "=" && e.shiftKey)) {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom in")
-        webZoomIn()
-      } else if (code === "Minus" || code === "NumpadSubtract" || key === "-" || key === "_") {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom out")
-        webZoomOut()
-      } else if (code === "Digit0" || code === "Numpad0" || key === "0") {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        console.log("[Zoom] Triggering zoom reset")
-        webZoomReset()
-      }
-    }
-    
-    // Use window with capture phase for maximum reliability
-    window.addEventListener("keydown", handleZoomKey, true)
-    onCleanup(() => window.removeEventListener("keydown", handleZoomKey, true))
+
+    // Zoom keyboard handling lives in web-zoom.ts: each app document (main
+    // frame and split panes) captures the zoom chords itself and applies its
+    // own CSS zoom (amicode#266). It must NOT be a command here — the registry's
+    // exact key matching is layout-sensitive, and inside the webview the
+    // chords never reach this document from the host anyway.
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -957,34 +918,12 @@ export default function LegacyLayout(props: ParentProps) {
         keybind: "mod+comma",
         onSelect: () => openSettings(),
       },
-      // web host only: the desktop build zooms through Electron (menu roles
-      // were retired for the action path), and registering the same chords
-      // here would double-fire against its renderer keydown handler
-      ...(platform.platform === "web"
-        ? [
-            {
-              id: "view.zoomIn",
-              title: language.t("amicode.zoomIn"),
-              category: language.t("command.category.view"),
-              keybind: "mod+=",
-              onSelect: () => webZoomIn(),
-            },
-            {
-              id: "view.zoomOut",
-              title: language.t("amicode.zoomOut"),
-              category: language.t("command.category.view"),
-              keybind: "mod+-",
-              onSelect: () => webZoomOut(),
-            },
-            {
-              id: "view.zoomReset",
-              title: language.t("amicode.zoomReset"),
-              category: language.t("command.category.view"),
-              keybind: "mod+0",
-              onSelect: () => webZoomReset(),
-            },
-          ]
-        : []),
+      // Zoom (Cmd/Ctrl+=/-/0) is deliberately NOT a command: web-zoom.ts
+      // captures the chords at each document and applies the in-app CSS zoom
+      // directly (harmoniqs/amicode#266) — the registry's exact key matching
+      // cannot express the layout variants of "+", and inside the webview the
+      // chords never reach this document from the host anyway. The desktop
+      // build keeps zooming through Electron.
       ...(platform.platform === "desktop" && platform.exportDebugLogs
         ? [
             {
