@@ -702,7 +702,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
       },
       review: {
-        diffStyle: createMemo(() => store.review?.diffStyle ?? "split"),
+        diffStyle: createMemo(() => store.review?.diffStyle ?? "unified"),
         setDiffStyle(diffStyle: ReviewDiffStyle) {
           if (!store.review) {
             setStore("review", { diffStyle, panelOpened: DEFAULT_REVIEW_PANEL_OPENED })
