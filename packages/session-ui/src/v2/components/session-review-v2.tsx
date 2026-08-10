@@ -261,26 +261,6 @@ export function SessionReviewV2(props: SessionReviewV2Props) {
 
   const toolbarEnd = () => (
     <>
-      <SegmentedControlV2
-        value={props.expandMode}
-        onChange={(value) => {
-          if (value !== "expand" && value !== "collapse") return
-          props.onExpandModeChange(value)
-        }}
-        class="session-review-v2-segmented-control session-review-v2-segmented-control--icon"
-        aria-label={i18n.t("ui.sessionReviewV2.expandMode")}
-      >
-        <TooltipV2 openDelay={2000} value={i18n.t("ui.sessionReviewV2.showAllLines")}>
-          <SegmentedControlItemV2 value="expand" aria-label={i18n.t("ui.sessionReviewV2.showAllLines")}>
-            <Icon name="expand" />
-          </SegmentedControlItemV2>
-        </TooltipV2>
-        <TooltipV2 openDelay={2000} value={i18n.t("ui.sessionReviewV2.hideNonDiffLines")}>
-          <SegmentedControlItemV2 value="collapse" aria-label={i18n.t("ui.sessionReviewV2.hideNonDiffLines")}>
-            <Icon name="collapse" />
-          </SegmentedControlItemV2>
-        </TooltipV2>
-      </SegmentedControlV2>
       <Show when={props.onDiffStyleChange}>
         <SegmentedControlV2
           value={props.diffStyle}
