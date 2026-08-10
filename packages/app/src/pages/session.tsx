@@ -672,6 +672,7 @@ export default function Page() {
     return {
       queryKey: sessionDiffKey(),
       enabled: !!sessionID,
+      placeholderData: [] as SnapshotFileDiff[],
       queryFn: sessionID
         ? () =>
             sdk()
@@ -720,7 +721,7 @@ export default function Page() {
   }
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
-  const reviewReady = () => !sessionDiffQuery.isPending || reviewDiffs().length > 0
+  const reviewReady = () => true
   const loadReviewDiff = async (file: string, _version?: number): Promise<(SnapshotFileDiff & { file: string }) | undefined> => {
     const diffs = reviewDiffs()
     const found = diffs.find((d) => d.file === file)
