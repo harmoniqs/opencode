@@ -500,19 +500,19 @@ export function SessionContextTab() {
               <div class="text-12-regular text-text-weak">
                 {language.t("amicode.contextTree.count", { count: treeItemCount() })}
               </div>
-              <div class="ml-2 hidden items-center gap-3 sm:flex">
-                <For each={LEGEND}>
-                  {(item) => (
-                    <div class="flex items-center gap-1.5">
-                      <span
-                        class="inline-block size-2 rounded-full"
-                        style={{ background: contextTreeKindColor(scheme(), item.kind) }}
-                      />
-                      <span class="text-12-regular text-text-weak">{item.label}</span>
-                    </div>
-                  )}
-                </For>
-              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <For each={LEGEND}>
+                {(item) => (
+                  <div class="flex items-center gap-1.5">
+                    <span
+                      class="inline-block size-2 rounded-full"
+                      style={{ background: contextTreeKindColor(scheme(), item.kind) }}
+                    />
+                    <span class="text-12-regular text-text-weak">{item.label}</span>
+                  </div>
+                )}
+              </For>
               <div class="flex-1" />
               <IconButton
                 icon="expand"

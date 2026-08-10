@@ -903,6 +903,7 @@ const layer: Layer.Layer<
       // This covers sessions where snapshots and summary diffs are both empty
       // but the tool parts carry their own diff data.
       const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+      const accumulated = new Map<string, { file: string; patch: string | undefined; additions: number; deletions: number; status: "added" | "modified" | "deleted"; editCount: number }>()
       for (const msg of all) {
         for (const part of msg.parts) {
           if (part.type !== "tool") continue
@@ -914,16 +915,33 @@ const layer: Layer.Layer<
             | undefined
           if (!filediff?.file) continue
           const relPath = toolPart.state?.title || filediff.file
-          seen.set(filediff.file, {
-            file: relPath,
-            patch: filediff.patch,
-            additions: filediff.additions ?? 0,
-            deletions: filediff.deletions ?? 0,
-            status: seen.has(filediff.file) ? "modified" : "added",
-          })
+          const existing = accumulated.get(filediff.file)
+          if (!existing) {
+            accumulated.set(filediff.file, {
+              file: relPath,
+              patch: filediff.patch,
+              additions: filediff.additions ?? 0,
+              deletions: filediff.deletions ?? 0,
+              status: "added",
+              editCount: 1,
+            })
+          } else {
+            existing.additions += (filediff.additions ?? 0)
+            existing.deletions += (filediff.deletions ?? 0)
+            existing.status = "modified"
+            existing.editCount += 1
+            // Keep last edit's patch as best-effort display
+            existing.patch = filediff.patch ?? existing.patch
+          }
         }
       }
-      return [...seen.values()]
+      return [...accumulated.values()].map((entry) => ({
+        file: entry.file,
+        patch: entry.patch,
+        additions: entry.additions,
+        deletions: entry.deletions,
+        status: entry.status,
+      }) as Snapshot.FileDiff)
     })
 
     const messages: Interface["messages"] = Effect.fn("Session.messages")(function* (input) {
