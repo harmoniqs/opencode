@@ -668,8 +668,8 @@ export default function Page() {
   const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
   const reviewDiffs = () => {
     // Derive file changes from tool parts (same source as the inline "Edit [file]" display).
-    // Tool parts with tool in ["edit", "write", "patch", "apply_patch"] carry the file path
-    // in state.input.filePath and +/- counts in state metadata.
+    // Tool parts with tool in ["edit", "write", "patch", "apply_patch"] carry diff data
+    // in state.metadata.filediff (with file, patch, additions, deletions).
     const id = params.id
     if (!id) return []
     const sessionMessages = sync().data.message[id]
@@ -681,16 +681,28 @@ export default function Page() {
       for (const part of parts) {
         if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
         if (part.state.status !== "completed") continue
+        const meta = part.state.metadata as Record<string, unknown> | undefined
+        const filediff = meta?.filediff as { file?: string; patch?: string; additions?: number; deletions?: number } | undefined
+        if (filediff?.file) {
+          // Use the relative path from title (e.g. "packages/app/src/file.tsx") if available
+          const relPath = (part.state as { title?: string }).title || filediff.file
+          seen.set(filediff.file, {
+            file: relPath,
+            patch: filediff.patch,
+            additions: filediff.additions ?? 0,
+            deletions: filediff.deletions ?? 0,
+            status: seen.has(filediff.file) ? "modified" : "added",
+          })
+          continue
+        }
+        // Fallback: no filediff metadata, use input.filePath
         const input = part.state.input as Record<string, unknown>
         const filePath = (input?.filePath ?? input?.file_path ?? input?.path) as string | undefined
         if (!filePath) continue
-        const meta = part.state.metadata as Record<string, unknown> | undefined
-        const additions = typeof meta?.additions === "number" ? meta.additions : 0
-        const deletions = typeof meta?.deletions === "number" ? meta.deletions : 0
         seen.set(filePath, {
           file: filePath,
-          additions,
-          deletions,
+          additions: 0,
+          deletions: 0,
           status: seen.has(filePath) ? "modified" : "added",
         })
       }
