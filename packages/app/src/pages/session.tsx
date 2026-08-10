@@ -1,7 +1,7 @@
 import type { FilePart, Project, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createQuery, skipToken, useMutation, useQueryClient } from "@tanstack/solid-query"
+import { useMutation } from "@tanstack/solid-query"
 import {
   batch,
   ErrorBoundary,
@@ -22,7 +22,6 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { debounce } from "@solid-primitives/scheduled"
 import { useLocal } from "@/context/local"
 import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
@@ -355,7 +354,6 @@ export default function Page() {
   const local = useLocal()
   const file = useFile()
   const sync = useSync()
-  const queryClient = useQueryClient()
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useSDK()
@@ -667,33 +665,19 @@ export default function Page() {
   }, desktopReviewOpen())
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
-  const wantsReview = createMemo(() =>
-    isDesktop()
-      ? desktopFileTreeOpen() ||
-        (desktopReviewOpen() && (activeTab() === "review" || (newSessionDesign() && !!activeFileTab())))
-      : store.mobileTab === "changes",
-  )
-  const sessionDiffKey = () => ["session-diff", params.id ?? ""] as const
-  const sessionDiffQuery = createQuery(() => {
-    const sessionID = params.id
-    const enabled = !!sessionID && wantsReview()
-    return {
-      queryKey: sessionDiffKey(),
-      enabled,
-      queryFn: sessionID
-        ? () =>
-            sdk()
-              .client.session.diff({ sessionID, directory: sdk().directory })
-              .then((result) => result.data ?? [])
-              .catch((error) => {
-                console.debug("[session-review] failed to load session diff", { error })
-                return []
-              })
-        : skipToken,
+  const reviewDiffs = () => {
+    // Aggregate per-message summary diffs across all user messages in the session.
+    // Each message stores the diffs from its turn; dedupe by file (last write wins).
+    const seen = new Map<string, SnapshotFileDiff & { file: string }>()
+    for (const msg of userMessages()) {
+      const msgDiffs = msg.summary?.diffs
+      if (!msgDiffs) continue
+      for (const d of msgDiffs) {
+        if (d.file) seen.set(d.file, d as SnapshotFileDiff & { file: string })
+      }
     }
-  })
-  const refreshSessionDiff = debounce(() => void queryClient.invalidateQueries({ queryKey: sessionDiffKey() }), 100)
-  const reviewDiffs = () => (sessionDiffQuery.isFetched ? (sessionDiffQuery.data ?? []) : [])
+    return [...seen.values()]
+  }
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
     const selected = reviewFile()
@@ -702,7 +686,7 @@ export default function Page() {
   }
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
-  const reviewReady = () => !sessionDiffQuery.isPending
+  const reviewReady = () => true
   const loadReviewDiff = async (file: string, _version?: number): Promise<(SnapshotFileDiff & { file: string }) | undefined> => {
     const diffs = reviewDiffs()
     const found = diffs.find((d) => d.file === file)
@@ -905,7 +889,6 @@ export default function Page() {
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
     if (!file || file.startsWith(".git/")) return
-    refreshSessionDiff()
   })
   onCleanup(stopVcs)
 
@@ -1028,17 +1011,6 @@ export default function Page() {
       setCursorPosition(input, prompt.cursor() ?? promptLength(prompt.current()))
     }
   }
-
-  createEffect(
-    on(
-      () => sync().data.session_status[params.id ?? ""]?.type,
-      (next, prev) => {
-        if (next !== "idle" || prev === undefined || prev === "idle") return
-        refreshSessionDiff()
-      },
-      { defer: true },
-    ),
-  )
 
   const fileTreeTab = () => layout.fileTree.tab()
   const setFileTreeTab = (value: "changes" | "all") => layout.fileTree.setTab(value)
@@ -1193,7 +1165,7 @@ export default function Page() {
     diffs: reviewDiffs,
     diffsReady: reviewReady,
     get diffVersion() {
-      return sessionDiffQuery.dataUpdatedAt
+      return lastUserMessage()?.time.created
     },
     loadDiff: loadReviewDiff,
     get activeFile() {
