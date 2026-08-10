@@ -3,7 +3,6 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  min-width: fit-content;
   overflow: hidden;
   background: var(--v2-background-bg-base);
 }
@@ -388,8 +387,19 @@
   color: var(--v2-state-fg-info);
 }
 
+[data-component="session-review-v2"] [data-slot="session-review-v2-file-title"] [data-component="tooltip-v2-trigger"] {
+  display: inline-flex;
+  min-width: 0;
+}
+
+[data-component="session-review-v2"] [data-slot="session-review-v2-file-title"] [data-component="tooltip-v2-trigger"]:has([data-slot="session-review-v2-file-path"]) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 [data-component="session-review-v2"] [data-slot="session-review-v2-file-name"] {
-  flex: none;
+  flex-shrink: 0;
   font-size: 13px;
   font-weight: 530;
   line-height: 1;
@@ -400,7 +410,8 @@
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-file-path"] {
-  flex: none;
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 440;
   line-height: 1;
@@ -408,6 +419,8 @@
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--v2-text-text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-diff-scroll"] {

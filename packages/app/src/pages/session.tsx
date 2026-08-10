@@ -87,6 +87,7 @@ import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
+import { accumulateDiffs } from "@/pages/session/v2/accumulate-diffs"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
@@ -666,7 +667,12 @@ export default function Page() {
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
-  const sessionDiffKey = () => ["session-diff", params.id ?? ""] as const
+  // Refetch when the session transitions to idle (assistant finished, snapshot taken)
+  const sessionDiffVersion = () => {
+    const id = params.id
+    return id ? sync().data.session_status[id]?.type ?? "idle" : "idle"
+  }
+  const sessionDiffKey = () => ["session-diff", params.id ?? "", sessionDiffVersion()] as const
   const sessionDiffQuery = createQuery(() => {
     const sessionID = params.id
     return {
@@ -685,33 +691,50 @@ export default function Page() {
   const reviewDiffs = createMemo(() => {
     // Server endpoint returns the authoritative full-session diff (queries all messages).
     const serverDiffs = sessionDiffQuery.data ?? []
-    if (serverDiffs.length > 0) return serverDiffs.filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
+    if (serverDiffs.length > 0) {
+      // Server paths are relative to the project root — prefix with ~/project-path
+      const dir = sdk().directory
+      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+      const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
+      return serverDiffs
+        .filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
+        .map((d) => ({ ...d, file: d.file.startsWith("/") || d.file.startsWith("~/") ? d.file : `${prefix}/${d.file}` }))
+    }
     // Fallback: derive from tool parts currently loaded in the client.
     // This shows immediate results for visible messages while the server query loads.
     const allMessages = messages()
     if (!allMessages.length) return [] as Array<SnapshotFileDiff & { file: string }>
-    const seen = new Map<string, SnapshotFileDiff & { file: string }>()
+    const dir = sdk().directory
+    const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+    const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
+    const toHomePath = (p: string) => {
+      if (p.startsWith("~/")) return p
+      if (home && p.startsWith(home)) return "~" + p.slice(home.length)
+      if (!p.startsWith("/")) return `${prefix}/${p}`
+      return p
+    }
+    const editParts: import("@/pages/session/v2/accumulate-diffs").ToolEditPart[] = []
     for (const msg of allMessages) {
-      const parts = sync().data.part[msg.id]
-      if (!parts) continue
-      for (const part of parts) {
+      const msgParts = sync().data.part[msg.id]
+      if (!msgParts) continue
+      for (const part of msgParts) {
         if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
         if (part.state.status !== "completed") continue
         const meta = part.state.metadata as Record<string, unknown> | undefined
         const filediff = meta?.filediff as { file?: string; patch?: string; additions?: number; deletions?: number } | undefined
         if (filediff?.file) {
-          const relPath = (part.state as { title?: string }).title || filediff.file
-          seen.set(filediff.file, {
-            file: relPath,
+          const rawTitle = (part.state as { title?: string }).title || filediff.file
+          editParts.push({
+            file: filediff.file,
+            title: toHomePath(rawTitle),
             patch: filediff.patch,
             additions: filediff.additions ?? 0,
             deletions: filediff.deletions ?? 0,
-            status: seen.has(filediff.file) ? "modified" : "added",
           })
         }
       }
     }
-    return [...seen.values()]
+    return accumulateDiffs(editParts)
   })
   const activeReviewFile = () => {
     const diffs = reviewDiffs()

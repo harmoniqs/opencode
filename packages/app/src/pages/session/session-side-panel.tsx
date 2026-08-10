@@ -55,6 +55,7 @@ import {
 } from "@/pages/session/helpers"
 import { setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
+import { WORK_COLUMN_WIDTH_MIN } from "@/pages/session/session-panel-width"
 import { SessionFileBrowserTab, type SessionFileBrowserState } from "@/pages/session/v2/session-file-browser-tab"
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
@@ -321,7 +322,7 @@ export function SessionSidePanel(props: {
               direction="horizontal"
               edge="start"
               size={layout.panelColumn.width()}
-              min={240}
+              min={WORK_COLUMN_WIDTH_MIN}
               max={typeof window === "undefined" ? 900 : window.innerWidth * 0.6}
               onResize={(width) => {
                 props.size.touch()
