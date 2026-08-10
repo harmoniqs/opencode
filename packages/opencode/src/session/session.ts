@@ -488,7 +488,7 @@ export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" 
 const layer: Layer.Layer<
   Service,
   never,
-  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service
+  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | Snapshot.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -497,6 +497,7 @@ const layer: Layer.Layer<
     const background = yield* BackgroundJob.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const snapshot = yield* Snapshot.Service
 
     const createNext = Effect.fn("Session.createNext")(function* (input: {
       id?: SessionID
@@ -835,8 +836,48 @@ const layer: Layer.Layer<
     })
 
     const diff = Effect.fn("Session.diff")(function* (sessionID: SessionID) {
-      void sessionID
-      return [] as Snapshot.FileDiff[]
+      const all = yield* messages({ sessionID }).pipe(Effect.orDie)
+      if (!all.length) return [] as Snapshot.FileDiff[]
+
+      // Find the first step-start snapshot hash (session-start ref)
+      let from: string | undefined
+      // Collect all agent-touched files from PatchParts (absolute paths)
+      const agentFilesAbsolute = new Set<string>()
+
+      for (const msg of all) {
+        for (const part of msg.parts) {
+          if (!from && part.type === "step-start" && part.snapshot) {
+            from = part.snapshot
+          }
+          if (part.type === "patch" && part.files) {
+            for (const file of part.files) agentFilesAbsolute.add(file)
+          }
+        }
+      }
+
+      // No snapshot or no agent-touched files → empty
+      if (!from || agentFilesAbsolute.size === 0) return [] as Snapshot.FileDiff[]
+
+      // Get current state
+      const to = yield* snapshot.track()
+      if (!to) return [] as Snapshot.FileDiff[]
+
+      // Normalize agent-touched files to relative paths (diffFull returns relative paths)
+      const ctx = yield* InstanceState.context
+      const worktree = ctx.worktree
+      const agentFiles = new Set<string>()
+      for (const abs of agentFilesAbsolute) {
+        const rel = abs.startsWith(worktree)
+          ? abs.slice(worktree.length).replace(/^\//, "").replaceAll("\\", "/")
+          : abs.replaceAll("\\", "/")
+        agentFiles.add(rel)
+      }
+
+      // Compute full diff and filter to agent-touched files
+      const allDiffs = yield* snapshot.diffFull(from, to)
+      return allDiffs.filter(
+        (d) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
+      )
     })
 
     const messages: Interface["messages"] = Effect.fn("Session.messages")(function* (input) {
@@ -1024,7 +1065,7 @@ function listByProject(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node],
+  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node, Snapshot.node],
 })
 
 export * as Session from "./session"

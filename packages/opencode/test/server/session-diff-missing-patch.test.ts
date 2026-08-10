@@ -1,14 +1,14 @@
 /**
- * Regression test for the same bug class as #26574 (sibling of #26566 and
- * #26553). The Desktop app calls GET /session/<id>/diff; before #26574
- * the response was Schema-encoded against `Snapshot.FileDiff` with
- * `patch: Schema.String` (required), so any session whose stored
- * `summary_diffs` had a row without `patch` returned HTTP 400 and the
- * session never loaded. Legacy session-level diffs are no longer surfaced,
- * but the endpoint remains compatible and must still return successfully.
+ * Tests for GET /session/<id>/diff endpoint.
  *
- * This test inserts a session row with a missing-patch diff entry and
- * asserts that GET /session/<id>/diff returns 200 with empty data.
+ * After #174, this endpoint returns session-scoped agent diffs computed from
+ * snapshots (the net diff from session start to current, filtered to files the
+ * agent touched via PatchParts). Legacy per-message summary diffs are no longer
+ * served through this endpoint.
+ *
+ * - A session with no snapshot parts returns [].
+ * - A session with legacy storage-based diffs (missing `patch`) returns [].
+ * - The messageID query param is accepted but ignored (backwards compat).
  */
 import { afterEach, describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -39,17 +39,16 @@ function pathFor(template: string, params: Record<string, string>) {
 const withSession = (input?: Parameters<Session.Interface["create"]>[0]) =>
   Effect.acquireRelease(Session.use.create(input), (created) => Session.use.remove(created.id).pipe(Effect.ignore))
 
-describe("session diff with missing patch (#26574)", () => {
+describe("session-scoped diff (#174)", () => {
   it.instance(
-    "GET /session/<id>/diff ignores legacy session-level diff storage",
+    "GET /session/<id>/diff returns [] for session with legacy storage diffs",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
         const session = yield* withSession({ title: "missing-patch" })
 
         // Mimic legacy/imported on-disk shape: a diff entry with no
-        // `patch` text. Pre-fix the typed response encoder rejects
-        // this and returns 400.
+        // `patch` text. The endpoint no longer reads from storage.
         yield* Storage.Service.use((storage) =>
           storage.write(["session_diff", session.id], [{ file: "legacy.txt", additions: 1, deletions: 0 }]),
         )
@@ -66,11 +65,11 @@ describe("session diff with missing patch (#26574)", () => {
   )
 
   it.instance(
-    "GET /session/<id>/diff returns requested turn diffs",
+    "GET /session/<id>/diff returns [] for session with no snapshot parts",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
-        const session = yield* withSession({ title: "turn-diff" })
+        const session = yield* withSession({ title: "no-snapshots" })
         const messageID = MessageID.ascending()
         yield* Session.use.updateMessage({
           id: messageID,
@@ -84,13 +83,15 @@ describe("session diff with missing patch (#26574)", () => {
           },
         } satisfies SessionV1.User)
 
+        // Even with messageID param, the endpoint returns session-scoped diffs
+        // (which is [] because there are no step-start/patch parts)
         const response = yield* requestInDirectory(
           `${pathFor(SessionPaths.diff, { sessionID: session.id })}?messageID=${messageID}`,
           test.directory,
         )
 
         expect(response.status).toBe(200)
-        expect(yield* response.json).toEqual([{ file: "turn.ts", additions: 1, deletions: 0, status: "modified" }])
+        expect(yield* response.json).toEqual([])
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )
