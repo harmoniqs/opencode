@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 320px;
   overflow: hidden;
   background: var(--v2-background-bg-base);
 }
@@ -213,6 +214,7 @@
   padding: 10px 12px;
   padding-left: 8px;
   flex-shrink: 0;
+  overflow: hidden;
   border-bottom: 1px solid var(--border-weaker-base, var(--v2-border-border-weak));
 }
 
@@ -220,6 +222,7 @@
   display: flex;
   align-items: center;
   gap: 0px;
+  flex-shrink: 0;
 }
 
 [data-component="session-review-v2"] .session-review-v2-toolbar-group--start {

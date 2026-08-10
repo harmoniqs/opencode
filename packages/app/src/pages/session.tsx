@@ -1103,15 +1103,9 @@ export default function Page() {
     loadFile: file.load,
   })
 
-  const changesTitle = () => {
-    if (!canReview()) return null
-    return <span class="text-14-medium">{language.t("ui.sessionReview.title")}</span>
-  }
+  const changesTitle = () => null
 
-  const changesTitleV2 = () => {
-    if (!canReview()) return null
-    return <span class="text-14-medium">{language.t("ui.sessionReview.title")}</span>
-  }
+  const changesTitleV2 = () => null
 
   const empty = (text: string) => (
     <div class="h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6">
