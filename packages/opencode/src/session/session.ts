@@ -840,7 +840,9 @@ const layer: Layer.Layer<
       if (!all.length) return [] as Snapshot.FileDiff[]
 
       // Find the first step-start snapshot hash (session-start ref)
+      // and the last step-finish snapshot hash (session-end ref)
       let from: string | undefined
+      let lastStepFinish: string | undefined
       // Collect all agent-touched files from PatchParts (absolute paths)
       const agentFilesAbsolute = new Set<string>()
 
@@ -848,6 +850,9 @@ const layer: Layer.Layer<
         for (const part of msg.parts) {
           if (!from && part.type === "step-start" && part.snapshot) {
             from = part.snapshot
+          }
+          if (part.type === "step-finish" && part.snapshot) {
+            lastStepFinish = part.snapshot
           }
           if (part.type === "patch" && part.files) {
             for (const file of part.files) agentFilesAbsolute.add(file)
@@ -858,8 +863,9 @@ const layer: Layer.Layer<
       // No snapshot or no agent-touched files → empty
       if (!from || agentFilesAbsolute.size === 0) return [] as Snapshot.FileDiff[]
 
-      // Get current state
-      const to = yield* snapshot.track()
+      // Use last step-finish hash if available (completed session),
+      // otherwise fall back to current working tree state (session still running)
+      const to = lastStepFinish ?? (yield* snapshot.track())
       if (!to) return [] as Snapshot.FileDiff[]
 
       // Normalize agent-touched files to relative paths (diffFull returns relative paths)
