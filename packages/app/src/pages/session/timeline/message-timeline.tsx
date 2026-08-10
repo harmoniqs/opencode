@@ -368,6 +368,9 @@ export function MessageTimeline(props: {
   const cached = timelineCache.get(ownerSessionKey)
   const initialMeasurements = cached?.measurements
   const coldBottomMount = !initialMeasurements?.length && props.shouldAnchorBottom()
+  // Hide the scroll container for the first frame on cold-bottom-mount to prevent
+  // a flash of content at the top before scrollToEnd fires.
+  const [scrollReady, setScrollReady] = createSignal(!coldBottomMount)
   const platform = usePlatform()
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>()
@@ -686,6 +689,7 @@ export function MessageTimeline(props: {
       overscanFrame = undefined
       if (renderOverscan() < 20) setRenderOverscan(20)
       if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
+      if (!scrollReady()) setScrollReady(true)
     })
   })
 
@@ -1582,6 +1586,7 @@ export function MessageTimeline(props: {
         class="relative min-w-0 w-full h-full"
         style={{
           "--sticky-accordion-top": showHeader() ? "48px" : "0px",
+          opacity: scrollReady() ? undefined : "0",
         }}
       >
         <Show when={showHeader()}>
