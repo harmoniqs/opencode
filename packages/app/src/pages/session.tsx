@@ -1948,9 +1948,7 @@ export default function Page() {
           classes={{ button: compact ? "w-full !py-2" : "w-full" }}
           onClick={() => setStore("mobileTab", "changes")}
         >
-          {hasReview()
-            ? language.t("session.review.filesChanged", { count: reviewCount() })
-            : language.t("session.review.change.other")}
+          {"Files Changed"}
         </Tabs.Trigger>
       </Tabs.List>
     </Tabs>
