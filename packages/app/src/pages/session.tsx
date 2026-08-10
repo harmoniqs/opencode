@@ -1,7 +1,7 @@
 import type { FilePart, Project, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { useMutation } from "@tanstack/solid-query"
+import { createQuery, skipToken, useMutation } from "@tanstack/solid-query"
 import {
   batch,
   ErrorBoundary,
@@ -666,12 +666,29 @@ export default function Page() {
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+  const sessionDiffKey = () => ["session-diff", params.id ?? ""] as const
+  const sessionDiffQuery = createQuery(() => {
+    const sessionID = params.id
+    return {
+      queryKey: sessionDiffKey(),
+      enabled: !!sessionID,
+      queryFn: sessionID
+        ? () =>
+            sdk()
+              .client.session.diff({ sessionID, directory: sdk().directory })
+              .then((result) => (result.data ?? []) as Array<SnapshotFileDiff>)
+              .catch(() => [] as SnapshotFileDiff[])
+        : skipToken,
+    }
+  })
   const reviewDiffs = () => {
-    // Derive file changes from tool parts (same source as the inline "Edit [file]" display).
-    // Tool parts with tool in ["edit", "write", "patch", "apply_patch"] carry diff data
-    // in state.metadata.filediff (with file, patch, additions, deletions).
+    // Server endpoint returns the authoritative full-session diff (queries all messages).
+    const serverDiffs = sessionDiffQuery.data ?? []
+    if (serverDiffs.length > 0) return serverDiffs.filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
+    // Fallback: derive from tool parts currently loaded in the client.
+    // This shows immediate results for visible messages while the server query loads.
     const allMessages = messages()
-    if (!allMessages.length) return []
+    if (!allMessages.length) return [] as Array<SnapshotFileDiff & { file: string }>
     const seen = new Map<string, SnapshotFileDiff & { file: string }>()
     for (const msg of allMessages) {
       const parts = sync().data.part[msg.id]
@@ -690,18 +707,7 @@ export default function Page() {
             deletions: filediff.deletions ?? 0,
             status: seen.has(filediff.file) ? "modified" : "added",
           })
-          continue
         }
-        // Fallback: no filediff metadata, use input.filePath
-        const input = part.state.input as Record<string, unknown>
-        const filePath = (input?.filePath ?? input?.file_path ?? input?.path) as string | undefined
-        if (!filePath) continue
-        seen.set(filePath, {
-          file: filePath,
-          additions: 0,
-          deletions: 0,
-          status: seen.has(filePath) ? "modified" : "added",
-        })
       }
     }
     return [...seen.values()]
@@ -714,7 +720,7 @@ export default function Page() {
   }
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
-  const reviewReady = () => true
+  const reviewReady = () => !sessionDiffQuery.isPending || reviewDiffs().length > 0
   const loadReviewDiff = async (file: string, _version?: number): Promise<(SnapshotFileDiff & { file: string }) | undefined> => {
     const diffs = reviewDiffs()
     const found = diffs.find((d) => d.file === file)

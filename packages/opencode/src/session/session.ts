@@ -887,9 +887,7 @@ const layer: Layer.Layer<
         }
       }
 
-      // Fallback: aggregate stored per-message summary diffs across the session.
-      // This handles sessions without snapshot data (old sessions, snapshots disabled,
-      // or snapshot GC'd) by using the diffs stored at summarization time.
+      // Fallback 1: aggregate stored per-message summary diffs across the session.
       const seen = new Map<string, Snapshot.FileDiff>()
       for (const msg of all) {
         if (msg.info.role !== "user") continue
@@ -897,6 +895,32 @@ const layer: Layer.Layer<
         if (!diffs) continue
         for (const d of diffs) {
           if (d.file) seen.set(d.file, d)
+        }
+      }
+      if (seen.size > 0) return [...seen.values()]
+
+      // Fallback 2: extract diffs from edit/write tool part metadata (filediff).
+      // This covers sessions where snapshots and summary diffs are both empty
+      // but the tool parts carry their own diff data.
+      const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+      for (const msg of all) {
+        for (const part of msg.parts) {
+          if (part.type !== "tool") continue
+          const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown>; title?: string } }
+          if (!toolPart.tool || !EDIT_TOOLS.has(toolPart.tool)) continue
+          if (toolPart.state?.status !== "completed") continue
+          const filediff = toolPart.state?.metadata?.filediff as
+            | { file?: string; patch?: string; additions?: number; deletions?: number }
+            | undefined
+          if (!filediff?.file) continue
+          const relPath = toolPart.state?.title || filediff.file
+          seen.set(filediff.file, {
+            file: relPath,
+            patch: filediff.patch,
+            additions: filediff.additions ?? 0,
+            deletions: filediff.deletions ?? 0,
+            status: seen.has(filediff.file) ? "modified" : "added",
+          })
         }
       }
       return [...seen.values()]
