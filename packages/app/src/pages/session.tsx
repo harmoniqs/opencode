@@ -665,15 +665,34 @@ export default function Page() {
   }, desktopReviewOpen())
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
+  const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
   const reviewDiffs = () => {
-    // Aggregate per-message summary diffs across all user messages in the session.
-    // Each message stores the diffs from its turn; dedupe by file (last write wins).
+    // Derive file changes from tool parts (same source as the inline "Edit [file]" display).
+    // Tool parts with tool in ["edit", "write", "patch", "apply_patch"] carry the file path
+    // in state.input.filePath and +/- counts in state metadata.
+    const id = params.id
+    if (!id) return []
+    const sessionMessages = sync().data.message[id]
+    if (!sessionMessages) return []
     const seen = new Map<string, SnapshotFileDiff & { file: string }>()
-    for (const msg of userMessages()) {
-      const msgDiffs = msg.summary?.diffs
-      if (!msgDiffs) continue
-      for (const d of msgDiffs) {
-        if (d.file) seen.set(d.file, d as SnapshotFileDiff & { file: string })
+    for (const msg of sessionMessages) {
+      const parts = sync().data.part[msg.id]
+      if (!parts) continue
+      for (const part of parts) {
+        if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
+        if (part.state.status !== "completed") continue
+        const input = part.state.input as Record<string, unknown>
+        const filePath = (input?.filePath ?? input?.file_path ?? input?.path) as string | undefined
+        if (!filePath) continue
+        const meta = part.state.metadata as Record<string, unknown> | undefined
+        const additions = typeof meta?.additions === "number" ? meta.additions : 0
+        const deletions = typeof meta?.deletions === "number" ? meta.deletions : 0
+        seen.set(filePath, {
+          file: filePath,
+          additions,
+          deletions,
+          status: seen.has(filePath) ? "modified" : "added",
+        })
       }
     }
     return [...seen.values()]
