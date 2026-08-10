@@ -720,7 +720,7 @@ export default function Page() {
     return diffs[0]?.file
   }
   const reviewCount = () => reviewDiffs().length
-  const hasReview = () => reviewCount() > 0
+  const hasReview = () => true
   const reviewReady = () => true
   const loadReviewDiff = async (file: string, _version?: number): Promise<(SnapshotFileDiff & { file: string }) | undefined> => {
     const diffs = reviewDiffs()
