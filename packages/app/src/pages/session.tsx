@@ -670,12 +670,10 @@ export default function Page() {
     // Derive file changes from tool parts (same source as the inline "Edit [file]" display).
     // Tool parts with tool in ["edit", "write", "patch", "apply_patch"] carry diff data
     // in state.metadata.filediff (with file, patch, additions, deletions).
-    const id = params.id
-    if (!id) return []
-    const sessionMessages = sync().data.message[id]
-    if (!sessionMessages) return []
+    const allMessages = messages()
+    if (!allMessages.length) return []
     const seen = new Map<string, SnapshotFileDiff & { file: string }>()
-    for (const msg of sessionMessages) {
+    for (const msg of allMessages) {
       const parts = sync().data.part[msg.id]
       if (!parts) continue
       for (const part of parts) {
@@ -684,7 +682,6 @@ export default function Page() {
         const meta = part.state.metadata as Record<string, unknown> | undefined
         const filediff = meta?.filediff as { file?: string; patch?: string; additions?: number; deletions?: number } | undefined
         if (filediff?.file) {
-          // Use the relative path from title (e.g. "packages/app/src/file.tsx") if available
           const relPath = (part.state as { title?: string }).title || filediff.file
           seen.set(filediff.file, {
             file: relPath,
