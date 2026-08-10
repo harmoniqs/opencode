@@ -785,9 +785,29 @@ function SessionChatsDropdown() {
     }
   }
 
-  function openSession(session: Session) {
+  async function openSession(session: Session) {
     // Close flyout first so its Portal unmounts cleanly.
     setOpen(false)
+
+    // Mirror the dashboard's project setup: ensure the directory is registered and
+    // touched so the workspace context is warm when the session page mounts.
+    const conn = server.current
+    if (conn) {
+      const ctx = globalCtx.ensureServerCtx(conn)
+      ctx.projects.open(session.directory)
+      ctx.projects.touch(session.directory)
+    }
+
+    // Await session sync BEFORE navigating (issue #176). When switching sessions
+    // within the same route (params.id change), the Page component persists and
+    // the timeline re-keys immediately. If data isn't fully cached yet, rows
+    // trickle in and the measurement burst overlaps with user interaction, causing
+    // the virtualizer's scroll anchoring to snap the viewport back. Awaiting here
+    // ensures messagesReady() is true with complete data the moment the timeline
+    // mounts — matching the dashboard path where the fresh route mount naturally
+    // gates on messagesReady(). For already-cached sessions this resolves instantly.
+    await serverSync().session.sync(session.id).catch(() => {})
+
     // Use tabs.select for sessions that already have an open tab (no transition).
     // For sessions without a tab, navigate directly — DO NOT use tabs.openPath
     // which calls addSessionTab(startTransition), keeping both old and new UI
