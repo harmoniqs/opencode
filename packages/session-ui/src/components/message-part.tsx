@@ -916,9 +916,8 @@ export function AssistantParts(props: {
       </Index>
       {/* amicode: Amico's working presence — the offset accent lane. Shown only
           while an in-domain turn streams (state === "on"), decoupled from any
-          card-suppression: the thinking block runs (H-mark + cycling gerund +
-          live elapsed/tokens — it owns its mark now, no lane-head here; two
-          signature marks side by side compete with each other). Pops out the
+          card-suppression: the thinking block (wave + cycling gerund + live
+          elapsed/tokens) runs without a duplicate mark. Pops out the
           moment working flips false. spec-20260712-amico-third-actor. */}
       <Show when={inDomainTurn() && props.working && last() === grouped().at(-1)?.key}>
         <div class="amc-lane" data-slot="amico-working">

@@ -1,15 +1,12 @@
 import { createSignal, onCleanup, onMount, Show, type ComponentProps } from "solid-js"
-import { wordAt, formatElapsed, formatTokens } from "./thinking"
+import { shuffledWordAt, SHUFFLED_WORDS, formatElapsed, formatTokens } from "./thinking"
 import { AmicoWave } from "./amico-wave"
-import { AmicoMark } from "./spinner"
 
 // AMICODE: the "thinking" working indicator — a two-row block shown while a
 // reply streams (app TimelineThinkingRow; session-ui lane in message-part.tsx).
-// Row 1: H-mark + harmonic wave (amico-wave.tsx) + the cycling gerund. Row 2:
-// the live meta line (elapsed · tokens · esc), starting under the wave. The
-// block OWNS the mark — mount sites no longer add their own (a `mark={false}`
-// opt-out remains for contexts that carry their own signature). Pure bits
-// (word rotation, label formatting) live in ./thinking for testing.
+// Row 1: harmonic wave (amico-wave.tsx) + the cycling gerund. Row 2:
+// the live meta line (elapsed · tokens · esc), starting under the wave.
+// Pure bits (word rotation, label formatting) live in ./thinking for testing.
 //
 // Layout invariants (earned the hard way — the CSS side lives in amicode.css):
 //  - the meta can NEVER wrap mid-phrase — the old flex row once let a greedy
@@ -47,14 +44,16 @@ export function ThinkingLine(props: {
   tokens?: number
   /** show the "esc to interrupt" hint — only pass when the mount site wires esc */
   interruptible?: boolean
-  /** render the H-mark as the block's anchor (default true) */
+  /** @deprecated no-op — the H-mark was removed (wave+verb is the indicator now); kept for compat */
   mark?: boolean
   class?: string
   style?: ComponentProps<"span">["style"]
 }) {
   const still = reducedMotion()
   const [elapsedMs, setElapsedMs] = createSignal(0)
-  const [tick, setTick] = createSignal(0)
+  // Random start so each turn/mount opens on a different verb; the module-level
+  // shuffle already decorrelates reloads, this decorrelates simultaneous mounts.
+  const [tick, setTick] = createSignal(Math.floor(Math.random() * SHUFFLED_WORDS.length))
 
   onMount(() => {
     const start = Date.now()
@@ -66,7 +65,7 @@ export function ThinkingLine(props: {
     }
   })
 
-  const word = () => (still ? "Thinking" : wordAt(tick()))
+  const word = () => (still ? "Thinking" : shuffledWordAt(tick()))
 
   return (
     <span
@@ -81,9 +80,6 @@ export function ThinkingLine(props: {
       <span class="amc-thinking-word" aria-hidden="true">
         {word()}…
       </span>
-      <Show when={props.mark ?? true}>
-        <AmicoMark />
-      </Show>
       <AmicoWave />
       <span class="amc-thinking-meta" aria-hidden="true">
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
