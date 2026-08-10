@@ -544,7 +544,9 @@ export function MessageTimeline(props: {
       }
     },
     anchorTo: "end",
-    followOnAppend: true,
+    get followOnAppend() {
+      return props.shouldAnchorBottom() && !props.hasScrollGesture()
+    },
     scrollEndThreshold: 80,
     get scrollMargin() {
       return showHeader() ? 64 : 0
