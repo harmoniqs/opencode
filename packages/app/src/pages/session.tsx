@@ -682,7 +682,7 @@ export default function Page() {
         : skipToken,
     }
   })
-  const reviewDiffs = () => {
+  const reviewDiffs = createMemo(() => {
     // Server endpoint returns the authoritative full-session diff (queries all messages).
     const serverDiffs = sessionDiffQuery.data ?? []
     if (serverDiffs.length > 0) return serverDiffs.filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
@@ -712,7 +712,7 @@ export default function Page() {
       }
     }
     return [...seen.values()]
-  }
+  })
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
     const selected = reviewFile()
