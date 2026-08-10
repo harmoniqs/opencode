@@ -61,7 +61,7 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
   )
 
   it.instance(
-    "returns [] when session has no step-start parts",
+    "falls back to per-message summary diffs when no snapshot parts exist",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -74,6 +74,12 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
           time: { created: Date.now() },
           agent: "build",
           model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("model") },
+          summary: {
+            diffs: [
+              { file: "src/main.ts", additions: 10, deletions: 2, status: "modified" as const },
+              { file: "src/new.ts", additions: 5, deletions: 0, status: "added" as const },
+            ],
+          },
         } satisfies SessionV1.User)
 
         const response = yield* requestInDirectory(
@@ -81,7 +87,9 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
           test.directory,
         )
         expect(response.status).toBe(200)
-        expect(yield* response.json).toEqual([])
+        const diffs = (yield* response.json) as Array<{ file: string; additions: number; deletions: number }>
+        expect(diffs.length).toBe(2)
+        expect(diffs.map((d) => d.file).sort()).toEqual(["src/main.ts", "src/new.ts"])
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )

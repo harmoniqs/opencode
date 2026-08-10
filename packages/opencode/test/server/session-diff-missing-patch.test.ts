@@ -65,7 +65,7 @@ describe("session-scoped diff (#174)", () => {
   )
 
   it.instance(
-    "GET /session/<id>/diff returns [] for session with no snapshot parts",
+    "GET /session/<id>/diff falls back to stored summary diffs when no snapshots exist",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -83,15 +83,14 @@ describe("session-scoped diff (#174)", () => {
           },
         } satisfies SessionV1.User)
 
-        // Even with messageID param, the endpoint returns session-scoped diffs
-        // (which is [] because there are no step-start/patch parts)
+        // No snapshot parts exist, so it falls back to per-message summary diffs
         const response = yield* requestInDirectory(
           `${pathFor(SessionPaths.diff, { sessionID: session.id })}?messageID=${messageID}`,
           test.directory,
         )
 
         expect(response.status).toBe(200)
-        expect(yield* response.json).toEqual([])
+        expect(yield* response.json).toEqual([{ file: "turn.ts", additions: 1, deletions: 0, status: "modified" }])
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )

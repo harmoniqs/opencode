@@ -860,30 +860,46 @@ const layer: Layer.Layer<
         }
       }
 
-      // No snapshot or no agent-touched files → empty
-      if (!from || agentFilesAbsolute.size === 0) return [] as Snapshot.FileDiff[]
+      // If we have snapshot hashes and agent-touched files, compute the real diff
+      if (from && agentFilesAbsolute.size > 0) {
+        // Use last step-finish hash if available (completed session),
+        // otherwise fall back to current working tree state (session still running)
+        const to = lastStepFinish ?? (yield* snapshot.track())
+        if (to) {
+          // Normalize agent-touched files to relative paths (diffFull returns relative paths)
+          const ctx = yield* InstanceState.context
+          const worktree = ctx.worktree
+          const agentFiles = new Set<string>()
+          for (const abs of agentFilesAbsolute) {
+            const rel = abs.startsWith(worktree)
+              ? abs.slice(worktree.length).replace(/^\//, "").replaceAll("\\", "/")
+              : abs.replaceAll("\\", "/")
+            agentFiles.add(rel)
+          }
 
-      // Use last step-finish hash if available (completed session),
-      // otherwise fall back to current working tree state (session still running)
-      const to = lastStepFinish ?? (yield* snapshot.track())
-      if (!to) return [] as Snapshot.FileDiff[]
-
-      // Normalize agent-touched files to relative paths (diffFull returns relative paths)
-      const ctx = yield* InstanceState.context
-      const worktree = ctx.worktree
-      const agentFiles = new Set<string>()
-      for (const abs of agentFilesAbsolute) {
-        const rel = abs.startsWith(worktree)
-          ? abs.slice(worktree.length).replace(/^\//, "").replaceAll("\\", "/")
-          : abs.replaceAll("\\", "/")
-        agentFiles.add(rel)
+          const allDiffs = yield* snapshot.diffFull(from, to).pipe(
+            Effect.catchCause(() => Effect.succeed([] as Snapshot.FileDiff[])),
+          )
+          const filtered = allDiffs.filter(
+            (d: Snapshot.FileDiff) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
+          )
+          if (filtered.length > 0) return filtered
+        }
       }
 
-      // Compute full diff and filter to agent-touched files
-      const allDiffs = yield* snapshot.diffFull(from, to)
-      return allDiffs.filter(
-        (d) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
-      )
+      // Fallback: aggregate stored per-message summary diffs across the session.
+      // This handles sessions without snapshot data (old sessions, snapshots disabled,
+      // or snapshot GC'd) by using the diffs stored at summarization time.
+      const seen = new Map<string, Snapshot.FileDiff>()
+      for (const msg of all) {
+        if (msg.info.role !== "user") continue
+        const diffs = msg.info.summary?.diffs
+        if (!diffs) continue
+        for (const d of diffs) {
+          if (d.file) seen.set(d.file, d)
+        }
+      }
+      return [...seen.values()]
     })
 
     const messages: Interface["messages"] = Effect.fn("Session.messages")(function* (input) {
