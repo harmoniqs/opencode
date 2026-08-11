@@ -2195,7 +2195,7 @@ function ArchivedSessionRow(props: {
             data-action="home-session-delete"
             variant="ghost-muted"
             size="large"
-            icon={<IconV2 name="trash" size="small" />}
+            icon={<Icon name="trash" size="small" />}
             aria-label="Delete permanently"
             onClick={(event: MouseEvent) => {
               event.preventDefault()
