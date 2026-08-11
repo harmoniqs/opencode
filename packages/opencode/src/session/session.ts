@@ -843,7 +843,7 @@ const layer: Layer.Layer<
       // and the last step-finish snapshot hash (session-end ref)
       let from: string | undefined
       let lastStepFinish: string | undefined
-      // Collect all agent-touched files from PatchParts (absolute paths)
+      // Collect all agent-touched files from PatchParts and completed tool parts (absolute paths)
       const agentFilesAbsolute = new Set<string>()
 
       for (const msg of all) {
@@ -856,6 +856,14 @@ const layer: Layer.Layer<
           }
           if (part.type === "patch" && part.files) {
             for (const file of part.files) agentFilesAbsolute.add(file)
+          }
+          // In-flight file tracking: also collect files from completed tool parts with filediff metadata
+          if (part.type === "tool") {
+            const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown> } }
+            if (toolPart.state?.status === "completed") {
+              const filediff = toolPart.state?.metadata?.filediff as { file?: string } | undefined
+              if (filediff?.file) agentFilesAbsolute.add(filediff.file)
+            }
           }
         }
       }
@@ -878,12 +886,28 @@ const layer: Layer.Layer<
           }
 
           const allDiffs = yield* snapshot.diffFull(from, to).pipe(
-            Effect.catchCause(() => Effect.succeed([] as Snapshot.FileDiff[])),
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                yield* Effect.logWarning("diffFull failed, falling through to per-file fallback", { cause })
+                return [] as Snapshot.FileDiff[]
+              }),
+            ),
           )
           const filtered = allDiffs.filter(
             (d: Snapshot.FileDiff) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
           )
           if (filtered.length > 0) return filtered
+
+          // Fallback A: primary returned empty but from hash exists — per-file git show vs current disk
+          const perFileDiffs = yield* snapshot.diffFromDisk(from, [...agentFiles]).pipe(
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                yield* Effect.logWarning("diffFromDisk failed, falling through to summary fallback", { cause })
+                return [] as Snapshot.FileDiff[]
+              }),
+            ),
+          )
+          if (perFileDiffs.length > 0) return perFileDiffs
         }
       }
 

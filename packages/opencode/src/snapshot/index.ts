@@ -42,6 +42,7 @@ export interface Interface {
   readonly revert: (patches: Patch[]) => Effect.Effect<void>
   readonly diff: (hash: string) => Effect.Effect<string>
   readonly diffFull: (from: string, to: string) => Effect.Effect<FileDiff[]>
+  readonly diffFromDisk: (ref: string, files: string[]) => Effect.Effect<FileDiff[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Snapshot") {}
@@ -758,6 +759,48 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
           )
         })
 
+        const diffFromDisk = Effect.fnUntraced(function* (ref: string, files: string[]) {
+          return yield* locked(
+            Effect.gen(function* () {
+              const result: FileDiff[] = []
+              const patchFn = (file: string, before: string, after: string) =>
+                formatPatch(structuredPatch(file, file, before, after, "", "", { context: Number.MAX_SAFE_INTEGER }))
+
+              for (const file of files) {
+                const beforeResult = yield* git([...cfg, ...args(["show", `${ref}:${file}`])])
+                const before = beforeResult.code === 0 ? beforeResult.text : ""
+
+                const diskPath = path.join(state.worktree, file)
+                const after = yield* read(diskPath)
+
+                if (before === after) continue
+
+                // Compute actual line-level additions/deletions from the structured patch
+                const sp = structuredPatch(file, file, before, after, "", "")
+                let adds = 0
+                let dels = 0
+                for (const hunk of sp.hunks) {
+                  for (const line of hunk.lines) {
+                    if (line.startsWith("+")) adds++
+                    else if (line.startsWith("-")) dels++
+                  }
+                }
+
+                const status: "added" | "deleted" | "modified" = before === "" ? "added" : after === "" ? "deleted" : "modified"
+                result.push({
+                  file,
+                  patch: patchFn(file, before, after),
+                  additions: adds,
+                  deletions: dels,
+                  status,
+                })
+              }
+
+              return result
+            }),
+          )
+        })
+
         yield* cleanup().pipe(
           Effect.catchCause((cause) => Effect.logError("cleanup loop failed", { cause: Cause.pretty(cause) })),
           Effect.repeat(Schedule.spaced(Duration.hours(1))),
@@ -765,7 +808,7 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
           Effect.forkScoped,
         )
 
-        return { cleanup, track, patch, restore, revert, diff, diffFull }
+        return { cleanup, track, patch, restore, revert, diff, diffFull, diffFromDisk }
       }),
     )
 
@@ -793,6 +836,9 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
       }),
       diffFull: Effect.fn("Snapshot.diffFull")(function* (from: string, to: string) {
         return yield* InstanceState.useEffect(state, (s) => s.diffFull(from, to))
+      }),
+      diffFromDisk: Effect.fn("Snapshot.diffFromDisk")(function* (ref: string, files: string[]) {
+        return yield* InstanceState.useEffect(state, (s) => s.diffFromDisk(ref, files))
       }),
     })
   }),
