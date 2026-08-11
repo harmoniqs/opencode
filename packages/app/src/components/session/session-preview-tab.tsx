@@ -199,18 +199,11 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                   {saveStatus() === "saving" ? "Saving..." : "Saved"}
                 </span>
               </Show>
-              {/* Zoom control */}
+              {/* Zoom control: [100% | - +] */}
               <div class="shrink-0 flex items-center h-6 rounded-md border border-border-base overflow-hidden">
-                <button
-                  class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                  onClick={zoomOut}
-                  aria-label="Zoom out"
-                >
-                  <span class="text-11-medium leading-none">−</span>
-                </button>
                 <input
                   type="text"
-                  class="w-8 h-full text-center text-11-regular text-text-base bg-transparent border-x border-border-base outline-none"
+                  class="w-9 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
                   value={`${zoom()}%`}
                   onInput={(e) => {
                     const val = parseInt(e.currentTarget.value)
@@ -225,13 +218,22 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                     }
                   }}
                 />
-                <button
-                  class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                  onClick={zoomIn}
-                  aria-label="Zoom in"
-                >
-                  <span class="text-11-medium leading-none">+</span>
-                </button>
+                <div class="flex items-center border-l border-border-base">
+                  <button
+                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                    onClick={zoomOut}
+                    aria-label="Zoom out"
+                  >
+                    <span class="text-12-medium leading-none">−</span>
+                  </button>
+                  <button
+                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                    onClick={zoomIn}
+                    aria-label="Zoom in"
+                  >
+                    <span class="text-12-medium leading-none">+</span>
+                  </button>
+                </div>
               </div>
               {/* Mode toggle */}
               <SegmentedControlV2
