@@ -24,6 +24,14 @@ interface PreviewFileState {
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+/**
+ * Convert ```math fenced code blocks (GitHub-flavored) to $$...$$ display math
+ * blocks that the Markdown component's KaTeX extension understands.
+ */
+function preprocessMarkdown(text: string): string {
+  return text.replace(/```math\n([\s\S]*?)```/g, (_match, body: string) => `$$\n${body.trim()}\n$$`)
+}
+
 export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; status?: string }> }) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
@@ -85,14 +93,6 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
     if (!path) return "preview"
     return fileStates[path]?.mode ?? "preview"
   })
-
-  const toggleMode = () => {
-    const path = selectedFile()
-    if (!path) return
-    const current = fileStates[path]?.mode ?? "preview"
-    const next = current === "preview" ? "raw" : "preview"
-    setFileStates(path, { ...fileStates[path], mode: next })
-  }
 
   const goBack = () => {
     setSelectedFile(undefined)
@@ -170,13 +170,36 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
               <div class="flex-1 min-w-0 text-12-regular text-text-base truncate">
                 {markdownFiles().find((f) => f.path === path())?.basename ?? path()}
               </div>
-              <button
-                class="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-11-regular text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                onClick={toggleMode}
-              >
-                <Icon name={currentMode() === "preview" ? "edit" : "eye"} size="small" />
-                <span>{currentMode() === "preview" ? "Raw" : "Preview"}</span>
-              </button>
+              <div class="shrink-0 flex items-center rounded-md border border-border-base overflow-hidden">
+                <button
+                  class="flex items-center gap-1 px-2.5 py-1 text-11-medium transition-colors"
+                  classList={{
+                    "bg-background-stronger text-text-base": currentMode() === "preview",
+                    "text-text-weak hover:text-text-base hover:bg-background-stronger/50": currentMode() !== "preview",
+                  }}
+                  onClick={() => {
+                    const path = selectedFile()
+                    if (path) setFileStates(path, { ...fileStates[path], mode: "preview" })
+                  }}
+                >
+                  <Icon name="eye" size="small" />
+                  <span>Preview</span>
+                </button>
+                <button
+                  class="flex items-center gap-1 px-2.5 py-1 text-11-medium border-l border-border-base transition-colors"
+                  classList={{
+                    "bg-background-stronger text-text-base": currentMode() === "raw",
+                    "text-text-weak hover:text-text-base hover:bg-background-stronger/50": currentMode() !== "raw",
+                  }}
+                  onClick={() => {
+                    const path = selectedFile()
+                    if (path) setFileStates(path, { ...fileStates[path], mode: "raw" })
+                  }}
+                >
+                  <Icon name="edit" size="small" />
+                  <span>Raw</span>
+                </button>
+              </div>
             </div>
 
             {/* Content area */}
@@ -193,7 +216,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                   }
                 >
                   <div class="p-4">
-                    <Markdown text={fileContent()} class="text-12-regular" />
+                    <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
                   </div>
                 </Show>
               </Show>
