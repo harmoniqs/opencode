@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
+import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 
@@ -231,6 +232,10 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
 // ─── File List ──────────────────────────────────────────────────────────────
 
 function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: string) => void }) {
+  const copyToClipboard = (text: string) => {
+    void navigator.clipboard.writeText(text)
+  }
+
   return (
     <div class="h-full overflow-auto">
       <Show
@@ -244,24 +249,33 @@ function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: st
         <div class="py-1">
           <For each={props.files}>
             {(file) => (
-              <button
-                class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-background-stronger transition-colors"
-                onClick={() => props.onSelect(file.path)}
-              >
-                <span
-                  class="shrink-0 w-4 h-4 flex items-center justify-center rounded text-10-medium"
-                  classList={{
-                    "bg-green-500/15 text-green-500": file.changeType === "added",
-                    "bg-yellow-500/15 text-yellow-500": file.changeType === "modified",
-                  }}
+              <MenuV2.Context>
+                <MenuV2.Context.Trigger
+                  as="button"
+                  class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-background-stronger transition-colors"
+                  onClick={() => props.onSelect(file.path)}
                 >
-                  {file.changeType === "added" ? "A" : "M"}
-                </span>
-                <div class="flex-1 min-w-0">
-                  <div class="text-12-regular text-text-base truncate">{file.basename}</div>
-                  <div class="text-11-regular text-text-weak truncate">{file.relativePath}</div>
-                </div>
-              </button>
+                  <span
+                    class="shrink-0 w-4 h-4 flex items-center justify-center rounded text-10-medium"
+                    classList={{
+                      "bg-green-500/15 text-green-500": file.changeType === "added",
+                      "bg-yellow-500/15 text-yellow-500": file.changeType === "modified",
+                    }}
+                  >
+                    {file.changeType === "added" ? "A" : "M"}
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-12-regular text-text-base truncate">{file.basename}</div>
+                    <div class="text-11-regular text-text-weak truncate">{file.relativePath}</div>
+                  </div>
+                </MenuV2.Context.Trigger>
+                <MenuV2.Context.Portal>
+                  <MenuV2.Context.Content>
+                    <MenuV2.Item onSelect={() => copyToClipboard(file.path)}>Copy full path</MenuV2.Item>
+                    <MenuV2.Item onSelect={() => copyToClipboard(file.basename)}>Copy filename</MenuV2.Item>
+                  </MenuV2.Context.Content>
+                </MenuV2.Context.Portal>
+              </MenuV2.Context>
             )}
           </For>
         </div>
