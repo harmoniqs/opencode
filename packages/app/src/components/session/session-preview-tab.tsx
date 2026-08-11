@@ -4,6 +4,8 @@ import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
+import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 
@@ -102,6 +104,8 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
   // ─── Raw Editor Save ────────────────────────────────────────────────────
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined
+  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
+  let savedTimer: ReturnType<typeof setTimeout> | undefined
 
   const saveFile = (path: string, content: string) => {
     const fsPath = path.startsWith("~/")
@@ -111,14 +115,22 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
     const baseUrl = serverSDK().url
     if (!baseUrl) return
 
+    setSaveStatus("saving")
+
     // POST to the file write endpoint
     fetch(new URL("/file/write", baseUrl), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: fsPath, content }),
-    }).catch(() => {
-      // Silently fail — save is best-effort in the preview
     })
+      .then(() => {
+        setSaveStatus("saved")
+        if (savedTimer) clearTimeout(savedTimer)
+        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+      })
+      .catch(() => {
+        setSaveStatus("idle")
+      })
   }
 
   const debouncedSave = (path: string, content: string) => {
@@ -147,6 +159,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
 
   onCleanup(() => {
     if (saveTimer) clearTimeout(saveTimer)
+    if (savedTimer) clearTimeout(savedTimer)
   })
 
   // ─── Render ─────────────────────────────────────────────────────────────
@@ -159,7 +172,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
       >
         {(path) => (
           <div class="h-full flex flex-col overflow-hidden">
-            {/* Header with back button and mode toggle */}
+            {/* Header with back button, save status, and mode toggle */}
             <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
               <IconButton
                 icon="arrow-left"
@@ -171,36 +184,31 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
               <div class="flex-1 min-w-0 text-12-regular text-text-base truncate">
                 {markdownFiles().find((f) => f.path === path())?.basename ?? path()}
               </div>
-              <div class="shrink-0 flex items-center rounded-md border border-border-base overflow-hidden">
-                <button
-                  class="flex items-center gap-1 px-2.5 py-1 text-11-medium transition-colors"
-                  classList={{
-                    "bg-background-stronger text-text-base": currentMode() === "preview",
-                    "text-text-weak hover:text-text-base hover:bg-background-stronger/50": currentMode() !== "preview",
-                  }}
-                  onClick={() => {
-                    const path = selectedFile()
-                    if (path) setFileStates(path, { ...fileStates[path], mode: "preview" })
-                  }}
-                >
-                  <Icon name="eye" size="small" />
-                  <span>Preview</span>
-                </button>
-                <button
-                  class="flex items-center gap-1 px-2.5 py-1 text-11-medium border-l border-border-base transition-colors"
-                  classList={{
-                    "bg-background-stronger text-text-base": currentMode() === "raw",
-                    "text-text-weak hover:text-text-base hover:bg-background-stronger/50": currentMode() !== "raw",
-                  }}
-                  onClick={() => {
-                    const path = selectedFile()
-                    if (path) setFileStates(path, { ...fileStates[path], mode: "raw" })
-                  }}
-                >
-                  <Icon name="edit" size="small" />
-                  <span>Raw</span>
-                </button>
-              </div>
+              <Show when={saveStatus() !== "idle"}>
+                <span class="text-11-regular text-text-weak animate-in fade-in">
+                  {saveStatus() === "saving" ? "Saving..." : "Saved"}
+                </span>
+              </Show>
+              <SegmentedControlV2
+                value={currentMode()}
+                onChange={(value) => {
+                  if (value !== "preview" && value !== "raw") return
+                  const p = selectedFile()
+                  if (p) setFileStates(p, { ...fileStates[p], mode: value })
+                }}
+                aria-label="View mode"
+              >
+                <TooltipV2 openDelay={400} value="Preview">
+                  <SegmentedControlItemV2 value="preview" aria-label="Preview">
+                    <Icon name="eye" size="small" />
+                  </SegmentedControlItemV2>
+                </TooltipV2>
+                <TooltipV2 openDelay={400} value="Raw">
+                  <SegmentedControlItemV2 value="raw" aria-label="Raw">
+                    <Icon name="edit" size="small" />
+                  </SegmentedControlItemV2>
+                </TooltipV2>
+              </SegmentedControlV2>
             </div>
 
             {/* Content area */}
@@ -216,7 +224,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                     />
                   }
                 >
-                  <div class="p-4">
+                  <div class="p-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:max-w-full [&_.katex]:text-[0.9em]">
                     <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
                   </div>
                 </Show>
