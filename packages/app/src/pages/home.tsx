@@ -34,6 +34,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { DialogSelectServer, useServerManagementController } from "@/components/dialog-select-server"
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
@@ -417,6 +418,33 @@ function HomeDesign() {
         description: errorMessage(cause, language.t("common.requestFailed")),
       })
     }
+  }
+
+  // amicode#310: permanently delete an archived session with confirmation dialog.
+  function deleteArchivedSession(session: Session) {
+    dialog.show(() => (
+      <DialogDeleteArchivedSession
+        session={session}
+        onConfirm={async () => {
+          const ctx = focusedServerCtx()
+          if (!ctx) return
+          try {
+            await (ctx.sdk.client.session.delete as Function)({
+              sessionID: session.id,
+              directory: session.directory,
+            })
+            setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
+          } catch (cause) {
+            showToast({
+              title: language.t("session.delete.failed.title"),
+              description: errorMessage(cause, language.t("common.requestFailed")),
+            })
+          }
+          dialog.close()
+        }}
+        onCancel={() => dialog.close()}
+      />
+    ))
   }
 
   // amicode#273 AC7: extend search results to include archived sessions with badge.
@@ -1247,6 +1275,7 @@ function HomeDesign() {
                                       session={session}
                                       openSession={openSession}
                                       onUnarchive={unarchiveSession}
+                                      onDelete={deleteArchivedSession}
                                     />
                                   )}
                                 </For>
@@ -2122,10 +2151,12 @@ function HomeCardsSkeleton() {
 }
 
 // amicode#273 AC5: archived session row — click opens read-only, hover shows unarchive.
+// amicode#310: added onDelete for permanent deletion.
 function ArchivedSessionRow(props: {
   session: Session
   openSession: (session: Session) => void
   onUnarchive: (session: Session) => void
+  onDelete: (session: Session) => void
 }) {
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
 
@@ -2143,7 +2174,7 @@ function ArchivedSessionRow(props: {
         </span>
       </button>
       <div
-        class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity"
+        class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity"
       >
         <TooltipV2 placement="top" value="Unarchive">
           <IconButtonV2
@@ -2159,8 +2190,51 @@ function ArchivedSessionRow(props: {
             }}
           />
         </TooltipV2>
+        <TooltipV2 placement="top" value="Delete permanently">
+          <IconButtonV2
+            data-action="home-session-delete"
+            variant="ghost-muted"
+            size="large"
+            icon={<IconV2 name="trash" size="small" />}
+            aria-label="Delete permanently"
+            onClick={(event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void props.onDelete(props.session)
+            }}
+          />
+        </TooltipV2>
       </div>
     </div>
+  )
+}
+
+// amicode#310: confirmation dialog for permanently deleting an archived session.
+function DialogDeleteArchivedSession(props: {
+  session: Session
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const language = useLanguage()
+  const name = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+
+  return (
+    <DialogV2 fit>
+      <DialogHeader hideClose>
+        <DialogTitleGroup
+          title={language.t("session.delete.title")}
+          description={language.t("session.delete.confirm", { name: name() })}
+        />
+      </DialogHeader>
+      <DialogFooter>
+        <ButtonV2 variant="ghost" onClick={props.onCancel}>
+          {language.t("common.cancel")}
+        </ButtonV2>
+        <ButtonV2 variant="danger" onClick={props.onConfirm}>
+          {language.t("session.delete.button")}
+        </ButtonV2>
+      </DialogFooter>
+    </DialogV2>
   )
 }
 
