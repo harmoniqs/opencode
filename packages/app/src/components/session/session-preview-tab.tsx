@@ -331,8 +331,13 @@ function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: st
                 </MenuV2.Context.Trigger>
                 <MenuV2.Context.Portal>
                   <MenuV2.Context.Content>
-                    <MenuV2.Item onSelect={() => copyToClipboard(file.path)}>Copy full path</MenuV2.Item>
                     <MenuV2.Item onSelect={() => copyToClipboard(file.basename)}>Copy filename</MenuV2.Item>
+                    <MenuV2.Item onSelect={() => {
+                      const fullPath = file.path.startsWith("~/")
+                        ? file.path.replace("~", process.env.HOME ?? "")
+                        : file.path
+                      copyToClipboard(fullPath)
+                    }}>Copy full path</MenuV2.Item>
                   </MenuV2.Context.Content>
                 </MenuV2.Context.Portal>
               </MenuV2.Context>
