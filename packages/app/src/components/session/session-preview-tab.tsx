@@ -172,7 +172,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
       >
         {(path) => (
           <div class="h-full flex flex-col overflow-hidden">
-            {/* Header with back button, save status, and mode toggle */}
+            {/* Header with back button, mode toggle */}
             <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
               <IconButton
                 icon="arrow-left"
@@ -185,7 +185,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                 {markdownFiles().find((f) => f.path === path())?.basename ?? path()}
               </div>
               <Show when={saveStatus() !== "idle"}>
-                <span class="text-11-regular text-text-weak animate-in fade-in">
+                <span class="text-11-regular text-text-weak">
                   {saveStatus() === "saving" ? "Saving..." : "Saved"}
                 </span>
               </Show>
@@ -196,15 +196,16 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                   const p = selectedFile()
                   if (p) setFileStates(p, { ...fileStates[p], mode: value })
                 }}
+                class="!w-auto"
                 aria-label="View mode"
               >
                 <TooltipV2 openDelay={400} value="Preview">
-                  <SegmentedControlItemV2 value="preview" aria-label="Preview">
+                  <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
                     <Icon name="eye" size="small" />
                   </SegmentedControlItemV2>
                 </TooltipV2>
                 <TooltipV2 openDelay={400} value="Raw">
-                  <SegmentedControlItemV2 value="raw" aria-label="Raw">
+                  <SegmentedControlItemV2 value="raw" aria-label="Raw" class="!flex-none !px-2">
                     <Icon name="edit" size="small" />
                   </SegmentedControlItemV2>
                 </TooltipV2>

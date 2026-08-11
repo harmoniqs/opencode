@@ -22,10 +22,10 @@ export function PanelMenu(props: {
   return (
     <DropdownMenu gutter={4} placement="bottom-end">
       <DropdownMenu.Trigger
-        class="flex items-center justify-center w-7 h-7 rounded-md text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors cursor-pointer"
+        class="flex items-center justify-center w-6 h-6 rounded-[5px] text-icon-weak hover:text-icon-base hover:bg-surface-base-hover transition-colors cursor-pointer"
         aria-label="Open panel"
       >
-        <Icon name="plus-small" />
+        <Icon name="plus-small" size="small" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
