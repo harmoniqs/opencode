@@ -103,6 +103,30 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       return yield* session.diff(ctx.params.sessionID)
     })
 
+    const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+
+    const touchedFiles = Effect.fn("SessionHttpApi.touchedFiles")(function* (ctx: {
+      params: { sessionID: SessionID }
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      const allMessages = yield* SessionError.mapStorageNotFound(
+        session.messages({ sessionID: ctx.params.sessionID }),
+      )
+      const seen = new Map<string, "added" | "modified">()
+      for (const msg of allMessages) {
+        for (const part of msg.parts) {
+          if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
+          if (part.state.status !== "completed") continue
+          const meta = part.state.metadata as Record<string, unknown> | undefined
+          const filediff = meta?.filediff as { file?: string } | undefined
+          if (filediff?.file && !seen.has(filediff.file)) {
+            seen.set(filediff.file, part.tool === "write" ? "added" : "modified")
+          }
+        }
+      }
+      return Array.from(seen, ([file, status]) => ({ file, status }))
+    })
+
     const messages = Effect.fn("SessionHttpApi.messages")(function* (ctx: {
       params: { sessionID: SessionID }
       query: typeof MessagesQuery.Type
@@ -417,6 +441,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("children", children)
       .handle("todo", todo)
       .handle("diff", diff)
+      .handle("touchedFiles", touchedFiles)
       .handle("messages", messages)
       .handle("message", message)
       .handleRaw("create", createRaw)

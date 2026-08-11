@@ -248,6 +248,8 @@ export const dict = {
   "prompt.mode.shell.exit": "按 esc 退出",
   "session.child.promptDisabled": "無法在子代理程式工作階段中輸入提示詞。",
   "session.child.backToParent": "返回主要工作階段。",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "修復程式碼庫中的一個 TODO",
   "prompt.example.2": "這個專案的技術堆疊是什麼?",
@@ -714,6 +716,7 @@ export const dict = {
   "common.rename": "重新命名",
   "common.reset": "重設",
   "common.archive": "封存",
+  "common.unarchive": "Unarchive",
   "common.delete": "刪除",
   "common.close": "關閉",
   "common.edit": "編輯",

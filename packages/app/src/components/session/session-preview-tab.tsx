@@ -57,15 +57,37 @@ export function SessionPreviewTab(props: {
     const seen = new Set<string>()
     const entries: PreviewFileEntry[] = []
 
+    // Build a suffix→absolute map from touchedFiles so we can resolve ~/... paths from diffs
+    const touched = props.touchedFiles?.() ?? []
+    const suffixToAbsolute = new Map<string, string>()
+    for (const t of touched) {
+      // For "/Users/jj/.julia/dev/X", try progressively shorter suffixes
+      const parts = t.file.split("/")
+      for (let i = 1; i < parts.length; i++) {
+        suffixToAbsolute.set(parts.slice(i).join("/"), t.file)
+      }
+    }
+
+    // Resolve ~/... to absolute using the suffix map
+    const resolveFile = (file: string): string => {
+      if (!file.startsWith("~/")) return file
+      const suffix = file.slice(2) // strip ~/
+      const absolute = suffixToAbsolute.get(suffix)
+      return absolute ?? file
+    }
+
     const toEntry = (file: string, status: string): PreviewFileEntry | null => {
       if (!file.endsWith(".md")) return null
-      if (seen.has(file)) return null
-      seen.add(file)
-      const parts = file.split("/")
+      // Use the resolved absolute path as the canonical key
+      const resolved = resolveFile(file)
+      if (seen.has(resolved)) return null
+      seen.add(resolved)
+      const parts = resolved.split("/")
       const basename = parts[parts.length - 1]
-      const relativePath = file.startsWith("~/") ? file.slice(2) : file
+      // Show a short relative path: strip common leading segments until we hit a recognizable dir
+      const relativePath = resolved.replace(/^\/Users\/[^/]+\//, "")
       return {
-        path: file,
+        path: resolved,
         relativePath,
         basename,
         extension: ".md" as const,
@@ -74,12 +96,9 @@ export function SessionPreviewTab(props: {
     }
 
     // Primary: all files touched by edit tools in this session
-    const touched = props.touchedFiles?.()
-    if (touched) {
-      for (const t of touched) {
-        const entry = toEntry(t.file, t.status)
-        if (entry) entries.push(entry)
-      }
+    for (const t of touched) {
+      const entry = toEntry(t.file, t.status)
+      if (entry) entries.push(entry)
     }
 
     // Supplement: any diff files not already in touchedFiles

@@ -249,6 +249,8 @@ export const dict = {
   "prompt.mode.shell.exit": "esc za izlaz",
   "session.child.promptDisabled": "Sesijama podagenta nije moguće slati upite.",
   "session.child.backToParent": "Nazad na glavnu sesiju.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "Popravi TODO u bazi koda",
   "prompt.example.2": "Koji je tehnološki stack ovog projekta?",
@@ -727,6 +729,7 @@ export const dict = {
   "common.rename": "Preimenuj",
   "common.reset": "Resetuj",
   "common.archive": "Arhiviraj",
+  "common.unarchive": "Unarchive",
   "common.delete": "Izbriši",
   "common.close": "Zatvori",
   "common.edit": "Uredi",

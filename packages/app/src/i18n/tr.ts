@@ -253,6 +253,8 @@ export const dict = {
   "prompt.mode.shell.exit": "çıkmak için esc",
   "session.child.promptDisabled": "Alt ajan oturumlarına istem gönderilemez.",
   "session.child.backToParent": "Ana oturuma dön.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "Kod tabanındaki bir TODO'yu düzelt",
   "prompt.example.2": "Bu projenin teknoloji yığını nedir?",
@@ -732,6 +734,7 @@ export const dict = {
   "common.rename": "Yeniden adlandır",
   "common.reset": "Sıfırla",
   "common.archive": "Arşivle",
+  "common.unarchive": "Unarchive",
   "common.delete": "Sil",
   "common.close": "Kapat",
   "common.edit": "Düzenle",
