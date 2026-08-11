@@ -966,14 +966,25 @@ export default function LegacyLayout(props: ParentProps) {
               id: "view.zoomIn",
               title: language.t("amicode.zoomIn"),
               category: language.t("command.category.view"),
-              keybind: "mod+=",
+              // Keybind matching is an exact (key, modifier-mask) lookup, so
+              // every chord that physically means "zoom in" must be registered
+              // (harmoniqs/amicode#266). On a US layout Ctrl/Cmd + Plus IS
+              // shift+"=", which arrives as key "+" (normalized "plus") WITH
+              // the shift bit — matching neither the key nor the mask of a bare
+              // "mod+=". The numpad's "+" arrives unshifted, and on layouts
+              // where "=" itself is shifted (DE/FR/Nordic) even the canonical
+              // chord carries shift. Only the first is shown in tooltips
+              // (displayKeybind takes parseKeybind(config)[0]).
+              keybind: "mod+=,mod+shift+=,mod+plus,mod+shift+plus",
               onSelect: () => webZoomIn(),
             },
             {
               id: "view.zoomOut",
               title: language.t("amicode.zoomOut"),
               category: language.t("command.category.view"),
-              keybind: "mod+-",
+              // Same reasoning: shift+"-" arrives as "_", and the numpad's
+              // minus arrives as a bare "-" (already covered).
+              keybind: "mod+-,mod+shift+_",
               onSelect: () => webZoomOut(),
             },
             {
