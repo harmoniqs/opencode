@@ -358,6 +358,8 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
   let textareaRef: HTMLTextAreaElement | undefined
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // Let Cmd+S through to our save handler; everything else (Cmd+A, Cmd+Z,
+    // Cmd+Shift+Z, Cmd+C, Cmd+V, etc.) is handled natively by the textarea.
     if ((e.metaKey || e.ctrlKey) && e.key === "s") {
       e.preventDefault()
       props.onSave()
@@ -366,10 +368,14 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
 
   return (
     <textarea
-      ref={(el) => (textareaRef = el)}
+      ref={(el) => {
+        textareaRef = el
+        // Set initial content without making it "controlled" — this preserves
+        // the browser's native undo/redo stack and selection behavior.
+        el.value = props.content
+      }}
       class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none"
       style={{ "tab-size": "2", "font-size": `${props.zoom * 0.12}px` }}
-      value={props.content}
       onInput={(e) => props.onEdit(e.currentTarget.value)}
       onKeyDown={handleKeyDown}
       spellcheck={false}
