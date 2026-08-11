@@ -483,7 +483,7 @@ export function SessionSidePanel(props: {
                                 </For>
                               </SortableProvider>
                               <div
-                                class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pr-3"
+                                class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pl-3 pr-3"
                                 classList={{
                                   "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
                                   "bg-background-stronger": !settings.general.newLayoutDesigns(),
@@ -692,7 +692,7 @@ export function SessionSidePanel(props: {
                               )}
                             </For>
                             <div
-                              class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center px-2"
+                              class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pl-3 pr-3"
                               classList={{
                                 "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
                                 "bg-background-stronger": !settings.general.newLayoutDesigns(),

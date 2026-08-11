@@ -42,6 +42,10 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
   const [fileStates, setFileStates] = createStore<Record<string, PreviewFileState>>({})
   const [fileContent, setFileContent] = createSignal<string>("")
   const [loading, setLoading] = createSignal(false)
+  const [zoom, setZoom] = createSignal(100)
+
+  const zoomIn = () => setZoom((z) => Math.min(z + 10, 200))
+  const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
 
   // Filter diffs to only .md files
   const markdownFiles = createMemo((): PreviewFileEntry[] => {
@@ -185,10 +189,51 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                 {markdownFiles().find((f) => f.path === path())?.basename ?? path()}
               </div>
               <Show when={saveStatus() !== "idle"}>
-                <span class="text-11-regular text-text-weak">
+                <span
+                  class="text-11-medium"
+                  classList={{
+                    "text-green-500": saveStatus() === "saved",
+                    "text-text-weak": saveStatus() === "saving",
+                  }}
+                >
                   {saveStatus() === "saving" ? "Saving..." : "Saved"}
                 </span>
               </Show>
+              {/* Zoom control */}
+              <div class="shrink-0 flex items-center h-6 rounded-md border border-border-base overflow-hidden">
+                <button
+                  class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                  onClick={zoomOut}
+                  aria-label="Zoom out"
+                >
+                  <span class="text-11-medium leading-none">−</span>
+                </button>
+                <input
+                  type="text"
+                  class="w-8 h-full text-center text-11-regular text-text-base bg-transparent border-x border-border-base outline-none"
+                  value={`${zoom()}%`}
+                  onInput={(e) => {
+                    const val = parseInt(e.currentTarget.value)
+                    if (!isNaN(val) && val >= 50 && val <= 200) setZoom(val)
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.value = `${zoom()}%`
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur()
+                    }
+                  }}
+                />
+                <button
+                  class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                  onClick={zoomIn}
+                  aria-label="Zoom in"
+                >
+                  <span class="text-11-medium leading-none">+</span>
+                </button>
+              </div>
+              {/* Mode toggle */}
               <SegmentedControlV2
                 value={currentMode()}
                 onChange={(value) => {
