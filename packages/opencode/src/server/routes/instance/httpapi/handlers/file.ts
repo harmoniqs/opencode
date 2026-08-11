@@ -6,7 +6,6 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Location } from "@opencode-ai/core/location"
 import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
 import { Effect, Layer, Option } from "effect"
-import * as fs from "fs/promises"
 import ignore from "ignore"
 import path from "path"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
@@ -97,17 +96,8 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
     const content = Effect.fn("FileHttpApi.content")(function* (ctx: { query: { path: string } }) {
       const directory = (yield* InstanceState.context).directory
       const file = path.resolve(directory, ctx.query.path)
-      const isAbsolute = path.isAbsolute(ctx.query.path)
-      // Allow absolute paths (the session may touch files outside the workspace);
-      // relative paths must stay within the workspace.
-      if (!isAbsolute && !FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
+      if (!FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
       if (!(yield* FSUtil.Service.use((fs) => fs.existsSafe(file)))) return { type: "text" as const, content: "" }
-      if (isAbsolute && !FSUtil.contains(directory, file)) {
-        // Read directly from disk for absolute paths outside the workspace
-        const buf = yield* Effect.tryPromise(() => fs.readFile(file)).pipe(Effect.orDie)
-        const text = new TextDecoder("utf-8", { fatal: true }).decode(buf)
-        return { type: "text" as const, content: text.trim() }
-      }
       return yield* filesystem(
         FileSystem.Service.use((fs) => fs.read({ path: RelativePath.make(ctx.query.path) })),
       ).pipe(
@@ -141,16 +131,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
     const write = Effect.fn("FileHttpApi.write")(function* (ctx: { payload: { path: string; content: string } }) {
       const directory = (yield* InstanceState.context).directory
       const file = path.resolve(directory, ctx.payload.path)
-      const isAbsolute = path.isAbsolute(ctx.payload.path)
-      // Allow absolute paths (the session may touch files outside the workspace);
-      // relative paths must stay within the workspace.
-      if (!isAbsolute && !FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
-      if (isAbsolute && !FSUtil.contains(directory, file)) {
-        // Write directly for absolute paths outside the workspace
-        yield* Effect.tryPromise(() => fs.mkdir(path.dirname(file), { recursive: true })).pipe(Effect.orDie)
-        yield* Effect.tryPromise(() => fs.writeFile(file, ctx.payload.content, "utf-8")).pipe(Effect.orDie)
-        return { ok: true as const }
-      }
+      if (!FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
       yield* FSUtil.Service.use((fs) => fs.writeWithDirs(file, ctx.payload.content)).pipe(Effect.orDie)
       return { ok: true as const }
     })
