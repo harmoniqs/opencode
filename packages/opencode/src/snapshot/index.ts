@@ -42,6 +42,8 @@ export interface Interface {
   readonly revert: (patches: Patch[]) => Effect.Effect<void>
   readonly diff: (hash: string) => Effect.Effect<string>
   readonly diffFull: (from: string, to: string) => Effect.Effect<FileDiff[]>
+  readonly diffFromDisk: (ref: string, files: string[]) => Effect.Effect<FileDiff[]>
+  readonly diffExternalFiles: (files: string[], startTime?: number) => Effect.Effect<FileDiff[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Snapshot") {}
@@ -758,6 +760,133 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
           )
         })
 
+        const diffFromDisk = Effect.fnUntraced(function* (ref: string, files: string[]) {
+          return yield* locked(
+            Effect.gen(function* () {
+              const result: FileDiff[] = []
+              const patchFn = (file: string, before: string, after: string) =>
+                formatPatch(structuredPatch(file, file, before, after, "", "", { context: Number.MAX_SAFE_INTEGER }))
+
+              for (const file of files) {
+                const beforeResult = yield* git([...cfg, ...args(["show", `${ref}:${file}`])])
+                const before = beforeResult.code === 0 ? beforeResult.text : ""
+
+                const diskPath = path.join(state.worktree, file)
+                const after = yield* read(diskPath)
+
+                if (before === after) continue
+
+                // Compute actual line-level additions/deletions from the structured patch
+                const sp = structuredPatch(file, file, before, after, "", "")
+                let adds = 0
+                let dels = 0
+                for (const hunk of sp.hunks) {
+                  for (const line of hunk.lines) {
+                    if (line.startsWith("+")) adds++
+                    else if (line.startsWith("-")) dels++
+                  }
+                }
+
+                const status: "added" | "deleted" | "modified" = before === "" ? "added" : after === "" ? "deleted" : "modified"
+                result.push({
+                  file,
+                  patch: patchFn(file, before, after),
+                  additions: adds,
+                  deletions: dels,
+                  status,
+                })
+              }
+
+              return result
+            }),
+          )
+        })
+
+        const diffExternalFiles = Effect.fnUntraced(function* (files: string[], startTime?: number) {
+          const result: FileDiff[] = []
+          const patchFn = (file: string, before: string, after: string) =>
+            formatPatch(structuredPatch(file, file, before, after, "", "", { context: Number.MAX_SAFE_INTEGER }))
+
+          // Group files by their git root to avoid repeated rev-parse calls
+          const repoRoots = new Map<string, { root: string; files: { abs: string; rel: string }[] }>()
+
+          for (const absPath of files) {
+            const dir = path.dirname(absPath)
+            const topLevel = yield* appProcess
+              .run(ChildProcess.make("git", ["rev-parse", "--show-toplevel"], { cwd: dir, extendEnv: true }), {})
+              .pipe(Effect.catch(() => Effect.succeed({ exitCode: 1, stdout: Buffer.from(""), stderr: Buffer.from("") })))
+            if (topLevel.exitCode !== 0) continue
+            const repoRoot = topLevel.stdout.toString("utf8").trim()
+            if (!repoRoot) continue
+
+            const relPath = absPath.startsWith(repoRoot + "/")
+              ? absPath.slice(repoRoot.length + 1)
+              : absPath.startsWith(repoRoot + "\\")
+                ? absPath.slice(repoRoot.length + 1).replaceAll("\\", "/")
+                : path.relative(repoRoot, absPath).replaceAll("\\", "/")
+
+            const entry = repoRoots.get(repoRoot) ?? { root: repoRoot, files: [] }
+            entry.files.push({ abs: absPath, rel: relPath })
+            repoRoots.set(repoRoot, entry)
+          }
+
+          for (const [, { root, files: repoFiles }] of repoRoots) {
+            // Find the commit that was HEAD at session start time
+            let ref = "HEAD"
+            if (startTime) {
+              const isoTime = new Date(startTime).toISOString()
+              const revList = yield* appProcess
+                .run(
+                  ChildProcess.make("git", ["-C", root, "rev-list", "-1", `--before=${isoTime}`, "HEAD"], {
+                    extendEnv: true,
+                  }),
+                  {},
+                )
+                .pipe(Effect.catch(() => Effect.succeed({ exitCode: 1, stdout: Buffer.from(""), stderr: Buffer.from("") })))
+              const foundRef = revList.exitCode === 0 ? revList.stdout.toString("utf8").trim() : ""
+              if (foundRef) ref = foundRef
+            }
+
+            for (const { abs: absPath, rel: relPath } of repoFiles) {
+              // Get the file content at the session-start ref
+              const showResult = yield* appProcess
+                .run(ChildProcess.make("git", ["-C", root, "show", `${ref}:${relPath}`], { extendEnv: true }), {})
+                .pipe(Effect.catch(() => Effect.succeed({ exitCode: 1, stdout: Buffer.from(""), stderr: Buffer.from("") })))
+              const before = showResult.exitCode === 0 ? showResult.stdout.toString("utf8") : ""
+
+              // Read current file from disk
+              const after = yield* fs.readFileString(absPath).pipe(Effect.catch(() => Effect.succeed("")))
+
+              if (before === after) continue
+
+              // Compute line-level additions/deletions
+              const sp = structuredPatch(relPath, relPath, before, after, "", "")
+              let adds = 0
+              let dels = 0
+              for (const hunk of sp.hunks) {
+                for (const line of hunk.lines) {
+                  if (line.startsWith("+")) adds++
+                  else if (line.startsWith("-")) dels++
+                }
+              }
+
+              const status: "added" | "deleted" | "modified" = before === "" ? "added" : after === "" ? "deleted" : "modified"
+              // Use absolute path so the client doesn't prefix it with the wrong workspace
+              const home = process.env.HOME
+              const displayPath = home && absPath.startsWith(home + "/") ? "~" + absPath.slice(home.length) : absPath
+              result.push({
+                file: displayPath,
+                patch: patchFn(relPath, before, after),
+                additions: adds,
+                deletions: dels,
+                status,
+              })
+            }
+          }
+
+          return result
+        })
+
         yield* cleanup().pipe(
           Effect.catchCause((cause) => Effect.logError("cleanup loop failed", { cause: Cause.pretty(cause) })),
           Effect.repeat(Schedule.spaced(Duration.hours(1))),
@@ -765,7 +894,7 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
           Effect.forkScoped,
         )
 
-        return { cleanup, track, patch, restore, revert, diff, diffFull }
+        return { cleanup, track, patch, restore, revert, diff, diffFull, diffFromDisk, diffExternalFiles }
       }),
     )
 
@@ -793,6 +922,12 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
       }),
       diffFull: Effect.fn("Snapshot.diffFull")(function* (from: string, to: string) {
         return yield* InstanceState.useEffect(state, (s) => s.diffFull(from, to))
+      }),
+      diffFromDisk: Effect.fn("Snapshot.diffFromDisk")(function* (ref: string, files: string[]) {
+        return yield* InstanceState.useEffect(state, (s) => s.diffFromDisk(ref, files))
+      }),
+      diffExternalFiles: Effect.fn("Snapshot.diffExternalFiles")(function* (files: string[], startTime?: number) {
+        return yield* InstanceState.useEffect(state, (s) => s.diffExternalFiles(files, startTime))
       }),
     })
   }),

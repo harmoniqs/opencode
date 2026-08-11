@@ -8,6 +8,9 @@ import { Keybind } from "@opencode-ai/ui/keybind"
 import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { showToast } from "@/utils/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
+import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { batch, createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -785,9 +788,57 @@ function SessionChatsDropdown() {
     }
   }
 
-  function openSession(session: Session) {
+  // amicode#310: permanently delete an archived session with confirmation dialog.
+  const dialog = useDialog()
+  function deleteArchivedSession(session: Session) {
+    dialog.show(() => (
+      <DialogDeleteArchivedSession
+        session={session}
+        onConfirm={async () => {
+          const ctx = getServerCtx()
+          if (!ctx) return
+          try {
+            await (ctx.sdk.client.session.delete as Function)({
+              sessionID: session.id,
+              directory: session.directory,
+            })
+            setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
+          } catch (cause) {
+            showToast({
+              title: language.t("session.delete.failed.title"),
+              description: String(cause),
+            })
+          }
+          dialog.close()
+        }}
+        onCancel={() => dialog.close()}
+      />
+    ))
+  }
+
+  async function openSession(session: Session) {
     // Close flyout first so its Portal unmounts cleanly.
     setOpen(false)
+
+    // Mirror the dashboard's project setup: ensure the directory is registered and
+    // touched so the workspace context is warm when the session page mounts.
+    const conn = server.current
+    if (conn) {
+      const ctx = globalCtx.ensureServerCtx(conn)
+      ctx.projects.open(session.directory)
+      ctx.projects.touch(session.directory)
+    }
+
+    // Await session sync BEFORE navigating (issue #176). When switching sessions
+    // within the same route (params.id change), the Page component persists and
+    // the timeline re-keys immediately. If data isn't fully cached yet, rows
+    // trickle in and the measurement burst overlaps with user interaction, causing
+    // the virtualizer's scroll anchoring to snap the viewport back. Awaiting here
+    // ensures messagesReady() is true with complete data the moment the timeline
+    // mounts — matching the dashboard path where the fresh route mount naturally
+    // gates on messagesReady(). For already-cached sessions this resolves instantly.
+    await serverSync().session.sync(session.id).catch(() => {})
+
     // Use tabs.select for sessions that already have an open tab (no transition).
     // For sessions without a tab, navigate directly — DO NOT use tabs.openPath
     // which calls addSessionTab(startTransition), keeping both old and new UI
@@ -818,6 +869,8 @@ function SessionChatsDropdown() {
         const target = e.target as Node
         if (flyoutRoot?.contains(target)) return
         if (triggerRef?.contains(target)) return
+        // Don't dismiss if the click landed inside a dialog (e.g. delete confirmation)
+        if (target instanceof Element && target.closest("[data-dialog-layer], [data-component='dialog-overlay']")) return
         setOpen(false)
       }
       const onKey = (e: KeyboardEvent) => {
@@ -986,6 +1039,7 @@ function SessionChatsDropdown() {
                             session={session}
                             onOpen={openSession}
                             onUnarchive={unarchiveSession}
+                            onDelete={deleteArchivedSession}
                           />
                         )}
                       </For>
@@ -1070,6 +1124,7 @@ function ArchivedSessionDropdownRow(props: {
   session: Session
   onOpen: (session: Session) => void
   onUnarchive: (session: Session) => void
+  onDelete: (session: Session) => void
 }) {
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
 
@@ -1086,7 +1141,7 @@ function ArchivedSessionDropdownRow(props: {
           {title()}
         </span>
       </button>
-      <div class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity">
+      <div class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 group-hover/archived:opacity-100 focus-within:opacity-100 transition-opacity">
         <TooltipV2 placement="top" value="Unarchive">
           <IconButtonV2
             data-action="session-dropdown-unarchive"
@@ -1101,7 +1156,50 @@ function ArchivedSessionDropdownRow(props: {
             }}
           />
         </TooltipV2>
+        <TooltipV2 placement="top" value="Delete permanently">
+          <IconButtonV2
+            data-action="session-dropdown-delete"
+            variant="ghost-muted"
+            size="large"
+            icon={<Icon name="trash" size="small" />}
+            aria-label="Delete permanently"
+            onClick={(event: MouseEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void props.onDelete(props.session)
+            }}
+          />
+        </TooltipV2>
       </div>
     </div>
+  )
+}
+
+// amicode#310: confirmation dialog for permanently deleting an archived session.
+function DialogDeleteArchivedSession(props: {
+  session: Session
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const language = useLanguage()
+  const name = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+
+  return (
+    <DialogV2 fit>
+      <DialogHeader hideClose>
+        <DialogTitleGroup
+          title={language.t("session.delete.title")}
+          description={language.t("session.delete.confirm", { name: name() })}
+        />
+      </DialogHeader>
+      <DialogFooter>
+        <ButtonV2 variant="ghost" onClick={props.onCancel}>
+          {language.t("common.cancel")}
+        </ButtonV2>
+        <ButtonV2 variant="danger" onClick={props.onConfirm}>
+          {language.t("session.delete.button")}
+        </ButtonV2>
+      </DialogFooter>
+    </DialogV2>
   )
 }

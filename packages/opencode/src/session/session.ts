@@ -488,7 +488,7 @@ export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" 
 const layer: Layer.Layer<
   Service,
   never,
-  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service
+  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | Snapshot.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -497,6 +497,7 @@ const layer: Layer.Layer<
     const background = yield* BackgroundJob.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const snapshot = yield* Snapshot.Service
 
     const createNext = Effect.fn("Session.createNext")(function* (input: {
       id?: SessionID
@@ -835,8 +836,165 @@ const layer: Layer.Layer<
     })
 
     const diff = Effect.fn("Session.diff")(function* (sessionID: SessionID) {
-      void sessionID
-      return [] as Snapshot.FileDiff[]
+      const all = yield* messages({ sessionID }).pipe(Effect.orDie)
+      if (!all.length) return [] as Snapshot.FileDiff[]
+
+      const session = yield* get(sessionID).pipe(Effect.orDie)
+      const sessionStartTime = session.time.created
+
+      // Find the first step-start snapshot hash (session-start ref)
+      // and the last step-finish snapshot hash (session-end ref)
+      let from: string | undefined
+      let lastStepFinish: string | undefined
+      // Collect all agent-touched files from PatchParts and completed tool parts (absolute paths)
+      const agentFilesAbsolute = new Set<string>()
+
+      for (const msg of all) {
+        for (const part of msg.parts) {
+          if (!from && part.type === "step-start" && part.snapshot) {
+            from = part.snapshot
+          }
+          if (part.type === "step-finish" && part.snapshot) {
+            lastStepFinish = part.snapshot
+          }
+          if (part.type === "patch" && part.files) {
+            for (const file of part.files) agentFilesAbsolute.add(file)
+          }
+          // In-flight file tracking: also collect files from completed tool parts with filediff metadata
+          if (part.type === "tool") {
+            const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown> } }
+            if (toolPart.state?.status === "completed") {
+              const filediff = toolPart.state?.metadata?.filediff as { file?: string } | undefined
+              if (filediff?.file) agentFilesAbsolute.add(filediff.file)
+            }
+          }
+        }
+      }
+
+      // If we have snapshot hashes and agent-touched files, compute the real diff
+      if (from && agentFilesAbsolute.size > 0) {
+        // Always track the live working tree so in-progress edits are included;
+        // fall back to the last step-finish hash only when tracking is unavailable.
+        const to = (yield* snapshot.track()) ?? lastStepFinish
+        if (to) {
+          // Normalize and split files into in-worktree (relative) and external (absolute)
+          const ctx = yield* InstanceState.context
+          const worktree = ctx.worktree
+          const agentFiles = new Set<string>()
+          const externalFiles: string[] = []
+          for (const raw of agentFilesAbsolute) {
+            // Resolve relative paths (e.g. ../../../other-repo/file.ts) to absolute
+            const abs = raw.startsWith("/") ? raw : path.resolve(worktree, raw)
+            if (abs.startsWith(worktree + "/") || abs === worktree) {
+              const rel = abs.slice(worktree.length + 1).replaceAll("\\", "/")
+              agentFiles.add(rel)
+            } else {
+              externalFiles.push(abs)
+            }
+          }
+
+          // Primary path: diff in-worktree files via snapshot
+          let results: Snapshot.FileDiff[] = []
+          if (agentFiles.size > 0) {
+            const allDiffs = yield* snapshot.diffFull(from, to).pipe(
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  yield* Effect.logWarning("diffFull failed, falling through to per-file fallback", { cause })
+                  return [] as Snapshot.FileDiff[]
+                }),
+              ),
+            )
+            const filtered = allDiffs.filter(
+              (d: Snapshot.FileDiff) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
+            )
+            if (filtered.length > 0) {
+              results = filtered
+            } else {
+              // Fallback A: per-file git show vs current disk for in-worktree files
+              const perFileDiffs = yield* snapshot.diffFromDisk(from, [...agentFiles]).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.gen(function* () {
+                    yield* Effect.logWarning("diffFromDisk failed, falling through to summary fallback", { cause })
+                    return [] as Snapshot.FileDiff[]
+                  }),
+                ),
+              )
+              if (perFileDiffs.length > 0) results = perFileDiffs
+            }
+          }
+
+          // External files: diff against HEAD in their own git repos
+          if (externalFiles.length > 0) {
+            const extDiffs = yield* snapshot.diffExternalFiles(externalFiles, sessionStartTime).pipe(
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  yield* Effect.logWarning("diffExternalFiles failed", { cause })
+                  return [] as Snapshot.FileDiff[]
+                }),
+              ),
+            )
+            results = [...results, ...extDiffs]
+          }
+
+          if (results.length > 0) return results
+        }
+      }
+
+      // Fallback 1: aggregate stored per-message summary diffs across the session.
+      const seen = new Map<string, Snapshot.FileDiff>()
+      for (const msg of all) {
+        if (msg.info.role !== "user") continue
+        const diffs = msg.info.summary?.diffs
+        if (!diffs) continue
+        for (const d of diffs) {
+          if (d.file) seen.set(d.file, d)
+        }
+      }
+      if (seen.size > 0) return [...seen.values()]
+
+      // Fallback 2: extract diffs from edit/write tool part metadata (filediff).
+      // This covers sessions where snapshots and summary diffs are both empty
+      // but the tool parts carry their own diff data.
+      const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+      const accumulated = new Map<string, { file: string; patch: string | undefined; additions: number; deletions: number; status: "added" | "modified" | "deleted"; editCount: number }>()
+      for (const msg of all) {
+        for (const part of msg.parts) {
+          if (part.type !== "tool") continue
+          const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown>; title?: string } }
+          if (!toolPart.tool || !EDIT_TOOLS.has(toolPart.tool)) continue
+          if (toolPart.state?.status !== "completed") continue
+          const filediff = toolPart.state?.metadata?.filediff as
+            | { file?: string; patch?: string; additions?: number; deletions?: number }
+            | undefined
+          if (!filediff?.file) continue
+          const relPath = toolPart.state?.title || filediff.file
+          const existing = accumulated.get(filediff.file)
+          if (!existing) {
+            accumulated.set(filediff.file, {
+              file: relPath,
+              patch: filediff.patch,
+              additions: filediff.additions ?? 0,
+              deletions: filediff.deletions ?? 0,
+              status: "added",
+              editCount: 1,
+            })
+          } else {
+            existing.additions += (filediff.additions ?? 0)
+            existing.deletions += (filediff.deletions ?? 0)
+            existing.status = "modified"
+            existing.editCount += 1
+            // Keep last edit's patch as best-effort display
+            existing.patch = filediff.patch ?? existing.patch
+          }
+        }
+      }
+      return [...accumulated.values()].map((entry) => ({
+        file: entry.file,
+        patch: entry.patch,
+        additions: entry.additions,
+        deletions: entry.deletions,
+        status: entry.status,
+      }) as Snapshot.FileDiff)
     })
 
     const messages: Interface["messages"] = Effect.fn("Session.messages")(function* (input) {
@@ -1024,7 +1182,7 @@ function listByProject(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node],
+  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node, Snapshot.node],
 })
 
 export * as Session from "./session"

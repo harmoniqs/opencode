@@ -1,7 +1,7 @@
-import type { FilePart, Project, UserMessage, VcsFileDiff } from "@opencode-ai/sdk/v2"
+import type { FilePart, Project, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createQuery, skipToken, useMutation, useQueryClient } from "@tanstack/solid-query"
+import { createQuery, skipToken, useMutation } from "@tanstack/solid-query"
 import {
   batch,
   ErrorBoundary,
@@ -22,14 +22,11 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { debounce } from "@solid-primitives/scheduled"
 import { useLocal } from "@/context/local"
 import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
 import type { SessionReviewLineComment } from "@opencode-ai/session-ui/session-review"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
-import { Select } from "@opencode-ai/ui/select"
-import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode-ai/ui/scroll-view"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -88,10 +85,9 @@ import {
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
-import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-review-empty-no-git-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
-import { reviewDiffDirectory, reviewDiffNeedsLoad, reviewRootDirectory } from "@/pages/session/v2/review-diff-kinds"
+import { accumulateDiffs } from "@/pages/session/v2/accumulate-diffs"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
@@ -99,7 +95,6 @@ import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
-import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
@@ -114,9 +109,6 @@ import { createSessionLineage } from "./session/session-lineage"
 type FollowupItem = FollowupDraft & { id: string }
 type FollowupEdit = Pick<FollowupItem, "id" | "prompt" | "context">
 const emptyFollowups: FollowupItem[] = []
-
-type ChangeMode = "git" | "branch" | "turn"
-type VcsMode = "git" | "branch"
 
 const sessionViewState = () => ({
   messageId: undefined as string | undefined,
@@ -363,7 +355,6 @@ export default function Page() {
   const local = useLocal()
   const file = useFile()
   const sync = useSync()
-  const queryClient = useQueryClient()
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useSDK()
@@ -378,7 +369,6 @@ export default function Page() {
   const location = useLocation()
   const navigate = useNavigate()
   const { params, sessionKey, workspaceKey, tabs, view } = useSessionLayout()
-  const reviewMode = () => view().review.mode() ?? "git"
   const reviewFile = () => view().review.file()
   const sessionOwnership = createSessionOwnership(sessionKey)
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
@@ -675,63 +665,80 @@ export default function Page() {
     return open
   }, desktopReviewOpen())
 
-  const turnDiffs = createMemo(() => list(lastUserMessage()?.summary?.diffs))
-  const nogit = createMemo(() => {
-    const project = sync().project
-    return !!project && project.vcs !== "git"
-  })
-  const changesOptions = createMemo<ChangeMode[]>(() => {
-    const list: ChangeMode[] = []
-    const project = sync().project
-    const vcs = sync().data.vcs
-    if (project?.vcs === "git") list.push("git")
-    if (project?.vcs === "git" && vcs?.branch && vcs?.default_branch && vcs.branch !== vcs.default_branch) {
-      list.push("branch")
-    }
-    list.push("turn")
-    return list
-  })
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
-  const wantsReview = createMemo(() =>
-    isDesktop()
-      ? desktopFileTreeOpen() ||
-        (desktopReviewOpen() && (activeTab() === "review" || (newSessionDesign() && !!activeFileTab())))
-      : store.mobileTab === "changes",
-  )
-  const vcsMode = createMemo<VcsMode | undefined>(() => {
-    const mode = reviewMode()
-    if (mode === "git" || mode === "branch") return mode
-  })
-  const vcsKey = createMemo(
-    () =>
-      ["session-vcs", sdk().directory, sync().data.vcs?.branch ?? "", sync().data.vcs?.default_branch ?? ""] as const,
-  )
-  const vcsQuery = createQuery(() => {
-    const mode = vcsMode()
-    const enabled = wantsReview() && sync().project?.vcs === "git"
-
+  const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+  // Refetch when the session transitions to idle (assistant finished, snapshot taken)
+  // or when a file-editing tool completes mid-turn (diff_version bumps)
+  const sessionDiffVersion = () => {
+    const id = params.id
+    const status = id ? sync().data.session_status[id]?.type ?? "idle" : "idle"
+    const version = id ? sync().data.diff_version[id] ?? 0 : 0
+    return `${status}:${version}`
+  }
+  const sessionDiffKey = () => ["session-diff", params.id ?? "", sessionDiffVersion()] as const
+  const sessionDiffQuery = createQuery(() => {
+    const sessionID = params.id
     return {
-      queryKey: [...vcsKey(), mode] as const,
-      enabled,
-      queryFn: mode
+      queryKey: sessionDiffKey(),
+      enabled: !!sessionID,
+      placeholderData: [] as SnapshotFileDiff[],
+      queryFn: sessionID
         ? () =>
             sdk()
-              .api.vcs.diff({ location: { directory: sdk().directory }, mode: mode === "git" ? "working" : mode })
-              .then((result) => result.data)
-              .catch((error) => {
-                console.debug("[session-review] failed to load vcs diff", { mode, error })
-                return []
-              })
+              .client.session.diff({ sessionID, directory: sdk().directory })
+              .then((result) => (result.data ?? []) as Array<SnapshotFileDiff>)
+              .catch(() => [] as SnapshotFileDiff[])
         : skipToken,
     }
   })
-  const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
-  const reviewDiffs = () => {
-    if (reviewMode() === "git" || reviewMode() === "branch")
-      // avoids suspense
-      return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
-    return turnDiffs()
-  }
+  const reviewDiffs = createMemo(() => {
+    // Server endpoint returns the authoritative full-session diff (queries all messages).
+    const serverDiffs = sessionDiffQuery.data ?? []
+    if (serverDiffs.length > 0) {
+      // Server paths are relative to the project root — prefix with ~/project-path
+      const dir = sdk().directory
+      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+      const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
+      return serverDiffs
+        .filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
+        .map((d) => ({ ...d, file: d.file.startsWith("/") || d.file.startsWith("~/") ? d.file : `${prefix}/${d.file}` }))
+    }
+    // Fallback: derive from tool parts currently loaded in the client.
+    // This shows immediate results for visible messages while the server query loads.
+    const allMessages = messages()
+    if (!allMessages.length) return [] as Array<SnapshotFileDiff & { file: string }>
+    const dir = sdk().directory
+    const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+    const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
+    const toHomePath = (p: string) => {
+      if (p.startsWith("~/")) return p
+      if (home && p.startsWith(home)) return "~" + p.slice(home.length)
+      if (!p.startsWith("/")) return `${prefix}/${p}`
+      return p
+    }
+    const editParts: import("@/pages/session/v2/accumulate-diffs").ToolEditPart[] = []
+    for (const msg of allMessages) {
+      const msgParts = sync().data.part[msg.id]
+      if (!msgParts) continue
+      for (const part of msgParts) {
+        if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
+        if (part.state.status !== "completed") continue
+        const meta = part.state.metadata as Record<string, unknown> | undefined
+        const filediff = meta?.filediff as { file?: string; patch?: string; additions?: number; deletions?: number } | undefined
+        if (filediff?.file) {
+          const rawTitle = (part.state as { title?: string }).title || filediff.file
+          editParts.push({
+            file: filediff.file,
+            title: toHomePath(rawTitle),
+            patch: filediff.patch,
+            additions: filediff.additions ?? 0,
+            deletions: filediff.deletions ?? 0,
+          })
+        }
+      }
+    }
+    return accumulateDiffs(editParts)
+  })
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
     const selected = reviewFile()
@@ -739,54 +746,13 @@ export default function Page() {
     return diffs[0]?.file
   }
   const reviewCount = () => reviewDiffs().length
-  const hasReview = () => reviewCount() > 0
-  const reviewReady = () => {
-    if (reviewMode() === "git" || reviewMode() === "branch") return !vcsQuery.isPending
-    return true
-  }
-  const loadReviewDiff = async (file: string, version?: number): Promise<VcsFileDiff | undefined> => {
-    const mode = vcsMode()
-    if (!mode) return
-    const root = reviewRootDirectory(sync().project?.worktree ?? sdk().directory)
-    const directory = reviewDiffDirectory(root, file)
-    const source = reviewDiffs().find((diff) => diff.file === file)
-    const valid = (diff: VcsFileDiff | undefined) => {
-      if (!diff || !source) return
-      if (diff.additions !== source.additions || diff.deletions !== source.deletions) return
-      if (reviewDiffNeedsLoad(diff)) return
-      return diff
-    }
-    const request = (scope: string, context?: number) =>
-      queryClient
-        .fetchQuery({
-          queryKey: [serverSDK().scope, ...vcsKey(), mode, "directory", scope, context, version] as const,
-          staleTime: Number.POSITIVE_INFINITY,
-          retry: 2,
-          queryFn: () =>
-            sdk()
-              .api.vcs.diff({
-                location: { directory: scope },
-                mode: mode === "git" ? "working" : mode,
-                context,
-              })
-              .then((result) => result.data),
-        })
-        .then((diffs) => diffs.find((diff) => diff.file === file))
-
-    if (directory !== root) {
-      try {
-        const scoped = valid(await request(directory))
-        if (scoped) return scoped
-      } catch (error) {
-        console.debug("[session-review] failed to load scoped vcs diff", { mode, file, directory, error })
-      }
-    }
-    try {
-      const bounded = valid(await request(root, 3))
-      if (bounded) return bounded
-    } catch (error) {
-      console.debug("[session-review] failed to load bounded vcs diff", { mode, file, root, error })
-    }
+  const hasReview = () => true
+  const reviewReady = () => true
+  const loadReviewDiff = async (file: string, _version?: number): Promise<(SnapshotFileDiff & { file: string }) | undefined> => {
+    const diffs = reviewDiffs()
+    const found = diffs.find((d) => d.file === file)
+    if (found && found.file) return found as SnapshotFileDiff & { file: string }
+    return undefined
   }
 
   const newSessionWorktree = createMemo(() => {
@@ -984,7 +950,6 @@ export default function Page() {
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
     if (!file || file.startsWith(".git/")) return
-    refreshVcs()
   })
   onCleanup(stopVcs)
 
@@ -1108,29 +1073,6 @@ export default function Page() {
     }
   }
 
-  createEffect(() => {
-    if (!layout.ready()) return
-    if (sync().status !== "complete") return
-    if (!sync().project) return
-    const list = changesOptions()
-    const mode = reviewMode()
-    if (list.includes(mode)) return
-    const next = list[0]
-    if (!next) return
-    view().review.setMode(next)
-  })
-
-  createEffect(
-    on(
-      () => sync().data.session_status[params.id ?? ""]?.type,
-      (next, prev) => {
-        if (next !== "idle" || prev === undefined || prev === "idle") return
-        refreshVcs()
-      },
-      { defer: true },
-    ),
-  )
-
   const fileTreeTab = () => layout.fileTree.tab()
   const setFileTreeTab = (value: "changes" | "all") => layout.fileTree.setTab(value)
 
@@ -1188,47 +1130,9 @@ export default function Page() {
     loadFile: file.load,
   })
 
-  const changesLabel = (option: ChangeMode) => {
-    if (option === "git") return language.t("ui.sessionReview.title.git")
-    if (option === "branch") return language.t("ui.sessionReview.title.branch")
-    return language.t("ui.sessionReview.title.lastTurn")
-  }
+  const changesTitle = () => null
 
-  const changesTitle = () => {
-    if (!canReview()) {
-      return null
-    }
-
-    return (
-      <Select
-        options={changesOptions()}
-        current={reviewMode()}
-        label={changesLabel}
-        onSelect={(option) => option && view().review.setMode(option)}
-        variant="ghost"
-        size="small"
-        valueClass="text-14-medium"
-      />
-    )
-  }
-
-  const changesTitleV2 = () => {
-    if (!canReview()) {
-      return null
-    }
-
-    return (
-      <SelectV2
-        appearance="inline"
-        options={changesOptions()}
-        current={reviewMode()}
-        label={changesLabel}
-        placement="bottom-start"
-        gutter={6}
-        onSelect={(option) => option && view().review.setMode(option)}
-      />
-    )
-  }
+  const changesTitleV2 = () => null
 
   const empty = (text: string) => (
     <div class="h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6">
@@ -1253,35 +1157,17 @@ export default function Page() {
   )
 
   const reviewEmptyText = createMemo(() => {
-    if (reviewMode() === "git") return language.t("session.review.noUncommittedChanges")
-    if (reviewMode() === "branch") return language.t("session.review.noBranchChanges")
     return language.t("session.review.noChanges")
   })
 
   const reviewEmpty = (input: { loadingClass: string; emptyClass: string }) => {
-    if (reviewMode() === "git" || reviewMode() === "branch") {
-      if (!reviewReady()) return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
-      return empty(reviewEmptyText())
-    }
-
-    if (reviewMode() === "turn") {
-      if (nogit()) return createGit(input)
-      return empty(reviewEmptyText())
-    }
-
-    return (
-      <div class={input.emptyClass}>
-        <div class="text-14-regular text-text-weak max-w-56">{reviewEmptyText()}</div>
-      </div>
-    )
+    if (!reviewReady()) return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
+    return empty(reviewEmptyText())
   }
 
   const reviewEmptyV2 = () => {
-    if ((reviewMode() === "git" || reviewMode() === "branch") && !reviewReady()) {
+    if (!reviewReady()) {
       return <div class="px-6 py-4 text-text-weak">{language.t("session.review.loadingChanges")}</div>
-    }
-    if (reviewMode() === "turn" && nogit()) {
-      return <SessionReviewEmptyNoGitV2 pending={gitMutation.isPending} onInitGit={initGit} />
     }
     return <SessionReviewEmptyChangesV2 />
   }
@@ -1334,7 +1220,7 @@ export default function Page() {
     diffs: reviewDiffs,
     diffsReady: reviewReady,
     get diffVersion() {
-      return vcsQuery.dataUpdatedAt
+      return lastUserMessage()?.time.created
     },
     loadDiff: loadReviewDiff,
     get activeFile() {
@@ -2086,10 +1972,8 @@ export default function Page() {
           classes={{ button: compact ? "w-full !py-2" : "w-full" }}
           onClick={() => setStore("mobileTab", "changes")}
         >
-          {hasReview()
-            ? language.t("session.review.filesChanged", { count: reviewCount() })
-            : language.t("session.review.change.other")}
-        </Tabs.Trigger>
+{"Files Changed"}
+</Tabs.Trigger>
       </Tabs.List>
     </Tabs>
   )

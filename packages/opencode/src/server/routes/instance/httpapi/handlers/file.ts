@@ -128,6 +128,14 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       return []
     })
 
+    const write = Effect.fn("FileHttpApi.write")(function* (ctx: { payload: { path: string; content: string } }) {
+      const directory = (yield* InstanceState.context).directory
+      const file = path.resolve(directory, ctx.payload.path)
+      if (!FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
+      yield* FSUtil.Service.use((fs) => fs.writeWithDirs(file, ctx.payload.content)).pipe(Effect.orDie)
+      return { ok: true as const }
+    })
+
     return handlers
       .handle("findText", findText)
       .handle("findFile", findFile)
@@ -135,5 +143,6 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       .handle("list", list)
       .handle("content", content)
       .handle("status", status)
+      .handle("write", write)
   }),
 ).pipe(Layer.provide(locationServiceMapLayer))

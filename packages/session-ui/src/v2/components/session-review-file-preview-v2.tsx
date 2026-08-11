@@ -4,8 +4,10 @@ import { DiffChanges } from "@opencode-ai/ui/v2/diff-changes-v2"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { useI18n } from "@opencode-ai/ui/context/i18n"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { mediaKindFromPath } from "../../pierre/media"
 import { cloneSelectedLineRange, previewSelectedLines } from "../../pierre/selection-bridge"
+import { copyTextToClipboard } from "../../util/clipboard"
 import type { FileContent, SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js"
@@ -254,16 +256,28 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   return (
     <>
       <div data-slot="session-review-v2-file-header">
-        <div data-slot="session-review-v2-file-title">
-          <div data-slot="session-review-v2-file-status" data-type={statusType(view().status)}>
-            {statusLabel(view().status)}
-          </div>
-          <FileIcon node={{ path: props.file, type: "file" }} />
-          <span data-slot="session-review-v2-file-name">{getFilename(props.file)}</span>
-          <Show when={props.file.includes("/")}>
-            <span data-slot="session-review-v2-file-path">{getDirectory(props.file)}</span>
-          </Show>
-        </div>
+        <MenuV2.Context>
+          <MenuV2.Context.Trigger as="div" data-slot="session-review-v2-file-title">
+            <div data-slot="session-review-v2-file-status" data-type={statusType(view().status)}>
+              {statusLabel(view().status)}
+            </div>
+            <FileIcon node={{ path: props.file, type: "file" }} />
+            <TooltipV2 value={props.file}>
+              <span data-slot="session-review-v2-file-name">{getFilename(props.file)}</span>
+            </TooltipV2>
+            <Show when={props.file.includes("/")}>
+              <TooltipV2 value={props.file}>
+                <span data-slot="session-review-v2-file-path">{getDirectory(props.file)}</span>
+              </TooltipV2>
+            </Show>
+          </MenuV2.Context.Trigger>
+          <MenuV2.Context.Portal>
+            <MenuV2.Context.Content>
+              <MenuV2.Item onSelect={() => copyTextToClipboard(props.file)}>Copy full path</MenuV2.Item>
+              <MenuV2.Item onSelect={() => copyTextToClipboard(getFilename(props.file))}>Copy filename</MenuV2.Item>
+            </MenuV2.Context.Content>
+          </MenuV2.Context.Portal>
+        </MenuV2.Context>
         <div data-slot="session-review-v2-file-diff">
           <DiffChanges changes={view()} />
         </div>

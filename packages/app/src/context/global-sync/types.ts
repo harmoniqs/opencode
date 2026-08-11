@@ -51,6 +51,9 @@ export type State = {
   session_diff: {
     [sessionID: string]: FileDiffInfo[]
   }
+  diff_version: {
+    [sessionID: string]: number
+  }
   todo: {
     [sessionID: string]: Todo[]
   }

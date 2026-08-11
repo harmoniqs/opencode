@@ -23,7 +23,7 @@ export function clampSessionPanelWidth(input: { width: number; available: number
 // — a wide monitor squished the chat into the left margin. Now the column is
 // fixed-width (default 320 — DEFAULT_PANEL_COLUMN_WIDTH — user-resizable
 // within these bounds) and the CHAT is the flex remainder.
-export const WORK_COLUMN_WIDTH_MIN = 240
+export const WORK_COLUMN_WIDTH_MIN = 330
 
 /** The column may never take more than 60% of the measured row. */
 export function workColumnWidthMax(available: number) {

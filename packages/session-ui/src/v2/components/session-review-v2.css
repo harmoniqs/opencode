@@ -208,11 +208,10 @@
 [data-component="session-review-v2"] [data-slot="session-review-v2-toolbar"] {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  padding-left: 8px;
+  gap: 4px;
+  padding: 10px 16px 10px 8px;
   flex-shrink: 0;
+  white-space: nowrap;
   border-bottom: 1px solid var(--border-weaker-base, var(--v2-border-border-weak));
 }
 
@@ -220,10 +219,12 @@
   display: flex;
   align-items: center;
   gap: 0px;
+  flex-shrink: 0;
 }
 
 [data-component="session-review-v2"] .session-review-v2-toolbar-group--start {
   min-width: 0;
+  flex-shrink: 0;
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-toolbar-collapsed-meta"] {
@@ -386,8 +387,19 @@
   color: var(--v2-state-fg-info);
 }
 
+[data-component="session-review-v2"] [data-slot="session-review-v2-file-title"] [data-component="tooltip-v2-trigger"] {
+  display: inline-flex;
+  min-width: 0;
+}
+
+[data-component="session-review-v2"] [data-slot="session-review-v2-file-title"] [data-component="tooltip-v2-trigger"]:has([data-slot="session-review-v2-file-path"]) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 [data-component="session-review-v2"] [data-slot="session-review-v2-file-name"] {
-  flex: none;
+  flex-shrink: 0;
   font-size: 13px;
   font-weight: 530;
   line-height: 1;
@@ -398,7 +410,8 @@
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-file-path"] {
-  flex: none;
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 440;
   line-height: 1;
@@ -406,6 +419,8 @@
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--v2-text-text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-diff-scroll"] {

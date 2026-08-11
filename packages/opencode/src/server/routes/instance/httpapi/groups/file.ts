@@ -92,6 +92,11 @@ export const LegacyStatus = Schema.Struct({
   status: Schema.Literals(["added", "deleted", "modified"]),
 }).annotate({ identifier: "File" })
 
+export const FileWriteBody = Schema.Struct({
+  path: Schema.String,
+  content: Schema.String,
+})
+
 export const FilePaths = {
   findText: "/find",
   findFile: "/find/file",
@@ -99,6 +104,7 @@ export const FilePaths = {
   list: "/file",
   content: "/file/content",
   status: "/file/status",
+  write: "/file/write",
 } as const
 
 export const FileApi = HttpApi.make("file")
@@ -163,6 +169,17 @@ export const FileApi = HttpApi.make("file")
             identifier: "file.status",
             summary: "Get file status",
             description: "Get the git status of all files in the project.",
+          }),
+        ),
+        HttpApiEndpoint.post("write", FilePaths.write, {
+          query: WorkspaceRoutingQuery,
+          payload: FileWriteBody,
+          success: described(Schema.Struct({ ok: Schema.Boolean }), "Write result"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "file.write",
+            summary: "Write file",
+            description: "Write content to a file on disk. Used by the Preview tab's raw editor.",
           }),
         ),
       )
