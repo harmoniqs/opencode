@@ -247,6 +247,8 @@ export const dict = {
   "prompt.mode.shell.exit": "esc for at afslutte",
   "session.child.promptDisabled": "Der kan ikke sendes prompts til underagentsessioner.",
   "session.child.backToParent": "Tilbage til hovedsessionen.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "Ret en TODO i koden",
   "prompt.example.2": "Hvad er teknologistakken for dette projekt?",
@@ -723,6 +725,7 @@ export const dict = {
   "common.rename": "Omdøb",
   "common.reset": "Nulstil",
   "common.archive": "Arkivér",
+  "common.unarchive": "Unarchive",
   "common.delete": "Slet",
   "common.close": "Luk",
   "common.edit": "Rediger",

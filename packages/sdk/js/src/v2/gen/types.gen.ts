@@ -2743,7 +2743,6 @@ export type PromptInput = {
   text: string
   files?: Array<PromptInputFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  skills?: Array<PromptSkillAttachment>
 }
 
 export type ConflictError = {
@@ -4027,7 +4026,6 @@ export type SessionMessageUser = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  skills?: Array<PromptSkillAttachment>
   type: "user"
 }
 
@@ -8128,6 +8126,39 @@ export type FileStatusResponses = {
 
 export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
 
+export type FileWriteData = {
+  body?: {
+    path: string
+    content: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/file/write"
+}
+
+export type FileWriteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type FileWriteError = FileWriteErrors[keyof FileWriteErrors]
+
+export type FileWriteResponses = {
+  /**
+   * Write result
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type FileWriteResponse = FileWriteResponses[keyof FileWriteResponses]
+
 export type InstanceDisposeData = {
   body?: never
   path?: never
@@ -9798,6 +9829,43 @@ export type SessionDiffResponses = {
 }
 
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
+
+export type SessionTouchedFilesData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/touched-files"
+}
+
+export type SessionTouchedFilesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionTouchedFilesError = SessionTouchedFilesErrors[keyof SessionTouchedFilesErrors]
+
+export type SessionTouchedFilesResponses = {
+  /**
+   * All files touched by edit tools in this session
+   */
+  200: Array<{
+    file: string
+    status: "added" | "modified"
+  }>
+}
+
+export type SessionTouchedFilesResponse = SessionTouchedFilesResponses[keyof SessionTouchedFilesResponses]
 
 export type SessionMessagesData = {
   body?: never

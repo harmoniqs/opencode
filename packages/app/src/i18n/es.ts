@@ -248,6 +248,8 @@ export const dict = {
   "prompt.mode.shell.exit": "esc para salir",
   "session.child.promptDisabled": "No se pueden enviar prompts a las sesiones de subagentes.",
   "session.child.backToParent": "Volver a la sesión principal.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "Arreglar un TODO en el código",
   "prompt.example.2": "¿Cuál es el stack tecnológico de este proyecto?",
@@ -730,6 +732,7 @@ export const dict = {
   "common.rename": "Renombrar",
   "common.reset": "Restablecer",
   "common.archive": "Archivar",
+  "common.unarchive": "Unarchive",
   "common.delete": "Eliminar",
   "common.close": "Cerrar",
   "common.edit": "Editar",

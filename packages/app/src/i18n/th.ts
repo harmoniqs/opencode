@@ -248,6 +248,8 @@ export const dict = {
   "prompt.mode.shell.exit": "กด esc เพื่อออก",
   "session.child.promptDisabled": "ไม่สามารถส่งพรอมต์ในเซสชันเอเจนต์ย่อยได้.",
   "session.child.backToParent": "กลับไปยังเซสชันหลัก.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "แก้ไข TODO ในโค้ดเบส",
   "prompt.example.2": "เทคโนโลยีของโปรเจกต์นี้คืออะไร?",
@@ -720,6 +722,7 @@ export const dict = {
   "common.rename": "เปลี่ยนชื่อ",
   "common.reset": "รีเซ็ต",
   "common.archive": "จัดเก็บ",
+  "common.unarchive": "Unarchive",
   "common.delete": "ลบ",
   "common.close": "ปิด",
   "common.edit": "แก้ไข",

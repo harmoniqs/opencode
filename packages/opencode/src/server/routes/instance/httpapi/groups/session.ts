@@ -75,6 +75,11 @@ export const PermissionResponsePayload = Schema.Struct({
   response: PermissionV1.Reply,
 })
 
+export const TouchedFile = Schema.Struct({
+  file: Schema.String,
+  status: Schema.Literals(["added", "modified"]),
+})
+
 export const SessionPaths = {
   list: root,
   status: `${root}/status`,
@@ -82,6 +87,7 @@ export const SessionPaths = {
   children: `${root}/:sessionID/children`,
   todo: `${root}/:sessionID/todo`,
   diff: `${root}/:sessionID/diff`,
+  touchedFiles: `${root}/:sessionID/touched-files`,
   messages: `${root}/:sessionID/message`,
   message: `${root}/:sessionID/message/:messageID`,
   create: root,
@@ -174,6 +180,18 @@ export const SessionApi = HttpApi.make("session")
             identifier: "session.diff",
             summary: "Get message diff",
             description: "Get the file changes (diff) that resulted from a specific user message in the session.",
+          }),
+        ),
+        HttpApiEndpoint.get("touchedFiles", SessionPaths.touchedFiles, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(TouchedFile), "All files touched by edit tools in this session"),
+          error: ApiNotFoundError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.touchedFiles",
+            summary: "Get touched files",
+            description: "Get all files that were edited or written by tools in this session, regardless of current git state.",
           }),
         ),
         HttpApiEndpoint.get("messages", SessionPaths.messages, {
