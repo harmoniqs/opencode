@@ -262,7 +262,7 @@ export function SessionSidePanel(props: {
       id: SESSION_PREVIEW_TAB,
       label: "Preview",
       icon: "eye",
-      available: hasMarkdownFiles,
+      available: () => true,
       active: previewOpen,
     },
   ])
@@ -442,7 +442,7 @@ export function SessionSidePanel(props: {
                                   </div>
                                 </Tabs.Trigger>
                               </div>
-                              <div style={{ display: previewOpen() && hasMarkdownFiles() ? undefined : "none" }}>
+                              <div style={{ display: previewOpen() ? undefined : "none" }}>
                                 <Tabs.Trigger
                                   value={SESSION_PREVIEW_TAB}
                                   closeButton={
@@ -646,7 +646,7 @@ export function SessionSidePanel(props: {
                                 </div>
                               </Tabs.Trigger>
                             </div>
-                            <div style={{ display: previewOpen() && hasMarkdownFiles() ? undefined : "none" }}>
+                            <div style={{ display: previewOpen() ? undefined : "none" }}>
                               <Tabs.Trigger
                                 value={SESSION_PREVIEW_TAB}
                                 closeButton={

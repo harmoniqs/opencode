@@ -1,7 +1,5 @@
 import { For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -19,35 +17,19 @@ export interface PanelMenuItem {
 export function PanelMenu(props: {
   items: PanelMenuItem[]
   onSelect: (id: string) => void
-  openFileKeybind?: () => string[][]
   v2?: boolean
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenu.Trigger class="flex items-center justify-center">
-        <Show
-          when={props.v2}
-          fallback={
-            <IconButton
-              icon="plus-small"
-              variant="ghost"
-              iconSize="large"
-              class="!rounded-md"
-              aria-label="Open panel"
-            />
-          }
-        >
-          <IconButtonV2
-            icon={<Icon name="plus-small" />}
-            variant="ghost-muted"
-            size="large"
-            aria-label="Open panel"
-          />
-        </Show>
+    <DropdownMenu gutter={4} placement="bottom-end">
+      <DropdownMenu.Trigger
+        class="flex items-center justify-center w-7 h-7 rounded-md text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors cursor-pointer"
+        aria-label="Open panel"
+      >
+        <Icon name="plus-small" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          class="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border-base bg-background-base p-1 shadow-md animate-in fade-in-0 zoom-in-95"
+          class="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border-base bg-background-base p-1 shadow-md"
         >
           <For each={props.items.filter((item) => item.available())}>
             {(item) => (
