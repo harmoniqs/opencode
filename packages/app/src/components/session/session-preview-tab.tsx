@@ -377,7 +377,7 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
           }
         })
       }}
-      class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none"
+      class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none selection:bg-blue-500/30"
       style={{ "tab-size": "2", "font-size": `${props.zoom * 0.12}px` }}
       onInput={(e) => props.onEdit(e.currentTarget.value)}
       spellcheck={false}

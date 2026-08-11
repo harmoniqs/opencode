@@ -483,7 +483,7 @@ export function SessionSidePanel(props: {
                                 </For>
                               </SortableProvider>
                             </Tabs.List>
-                            <div class="shrink-0 flex items-center justify-center pl-3 pr-4">
+                            <div class="shrink-0 flex items-center justify-center pl-2 pr-1">
                               <PanelMenu
                                 items={panelMenuItems()}
                                 onSelect={handlePanelMenuSelect}
@@ -686,7 +686,7 @@ export function SessionSidePanel(props: {
                               )}
                             </For>
                           </Tabs.List>
-                          <div class="shrink-0 flex items-center justify-center pl-3 pr-4">
+                          <div class="shrink-0 flex items-center justify-center pl-2 pr-1">
                             <PanelMenu
                               items={panelMenuItems()}
                               onSelect={handlePanelMenuSelect}
