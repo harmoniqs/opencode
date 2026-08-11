@@ -36,7 +36,10 @@ function preprocessMarkdown(text: string): string {
   return text.replace(/```math\n([\s\S]*?)```/g, (_match, body: string) => `$$\n${body.trim()}\n$$`)
 }
 
-export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; status?: string }> }) {
+export function SessionPreviewTab(props: {
+  diffs: () => Array<{ file: string; status?: string }>
+  touchedFiles?: () => Array<{ file: string; status: string }>
+}) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
   const [selectedFile, setSelectedFile] = createSignal<string | undefined>(undefined)
@@ -48,24 +51,44 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
   const zoomIn = () => setZoom((z) => Math.min(z + 10, 200))
   const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
 
-  // Filter diffs to only .md files
+  // Derive the file list from touchedFiles (tool-edit history, persists regardless of git state)
+  // supplemented by diffs for any files not already covered.
   const markdownFiles = createMemo((): PreviewFileEntry[] => {
-    return props
-      .diffs()
-      .filter((d) => d.file.endsWith(".md"))
-      .map((d) => {
-        const parts = d.file.split("/")
-        const basename = parts[parts.length - 1]
-        // relativePath: strip leading ~/ prefix
-        const relativePath = d.file.startsWith("~/") ? d.file.slice(2) : d.file
-        return {
-          path: d.file,
-          relativePath,
-          basename,
-          extension: ".md" as const,
-          changeType: (d.status === "added" ? "added" : "modified") as "added" | "modified",
-        }
-      })
+    const seen = new Set<string>()
+    const entries: PreviewFileEntry[] = []
+
+    const toEntry = (file: string, status: string): PreviewFileEntry | null => {
+      if (!file.endsWith(".md")) return null
+      if (seen.has(file)) return null
+      seen.add(file)
+      const parts = file.split("/")
+      const basename = parts[parts.length - 1]
+      const relativePath = file.startsWith("~/") ? file.slice(2) : file
+      return {
+        path: file,
+        relativePath,
+        basename,
+        extension: ".md" as const,
+        changeType: (status === "added" ? "added" : "modified") as "added" | "modified",
+      }
+    }
+
+    // Primary: all files touched by edit tools in this session
+    const touched = props.touchedFiles?.()
+    if (touched) {
+      for (const t of touched) {
+        const entry = toEntry(t.file, t.status)
+        if (entry) entries.push(entry)
+      }
+    }
+
+    // Supplement: any diff files not already in touchedFiles
+    for (const d of props.diffs()) {
+      const entry = toEntry(d.file, d.status === "added" ? "added" : "modified")
+      if (entry) entries.push(entry)
+    }
+
+    return entries
   })
 
   // Load file content when a file is selected
