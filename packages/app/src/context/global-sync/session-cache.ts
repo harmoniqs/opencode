@@ -7,6 +7,7 @@ export const SESSION_CACHE_LIMIT = 40
 type SessionCache = {
   session_status: Record<string, SessionStatus | undefined>
   session_diff: Record<string, FileDiffInfo[] | undefined>
+  diff_version: Record<string, number | undefined>
   todo: Record<string, Todo[] | undefined>
   message: Record<string, Message[] | undefined>
   session_message: Record<string, SessionMessageInfo[] | undefined>
@@ -34,6 +35,7 @@ export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<stri
     delete store.todo[sessionID]
     delete store.session_message[sessionID]
     delete store.session_diff[sessionID]
+    delete store.diff_version[sessionID]
     delete store.session_status[sessionID]
     delete store.permission[sessionID]
     delete store.question[sessionID]

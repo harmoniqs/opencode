@@ -839,6 +839,9 @@ const layer: Layer.Layer<
       const all = yield* messages({ sessionID }).pipe(Effect.orDie)
       if (!all.length) return [] as Snapshot.FileDiff[]
 
+      const session = yield* get(sessionID).pipe(Effect.orDie)
+      const sessionStartTime = session.time.created
+
       // Find the first step-start snapshot hash (session-start ref)
       // and the last step-finish snapshot hash (session-end ref)
       let from: string | undefined
@@ -870,44 +873,70 @@ const layer: Layer.Layer<
 
       // If we have snapshot hashes and agent-touched files, compute the real diff
       if (from && agentFilesAbsolute.size > 0) {
-        // Use last step-finish hash if available (completed session),
-        // otherwise fall back to current working tree state (session still running)
-        const to = lastStepFinish ?? (yield* snapshot.track())
+        // Always track the live working tree so in-progress edits are included;
+        // fall back to the last step-finish hash only when tracking is unavailable.
+        const to = (yield* snapshot.track()) ?? lastStepFinish
         if (to) {
-          // Normalize agent-touched files to relative paths (diffFull returns relative paths)
+          // Normalize and split files into in-worktree (relative) and external (absolute)
           const ctx = yield* InstanceState.context
           const worktree = ctx.worktree
           const agentFiles = new Set<string>()
-          for (const abs of agentFilesAbsolute) {
-            const rel = abs.startsWith(worktree)
-              ? abs.slice(worktree.length).replace(/^\//, "").replaceAll("\\", "/")
-              : abs.replaceAll("\\", "/")
-            agentFiles.add(rel)
+          const externalFiles: string[] = []
+          for (const raw of agentFilesAbsolute) {
+            // Resolve relative paths (e.g. ../../../other-repo/file.ts) to absolute
+            const abs = raw.startsWith("/") ? raw : path.resolve(worktree, raw)
+            if (abs.startsWith(worktree + "/") || abs === worktree) {
+              const rel = abs.slice(worktree.length + 1).replaceAll("\\", "/")
+              agentFiles.add(rel)
+            } else {
+              externalFiles.push(abs)
+            }
           }
 
-          const allDiffs = yield* snapshot.diffFull(from, to).pipe(
-            Effect.catchCause((cause) =>
-              Effect.gen(function* () {
-                yield* Effect.logWarning("diffFull failed, falling through to per-file fallback", { cause })
-                return [] as Snapshot.FileDiff[]
-              }),
-            ),
-          )
-          const filtered = allDiffs.filter(
-            (d: Snapshot.FileDiff) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
-          )
-          if (filtered.length > 0) return filtered
+          // Primary path: diff in-worktree files via snapshot
+          let results: Snapshot.FileDiff[] = []
+          if (agentFiles.size > 0) {
+            const allDiffs = yield* snapshot.diffFull(from, to).pipe(
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  yield* Effect.logWarning("diffFull failed, falling through to per-file fallback", { cause })
+                  return [] as Snapshot.FileDiff[]
+                }),
+              ),
+            )
+            const filtered = allDiffs.filter(
+              (d: Snapshot.FileDiff) => d.file && agentFiles.has(d.file) && (d.additions ?? 0) + (d.deletions ?? 0) > 0,
+            )
+            if (filtered.length > 0) {
+              results = filtered
+            } else {
+              // Fallback A: per-file git show vs current disk for in-worktree files
+              const perFileDiffs = yield* snapshot.diffFromDisk(from, [...agentFiles]).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.gen(function* () {
+                    yield* Effect.logWarning("diffFromDisk failed, falling through to summary fallback", { cause })
+                    return [] as Snapshot.FileDiff[]
+                  }),
+                ),
+              )
+              if (perFileDiffs.length > 0) results = perFileDiffs
+            }
+          }
 
-          // Fallback A: primary returned empty but from hash exists — per-file git show vs current disk
-          const perFileDiffs = yield* snapshot.diffFromDisk(from, [...agentFiles]).pipe(
-            Effect.catchCause((cause) =>
-              Effect.gen(function* () {
-                yield* Effect.logWarning("diffFromDisk failed, falling through to summary fallback", { cause })
-                return [] as Snapshot.FileDiff[]
-              }),
-            ),
-          )
-          if (perFileDiffs.length > 0) return perFileDiffs
+          // External files: diff against HEAD in their own git repos
+          if (externalFiles.length > 0) {
+            const extDiffs = yield* snapshot.diffExternalFiles(externalFiles, sessionStartTime).pipe(
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  yield* Effect.logWarning("diffExternalFiles failed", { cause })
+                  return [] as Snapshot.FileDiff[]
+                }),
+              ),
+            )
+            results = [...results, ...extDiffs]
+          }
+
+          if (results.length > 0) return results
         }
       }
 

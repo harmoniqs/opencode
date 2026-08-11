@@ -12,6 +12,7 @@ const sessionFields = new Set([
   "session_status",
   "session_working",
   "session_diff",
+  "diff_version",
   "todo",
   "permission",
   "question",
