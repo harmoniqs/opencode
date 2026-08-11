@@ -82,6 +82,7 @@ export function SessionSidePanel(props: {
   reviewSnap: boolean
   size: Sizing
   stacked?: boolean
+  touchedFiles?: () => Array<{ file: string; status: string }>
 }) {
   const layout = useLayout()
   const settings = useSettings()
@@ -245,9 +246,13 @@ export function SessionSidePanel(props: {
     return active !== "review" && active !== "context" && active !== "empty" && active !== SESSION_PREVIEW_TAB
   })
 
-  // Markdown files for the Preview tab (only shown when at least one .md file exists)
-  const markdownDiffs = createMemo(() => diffs().filter((d) => d.file.endsWith(".md")))
-  const hasMarkdownFiles = createMemo(() => markdownDiffs().length > 0)
+  // Markdown files for the Preview tab — check both git diffs and tool-edit history
+  const hasMarkdownFiles = createMemo(() => {
+    if (diffs().some((d) => d.file.endsWith(".md"))) return true
+    const touched = props.touchedFiles?.()
+    if (touched?.some((t) => t.file.endsWith(".md"))) return true
+    return false
+  })
 
   // Panel menu items
   const panelMenuItems = createMemo((): PanelMenuItem[] => [
@@ -528,7 +533,7 @@ export function SessionSidePanel(props: {
                           <Show when={activeTab() === SESSION_PREVIEW_TAB}>
                             <Tabs.Content value={SESSION_PREVIEW_TAB} class="flex flex-col h-full overflow-hidden contain-strict">
                               <div class="relative flex-1 min-h-0 overflow-hidden">
-                                <SessionPreviewTab diffs={diffs} />
+                                <SessionPreviewTab diffs={diffs} touchedFiles={props.touchedFiles} />
                               </div>
                             </Tabs.Content>
                           </Show>
@@ -737,11 +742,11 @@ export function SessionSidePanel(props: {
                         </Show>
 
                         <Show when={activeTab() === SESSION_PREVIEW_TAB}>
-                          <Tabs.Content value={SESSION_PREVIEW_TAB} class="flex flex-col h-full overflow-hidden contain-strict">
-                            <div class="relative flex-1 min-h-0 overflow-hidden">
-                              <SessionPreviewTab diffs={diffs} />
-                            </div>
-                          </Tabs.Content>
+                           <Tabs.Content value={SESSION_PREVIEW_TAB} class="flex flex-col h-full overflow-hidden contain-strict">
+                             <div class="relative flex-1 min-h-0 overflow-hidden">
+                               <SessionPreviewTab diffs={diffs} touchedFiles={props.touchedFiles} />
+                             </div>
+                           </Tabs.Content>
                         </Show>
 
                         <Show when={fileBrowserMounted()}>

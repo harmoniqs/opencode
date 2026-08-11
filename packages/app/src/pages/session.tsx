@@ -739,6 +739,39 @@ export default function Page() {
     }
     return accumulateDiffs(editParts)
   })
+
+  // All files touched by edit tools in this session — independent of git state.
+  // The Preview tab uses this so documents remain visible even after being committed/reverted.
+  const touchedFiles = createMemo(() => {
+    const allMessages = messages()
+    if (!allMessages.length) return [] as Array<{ file: string; status: string }>
+    const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+    const toHomePath = (p: string) => {
+      if (p.startsWith("~/")) return p
+      if (home && p.startsWith(home)) return "~" + p.slice(home.length)
+      return p
+    }
+    const seen = new Map<string, string>()
+    for (const msg of allMessages) {
+      const msgParts = sync().data.part[msg.id]
+      if (!msgParts) continue
+      for (const part of msgParts) {
+        if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
+        if (part.state.status !== "completed") continue
+        const meta = part.state.metadata as Record<string, unknown> | undefined
+        const filediff = meta?.filediff as { file?: string } | undefined
+        if (filediff?.file) {
+          const normalized = toHomePath(filediff.file)
+          if (!seen.has(normalized)) {
+            // First touch of this file — check if it was created or modified
+            seen.set(normalized, part.tool === "write" ? "added" : "modified")
+          }
+        }
+      }
+    }
+    return Array.from(seen, ([file, status]) => ({ file, status }))
+  })
+
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
     const selected = reviewFile()
@@ -2259,6 +2292,7 @@ export default function Page() {
               focusReviewDiff={focusReviewDiff}
               reviewSnap={ui.reviewSnap}
               size={size}
+              touchedFiles={touchedFiles}
             />
           </Suspense>
         </Show>
@@ -2311,6 +2345,7 @@ export default function Page() {
                       reviewSnap={ui.reviewSnap}
                       size={size}
                       stacked={desktopV2PanelLayout().stacked}
+                      touchedFiles={touchedFiles}
                     />
                   </Suspense>
                 </div>
