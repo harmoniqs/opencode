@@ -267,10 +267,14 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                       content={fileContent()}
                       onEdit={handleRawEdit}
                       onSave={immediateSave}
+                      zoom={zoom()}
                     />
                   }
                 >
-                  <div class="p-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:max-w-full [&_.katex]:text-[0.9em]">
+                  <div
+                    class="p-4 origin-top-left [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:max-w-full [&_.katex]:text-[0.9em]"
+                    style={{ transform: `scale(${zoom() / 100})`, width: `${10000 / zoom()}%` }}
+                  >
                     <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
                   </div>
                 </Show>
@@ -340,7 +344,7 @@ function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: st
 
 // ─── Raw Editor ─────────────────────────────────────────────────────────────
 
-function RawEditor(props: { content: string; onEdit: (content: string) => void; onSave: () => void }) {
+function RawEditor(props: { content: string; onEdit: (content: string) => void; onSave: () => void; zoom: number }) {
   let textareaRef: HTMLTextAreaElement | undefined
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -353,8 +357,8 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
   return (
     <textarea
       ref={(el) => (textareaRef = el)}
-      class="w-full h-full p-4 resize-none bg-transparent text-12-regular text-text-base font-mono outline-none border-none"
-      style={{ "tab-size": "2" }}
+      class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none"
+      style={{ "tab-size": "2", "font-size": `${props.zoom * 0.12}px` }}
       value={props.content}
       onInput={(e) => props.onEdit(e.currentTarget.value)}
       onKeyDown={handleKeyDown}
