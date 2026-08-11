@@ -1,0 +1,273 @@
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js"
+import { createStore } from "solid-js/store"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
+import { Icon } from "@opencode-ai/ui/icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
+import { useSDK } from "@/context/sdk"
+import { useServerSDK } from "@/context/server-sdk"
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export interface PreviewFileEntry {
+  path: string
+  relativePath: string
+  basename: string
+  extension: ".md"
+  changeType: "added" | "modified"
+}
+
+interface PreviewFileState {
+  mode: "preview" | "raw"
+  scrollPosition?: number
+  unsavedContent?: string
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+
+export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; status?: string }> }) {
+  const sdk = useSDK()
+  const serverSDK = useServerSDK()
+  const [selectedFile, setSelectedFile] = createSignal<string | undefined>(undefined)
+  const [fileStates, setFileStates] = createStore<Record<string, PreviewFileState>>({})
+  const [fileContent, setFileContent] = createSignal<string>("")
+  const [loading, setLoading] = createSignal(false)
+
+  // Filter diffs to only .md files
+  const markdownFiles = createMemo((): PreviewFileEntry[] => {
+    return props
+      .diffs()
+      .filter((d) => d.file.endsWith(".md"))
+      .map((d) => {
+        const parts = d.file.split("/")
+        const basename = parts[parts.length - 1]
+        // relativePath: strip leading ~/ prefix
+        const relativePath = d.file.startsWith("~/") ? d.file.slice(2) : d.file
+        return {
+          path: d.file,
+          relativePath,
+          basename,
+          extension: ".md" as const,
+          changeType: (d.status === "added" ? "added" : "modified") as "added" | "modified",
+        }
+      })
+  })
+
+  // Load file content when a file is selected
+  createEffect(
+    on(selectedFile, (path) => {
+      if (!path) return
+      setLoading(true)
+
+      // Resolve the actual filesystem path from the display path
+      const fsPath = path.startsWith("~/")
+        ? path.replace("~", process.env.HOME ?? "")
+        : path
+
+      sdk()
+        .client.file.read({ path: fsPath })
+        .then((result) => {
+          const content = result.data
+          if (content && content.type === "text") {
+            setFileContent(content.content)
+          }
+        })
+        .catch(() => {
+          setFileContent("")
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+    }),
+  )
+
+  const currentMode = createMemo(() => {
+    const path = selectedFile()
+    if (!path) return "preview"
+    return fileStates[path]?.mode ?? "preview"
+  })
+
+  const toggleMode = () => {
+    const path = selectedFile()
+    if (!path) return
+    const current = fileStates[path]?.mode ?? "preview"
+    const next = current === "preview" ? "raw" : "preview"
+    setFileStates(path, { ...fileStates[path], mode: next })
+  }
+
+  const goBack = () => {
+    setSelectedFile(undefined)
+  }
+
+  // ─── Raw Editor Save ────────────────────────────────────────────────────
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+
+  const saveFile = (path: string, content: string) => {
+    const fsPath = path.startsWith("~/")
+      ? path.replace("~", process.env.HOME ?? "")
+      : path
+
+    const baseUrl = serverSDK().url
+    if (!baseUrl) return
+
+    // POST to the file write endpoint
+    fetch(new URL("/file/write", baseUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fsPath, content }),
+    }).catch(() => {
+      // Silently fail — save is best-effort in the preview
+    })
+  }
+
+  const debouncedSave = (path: string, content: string) => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => saveFile(path, content), 1000)
+  }
+
+  const immediateSave = () => {
+    const path = selectedFile()
+    if (!path) return
+    const content = fileStates[path]?.unsavedContent
+    if (content !== undefined) {
+      if (saveTimer) clearTimeout(saveTimer)
+      saveFile(path, content)
+      setFileStates(path, { ...fileStates[path], unsavedContent: undefined })
+    }
+  }
+
+  const handleRawEdit = (content: string) => {
+    const path = selectedFile()
+    if (!path) return
+    setFileStates(path, { ...fileStates[path], unsavedContent: content })
+    setFileContent(content)
+    debouncedSave(path, content)
+  }
+
+  onCleanup(() => {
+    if (saveTimer) clearTimeout(saveTimer)
+  })
+
+  // ─── Render ─────────────────────────────────────────────────────────────
+
+  return (
+    <div class="h-full flex flex-col overflow-hidden">
+      <Show
+        when={selectedFile()}
+        fallback={<PreviewFileList files={markdownFiles()} onSelect={setSelectedFile} />}
+      >
+        {(path) => (
+          <div class="h-full flex flex-col overflow-hidden">
+            {/* Header with back button and mode toggle */}
+            <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
+              <IconButton
+                icon="arrow-left"
+                variant="ghost"
+                class="h-6 w-6"
+                onClick={goBack}
+                aria-label="Back to file list"
+              />
+              <div class="flex-1 min-w-0 text-12-regular text-text-base truncate">
+                {markdownFiles().find((f) => f.path === path())?.basename ?? path()}
+              </div>
+              <button
+                class="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-11-regular text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                onClick={toggleMode}
+              >
+                <Icon name={currentMode() === "preview" ? "edit" : "eye"} size="small" />
+                <span>{currentMode() === "preview" ? "Raw" : "Preview"}</span>
+              </button>
+            </div>
+
+            {/* Content area */}
+            <div class="flex-1 min-h-0 overflow-auto">
+              <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
+                <Show
+                  when={currentMode() === "preview"}
+                  fallback={
+                    <RawEditor
+                      content={fileContent()}
+                      onEdit={handleRawEdit}
+                      onSave={immediateSave}
+                    />
+                  }
+                >
+                  <div class="p-4">
+                    <Markdown text={fileContent()} class="text-12-regular" />
+                  </div>
+                </Show>
+              </Show>
+            </div>
+          </div>
+        )}
+      </Show>
+    </div>
+  )
+}
+
+// ─── File List ──────────────────────────────────────────────────────────────
+
+function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: string) => void }) {
+  return (
+    <div class="h-full overflow-auto">
+      <Show
+        when={props.files.length > 0}
+        fallback={
+          <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+            No markdown files modified in this session
+          </div>
+        }
+      >
+        <div class="py-1">
+          <For each={props.files}>
+            {(file) => (
+              <button
+                class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-background-stronger transition-colors"
+                onClick={() => props.onSelect(file.path)}
+              >
+                <span
+                  class="shrink-0 w-4 h-4 flex items-center justify-center rounded text-10-medium"
+                  classList={{
+                    "bg-green-500/15 text-green-500": file.changeType === "added",
+                    "bg-yellow-500/15 text-yellow-500": file.changeType === "modified",
+                  }}
+                >
+                  {file.changeType === "added" ? "A" : "M"}
+                </span>
+                <div class="flex-1 min-w-0">
+                  <div class="text-12-regular text-text-base truncate">{file.basename}</div>
+                  <div class="text-11-regular text-text-weak truncate">{file.relativePath}</div>
+                </div>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
+  )
+}
+
+// ─── Raw Editor ─────────────────────────────────────────────────────────────
+
+function RawEditor(props: { content: string; onEdit: (content: string) => void; onSave: () => void }) {
+  let textareaRef: HTMLTextAreaElement | undefined
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      e.preventDefault()
+      props.onSave()
+    }
+  }
+
+  return (
+    <textarea
+      ref={(el) => (textareaRef = el)}
+      class="w-full h-full p-4 resize-none bg-transparent text-12-regular text-text-base font-mono outline-none border-none"
+      style={{ "tab-size": "2" }}
+      value={props.content}
+      onInput={(e) => props.onEdit(e.currentTarget.value)}
+      onKeyDown={handleKeyDown}
+      spellcheck={false}
+    />
+  )
+}

@@ -2,9 +2,9 @@ import { batch, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { same } from "@/utils/same"
-import { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
+import { SESSION_OPEN_FILE_TAB, SESSION_PREVIEW_TAB } from "@/context/layout-tabs"
 
-export { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
+export { SESSION_OPEN_FILE_TAB, SESSION_PREVIEW_TAB } from "@/context/layout-tabs"
 
 const emptyTabs: string[] = []
 
@@ -36,6 +36,9 @@ export const createSessionTabs = (input: TabsInput) => {
   const vaultOpen = input.vaultOpen ?? (() => false)
   const fileBrowser = input.fileBrowser ?? (() => false)
   const contextOpen = createMemo(() => input.tabs().active() === "context" || input.tabs().all().includes("context"))
+  const previewOpen = createMemo(
+    () => input.tabs().active() === SESSION_PREVIEW_TAB || input.tabs().all().includes(SESSION_PREVIEW_TAB),
+  )
   const openFileOpen = createMemo(
     () =>
       fileBrowser() &&
@@ -48,7 +51,7 @@ export const createSessionTabs = (input: TabsInput) => {
         .tabs()
         .all()
         .flatMap((tab) => {
-          if (tab === "context" || tab === "review" || tab === "vault") return []
+          if (tab === "context" || tab === "review" || tab === "vault" || tab === SESSION_PREVIEW_TAB) return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
           if (seen.has(value)) return []
@@ -65,6 +68,7 @@ export const createSessionTabs = (input: TabsInput) => {
   const activeTab = createMemo(() => {
     const active = input.tabs().active()
     if (active === "context") return active
+    if (active === SESSION_PREVIEW_TAB && previewOpen()) return active
     if (active === "vault" && vaultOpen()) return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
@@ -73,6 +77,7 @@ export const createSessionTabs = (input: TabsInput) => {
     const first = openedTabs()[0]
     if (first) return first
     if (vaultOpen()) return "vault"
+    if (previewOpen()) return SESSION_PREVIEW_TAB
     if (contextOpen()) return "context"
     if (review() && hasReview()) return "review"
     return "empty"
@@ -92,6 +97,7 @@ export const createSessionTabs = (input: TabsInput) => {
 
   return {
     contextOpen,
+    previewOpen,
     openFileOpen,
     panelTabs,
     openedTabs,
