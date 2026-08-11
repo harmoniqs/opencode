@@ -482,19 +482,13 @@ export function SessionSidePanel(props: {
                                   )}
                                 </For>
                               </SortableProvider>
-                              <div
-                                class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pl-3 pr-3"
-                                classList={{
-                                  "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
-                                  "bg-background-stronger": !settings.general.newLayoutDesigns(),
-                                }}
-                              >
-                                <PanelMenu
-                                  items={panelMenuItems()}
-                                  onSelect={handlePanelMenuSelect}
-                                />
-                              </div>
                             </Tabs.List>
+                            <div class="shrink-0 flex items-center justify-center pl-1 pr-3">
+                              <PanelMenu
+                                items={panelMenuItems()}
+                                onSelect={handlePanelMenuSelect}
+                              />
+                            </div>
                           </div>
 
                           <Show when={reviewTab() && props.canReview() && activeTab() === "review"}>
@@ -691,20 +685,14 @@ export function SessionSidePanel(props: {
                                 />
                               )}
                             </For>
-                            <div
-                              class="h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pl-3 pr-3"
-                              classList={{
-                                "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
-                                "bg-background-stronger": !settings.general.newLayoutDesigns(),
-                              }}
-                            >
-                              <PanelMenu
-                                items={panelMenuItems()}
-                                onSelect={handlePanelMenuSelect}
-                                v2
-                              />
-                            </div>
                           </Tabs.List>
+                          <div class="shrink-0 flex items-center justify-center pl-1 pr-2">
+                            <PanelMenu
+                              items={panelMenuItems()}
+                              onSelect={handlePanelMenuSelect}
+                              v2
+                            />
+                          </div>
                           <div
                             class="session-review-v2-open-in-app-slot shrink-0 flex items-center pr-3"
                             onPointerDown={(event) => event.stopPropagation()}

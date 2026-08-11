@@ -201,7 +201,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                 </span>
               </Show>
               {/* Zoom control: [100% | - +] */}
-              <div class="shrink-0 flex items-center h-6 rounded-md border border-border-base overflow-hidden">
+              <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
                 <input
                   type="text"
                   class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
@@ -358,11 +358,17 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
   let textareaRef: HTMLTextAreaElement | undefined
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Let Cmd+S through to our save handler; everything else (Cmd+A, Cmd+Z,
-    // Cmd+Shift+Z, Cmd+C, Cmd+V, etc.) is handled natively by the textarea.
+    // Cmd+S: save
     if ((e.metaKey || e.ctrlKey) && e.key === "s") {
       e.preventDefault()
+      e.stopPropagation()
       props.onSave()
+      return
+    }
+    // Stop propagation on all Cmd/Ctrl shortcuts so the app's global
+    // command handler doesn't steal them (Cmd+A, Cmd+Z, Cmd+Shift+Z, etc.)
+    if (e.metaKey || e.ctrlKey) {
+      e.stopPropagation()
     }
   }
 
@@ -370,8 +376,6 @@ function RawEditor(props: { content: string; onEdit: (content: string) => void; 
     <textarea
       ref={(el) => {
         textareaRef = el
-        // Set initial content without making it "controlled" — this preserves
-        // the browser's native undo/redo stack and selection behavior.
         el.value = props.content
       }}
       class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none"
