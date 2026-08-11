@@ -1969,8 +1969,8 @@ export default function Page() {
           classes={{ button: compact ? "w-full !py-2" : "w-full" }}
           onClick={() => setStore("mobileTab", "changes")}
         >
-          {"Modified Files"}
-        </Tabs.Trigger>
+{"Files Changed"}
+</Tabs.Trigger>
       </Tabs.List>
     </Tabs>
   )

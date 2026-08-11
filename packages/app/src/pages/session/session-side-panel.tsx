@@ -595,7 +595,7 @@ export function SessionSidePanel(props: {
                                 aria-controls={activeTab() === "review" ? reviewTabPanelID : undefined}
                               >
                                 {props.hasReview()
-                                   ? "Modified Files"
+                                   ? "Files Changed"
                                    : language.t("session.tab.review")}
                               </Tabs.Trigger>
                             </Show>
@@ -818,7 +818,7 @@ export function SessionSidePanel(props: {
                             </>
                           }
                         >
-                          {"Modified Files"}
+                          {"Files Changed"}
                         </Show>
                       </Tabs.Trigger>
                       <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>

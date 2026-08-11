@@ -24,7 +24,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
             <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
           </Show>
           <text fg={theme().text}>
-            <b>Modified Files</b>
+            <b>Files Changed</b>
           </text>
         </box>
         <Show when={list().length <= 2 || open()}>
