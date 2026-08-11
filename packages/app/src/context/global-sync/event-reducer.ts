@@ -17,6 +17,7 @@ import { dropSessionCaches } from "./session-cache"
 import { diffs as list, message as clean } from "@/utils/diffs"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
 const SESSION_CONTENT_EVENTS = new Set([
   "session.diff",
   "todo.updated",
@@ -312,6 +313,15 @@ export function applyDirectoryEvent(input: {
     case "message.part.updated": {
       const part = (event.properties as { part: Part }).part
       if (SKIP_PARTS.has(part.type)) break
+      // Bump diff_version when a file-editing tool completes so the diff query refetches mid-turn
+      if (
+        part.type === "tool" &&
+        EDIT_TOOLS.has(part.tool) &&
+        part.state.status === "completed" &&
+        (part.state as { metadata?: Record<string, unknown> }).metadata?.filediff
+      ) {
+        input.setStore("diff_version", part.sessionID, (v) => (v ?? 0) + 1)
+      }
       input.setStore(
         produce((draft) => {
           delete draft.part_text_accum_delta[part.id]

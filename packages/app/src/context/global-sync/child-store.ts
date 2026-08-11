@@ -234,6 +234,7 @@ export function createChildStoreManager(input: {
               return (type ?? "idle") !== "idle"
             },
             session_diff: {},
+            diff_version: {},
             todo: {},
             permission: {},
             question: {},

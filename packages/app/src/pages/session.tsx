@@ -668,9 +668,12 @@ export default function Page() {
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
   // Refetch when the session transitions to idle (assistant finished, snapshot taken)
+  // or when a file-editing tool completes mid-turn (diff_version bumps)
   const sessionDiffVersion = () => {
     const id = params.id
-    return id ? sync().data.session_status[id]?.type ?? "idle" : "idle"
+    const status = id ? sync().data.session_status[id]?.type ?? "idle" : "idle"
+    const version = id ? sync().data.diff_version[id] ?? 0 : 0
+    return `${status}:${version}`
   }
   const sessionDiffKey = () => ["session-diff", params.id ?? "", sessionDiffVersion()] as const
   const sessionDiffQuery = createQuery(() => {
