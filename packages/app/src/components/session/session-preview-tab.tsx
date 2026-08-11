@@ -357,31 +357,29 @@ function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: st
 function RawEditor(props: { content: string; onEdit: (content: string) => void; onSave: () => void; zoom: number }) {
   let textareaRef: HTMLTextAreaElement | undefined
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // Cmd+S: save
-    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-      e.preventDefault()
-      e.stopPropagation()
-      props.onSave()
-      return
-    }
-    // Stop propagation on all Cmd/Ctrl shortcuts so the app's global
-    // command handler doesn't steal them (Cmd+A, Cmd+Z, Cmd+Shift+Z, etc.)
-    if (e.metaKey || e.ctrlKey) {
-      e.stopPropagation()
-    }
-  }
-
   return (
     <textarea
       ref={(el) => {
         textareaRef = el
         el.value = props.content
+        // Use a native (non-delegated) keydown listener so stopPropagation
+        // actually prevents the app's global command system from stealing
+        // Cmd+A, Cmd+Z, Cmd+Shift+Z, etc.
+        el.addEventListener("keydown", (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+            e.preventDefault()
+            e.stopPropagation()
+            props.onSave()
+            return
+          }
+          if (e.metaKey || e.ctrlKey) {
+            e.stopPropagation()
+          }
+        })
       }}
       class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none"
       style={{ "tab-size": "2", "font-size": `${props.zoom * 0.12}px` }}
       onInput={(e) => props.onEdit(e.currentTarget.value)}
-      onKeyDown={handleKeyDown}
       spellcheck={false}
     />
   )
