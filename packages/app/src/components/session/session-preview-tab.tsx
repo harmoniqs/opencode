@@ -6,6 +6,7 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
+import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 
@@ -203,7 +204,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
               <div class="shrink-0 flex items-center h-6 rounded-md border border-border-base overflow-hidden">
                 <input
                   type="text"
-                  class="w-9 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
+                  class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
                   value={`${zoom()}%`}
                   onInput={(e) => {
                     const val = parseInt(e.currentTarget.value)
@@ -227,7 +228,7 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
                     <span class="text-12-medium leading-none">−</span>
                   </button>
                   <button
-                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
                     onClick={zoomIn}
                     aria-label="Zoom in"
                   >
@@ -293,7 +294,9 @@ export function SessionPreviewTab(props: { diffs: () => Array<{ file: string; st
 
 function PreviewFileList(props: { files: PreviewFileEntry[]; onSelect: (path: string) => void }) {
   const copyToClipboard = (text: string) => {
-    void navigator.clipboard.writeText(text)
+    if (!writeClipboardViaBridge(text)) {
+      void navigator.clipboard.writeText(text)
+    }
   }
 
   return (
