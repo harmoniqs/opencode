@@ -869,6 +869,8 @@ function SessionChatsDropdown() {
         const target = e.target as Node
         if (flyoutRoot?.contains(target)) return
         if (triggerRef?.contains(target)) return
+        // Don't dismiss if the click landed inside a dialog (e.g. delete confirmation)
+        if (target instanceof Element && target.closest("[data-dialog-layer], [data-component='dialog-overlay']")) return
         setOpen(false)
       }
       const onKey = (e: KeyboardEvent) => {

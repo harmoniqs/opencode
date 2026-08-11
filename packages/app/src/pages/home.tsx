@@ -865,7 +865,11 @@ function HomeDesign() {
   createEffect(() => {
     if (!sessionsOpen()) return
     const onDown = (e: MouseEvent) => {
-      if (flyoutRoot && !flyoutRoot.contains(e.target as Node)) setSessionsOpen(false)
+      const target = e.target as Node
+      if (flyoutRoot && flyoutRoot.contains(target)) return
+      // Don't dismiss if the click landed inside a dialog (e.g. delete confirmation)
+      if (target instanceof Element && target.closest("[data-dialog-layer], [data-component='dialog-overlay']")) return
+      setSessionsOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSessionsOpen(false)
