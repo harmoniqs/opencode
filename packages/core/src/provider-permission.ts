@@ -207,13 +207,14 @@ export function redactSessionMessages(
 ): readonly import("@opencode-ai/schema/session-message").SessionMessage.Message[] {
   const tierLabel = resolveTierLabel(config, activeModelId)
   return messages.map((msg) => {
-    if (msg.type === "user" && msg.files && msg.files.length > 0) {
-      const kept = (msg.files as unknown as { path: string }[]).filter((f) => {
-        const p = (f as unknown as { path: string }).path ?? ""
+    if (msg.type === "user" && (msg as unknown as { files?: unknown[] }).files && ((msg as unknown as { files: unknown[] }).files.length > 0)) {
+      const files = (msg as unknown as { files: { uri: string; name?: string }[] }).files
+      const kept = files.filter((f) => {
+        const p = (f as unknown as { uri: string }).uri ?? (f as unknown as { name: string }).name ?? ""
         if (!p) return true
         return !isDeniedForModel(config, activeModelId, p)
       })
-      if (kept.length !== (msg.files as unknown[]).length) {
+      if (kept.length !== files.length) {
         return { ...msg, files: kept } as typeof msg
       }
       return msg
