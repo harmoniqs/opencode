@@ -208,7 +208,7 @@ export function redactSessionMessages(
   const tierLabel = resolveTierLabel(config, activeModelId)
   return messages.map((msg) => {
     if (msg.type === "user" && (msg as unknown as { files?: unknown[] }).files && ((msg as unknown as { files: unknown[] }).files.length > 0)) {
-      const files = (msg as unknown as { files: { uri: string; name?: string }[] }).files
+      const files = (msg as unknown as { files: { uri: string; mime: string; name?: string }[] }).files
       const kept = files.filter((f) => {
         const p = (f as unknown as { uri: string }).uri ?? (f as unknown as { name: string }).name ?? ""
         if (!p) return true
