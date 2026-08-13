@@ -11,6 +11,7 @@ import { SessionV2 } from "./session"
 import { SessionStore } from "./session/store"
 import { Wildcard } from "./util/wildcard"
 import { PermissionSaved } from "./permission/saved"
+import { ProviderPermissionSaved } from "./permission/provider-saved"
 import { Config } from "./config"
 
 export { Effect, Rule, Ruleset } from "@opencode-ai/schema/permission"
@@ -116,6 +117,7 @@ const layer = Layer.effect(
     const agents = yield* AgentV2.Service
     const sessions = yield* SessionStore.Service
     const saved = yield* PermissionSaved.Service
+    const providerSaved = yield* ProviderPermissionSaved.Service
     const configs = yield* Config.Service
     const pending = new Map<ID, Pending>()
 
@@ -180,15 +182,31 @@ const layer = Layer.effect(
         modelId = (input.metadata as Record<string, unknown>).model as string
       }
       const lookupId = modelId ?? "__unassigned__"
+      const tierId = cfg.assignments[lookupId] ?? cfg.defaultTier
+
+      // Tier-keyed always-grants (SQLite) override matrix ask → allow
+      const providerGrants = yield* providerSaved
+        .list({ projectID: location.project.id, tierID: tierId })
+        .pipe(EffectRuntime.catchAll(() => EffectRuntime.succeed([] as readonly import("./permission/provider-saved").ProviderPermissionSaved.Info[])))
+      const isProviderAllowed = (action: string, resource: string) =>
+        providerGrants.some(
+          (g) => Wildcard.match(action, g.action) && Wildcard.match(resource, g.resource),
+        )
 
       const effects: ProviderPermission.Effect[] = []
       for (const resource of input.resources) {
         const resourcePath = resource || "**"
+        // Saved tier grant takes precedence (authoritative allow)
+        if (isProviderAllowed(input.action, resourcePath)) {
+          effects.push("allow")
+          continue
+        }
         const eff = ProviderPermission.resolveEffect(cfg, lookupId, input.action, resourcePath)
         if (eff) effects.push(eff)
       }
       if (effects.length === 0) {
         // Network tools or unknown actions: still check with empty resource
+        if (isProviderAllowed(input.action, "**")) return "allow" as const
         const eff = ProviderPermission.resolveEffect(cfg, lookupId, input.action, "**")
         if (eff) return eff
         return undefined
@@ -307,6 +325,32 @@ const layer = Layer.effect(
               action: existing.request.action,
               resources: existing.request.save,
             })
+            // Provider-permission tier-keyed always grant (spec: keyed by tier)
+            const entriesForTier = yield* configs.entries().pipe(EffectRuntime.catchAll(() => EffectRuntime.succeed([] as unknown as readonly import("./config").Config.Entry[]))) as unknown as readonly import("./config").Config.Entry[]
+            const ppRaw = Config.latest(entriesForTier as never, "providerPermissions" as never) as unknown as
+              | import("@opencode-ai/schema/provider-permission").ProviderPermission.Config
+              | undefined
+            let tierForSave = "unassigned"
+            if (ppRaw && Array.isArray((ppRaw as unknown as { tiers: unknown[] }).tiers)) {
+              const cfg = ppRaw as import("@opencode-ai/schema/provider-permission").ProviderPermission.Config
+              const sess = yield* sessions
+                .get(existing.request.sessionID)
+                .pipe(EffectRuntime.catchAll(() => EffectRuntime.succeed(undefined)))
+              if (sess?.model) {
+                const mid = `${sess.model.providerID}/${sess.model.id}`
+                tierForSave = cfg.assignments[mid] ?? cfg.defaultTier
+              } else {
+                tierForSave = cfg.defaultTier
+              }
+            }
+            yield* providerSaved
+              .add({
+                projectID: location.project.id,
+                tierID: tierForSave,
+                action: existing.request.action,
+                resources: existing.request.save,
+              })
+              .pipe(EffectRuntime.catchAll(() => EffectRuntime.succeed(undefined)))
           }
           yield* Deferred.succeed(existing.deferred, undefined)
           pending.delete(input.requestID)
@@ -327,6 +371,20 @@ const layer = Layer.effect(
               )
             )
               continue
+            yield* events.publish(Event.Replied, {
+              sessionID: item.request.sessionID,
+              requestID: item.request.id,
+              reply: "always",
+            })
+            yield* Deferred.succeed(item.deferred, undefined)
+            pending.delete(id)
+          }
+          // Provider tier pending auto-allow (saved tier grants may now satisfy provider check)
+          for (const [id, item] of Array.from(pending.entries())) {
+            const providerEffect = yield* evaluateProvider(item.request as unknown as typeof existing.request).pipe(
+              EffectRuntime.catchAll(() => EffectRuntime.succeed("ask" as const)),
+            )
+            if (providerEffect !== "allow") continue
             yield* events.publish(Event.Replied, {
               sessionID: item.request.sessionID,
               requestID: item.request.id,
@@ -360,5 +418,13 @@ export const locationLayer = layer.pipe(Layer.provideMerge(AgentV2.locationLayer
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [EventV2.node, Location.node, AgentV2.node, SessionStore.node, PermissionSaved.node, Config.node],
+  deps: [
+    EventV2.node,
+    Location.node,
+    AgentV2.node,
+    SessionStore.node,
+    PermissionSaved.node,
+    ProviderPermissionSaved.node,
+    Config.node,
+  ],
 })

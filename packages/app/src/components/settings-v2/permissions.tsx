@@ -295,7 +295,7 @@ export const SettingsPermissionsV2: Component = () => {
                   <p class="settings-v2-permissions-matrix-help">Glob patterns supported, e.g. ~/secrets/**, src/private/**. Most-specific pattern wins.</p>
                 </div>
 
-                {/* Model Assignment */}
+                {/* Model Assignment — multi-select picker inside tier card */}
                 <div class="settings-v2-permissions-models">
                   <h4 class="settings-v2-permissions-models-title">Models in this tier</h4>
                   <Show when={assignedModels().length > 0} fallback={<p class="settings-v2-permissions-models-empty">No models assigned</p>}>
@@ -308,20 +308,35 @@ export const SettingsPermissionsV2: Component = () => {
                       )}</For>
                     </div>
                   </Show>
-                  <div class="settings-v2-permissions-model-picker">
-                    <select
-                      value=""
-                      onChange={(e) => { const v = e.currentTarget.value; if (v) { assignModel(v, tier.id); e.currentTarget.value = "" } }}
-                      class="settings-v2-permissions-model-select"
-                    >
-                      <option value="" disabled>{language.t("settings.permissions.modelPicker.placeholder") ?? "Assign model…"}</option>
-                      <For each={unassignedModels()}>{(m) => <option value={m}>{m}</option> }</For>
-                    </select>
-                    <Show when={tier.id !== "unassigned" && unassignedModels().length === 0}>
-                      <span class="settings-v2-permissions-models-hint">All models assigned — reassign from another tier to move it.</span>
+                  <div class="settings-v2-permissions-model-picker" data-component="model-multi-picker">
+                    <p class="settings-v2-permissions-model-picker-help">
+                      {language.t("settings.permissions.modelPicker.help") ??
+                        "Check to assign — a model can only be in one tier; checking here removes it from its previous tier."}
+                    </p>
+                    <div class="settings-v2-permissions-model-grid">
+                      <For each={allModels()}>
+                        {(m) => {
+                          const checked = () =>
+                            tier.id === "unassigned" ? !assignments()[m] : assignments()[m] === tier.id
+                          return (
+                            <label class="settings-v2-permissions-model-option">
+                              <input
+                                type="checkbox"
+                                checked={checked()}
+                                onChange={(e) =>
+                                  e.currentTarget.checked ? assignModel(m, tier.id) : assignModel(m, "unassigned")
+                                }
+                              />
+                              <span class="settings-v2-permissions-model-option-label">{m}</span>
+                            </label>
+                          )
+                        }}
+                      </For>
+                    </div>
+                    <Show when={allModels().length === 0}>
+                      <span class="settings-v2-permissions-models-hint">No models available — connect a provider first.</span>
                     </Show>
                   </div>
-                  {/* Also allow moving models from this tier via dropdown per model? simplified */}
                 </div>
               </div>
             )

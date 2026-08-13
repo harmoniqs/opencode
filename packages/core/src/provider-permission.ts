@@ -74,6 +74,27 @@ export const node = makeLocationNode({
   deps: [Config.node],
 })
 
+// ---- Source-path registry (in-memory, per-process) ----
+// Maps `${sessionID}:${callID}` → sourcePath for history redaction.
+// The registry is populated at tool execution time (source-path tagging) and
+// consulted at send-time. It adds zero cost when no model switch occurs (map lookup only).
+const sourcePathMap = new Map<string, string>()
+
+export function registerSourcePath(sessionID: string, callID: string, sourcePath: string): void {
+  if (!sourcePath) return
+  sourcePathMap.set(`${sessionID}:${callID}`, sourcePath)
+}
+
+export function getSourcePath(sessionID: string, callID: string): string | undefined {
+  return sourcePathMap.get(`${sessionID}:${callID}`)
+}
+
+export function clearSourcePathsForSession(sessionID: string): void {
+  for (const key of sourcePathMap.keys()) {
+    if (key.startsWith(`${sessionID}:`)) sourcePathMap.delete(key)
+  }
+}
+
 // ---- Pure helpers for history redaction / context filtering ----
 
 export function shouldRedactPath(
@@ -160,4 +181,83 @@ export function filterContextFiles(
 export function tagResult(content: string, sourcePath?: string): { content: string; metadata?: Record<string, unknown> } {
   if (!sourcePath) return { content }
   return { content, metadata: { sourcePath } }
+}
+
+// ---- SessionMessage-level redaction (history + context) ----
+// These helpers are wired in SessionRunner (history) and SystemContext (auto-context).
+// They filter at send-time only and never mutate the stored history.
+
+export function filterSystemBaseline(
+  baseline: string,
+  config: ProviderPermission.Config,
+  activeModelId: string,
+): string {
+  // System baseline is composed of blocks like "Instructions from: /path\n<content>".
+  // Split on that marker, check each file path against the tier, and drop denied blocks.
+  // If no marker, return baseline unchanged (no file to filter).
+  if (!baseline.includes("Instructions from:")) return baseline
+  const parts = baseline.split(/(?=Instructions from:)/g)
+  const filtered = parts.filter((part) => {
+    const match = part.match(/Instructions from:\s*([^\n]+)/)
+    if (!match) return true
+    const p = match[1].trim()
+    return !isDeniedForModel(config, activeModelId, p)
+  })
+  return filtered.join("").trim()
+}
+
+export function redactSessionMessages(
+  messages: readonly import("@opencode-ai/schema/session-message").SessionMessage.Message[],
+  config: ProviderPermission.Config,
+  activeModelId: string,
+  sessionID: string,
+): readonly import("@opencode-ai/schema/session-message").SessionMessage.Message[] {
+  const tierLabel = resolveTierLabel(config, activeModelId)
+  return messages.map((msg) => {
+    // User file attachments: filter denied files
+    if (msg.type === "user" && msg.files && msg.files.length > 0) {
+      const kept = msg.files.filter((f: { path?: string; name?: string }) => {
+        const p = (f as unknown as { path: string }).path ?? (f as unknown as { name: string }).name ?? ""
+        if (!p) return true
+        return !isDeniedForModel(config, activeModelId, p)
+      })
+      if (kept.length !== msg.files.length) {
+        return { ...msg, files: kept } as typeof msg
+      }
+      return msg
+    }
+    // Assistant tool outputs: redact denied file content
+    if (msg.type === "assistant") {
+      let changed = false
+      const newContent = msg.content.map((item) => {
+        if (item.type !== "tool") return item
+        // Resolve sourcePath via registry or tool input
+        let sourcePath = getSourcePath(sessionID, item.id)
+        if (!sourcePath) {
+          const input = (item.state as unknown as { input?: Record<string, unknown> }).input
+          if (input && typeof input.path === "string") sourcePath = input.path as string
+          else if (input && typeof input.pattern === "string") sourcePath = input.pattern as string
+          else if (input && typeof input.url === "string") sourcePath = input.url as string
+          else if (input && typeof input.query === "string") sourcePath = input.query as string
+        }
+        // Also check outputPaths (e.g., read output files)
+        const outputPaths = (item.state as unknown as { outputPaths?: string[] }).outputPaths
+        const deniedPath = sourcePath && isDeniedForModel(config, activeModelId, sourcePath)
+          ? sourcePath
+          : outputPaths?.find((p) => isDeniedForModel(config, activeModelId, p))
+        if (!deniedPath) return item
+        // For redaction we keep tool identity but replace content with placeholder
+        const placeholder = `[Content from ${deniedPath} filtered — trust tier "${tierLabel}" does not have read access]`
+        // Preserve shape: completed vs error both have content array
+        const state = item.state as Record<string, unknown>
+        const content = (state.content as unknown[]) ?? []
+        // If content is TextItem array, replace with placeholder text
+        const redactedContent = [{ type: "text", text: placeholder }] as unknown as typeof content
+        changed = true
+        return { ...item, state: { ...state, content: redactedContent } as unknown as typeof item.state }
+      })
+      if (changed) return { ...msg, content: newContent } as typeof msg
+    }
+    return msg
+  })
 }
