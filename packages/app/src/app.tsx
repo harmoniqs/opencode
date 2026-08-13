@@ -55,6 +55,7 @@ import { ModelsProvider } from "@/context/models"
 import { NotificationProvider } from "@/context/notification"
 import { PermissionProvider } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
+import { setPendingAutoSend } from "@/pages/new-session/new-session-draft-controller"
 import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider, useSettings } from "@/context/settings"
@@ -456,7 +457,6 @@ function AmicodeThemeBridge() {
 function AmicodeNavigateBridge() {
   const tabs = useTabs()
   const server = useServer()
-  const navigate = useNavigate()
   let pending = false
   const onMsg = async (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; path?: string } | undefined
@@ -468,11 +468,8 @@ function AmicodeNavigateBridge() {
       if (url.pathname === "/new-session") {
         const prompt = url.searchParams.get("prompt") || undefined
         const autoSend = url.searchParams.get("autoSend") === "1"
-        const tab = await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
-        if (autoSend && tab) {
-          // Re-navigate with autoSend param so the draft controller picks it up
-          navigate(`/new-session?draftId=${tab.draftID}&autoSend=1`, { replace: true })
-        }
+        if (autoSend) setPendingAutoSend(true)
+        await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
       }
     } catch { /* malformed path — ignore */ }
     finally { setTimeout(() => { pending = false }, 2000) }

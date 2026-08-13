@@ -1,5 +1,5 @@
 import { useSearchParams } from "@solidjs/router"
-import { createEffect, untrack } from "solid-js"
+import { createEffect, createSignal, untrack } from "solid-js"
 import { usePromptInputV2Controller } from "@/components/prompt-input-v2"
 import { useComments } from "@/context/comments"
 import { useLocal } from "@/context/local"
@@ -9,6 +9,11 @@ import { createPromptInputController, createPromptProjectControls } from "@/page
 import { createPromptModelSelection } from "@/pages/session/composer/prompt-model-selection"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
+
+// amicode#363: global flag the navigate bridge sets before creating a draft.
+// The draft controller reads + clears it on mount to auto-submit.
+const [pendingAutoSend, setPendingAutoSend] = createSignal(false)
+export { setPendingAutoSend }
 
 export function createNewSessionDraftController(workspace: { worktree: () => string; resetWorktree: () => void }) {
   const prompt = usePrompt()
@@ -43,12 +48,13 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
     if (!prompt.ready()) return
     untrack(() => {
       const text = searchParams.prompt
-      if (!text) return
-      prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
-      const shouldAutoSend = searchParams.autoSend === "1"
-      setSearchParams({ ...searchParams, prompt: undefined, autoSend: undefined })
-      // amicode#363: auto-submit when the extension requests it (fleet button)
-      if (shouldAutoSend) {
+      if (text) {
+        prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+        setSearchParams({ ...searchParams, prompt: undefined, autoSend: undefined })
+      }
+      // amicode#363: auto-submit when the navigate bridge flagged it
+      if (pendingAutoSend()) {
+        setPendingAutoSend(false)
         queueMicrotask(() => input.view.submit.onSubmit())
       }
     })
