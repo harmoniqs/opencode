@@ -450,70 +450,23 @@ function AmicodeThemeBridge() {
   return null
 }
 
-/** amicode#363: bridge for the extension to open a new session with a skill
- *  command auto-invoked. Must live inside TabsProvider + ServerProvider so it
- *  has access to useTabs() and useServer(). Creates a session, sends the
- *  command, and opens the session tab — same flow as the bug reporter. */
+/** amicode#363: bridge for the extension to open a new draft session with a
+ *  pre-filled prompt. Must live inside TabsProvider + ServerProvider so it has
+ *  access to useTabs().newDraft. */
 function AmicodeNavigateBridge() {
   const tabs = useTabs()
   const server = useServer()
-  let pending = false
-  const onMsg = async (e: MessageEvent) => {
+  const onMsg = (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; path?: string } | undefined
     if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
-    if (pending) return // dedupe
+    // Parse prompt from the path (expected: /new-session?prompt=...)
     try {
       const url = new URL(d.path, window.location.origin)
-      if (url.pathname !== "/new-session") return
-      const prompt = url.searchParams.get("prompt") || undefined
-      if (!prompt) return
-      pending = true
-
-      // Parse the command: "/fleet I want to..." → command="fleet", args="I want to..."
-      let command: string | undefined
-      let args = prompt
-      if (prompt.startsWith("/")) {
-        const spaceIdx = prompt.indexOf(" ")
-        if (spaceIdx > 0) {
-          command = prompt.slice(1, spaceIdx)
-          args = prompt.slice(spaceIdx + 1)
-        } else {
-          command = prompt.slice(1)
-          args = ""
-        }
+      if (url.pathname === "/new-session") {
+        const prompt = url.searchParams.get("prompt") || undefined
+        tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
       }
-
-      // Create session via API
-      const conn = server.list[0]
-      if (!conn || conn.type !== "http") { pending = false; return }
-      const baseUrl = conn.http.url
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (conn.http.password) {
-        headers["Authorization"] = `Basic ${btoa(`${conn.http.username ?? "opencode"}:${conn.http.password}`)}`
-      }
-
-      const createRes = await fetch(`${baseUrl}/session`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({}),
-      })
-      if (!createRes.ok) { pending = false; return }
-      const { id: sessionID } = (await createRes.json()) as { id: string }
-
-      // Send command (invokes the skill)
-      if (command) {
-        await fetch(`${baseUrl}/session/${sessionID}/command`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ command, arguments: args }),
-        })
-      }
-
-      // Open the session tab in the app
-      tabs.addSessionTab({ server: server.key, sessionId: sessionID })
-
-    } catch { /* network/parse error — ignore */ }
-    finally { pending = false }
+    } catch { /* malformed path — ignore */ }
   }
   window.addEventListener("message", onMsg)
   onCleanup(() => window.removeEventListener("message", onMsg))
