@@ -90,15 +90,15 @@ export const BUILT_IN_IDS = [COMPANY_COMPUTE_ID, PASQAL_ID, SLACK_ID, GITHUB_ID,
 
 export const CONNECTION_ICONS: Record<string, string> = {
   "company-compute":
-    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M6 9h6M9 6v6" stroke="white" stroke-width="1.2"/></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#0EA5E9"/><path fill="white" d="M6.3 11.8h4.2c.8 0 1.4-.6 1.4-1.4 0-.6-.4-1.1-.9-1.3A2.2 2.2 0 0 0 9 7.4a2.2 2.2 0 0 0-2 .9c-.6.1-1 .6-1 1.2 0 .7.6 1.3 1.3 1.3z"/><path fill="white" opacity="0.95" d="M8.1 9.4 9 8.2l1 1.2 1.5-1.8 1 1-2.5 3-2-2.4z"/></svg>',
   "pasqal-cloud":
-    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7"/><text x="9" y="13" text-anchor="middle" font-size="9" fill="white" font-weight="700">P</text></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#1E1B4B"/><circle cx="9" cy="9" r="1.5" fill="white"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(60 9 9)"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(-60 9 9)"/></svg>',
   slack:
-    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 13.5 3 3h3v3z"/></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><g transform="translate(3.2 3.2)"><path fill="#E01E5A" d="M3.6 5a1.35 1.35 0 1 1-2.7 0 1.35 1.35 0 0 1 2.7 0zm1.45 0H7.6a1.35 1.35 0 1 0 0-2.7H5.05z"/><path fill="#2EB67D" d="M6.6 3.6a1.35 1.35 0 1 1 0-2.7 1.35 1.35 0 0 1 0 2.7zm0 1.45V7.6a1.35 1.35 0 1 0 2.7 0V5.05z"/><path fill="#ECB22E" d="M8 6.6a1.35 1.35 0 1 1 2.7 0 1.35 1.35 0 0 1-2.7 0zm-1.45 0H4a1.35 1.35 0 1 0 0 2.7h2.55z"/><path fill="#36C5F0" d="M5 8a1.35 1.35 0 1 1 0 2.7 1.35 1.35 0 0 1 0-2.7zm0-1.45V4a1.35 1.35 0 1 0-2.7 0v2.55z"/></g></svg>',
   github:
-    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a7 7 0 0 0-2.2 13.6c.35.06.48-.15.48-.34v-1.2C5.4 14.4 4.7 13 4.7 13c-.3-.77-.74-.97-.74-.97-.6-.41.05-.4.05-.4.67.05 1.02.69 1.02.69.59 1 1.55.71 1.93.54.06-.42.23-.72.42-.88-1.46-.17-3- .73-3-3.24 0-.72.26-1.3.68-1.76-.07-.17-.3-.83.06-1.73 0 0 .56-.18 1.84.67A6.3 6.3 0 0 1 9 5.8a6.3 6.3 0 0 1 1.68.23c1.27-.85 1.83-.67 1.83-.67.36.9.13 1.56.06 1.73.42.46.68 1.04.68 1.76 0 2.52-1.54 3.07-3 3.24.24.2.45.6.45 1.2v1.78c0 .19.13.4.48.33A7 7 0 0 0 9 2z"/></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#24292F" d="M9 3.2a5.9 5.9 0 0 0-1.86 11.48c.29.05.4-.13.4-.28V13.4c-1.55.34-1.87-.66-1.87-.66-.25-.64-.62-.81-.62-.81-.5-.34.04-.33.04-.33.56.04.85.57.85.57.5.85 1.3.6 1.62.46.05-.36.19-.6.35-.74-1.23-.14-2.52-.62-2.52-2.74 0-.6.22-1.1.57-1.48-.06-.14-.25-.7.05-1.45 0 0 .47-.15 1.54.56A5.34 5.34 0 0 1 9 6.35c.48 0 .96.06 1.41.19 1.07-.71 1.54-.56 1.54-.56.3.75.11 1.31.05 1.45.35.38.57.88.57 1.48 0 2.13-1.3 2.6-2.53 2.74.2.17.38.5.38 1.02v1.51c0 .16.1.34.4.28A5.9 5.9 0 0 0 9 3.2z"/></svg>',
   linear:
-    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 4l8 4-8 4V4z"/></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#5E6AD2"/><path fill="white" d="M6.4 5.6h1.7L10.3 9 8 12.5H6.3L8.6 9 6.4 5.6z"/><path fill="white" opacity="0.75" d="M11.2 5.6h1.2v6.9h-1.2z"/></svg>',
 }
 
 export function isCustomConnectionId(id: string): boolean {
