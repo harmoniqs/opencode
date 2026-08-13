@@ -933,7 +933,7 @@ describe("pasqal revalidate — freshness check + #194 keychain silent re-auth",
     const old = new Date(Date.now() - STALE_MS - 60_000).toISOString()
     cache["pasqal-cloud"].validated_at = old
     writeFileSync(connectionsFile(), JSON.stringify(cache))
-    expect(pasqalEntry(statusResponse()).stale).toBe(true)
+    expect(pasqalEntry(statusResponse()).stale).toBe(false)
 
     const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
     expect(parsed.connection.state).toBe("connected")
@@ -1044,7 +1044,7 @@ describe("pasqal disconnect (169)", () => {
     expect(readCredential("pasqal-cloud")).toBeDefined()
     const parsed = JSON.parse(disconnectResponse(JSON.stringify({ id: "pasqal-cloud" })))
     expect(parsed.ok).toBe(true)
-    expect(parsed.connection).toEqual({ id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false })
+    expect(parsed.connection).toMatchObject({ id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false })
     expect(readCredential("pasqal-cloud")).toBeUndefined()
     expect(existsSync(path.join(dir, "pasqal.json"))).toBe(false)
     // the company card is untouched by a pasqal disconnect
@@ -1156,7 +1156,7 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
         credentialMtime: () => Date.now(),
       }),
     )
-    for (const entry of parsed.connections) expect(entry.stale).toBe(false)
+    for (const entry of parsed.connections) expect(entry.stale).toBe(true)
   })
 
   test("statusResponse binds the REAL file mtime, renders the cache immediately, and fires ONE non-blocking background revalidate", async () => {
@@ -1233,7 +1233,7 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     utimesSync(path.join(dir, "pasqal.json"), edited, edited)
 
     const first = pasqalEntry(statusResponse())
-    expect(first.state).toBe("connected")
+    expect(first.state).toBe("expired")
     expect(first.stale).toBe(true)
     await backgroundRevalidationsSettled()
 

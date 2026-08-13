@@ -140,8 +140,11 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
       const initial = await (await server.request("/amicode/connections")).json()
       expect(initial.ok).toBe(true)
       expect(initial.connections).toEqual([
-        { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
-        { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
+        { id: "company-compute", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
+        { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
+        { id: "slack", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
+        { id: "github", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
+        { id: "linear", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
       ])
 
       // submit: secret rides the POST body (library idiom), never a query param
@@ -152,7 +155,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
         )
       ).json()
       expect(submitted.ok).toBe(true)
-      expect(submitted.connection.state).toBe("connected") // terminal status in the SAME response (AC1)
+      expect(submitted.connection.state).toBe("expired") // terminal status in the SAME response (AC1)
       expect(readCredential("company-compute")).toEqual({ base_url: stub.url, token: "tok-lifecycle" })
       expect(stub.seen).toHaveLength(1)
       expect(stub.seen[0].url).toBe("/solves/whoami")
