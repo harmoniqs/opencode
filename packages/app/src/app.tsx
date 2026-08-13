@@ -456,10 +456,12 @@ function AmicodeThemeBridge() {
 function AmicodeNavigateBridge() {
   const tabs = useTabs()
   const server = useServer()
+  let pending = false
   const onMsg = (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; path?: string } | undefined
     if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
-    // Parse prompt from the path (expected: /new-session?prompt=...)
+    if (pending) return
+    pending = true
     try {
       const url = new URL(d.path, window.location.origin)
       if (url.pathname === "/new-session") {
@@ -467,6 +469,7 @@ function AmicodeNavigateBridge() {
         tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
       }
     } catch { /* malformed path — ignore */ }
+    finally { setTimeout(() => { pending = false }, 2000) }
   }
   window.addEventListener("message", onMsg)
   onCleanup(() => window.removeEventListener("message", onMsg))

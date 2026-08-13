@@ -16,7 +16,7 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
   const comments = useComments()
   const local = useLocal()
   const route = useSessionKey()
-  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string; autoSend?: string }>()
   const model = createPromptModelSelection({ agent: () => local.agent.current() })
 
   useComposerCommands({ model })
@@ -45,7 +45,12 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
       const text = searchParams.prompt
       if (!text) return
       prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
-      setSearchParams({ ...searchParams, prompt: undefined })
+      const shouldAutoSend = searchParams.autoSend === "1"
+      setSearchParams({ ...searchParams, prompt: undefined, autoSend: undefined })
+      // amicode#363: auto-submit when the extension requests it (fleet button)
+      if (shouldAutoSend) {
+        queueMicrotask(() => input.view.submit.onSubmit())
+      }
     })
   })
 
