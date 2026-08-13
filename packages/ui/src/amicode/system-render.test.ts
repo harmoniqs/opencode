@@ -361,6 +361,7 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
     // Render each DISTINCT output once. The sweep enumerates ~8k systems but they
     // collapse onto far fewer equations, and KaTeX is the expensive part —
     // rendering the same string 200 times proves nothing and timed out CI.
+    // Increased from default 5000ms — exhaustive sweep needs ~6s on CI runners.
     const distinct = new Map<string, string>()
     for (const platform of PLATFORMS)
       for (const a of ROLES)
@@ -404,7 +405,7 @@ describe("systemHamiltonianLatex — exhaustive sweep", () => {
     expect(checked).toBeGreaterThan(6000)
     expect(distinct.size).toBeGreaterThan(100) // the sweep really does vary the output
     expect(broken).toEqual([])
-  })
+  }, 10000)
 
   it("survives malformed input without throwing", () => {
     const cases = [
