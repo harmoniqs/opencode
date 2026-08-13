@@ -12,6 +12,7 @@ import { PermissionV2 } from "../permission"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { registerSourcePath } from "../provider-permission"
 
 export const name = "glob"
 
@@ -72,6 +73,8 @@ const layer = Layer.effectDiscard(
                 agent: context.agent,
                 source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
               })
+              // Tag source path (pattern) for history redaction
+              registerSourcePath(context.sessionID, context.toolCallID, input.pattern)
               const cwd = path.resolve(location.directory, input.path ?? ".")
               return yield* ripgrep
                 .glob({

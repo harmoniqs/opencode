@@ -55,6 +55,7 @@ import { ModelsProvider } from "@/context/models"
 import { NotificationProvider } from "@/context/notification"
 import { PermissionProvider } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
+import { setPendingAutoSend } from "@/pages/new-session/new-session-draft-controller"
 import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider, useSettings } from "@/context/settings"
@@ -450,6 +451,34 @@ function AmicodeThemeBridge() {
   return null
 }
 
+/** amicode#363: bridge for the extension to open a new draft session with a
+ *  pre-filled prompt. Must live inside TabsProvider + ServerProvider so it has
+ *  access to useTabs().newDraft. */
+function AmicodeNavigateBridge() {
+  const tabs = useTabs()
+  const server = useServer()
+  let pending = false
+  const onMsg = async (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; path?: string } | undefined
+    if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
+    if (pending) return
+    pending = true
+    try {
+      const url = new URL(d.path, window.location.origin)
+      if (url.pathname === "/new-session") {
+        const prompt = url.searchParams.get("prompt") || undefined
+        const autoSend = url.searchParams.get("autoSend") === "1"
+        if (autoSend) setPendingAutoSend(true)
+        await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+      }
+    } catch { /* malformed path — ignore */ }
+    finally { setTimeout(() => { pending = false }, 2000) }
+  }
+  window.addEventListener("message", onMsg)
+  onCleanup(() => window.removeEventListener("message", onMsg))
+  return null
+}
+
 export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
   return (
     <MetaProvider>
@@ -650,6 +679,7 @@ export function AppInterface(props: {
                 component={props.router ?? Router}
                 root={(routerProps) => (
                   <TabsProvider>
+                    <AmicodeNavigateBridge />
                     <PermissionProvider>
                       <NotificationProvider>
                         <ServerShell>

@@ -195,9 +195,13 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     const parsed = JSON.parse(statusResponse())
     expect(parsed.ok).toBe(true)
     expect(parsed.error).toBeNull()
+    // #327: catalog expanded to 5 (harmoniqs, pasqal, slack, github, linear)
     expect(parsed.connections).toEqual([
       { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
       { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
+      { id: "slack", state: "needs-key", validated_at: null, stale: false },
+      { id: "github", state: "needs-key", validated_at: null, stale: false },
+      { id: "linear", state: "needs-key", validated_at: null, stale: false },
     ])
   })
 
