@@ -55,7 +55,8 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
       // amicode#363: auto-submit when the navigate bridge flagged it
       if (pendingAutoSend()) {
         setPendingAutoSend(false)
-        queueMicrotask(() => input.view.submit.onSubmit())
+        // Delay to ensure the prompt input and submission machinery are fully mounted
+        setTimeout(() => input.view.submit.onSubmit(), 100)
       }
     })
   })
