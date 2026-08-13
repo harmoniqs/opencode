@@ -13,7 +13,8 @@ import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
 
-export type ConnectionType = "company-compute" | "pasqal-cloud"
+export type BuiltInConnectionType = "company-compute" | "pasqal-cloud" | "slack" | "github" | "linear"
+export type ConnectionType = BuiltInConnectionType | (string & {})
 
 /** FROZEN byte shape — every existing CLI consumer parses this unchanged. */
 export interface CompanyComputeCredential {
@@ -27,7 +28,10 @@ export interface PasqalCredential {
   token: string
   expires_at?: string
 }
-export type Credential = CompanyComputeCredential | PasqalCredential
+export interface TokenCredential {
+  token: string
+}
+export type Credential = CompanyComputeCredential | PasqalCredential | TokenCredential
 
 /** $AMICO_CLOUD_FILE overrides the path — the same override the amicode CLI's
  *  remote-config reader honors (remote_config.ts cloudConfigFile). */
@@ -41,6 +45,21 @@ export function pasqalFile(): string {
   const env = process.env.AMICO_PASQAL_FILE
   if (env && env.trim() !== "") return env
   return path.join(homedir(), ".amico", "pasqal.json")
+}
+export function slackFile(): string {
+  const env = process.env.AMICO_SLACK_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "slack.json")
+}
+export function githubFile(): string {
+  const env = process.env.AMICO_GITHUB_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "github.json")
+}
+export function linearFile(): string {
+  const env = process.env.AMICO_LINEAR_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "linear.json")
 }
 
 // --- poison guard: writing any object carrying a password-like key through
@@ -63,7 +82,7 @@ interface Backend {
   decode(raw: unknown): Credential | undefined
 }
 
-const BACKENDS: Record<ConnectionType, Backend> = {
+const BACKENDS: Record<string, Backend> = {
   "company-compute": {
     file: cloudFile,
     encode(value) {
@@ -105,6 +124,51 @@ const BACKENDS: Record<ConnectionType, Backend> = {
       return out
     },
   },
+  slack: {
+    file: slackFile,
+    encode(value) {
+      rejectPoisonKeys(value)
+      const token = typeof value.token === "string" ? value.token.trim() : ""
+      if (token === "") throw new Error('slack credential needs non-empty "token"')
+      return JSON.stringify({ token }, null, 2) + "\n"
+    },
+    decode(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+      const d = raw as Record<string, unknown>
+      if (typeof d.token !== "string" || d.token === "") return undefined
+      return { token: d.token }
+    },
+  },
+  github: {
+    file: githubFile,
+    encode(value) {
+      rejectPoisonKeys(value)
+      const token = typeof value.token === "string" ? value.token.trim() : ""
+      if (token === "") throw new Error('github credential needs non-empty "token"')
+      return JSON.stringify({ token }, null, 2) + "\n"
+    },
+    decode(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+      const d = raw as Record<string, unknown>
+      if (typeof d.token !== "string" || d.token === "") return undefined
+      return { token: d.token }
+    },
+  },
+  linear: {
+    file: linearFile,
+    encode(value) {
+      rejectPoisonKeys(value)
+      const token = typeof value.token === "string" ? value.token.trim() : ""
+      if (token === "") throw new Error('linear credential needs non-empty "token"')
+      return JSON.stringify({ token }, null, 2) + "\n"
+    },
+    decode(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+      const d = raw as Record<string, unknown>
+      if (typeof d.token !== "string" || d.token === "") return undefined
+      return { token: d.token }
+    },
+  },
 }
 
 // --- atomic 0600-at-birth writer ---
@@ -141,6 +205,7 @@ export function readCredential(type: "pasqal-cloud"): PasqalCredential | undefin
 export function readCredential(type: ConnectionType): Credential | undefined
 export function readCredential(type: ConnectionType): Credential | undefined {
   const backend = BACKENDS[type]
+  if (!backend) return undefined
   const file = backend.file()
   let raw: unknown
   try {
@@ -156,13 +221,16 @@ export function writeCredential(type: "company-compute", value: CompanyComputeCr
 export function writeCredential(type: "pasqal-cloud", value: PasqalCredential, hooks?: WriteHooks): void
 export function writeCredential(type: ConnectionType, value: Credential, hooks?: WriteHooks): void {
   const backend = BACKENDS[type]
+  if (!backend) throw new Error(`unknown connection id: ${type}`)
   const bytes = backend.encode(value as unknown as Record<string, unknown>) // encode BEFORE touching disk
   atomicWriteFileSync(backend.file(), bytes, hooks)
 }
 
 /** Remove the credential file; absent is a no-op. */
 export function clearCredential(type: ConnectionType): void {
-  rmSync(BACKENDS[type].file(), { force: true })
+  const backend = BACKENDS[type]
+  if (!backend) return
+  rmSync(backend.file(), { force: true })
 }
 
 /** The credential FILE's mtime in ms — the hand-edit detector (amicode#170
@@ -170,8 +238,14 @@ export function clearCredential(type: ConnectionType): void {
  *  Absent/unreadable → undefined, never a throw. */
 export function credentialFileMtime(type: ConnectionType): number | undefined {
   try {
-    return statSync(BACKENDS[type].file()).mtimeMs
+    const backend = BACKENDS[type]
+    if (!backend) return undefined
+    return statSync(backend.file()).mtimeMs
   } catch {
     return undefined
   }
+}
+
+export function isBuiltInConnectionId(id: string): id is BuiltInConnectionType {
+  return id in BACKENDS
 }

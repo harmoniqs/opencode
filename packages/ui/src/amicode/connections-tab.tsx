@@ -10,11 +10,14 @@ import { Button } from "../components/button"
 import { Spinner } from "../components/spinner"
 import {
   cardModel,
+  catalogForPicker,
   chooseProjectPayload,
   connectionAuthMethods,
+  connectionDisplayName,
   connectionTitle,
   driftCopy,
   fillLabelTemplate,
+  isCustomConnectionId,
   methodEntryKind,
   offlineCopy,
   pasqalSubmitPayload,
@@ -23,6 +26,7 @@ import {
   stateCopy,
   statusTabConnections,
   submitPayload,
+  tokenOnlySubmitPayload,
   type ConnectionActionView,
   type ConnectionAuthMethod,
   type ConnectionsView,
@@ -32,6 +36,8 @@ import {
   type ChooseProjectPayload,
   type StartAuthPayload,
 } from "./connections"
+import { ConnectionIcon } from "./connection-icon"
+import { ConnectionPicker } from "./connection-picker"
 
 export type ConnectionsTabLabels = {
   empty: string
@@ -71,12 +77,15 @@ export function AmicodeConnectionsTab(props: {
   onDisconnect: (id: string) => void
   onRevalidate: (id: string) => void
   onRetry: () => void
+  onAddCustom?: (payload: { name: string; token: string; url?: string }) => Promise<ConnectionActionView>
+  onRemove?: (id: string) => Promise<void>
   /** auth-path scaffold (#194) — optional until the server routes exist; the
    *  UI that needs them is only reachable when the wire advertises methods */
   onStartAuth?: (payload: StartAuthPayload) => void
   onChooseProject?: (payload: ChooseProjectPayload) => void
   onCancelAuth?: (id: string) => void
 }) {
+  const [showPicker, setShowPicker] = createSignal(false)
   return (
     <div class="flex flex-col" data-component="amicode-connections-tab">
       <Show
@@ -105,7 +114,29 @@ export function AmicodeConnectionsTab(props: {
           >
             <Show
               when={statusTabConnections(view().connections).length > 0}
-              fallback={<div class="text-14-regular text-text-base text-center my-auto py-1">{props.labels.empty}</div>}
+              fallback={
+                <div class="flex flex-col items-center gap-2 py-3" data-slot="amicode-connections-empty">
+                  <span class="text-14-regular text-text-base text-center">No connections yet</span>
+                  <Button type="button" variant="secondary" size="small" onClick={() => setShowPicker(true)} data-slot="amicode-connections-add">
+                    Add connection
+                  </Button>
+                  <Show when={showPicker()}>
+                    <ConnectionPicker
+                      catalog={catalogForPicker(view().connections)}
+                      onAddCustom={async (p) => {
+                        if (props.onAddCustom) await props.onAddCustom(p)
+                        setShowPicker(false)
+                      }}
+                      onSubmitToken={async (id, token) => {
+                        const payload = tokenOnlySubmitPayload(id, token)
+                        if (payload) await props.onSubmit(payload as CredentialSubmitPayload)
+                        setShowPicker(false)
+                      }}
+                      onClose={() => setShowPicker(false)}
+                    />
+                  </Show>
+                </div>
+              }
             >
               <For each={statusTabConnections(view().connections)}>
                 {(conn) => (
@@ -116,12 +147,35 @@ export function AmicodeConnectionsTab(props: {
                     onSubmit={props.onSubmit}
                     onDisconnect={props.onDisconnect}
                     onRevalidate={props.onRevalidate}
+                    onRemove={props.onRemove}
                     onStartAuth={props.onStartAuth}
                     onChooseProject={props.onChooseProject}
                     onCancelAuth={props.onCancelAuth}
                   />
                 )}
               </For>
+              <Show when={!showPicker()}>
+                <Button type="button" variant="ghost" size="small" class="self-start mx-2 mt-2" data-slot="amicode-connections-add" onClick={() => setShowPicker(true)}>
+                  Add connection
+                </Button>
+              </Show>
+              <Show when={showPicker()}>
+                <div class="px-2 pb-2">
+                  <ConnectionPicker
+                    catalog={catalogForPicker(view().connections)}
+                    onAddCustom={async (p) => {
+                      if (props.onAddCustom) await props.onAddCustom(p)
+                      setShowPicker(false)
+                    }}
+                    onSubmitToken={async (id, token) => {
+                      const payload = tokenOnlySubmitPayload(id, token)
+                      if (payload) await props.onSubmit(payload as CredentialSubmitPayload)
+                      setShowPicker(false)
+                    }}
+                    onClose={() => setShowPicker(false)}
+                  />
+                </div>
+              </Show>
             </Show>
           </Show>
         )}
@@ -147,6 +201,7 @@ export function ConnectionCard(props: {
   onSubmit: (payload: CredentialSubmitPayload) => Promise<ConnectionActionView>
   onDisconnect: (id: string) => void
   onRevalidate: (id: string) => void
+  onRemove?: (id: string) => Promise<void>
   onStartAuth?: (payload: StartAuthPayload) => void
   onChooseProject?: (payload: ChooseProjectPayload) => void
   onCancelAuth?: (id: string) => void
@@ -188,9 +243,11 @@ export function ConnectionCard(props: {
         ? pasqalSubmitPayload(props.conn.id, username(), password()) // #194: no project_id → server lists projects
         : kind === "pasqal-token"
           ? pasqalTokenSubmitPayload(props.conn.id, token(), projectId())
-          : submitPayload(props.conn.id, baseUrl(), token())
+          : kind === "token-only"
+            ? tokenOnlySubmitPayload(props.conn.id, token())
+            : submitPayload(props.conn.id, baseUrl(), token())
     if (!payload) return // AC3: empty submission — no request, no state change
-    const result = await props.onSubmit(payload)
+    const result = await props.onSubmit(payload as CredentialSubmitPayload)
     // clear the masked inputs once accepted; secrets are never echoed back
     if (result.ok && result.connection?.state === "connected") {
       setToken("")
@@ -212,13 +269,8 @@ export function ConnectionCard(props: {
     <div class="flex flex-col w-full px-2 py-1" data-slot="amicode-connection-card" data-state={props.conn.state}>
       <Show when={!props.hideHeader}>
         <div class="flex items-center gap-2 w-full min-w-0">
-          <Show
-            when={model().showLoading}
-            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
-          >
-            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
-          </Show>
-          <span class="text-14-regular text-text-base truncate">{connectionTitle(props.conn.id)}</span>
+          <ConnectionIcon conn={props.conn} />
+          <span class="text-14-regular text-text-base truncate">{connectionDisplayName(props.conn)}</span>
           <Show when={model().showRawState}>
             <span class="text-11-regular text-text-base bg-surface-base px-1.5 py-0.5 rounded-md shrink-0">
               {props.conn.rawState}
@@ -238,12 +290,7 @@ export function ConnectionCard(props: {
         data-slot="amicode-connection-state-copy"
       >
         <Show when={props.hideHeader}>
-          <Show
-            when={model().showLoading}
-            fallback={<div class={`size-1.5 rounded-full shrink-0 ${TONE_DOT[model().tone]}`} />}
-          >
-            <Spinner class="size-3 shrink-0 text-text-weak" data-slot="amicode-connection-loading" />
-          </Show>
+          <ConnectionIcon conn={props.conn} />
         </Show>
         {stateCopy(props.conn, props.labels.states)}
         <Show when={model().showIdentity}>
@@ -443,6 +490,19 @@ export function ConnectionCard(props: {
                   class="amc-input amc-input--compact"
                 />
               </Show>
+              <Show when={entryKind() === "token-only"}>
+                <input
+                  type="password"
+                  name="token"
+                  autocomplete="off"
+                  placeholder={props.labels.tokenPlaceholder}
+                  aria-label={props.labels.tokenPlaceholder}
+                  value={token()}
+                  disabled={model().formDisabled}
+                  onInput={(event) => setToken(event.currentTarget.value)}
+                  class="amc-input amc-input--compact"
+                />
+              </Show>
               <Show when={entryKind() === "base-url-token" || entryKind() === "pasqal-token"}>
                 <input
                   type="password"
@@ -496,15 +556,30 @@ export function ConnectionCard(props: {
           >
             {props.labels.revalidate}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="small"
-            data-slot="amicode-connection-disconnect"
-            onClick={() => props.onDisconnect(props.conn.id)}
-          >
-            {props.labels.disconnect}
-          </Button>
+          <Show when={isCustomConnectionId(props.conn.id)} fallback={
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              data-slot="amicode-connection-disconnect"
+              onClick={() => props.onDisconnect(props.conn.id)}
+            >
+              {props.labels.disconnect}
+            </Button>
+          }>
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              data-slot="amicode-connection-remove"
+              onClick={async () => {
+                if (props.onRemove) await props.onRemove(props.conn.id)
+                else props.onDisconnect(props.conn.id)
+              }}
+            >
+              Remove
+            </Button>
+          </Show>
         </div>
       </Show>
     </div>

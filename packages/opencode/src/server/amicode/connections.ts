@@ -7,6 +7,7 @@
 // logs. Every status response is built through a redacting whitelist parser,
 // so no input (cache file, in-memory state) can leak a token into a body.
 import { existsSync, readFileSync } from "node:fs"
+import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
 import {
@@ -63,10 +64,166 @@ export interface ConnectionStatus {
    *  a presentation flag on a connected claim ("last verified <validated_at>
    *  as <identity>"), never a verdict on the credential. Connected-only. */
   offline?: boolean
+  /** #327: optional icon svg for built-ins, letter avatar for custom */
+  icon?: string
+  /** #327: display name from registry */
+  name?: string
 }
 
 /** The connection cards this module serves; company-compute renders first. */
-export const CONNECTION_IDS: ConnectionType[] = ["company-compute", "pasqal-cloud"]
+export const CONNECTION_IDS: ConnectionType[] = ["company-compute", "pasqal-cloud", "slack", "github", "linear"]
+
+// --- Registry (issue #327): formalized built-in catalog with logos + custom ---
+
+/** Inline SVG icons — monochrome, currentColor fill, 18px viewBox. */
+export const CONNECTION_ICONS: Record<string, string> = {
+  "company-compute":
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M6 9h6M9 6v6" stroke="white" stroke-width="1.2"/></svg>',
+  "pasqal-cloud":
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7"/><text x="9" y="13" text-anchor="middle" font-size="9" fill="white" font-weight="700">P</text></svg>',
+  slack:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5.5 13.5a1.5 1.5 0 1 1 0-3h1.5v1.5a1.5 1.5 0 0 1-1.5 1.5zM6 10.5H3a1.5 1.5 0 0 1 0-3h3v3zM10.5 5.5a1.5 1.5 0 1 1 3 0v1.5h-1.5a1.5 1.5 0 0 1-1.5-1.5zM12 7.5h3a1.5 1.5 0 0 1 0 3h-3v-3zM13.5 10.5a1.5 1.5 0 1 1-3 0v-1.5h1.5a1.5 1.5 0 0 1 1.5 1.5zM7.5 12a1.5 1.5 0 1 1 0 3v-1.5h1.5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="9" cy="9" r="2.5" fill="white" opacity="0.2"/></svg>',
+  github:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a7 7 0 0 0-2.2 13.6c.35.06.48-.15.48-.34v-1.2C5.4 14.4 4.7 13 4.7 13c-.3-.77-.74-.97-.74-.97-.6-.41.05-.4.05-.4.67.05 1.02.69 1.02.69.59 1 1.55.71 1.93.54.06-.42.23-.72.42-.88-1.46-.17-3- .73-3-3.24 0-.72.26-1.3.68-1.76-.07-.17-.3-.83.06-1.73 0 0 .56-.18 1.84.67A6.3 6.3 0 0 1 9 5.8a6.3 6.3 0 0 1 1.68.23c1.27-.85 1.83-.67 1.83-.67.36.9.13 1.56.06 1.73.42.46.68 1.04.68 1.76 0 2.52-1.54 3.07-3 3.24.24.2.45.6.45 1.2v1.78c0 .19.13.4.48.33A7 7 0 0 0 9 2z"/></svg>',
+  linear:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 4l8 4-8 4V4z" fill="white"/><rect x="4" y="3" width="2" height="12" rx="0.5" fill="white" opacity="0.3"/></svg>',
+}
+
+export interface ConnectionEntry {
+  id: string
+  kind: "built-in" | "custom"
+  name: string
+  icon: { kind: "svg"; svg: string } | { kind: "letter"; letter: string }
+  validator: "company-compute" | "pasqal" | "slack" | "github" | "linear" | "none"
+  authShape: "base-url-token" | "token-only" | "pasqal-credentials"
+  url?: string
+}
+
+export const BUILT_IN_CATALOG: ConnectionEntry[] = [
+  {
+    id: "company-compute",
+    kind: "built-in",
+    name: "Harmoniqs Cloud",
+    icon: { kind: "svg", svg: CONNECTION_ICONS["company-compute"] },
+    validator: "company-compute",
+    authShape: "base-url-token",
+  },
+  {
+    id: "pasqal-cloud",
+    kind: "built-in",
+    name: "Pasqal Cloud",
+    icon: { kind: "svg", svg: CONNECTION_ICONS["pasqal-cloud"] },
+    validator: "pasqal",
+    authShape: "pasqal-credentials",
+  },
+  {
+    id: "slack",
+    kind: "built-in",
+    name: "Slack",
+    icon: { kind: "svg", svg: CONNECTION_ICONS["slack"] },
+    validator: "slack",
+    authShape: "token-only",
+  },
+  {
+    id: "github",
+    kind: "built-in",
+    name: "GitHub",
+    icon: { kind: "svg", svg: CONNECTION_ICONS["github"] },
+    validator: "github",
+    authShape: "token-only",
+  },
+  {
+    id: "linear",
+    kind: "built-in",
+    name: "Linear",
+    icon: { kind: "svg", svg: CONNECTION_ICONS["linear"] },
+    validator: "linear",
+    authShape: "token-only",
+  },
+]
+
+export function getBuiltInEntry(id: string): ConnectionEntry | undefined {
+  return BUILT_IN_CATALOG.find((e) => e.id === id)
+}
+
+export function isCustomConnectionId(id: string): boolean {
+  return id.startsWith("custom-")
+}
+
+/** Custom connections file — 0600 atomic, ADR 0001 discipline. */
+export function customConnectionsFile(): string {
+  const env = process.env.AMICO_CUSTOM_CONNECTIONS_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "custom-connections.json")
+}
+
+export interface CustomConnectionRecord {
+  id: string
+  name: string
+  url?: string
+  token: string
+}
+
+export function loadCustomConnections(): CustomConnectionRecord[] {
+  try {
+    const file = customConnectionsFile()
+    if (!existsSync(file)) return []
+    const raw: unknown = JSON.parse(readFileSync(file, "utf8"))
+    if (!Array.isArray(raw)) return []
+    const out: CustomConnectionRecord[] = []
+    for (const entry of raw) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue
+      const d = entry as Record<string, unknown>
+      const id = typeof d.id === "string" ? d.id : ""
+      const name = typeof d.name === "string" ? d.name : ""
+      const token = typeof d.token === "string" ? d.token : ""
+      if (!id.startsWith("custom-") || name === "" || token === "") continue
+      const url = typeof d.url === "string" && d.url.trim() !== "" ? d.url.trim() : undefined
+      out.push({ id, name, token, ...(url ? { url } : {}) })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export function saveCustomConnections(records: CustomConnectionRecord[]): void {
+  const file = customConnectionsFile()
+  // atomic 0600 via shared writer
+  atomicWriteFileSync(file, JSON.stringify(records, null, 2) + "\n")
+}
+
+export function allConnections(): ConnectionEntry[] {
+  const customs = loadCustomConnections().map((c) => ({
+    id: c.id,
+    kind: "custom" as const,
+    name: c.name,
+    icon: { kind: "letter" as const, letter: c.name.charAt(0).toUpperCase() },
+    validator: "none" as const,
+    authShape: "token-only" as const,
+    url: c.url,
+  }))
+  return [...BUILT_IN_CATALOG, ...customs]
+}
+
+export function configuredConnectionIds(): string[] {
+  const ids: string[] = []
+  for (const entry of BUILT_IN_CATALOG) {
+    if (readCredential(entry.id) !== undefined) ids.push(entry.id)
+  }
+  for (const c of loadCustomConnections()) ids.push(c.id)
+  // also include session-only and inflight which count as configured
+  for (const [id] of inflightOverlay) if (!ids.includes(id)) ids.push(id)
+  for (const [id] of sessionOnlyOverlay) if (!ids.includes(id)) ids.push(id)
+  // and any persisted status for custom ids
+  try {
+    const cache = readCacheFile(connectionsFile())
+    for (const key of Object.keys(cache)) {
+      if (key.startsWith("custom-") && !ids.includes(key)) ids.push(key)
+    }
+  } catch {}
+  return ids
+}
 
 /** A connected claim older than this renders stale:true — the UI's cue to
  *  offer revalidation. Freshness metadata only; never blocks anything. */
@@ -209,6 +366,26 @@ function computeStale(state: ConnectionState, validated_at: string | null, now: 
   return mtime !== undefined && mtime - at > MTIME_STALE_SLACK_MS
 }
 
+function iconForId(id: string): string | undefined {
+  const builtIn = getBuiltInEntry(id)
+  if (builtIn && builtIn.icon.kind === "svg") return builtIn.icon.svg
+  if (id.startsWith("custom-")) {
+    const custom = loadCustomConnections().find((c) => c.id === id)
+    if (custom) return custom.name.charAt(0).toUpperCase()
+  }
+  return undefined
+}
+
+function nameForId(id: string): string | undefined {
+  const builtIn = getBuiltInEntry(id)
+  if (builtIn) return builtIn.name
+  if (id.startsWith("custom-")) {
+    const custom = loadCustomConnections().find((c) => c.id === id)
+    if (custom) return custom.name
+  }
+  return undefined
+}
+
 /** Derive the rendered status for one connection from its whitelisted cache
  *  entry, the in-flight overlay, the session-only store, and credential
  *  presence (the truth for durable "connected"). Output carries ONLY
@@ -233,6 +410,10 @@ function renderStatus(
     if (input.session.entitlements) out.entitlements = input.session.entitlements
     if (input.session.expires_at) out.expires_at = input.session.expires_at
     if (input.session.devices) out.devices = input.session.devices
+    const icon = iconForId(id)
+    if (icon) out.icon = icon
+    const name = nameForId(id)
+    if (name) out.name = name
     return out
   }
   let state: ConnectionState
@@ -263,6 +444,10 @@ function renderStatus(
   // 170 AC3: offline is a connected-only presentation flag — "showing the
   // last verified status" makes no sense on any other state
   if (state === "connected" && persisted.offline) out.offline = true
+  const icon = iconForId(id)
+  if (icon) out.icon = icon
+  const name = nameForId(id)
+  if (name) out.name = name
   return out
 }
 
@@ -299,7 +484,7 @@ export interface StatusInput {
 export function statusBody(input: StatusInput): string {
   const cache = readCacheFile(input.file)
   const now = input.now ?? Date.now()
-  const connections = CONNECTION_IDS.map((id) => {
+  const builtIns = CONNECTION_IDS.map((id) => {
     const session = input.session?.get(id)
     const mtime = input.credentialMtime?.(id)
     return renderStatus(id, whitelistPersisted(cache[id]), {
@@ -310,7 +495,44 @@ export function statusBody(input: StatusInput): string {
       ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
     })
   })
-  return JSON.stringify({ ok: true, connections, error: null })
+  // #327: custom connections that have been configured (optimistic connected)
+  const customs: ConnectionStatus[] = []
+  try {
+    const customRecords = loadCustomConnections()
+    for (const rec of customRecords) {
+      const id = rec.id
+      // only surface customs that have a cache entry or are considered configured
+      // loadCustomConnections already implies configured, so always surface
+      const session = input.session?.get(id)
+      const mtime = input.credentialMtime?.(id)
+      customs.push(
+        renderStatus(id, whitelistPersisted(cache[id]), {
+          inflight: input.overlay.has(id),
+          credential: true, // optimistic — presence in file means connected
+          now,
+          ...(mtime !== undefined ? { mtime } : {}),
+          ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
+        }),
+      )
+    }
+    // also surface any custom ids that are in cache but not in file (defensive)
+    for (const key of Object.keys(cache)) {
+      if (key.startsWith("custom-") && !customRecords.some((r) => r.id === key)) {
+        const session = input.session?.get(key)
+        const mtime = input.credentialMtime?.(key)
+        customs.push(
+          renderStatus(key, whitelistPersisted(cache[key]), {
+            inflight: input.overlay.has(key),
+            credential: input.hasCredential(key),
+            now,
+            ...(mtime !== undefined ? { mtime } : {}),
+            ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
+          }),
+        )
+      }
+    }
+  } catch {}
+  return JSON.stringify({ ok: true, connections: [...builtIns, ...customs], error: null })
 }
 
 /** GET /amicode/connections — never rejects; failures collapse into the one
@@ -322,7 +544,10 @@ export function statusResponse(deps: { fetchImpl?: FetchImpl; pasqalSpawn?: Pasq
     const body = statusBody({
       file: connectionsFile(),
       overlay: inflightOverlay,
-      hasCredential: (id) => readCredential(id) !== undefined,
+      hasCredential: (id) => {
+        if (isCustomConnectionId(id)) return loadCustomConnections().some((c) => c.id === id)
+        return readCredential(id) !== undefined
+      },
       credentialMtime: credentialFileMtime,
       session: sessionOnlyOverlay,
     })
@@ -364,11 +589,14 @@ function kickStaleRevalidations(body: string, deps: { fetchImpl?: FetchImpl; pas
     if (entry.state !== "connected" || entry.stale !== true || entry.session_only === true) continue
     const id = CONNECTION_IDS.find((known) => known === entry.id)
     if (!id || backgroundInflight.has(id) || inflightOverlay.has(id)) continue
+    // custom connections are optimistic, never background revalidated
+    if (isCustomConnectionId(id)) continue
     if (readCredential(id) === undefined) continue
     const task = (async () => {
       try {
         if (id === "company-compute") await backgroundRevalidateCompanyCompute(deps)
-        else await backgroundRevalidatePasqal(deps)
+        else if (id === "pasqal-cloud") await backgroundRevalidatePasqal(deps)
+        else if (id === "slack" || id === "github" || id === "linear") await backgroundRevalidateToken(id, deps)
       } catch {
         // background refresh must never surface trouble; the next GET retries
       }
@@ -413,7 +641,7 @@ function identityRecord(existing: Partial<ConnectionStatus>, submitter: string |
  *  credential is never touched. */
 async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl }): Promise<void> {
   const id: ConnectionType = "company-compute"
-  const credential = readCredential(id)
+  const credential = readCredential(id) as unknown as { base_url: string; token: string } | undefined
   if (!credential) return
   const probe = await probeCompanyCompute(credential.base_url, credential.token, deps.fetchImpl)
   const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
@@ -440,10 +668,29 @@ async function backgroundRevalidateCompanyCompute(deps: { fetchImpl?: FetchImpl 
  *  silent re-mint — an expired token with a stored keychain password renews
  *  itself without blocking the GET that noticed the staleness. */
 async function backgroundRevalidatePasqal(deps: MutationDeps): Promise<void> {
-  const credential = readCredential("pasqal-cloud")
+  const credential = readCredential("pasqal-cloud") as unknown as PasqalCredential | undefined
   if (!credential) return
   if (pasqalExpired(credential) && (await attemptPasqalSilentReauth(deps))) return
   refreshPasqalFreshness(credential)
+}
+
+async function backgroundRevalidateToken(id: ConnectionType, deps: { fetchImpl?: FetchImpl }): Promise<void> {
+  const cred = readCredential(id) as { token?: string } | undefined
+  if (!cred || typeof cred.token !== "string") return
+  let probe: ProbeResult
+  if (id === "slack") probe = await probeSlack(cred.token, deps.fetchImpl)
+  else if (id === "github") probe = await probeGithub(cred.token, deps.fetchImpl)
+  else probe = await probeLinear(cred.token, deps.fetchImpl)
+  const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+  if (probe.outcome === "unreachable") {
+    persistStatus(id, { ...existing, offline: true })
+    return
+  }
+  persistStatus(id, {
+    ...keptMetadata(existing),
+    state: probe.outcome === "valid" ? "connected" : "invalid",
+    validated_at: new Date().toISOString(),
+  })
 }
 
 // --- probe validation ---
@@ -463,7 +710,7 @@ export interface ProbeResult {
  *  missing) is the identity-echo seam. */
 export type FetchImpl = (
   url: string,
-  init: { method: "GET"; headers: Record<string, string> },
+  init: { method: string; headers: Record<string, string>; body?: string },
 ) => Promise<{ status: number; json?: () => Promise<unknown> }>
 
 const PROBE_PATH = "/solves/whoami"
@@ -509,6 +756,76 @@ export async function probeCompanyCompute(
   if (response.status >= 200 && response.status < 300) {
     const submitter = await readSubmitterEcho(response)
     return { outcome: "valid", ...(submitter ? { submitter } : {}) }
+  }
+  return { outcome: "unreachable" }
+}
+
+// --- New validators (issue #327): Slack, GitHub, Linear ---
+
+export async function probeSlack(token: string, fetchImpl: FetchImpl = fetch): Promise<ProbeResult> {
+  let response: { status: number; json?: () => Promise<unknown> }
+  try {
+    response = await fetchImpl("https://slack.com/api/auth.test", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` },
+    })
+  } catch {
+    return { outcome: "unreachable" }
+  }
+  if (response.json) {
+    try {
+      const body = (await response.json()) as Record<string, unknown>
+      if (body && body.ok === true) return { outcome: "valid" }
+      if (body && body.ok === false) return { outcome: "invalid" }
+    } catch {
+      return { outcome: "unreachable" }
+    }
+  }
+  return { outcome: "unreachable" }
+}
+
+export async function probeGithub(token: string, fetchImpl: FetchImpl = fetch): Promise<ProbeResult> {
+  let response: { status: number; json?: () => Promise<unknown> }
+  try {
+    response = await fetchImpl("https://api.github.com/user", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` },
+    })
+  } catch {
+    return { outcome: "unreachable" }
+  }
+  if (response.status === 200) return { outcome: "valid" }
+  if (response.status === 401 || response.status === 403) return { outcome: "invalid" }
+  return { outcome: "unreachable" }
+}
+
+export async function probeLinear(token: string, fetchImpl: FetchImpl = fetch): Promise<ProbeResult> {
+  let response: { status: number; json?: () => Promise<unknown> }
+  try {
+    response = await (fetchImpl as unknown as (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; json?: () => Promise<unknown> }>)(
+      "https://api.linear.app/graphql",
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ query: "{ viewer { id } }" }),
+      },
+    )
+  } catch {
+    return { outcome: "unreachable" }
+  }
+  if (response.status === 401 || response.status === 403) return { outcome: "invalid" }
+  if (response.status === 200) {
+    if (response.json) {
+      try {
+        const body = (await response.json()) as Record<string, unknown>
+        if (body && typeof body === "object" && body.data) return { outcome: "valid" }
+        // 200 without data is treat as unreachable per spec
+        return { outcome: "unreachable" }
+      } catch {
+        return { outcome: "unreachable" }
+      }
+    }
+    return { outcome: "valid" }
   }
   return { outcome: "unreachable" }
 }
@@ -636,7 +953,7 @@ function persistStatus(id: ConnectionType, entry: Partial<ConnectionStatus>): vo
   const file = connectionsFile()
   const cache = readCacheFile(file)
   const out: Record<string, unknown> = {}
-  for (const key of CONNECTION_IDS) if (key in cache) out[key] = whitelistPersisted(cache[key])
+  for (const key of Object.keys(cache)) out[key] = whitelistPersisted(cache[key])
   out[id] = whitelistPersisted(entry)
   atomicWriteFileSync(file, JSON.stringify(out, null, 2) + "\n")
 }
@@ -645,7 +962,7 @@ function clearStatus(id: ConnectionType): void {
   const file = connectionsFile()
   const cache = readCacheFile(file)
   const out: Record<string, unknown> = {}
-  for (const key of CONNECTION_IDS) if (key !== id && key in cache) out[key] = whitelistPersisted(cache[key])
+  for (const key of Object.keys(cache)) if (key !== id) out[key] = whitelistPersisted(cache[key])
   atomicWriteFileSync(file, JSON.stringify(out, null, 2) + "\n")
 }
 
@@ -807,9 +1124,13 @@ function renderCurrent(id: ConnectionType, warning?: string): string {
   const cache = readCacheFile(connectionsFile())
   const session = sessionOnlyOverlay.get(id)
   const mtime = credentialFileMtime(id)
+  const isCustom = isCustomConnectionId(id)
+  const hasCred = isCustom
+    ? loadCustomConnections().some((c) => c.id === id)
+    : readCredential(id) !== undefined
   const connection = renderStatus(id, whitelistPersisted(cache[id]), {
     inflight: inflightOverlay.has(id),
-    credential: readCredential(id) !== undefined,
+    credential: hasCred,
     now: Date.now(),
     ...(mtime !== undefined ? { mtime } : {}),
     ...(session !== undefined ? { session: whitelistPersisted(session) } : {}),
@@ -856,6 +1177,9 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
   const body = parseMutationBody(rawBody)
   if (!body) return synthesizeConnection("bad_request", "body must be JSON with an id and that id's credential fields")
   if (body.id === "pasqal-cloud") return submitPasqalCredential(body, deps)
+  if (body.id === "slack" || body.id === "github" || body.id === "linear") {
+    return submitTokenCredential(body.id as ConnectionType, body, deps)
+  }
   if (body.id !== "company-compute") {
     return synthesizeConnection("unknown_connection", "id must be a known connection id")
   }
@@ -892,6 +1216,32 @@ export async function submitCredentialResponse(rawBody: string, deps: MutationDe
     persistStatus(id, { state: probe.outcome, validated_at })
   }
   return renderCurrent(id, warning)
+}
+
+async function submitTokenCredential(id: ConnectionType, body: MutationBody, deps: MutationDeps): Promise<string> {
+  const token = typeof body.token === "string" ? body.token.trim() : ""
+  if (token === "") return synthesizeConnection("bad_request", "non-empty token is required")
+  inflightOverlay.set(id, { state: "validating" })
+  let probe: ProbeResult
+  try {
+    if (id === "slack") probe = await probeSlack(token, deps.fetchImpl)
+    else if (id === "github") probe = await probeGithub(token, deps.fetchImpl)
+    else probe = await probeLinear(token, deps.fetchImpl)
+  } finally {
+    inflightOverlay.delete(id)
+  }
+  const validated_at = new Date().toISOString()
+  if (probe.outcome === "valid") {
+    try {
+      writeCredential(id, { token })
+    } catch {
+      return synthesizeConnection("write_failed", "credential could not be saved")
+    }
+    persistStatus(id, { state: "connected", validated_at })
+  } else {
+    persistStatus(id, { state: probe.outcome, validated_at })
+  }
+  return renderCurrent(id)
 }
 
 /** POST body {id:"pasqal-cloud", username, password, project_id} → spawn the
@@ -1111,12 +1461,34 @@ function parseIdBody(rawBody: string): ConnectionType | undefined {
   return CONNECTION_IDS.find((known) => known === id)
 }
 
+function parseAnyIdBody(rawBody: string): string | undefined {
+  const body = parseMutationBody(rawBody)
+  if (!body) return undefined
+  const id = body.id
+  if (typeof id !== "string" || id.trim() === "") return undefined
+  return id.trim()
+}
+
 /** POST /amicode/connections/disconnect — body {id}. Clears the credential
  *  through the #162 seam and drops the cache entry; status becomes needs-key.
  *  Idempotent: disconnecting an absent credential is a no-op. */
 export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): string {
   const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
   if (refusal) return refusal
+  const anyId = parseAnyIdBody(rawBody)
+  if (!anyId) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
+  // #327: custom connections have their own removal path but disconnect also handles them
+  if (isCustomConnectionId(anyId)) {
+    try {
+      const existing = loadCustomConnections()
+      const next = existing.filter((c) => c.id !== anyId)
+      if (next.length !== existing.length) saveCustomConnections(next)
+      clearStatus(anyId)
+    } catch {
+      return synthesizeConnection("write_failed", "credential could not be cleared")
+    }
+    return JSON.stringify({ ok: true, connection: { id: anyId, state: "needs-key", validated_at: null, stale: false }, error: null })
+  }
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
   try {
@@ -1136,16 +1508,103 @@ export function disconnectResponse(rawBody: string, deps: MutationDeps = {}): st
   return renderCurrent(id)
 }
 
+// --- #327 custom + catalog routes ---
+
+export function catalogResponse(): string {
+  const configured = new Set(configuredConnectionIds())
+  const available = BUILT_IN_CATALOG.filter((e) => !configured.has(e.id)).map((e) => ({
+    id: e.id,
+    name: e.name,
+    icon: e.icon.kind === "svg" ? e.icon.svg : e.icon.letter,
+    authShape: e.authShape,
+  }))
+  return JSON.stringify({ ok: true, catalog: available, error: null })
+}
+
+export async function addCustomConnectionResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
+  const body = parseMutationBody(rawBody)
+  if (!body) return synthesizeConnection("bad_request", "body must be JSON with name and token")
+  const name = typeof body.name === "string" ? body.name.trim() : ""
+  const token = typeof body.token === "string" ? body.token.trim() : ""
+  const url = typeof body.url === "string" ? body.url.trim() : typeof body.base_url === "string" ? body.base_url.trim() : ""
+  if (name === "" || token === "") return synthesizeConnection("bad_request", "name and token are required")
+  if (url !== "" && !isHttpUrl(url)) return synthesizeConnection("bad_request", "url must be an http(s) URL")
+  const id = `custom-${randomBytes(4).toString("hex")}`
+  const record: CustomConnectionRecord = { id, name, token, ...(url ? { url } : {}) }
+  try {
+    const existing = loadCustomConnections()
+    existing.push(record)
+    saveCustomConnections(existing)
+    // optimistic connected — no probe, immediate status
+    persistStatus(id, { state: "connected", validated_at: new Date().toISOString() })
+  } catch {
+    return synthesizeConnection("write_failed", "custom connection could not be saved")
+  }
+  return renderCurrent(id)
+}
+
+export function removeCustomConnectionResponse(rawBody: string, deps: MutationDeps = {}): string {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
+  const id = parseAnyIdBody(rawBody)
+  if (!id || !isCustomConnectionId(id)) return synthesizeConnection("bad_request", "body must be JSON {id} with a custom connection id")
+  try {
+    const existing = loadCustomConnections()
+    const next = existing.filter((c) => c.id !== id)
+    if (next.length === existing.length) return synthesizeConnection("bad_request", "custom connection not found")
+    saveCustomConnections(next)
+    clearStatus(id)
+  } catch {
+    return synthesizeConnection("write_failed", "custom connection could not be removed")
+  }
+  return JSON.stringify({ ok: true, error: null })
+}
+
 /** POST /amicode/connections/revalidate — body {id}. Re-runs the probe from
  *  the STORED credential and refreshes validated_at; the secret never rides
  *  the request. Absent credential → needs-key, no probe fired. */
 export async function revalidateResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
   const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
   if (refusal) return refusal
+  const anyId = parseAnyIdBody(rawBody)
+  if (!anyId) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
+  // #327: custom connections are optimistic — no probe
+  if (isCustomConnectionId(anyId)) {
+    const exists = loadCustomConnections().some((c) => c.id === anyId)
+    if (!exists) return synthesizeConnection("bad_request", "custom connection not found")
+    const existing = whitelistPersisted(readCacheFile(connectionsFile())[anyId])
+    persistStatus(anyId, { ...keptMetadata(existing), state: "connected", validated_at: new Date().toISOString() })
+    return renderCurrent(anyId)
+  }
   const id = parseIdBody(rawBody)
   if (!id) return synthesizeConnection("bad_request", "body must be JSON {id} with a known connection id")
   if (id === "pasqal-cloud") return revalidatePasqal(deps)
-  const credential = readCredential("company-compute")
+  if (id === "slack" || id === "github" || id === "linear") {
+    const cred = readCredential(id) as { token?: string } | undefined
+    if (!cred || typeof cred.token !== "string" || cred.token === "") {
+      clearStatus(id)
+      return renderCurrent(id)
+    }
+    inflightOverlay.set(id, { state: "validating" })
+    let probe: ProbeResult
+    try {
+      if (id === "slack") probe = await probeSlack(cred.token, deps.fetchImpl)
+      else if (id === "github") probe = await probeGithub(cred.token, deps.fetchImpl)
+      else probe = await probeLinear(cred.token, deps.fetchImpl)
+    } finally {
+      inflightOverlay.delete(id)
+    }
+    const existing = whitelistPersisted(readCacheFile(connectionsFile())[id])
+    persistStatus(id, {
+      ...keptMetadata(existing),
+      state: probe.outcome === "valid" ? "connected" : probe.outcome,
+      validated_at: new Date().toISOString(),
+    })
+    return renderCurrent(id)
+  }
+  const credential = readCredential("company-compute") as unknown as { base_url: string; token: string } | undefined
   if (!credential) {
     clearStatus(id) // a status claim without a credential behind it is noise
     return renderCurrent(id)
