@@ -456,8 +456,9 @@ function AmicodeThemeBridge() {
 function AmicodeNavigateBridge() {
   const tabs = useTabs()
   const server = useServer()
+  const navigate = useNavigate()
   let pending = false
-  const onMsg = (e: MessageEvent) => {
+  const onMsg = async (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; path?: string } | undefined
     if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
     if (pending) return
@@ -466,7 +467,12 @@ function AmicodeNavigateBridge() {
       const url = new URL(d.path, window.location.origin)
       if (url.pathname === "/new-session") {
         const prompt = url.searchParams.get("prompt") || undefined
-        tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+        const autoSend = url.searchParams.get("autoSend") === "1"
+        const tab = await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+        if (autoSend && tab) {
+          // Re-navigate with autoSend param so the draft controller picks it up
+          navigate(`/new-session?draftId=${tab.draftID}&autoSend=1`, { replace: true })
+        }
       }
     } catch { /* malformed path — ignore */ }
     finally { setTimeout(() => { pending = false }, 2000) }
