@@ -105,12 +105,13 @@ export function isCustomConnectionId(id: string): boolean {
   return id.startsWith("custom-")
 }
 
-export function catalogForPicker(connections: ConnectionView[]): { id: string; name: string; icon: string }[] {
+export function catalogForPicker(connections: ConnectionView[]): { id: string; name: string; icon: string; authShape: string }[] {
   const configured = new Set(connections.filter((c) => c.state !== "needs-key").map((c) => c.id))
   return BUILT_IN_IDS.filter((id) => !configured.has(id)).map((id) => ({
     id,
     name: connectionTitle(id),
     icon: CONNECTION_ICONS[id] ?? "",
+    authShape: connectionFormKind(id),
   }))
 }
 
@@ -467,12 +468,17 @@ export function connectionAuthMethods(view: ConnectionView): ConnectionAuthMetho
 
 /** What the entry area renders for a chosen method: a field set or a start
  *  button ("none" — browser/device-code hand the work elsewhere). */
-export type MethodEntryKind = "base-url-token" | "pasqal-credentials" | "pasqal-token" | "none"
+export type MethodEntryKind = ConnectionFormKind | "pasqal-token" | "none"
 
 export function methodEntryKind(id: string, method: ConnectionAuthMethod): MethodEntryKind {
   if (method === "browser" || method === "device-code") return "none"
   if (method === "credentials") return connectionFormKind(id)
-  return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  if (method === "token") {
+    const kind = connectionFormKind(id)
+    if (kind === "token-only" || kind === "custom") return kind
+    return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  }
+  return connectionFormKind(id)
 }
 
 export type StartAuthPayload = { id: string; method: ConnectionAuthMethod }
