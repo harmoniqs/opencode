@@ -1145,6 +1145,8 @@ interface MutationBody {
   username?: unknown
   password?: unknown
   project_id?: unknown
+  name?: unknown
+  url?: unknown
 }
 
 function parseMutationBody(rawBody: string): MutationBody | undefined {
@@ -1655,8 +1657,8 @@ async function revalidatePasqal(deps: MutationDeps): Promise<string> {
   }
   // ADR 0001 addendum (#194): an expired token silently re-mints from the
   // keychain password when one is stored; otherwise it renders expired as before.
-  if (pasqalExpired(credential) && (await attemptPasqalSilentReauth(deps))) return renderCurrent(id)
-  refreshPasqalFreshness(credential)
+  if (pasqalExpired(credential as unknown as PasqalCredential) && (await attemptPasqalSilentReauth(deps))) return renderCurrent(id)
+  refreshPasqalFreshness(credential as unknown as PasqalCredential)
   return renderCurrent(id)
 }
 
@@ -1683,7 +1685,7 @@ async function attemptPasqalSilentReauth(deps: MutationDeps): Promise<boolean> {
   const id: ConnectionType = "pasqal-cloud"
   const secret = pasqalSecretStore().read(PASQAL_SECRET_ACCOUNT)
   if (!secret) return false
-  const projectId = readCredential(id)?.project_id ?? ""
+  const projectId = (readCredential(id) as unknown as PasqalCredential | undefined)?.project_id ?? ""
   if (projectId === "") return false // nothing to re-mint against without a project
   const spawn = deps.pasqalSpawn ?? spawnPasqalValidator
   const argv = [pasqalPython(), pasqalValidatorScript()] // no secret ever rides argv

@@ -202,6 +202,10 @@ export function atomicWriteFileSync(target: string, data: string, hooks?: WriteH
 
 export function readCredential(type: "company-compute"): CompanyComputeCredential | undefined
 export function readCredential(type: "pasqal-cloud"): PasqalCredential | undefined
+export function readCredential(type: "slack"): TokenCredential | undefined
+export function readCredential(type: "github"): TokenCredential | undefined
+export function readCredential(type: "linear"): TokenCredential | undefined
+export function readCredential(type: string): Credential | undefined
 export function readCredential(type: ConnectionType): Credential | undefined
 export function readCredential(type: ConnectionType): Credential | undefined {
   const backend = BACKENDS[type]
@@ -219,6 +223,10 @@ export function readCredential(type: ConnectionType): Credential | undefined {
 
 export function writeCredential(type: "company-compute", value: CompanyComputeCredential, hooks?: WriteHooks): void
 export function writeCredential(type: "pasqal-cloud", value: PasqalCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "slack", value: TokenCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "github", value: TokenCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "linear", value: TokenCredential, hooks?: WriteHooks): void
+export function writeCredential(type: string, value: Credential, hooks?: WriteHooks): void
 export function writeCredential(type: ConnectionType, value: Credential, hooks?: WriteHooks): void {
   const backend = BACKENDS[type]
   if (!backend) throw new Error(`unknown connection id: ${type}`)
