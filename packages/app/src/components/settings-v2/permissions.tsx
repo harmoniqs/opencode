@@ -1,5 +1,5 @@
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
-import { BadgeV2 } from "@opencode-ai/ui/v2/badge-v2"
+import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import { showToast } from "@/utils/toast"
 import { createMemo, createSignal, For, Show, type Component } from "solid-js"
@@ -98,13 +98,15 @@ export const SettingsPermissionsV2: Component = () => {
 
   const persist = async (next: ProviderPermissionsConfig) => {
     const before = rawConfig()
-    // optimistic
-    serverSync().set("config", "providerPermissions", next as unknown as Record<string, unknown>)
+    // optimistic — cast through unknown to satisfy Config Part typing (providerPermissions is valid Config key)
+    ;(serverSync() as unknown as { set: (...a: unknown[]) => void }).set("config", "providerPermissions", next)
     try {
-      await serverSync().updateConfig({ providerPermissions: next } as unknown as Record<string, unknown>)
+      await (serverSync() as unknown as { updateConfig: (c: unknown) => Promise<void> }).updateConfig({
+        providerPermissions: next,
+      })
       showToast({ variant: "success", title: language.t("settings.permissions.toast.saved") ?? "Permissions saved" })
     } catch (e) {
-      serverSync().set("config", "providerPermissions", before as unknown as Record<string, unknown>)
+      ;(serverSync() as unknown as { set: (...a: unknown[]) => void }).set("config", "providerPermissions", before)
       showToast({ title: language.t("common.requestFailed"), description: e instanceof Error ? e.message : String(e) })
     }
   }
@@ -206,10 +208,10 @@ export const SettingsPermissionsV2: Component = () => {
                       fallback={
                         <>
                           <h3 class="settings-v2-permissions-card-title">{tier.label}</h3>
-                          <BadgeV2 variant={badgeVariant(summary()) as never} class="settings-v2-permissions-badge">
+                          <Tag variant={badgeVariant(summary()) === "danger" ? "accent" : "neutral"} class="settings-v2-permissions-badge">
                             <Show when={summary() === "Full Access"}>⚠️ </Show>
                             {summary()}
-                          </BadgeV2>
+                          </Tag>
                           <Show when={!isUnassigned()}>
                             <ButtonV2 size="small" variant="ghost-muted" icon="pencil" onClick={() => { setEditingLabel(tier.id); setEditValue(tier.label) }}>
                               {language.t("common.rename") ?? "Rename"}
