@@ -1,3 +1,5 @@
+export * as ProviderPermission from "./provider-permission"
+
 import { Schema } from "effect"
 
 export const Effect = Schema.Literals(["allow", "deny", "ask"]).annotate({ identifier: "ProviderPermission.Effect" })
