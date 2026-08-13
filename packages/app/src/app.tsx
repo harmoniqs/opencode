@@ -411,6 +411,13 @@ function AmicodeThemeBridge() {
   const onMsg = (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; colorScheme?: string } | undefined
     if (d?.source !== "amicode") return
+    // amicode#363: navigate to an in-app route (e.g. /new-session?prompt=...)
+    // without a full page reload — the router picks up the pushState.
+    if (d.kind === "navigate" && (d as any).path) {
+      history.pushState(null, "", (d as any).path)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      return
+    }
     // amicode#200 AC6: the Connect Cloud palette command deep-links into the
     // defaults capsule's compute-connect flow (consumed when home is showing).
     if (d.kind === "open-compute-connect") {
