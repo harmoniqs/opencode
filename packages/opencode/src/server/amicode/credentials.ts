@@ -13,7 +13,7 @@ import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
 
-export type BuiltInConnectionType = "company-compute" | "pasqal-cloud" | "slack" | "github" | "linear"
+export type BuiltInConnectionType = "company-compute" | "pasqal-cloud" | "slack" | "github" | "linear" | "google" | "google-drive"
 export type ConnectionType = BuiltInConnectionType | (string & {})
 
 /** FROZEN byte shape — every existing CLI consumer parses this unchanged. */
@@ -60,6 +60,16 @@ export function linearFile(): string {
   const env = process.env.AMICO_LINEAR_FILE
   if (env && env.trim() !== "") return env
   return path.join(homedir(), ".amico", "linear.json")
+}
+export function googleFile(): string {
+  const env = process.env.AMICO_GOOGLE_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "google.json")
+}
+export function googleDriveFile(): string {
+  const env = process.env.AMICO_GOOGLE_DRIVE_FILE
+  if (env && env.trim() !== "") return env
+  return path.join(homedir(), ".amico", "google-drive.json")
 }
 
 // --- poison guard: writing any object carrying a password-like key through
@@ -169,6 +179,36 @@ const BACKENDS: Record<string, Backend> = {
       return { token: d.token }
     },
   },
+  google: {
+    file: googleFile,
+    encode(value) {
+      rejectPoisonKeys(value)
+      const token = typeof value.token === "string" ? value.token.trim() : ""
+      if (token === "") throw new Error('google credential needs non-empty "token"')
+      return JSON.stringify({ token }, null, 2) + "\n"
+    },
+    decode(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+      const d = raw as Record<string, unknown>
+      if (typeof d.token !== "string" || d.token === "") return undefined
+      return { token: d.token }
+    },
+  },
+  "google-drive": {
+    file: googleDriveFile,
+    encode(value) {
+      rejectPoisonKeys(value)
+      const token = typeof value.token === "string" ? value.token.trim() : ""
+      if (token === "") throw new Error('google-drive credential needs non-empty "token"')
+      return JSON.stringify({ token }, null, 2) + "\n"
+    },
+    decode(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined
+      const d = raw as Record<string, unknown>
+      if (typeof d.token !== "string" || d.token === "") return undefined
+      return { token: d.token }
+    },
+  },
 }
 
 // --- atomic 0600-at-birth writer ---
@@ -205,6 +245,8 @@ export function readCredential(type: "pasqal-cloud"): PasqalCredential | undefin
 export function readCredential(type: "slack"): TokenCredential | undefined
 export function readCredential(type: "github"): TokenCredential | undefined
 export function readCredential(type: "linear"): TokenCredential | undefined
+export function readCredential(type: "google"): TokenCredential | undefined
+export function readCredential(type: "google-drive"): TokenCredential | undefined
 export function readCredential(type: string): Credential | undefined
 export function readCredential(type: ConnectionType): Credential | undefined
 export function readCredential(type: ConnectionType): Credential | undefined {
@@ -226,6 +268,8 @@ export function writeCredential(type: "pasqal-cloud", value: PasqalCredential, h
 export function writeCredential(type: "slack", value: TokenCredential, hooks?: WriteHooks): void
 export function writeCredential(type: "github", value: TokenCredential, hooks?: WriteHooks): void
 export function writeCredential(type: "linear", value: TokenCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "google", value: TokenCredential, hooks?: WriteHooks): void
+export function writeCredential(type: "google-drive", value: TokenCredential, hooks?: WriteHooks): void
 export function writeCredential(type: string, value: Credential, hooks?: WriteHooks): void
 export function writeCredential(type: ConnectionType, value: Credential, hooks?: WriteHooks): void {
   const backend = BACKENDS[type]

@@ -85,12 +85,14 @@ export const PASQAL_ID = "pasqal-cloud"
 export const SLACK_ID = "slack"
 export const GITHUB_ID = "github"
 export const LINEAR_ID = "linear"
+export const GOOGLE_ID = "google"
+export const GOOGLE_DRIVE_ID = "google-drive"
 
-export const BUILT_IN_IDS = [COMPANY_COMPUTE_ID, PASQAL_ID, SLACK_ID, GITHUB_ID, LINEAR_ID] as const
+export const BUILT_IN_IDS = [COMPANY_COMPUTE_ID, PASQAL_ID, SLACK_ID, GITHUB_ID, LINEAR_ID, GOOGLE_ID, GOOGLE_DRIVE_ID] as const
 
 export const CONNECTION_ICONS: Record<string, string> = {
   "company-compute":
-    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#0EA5E9"/><path fill="white" d="M6.3 11.8h4.2c.8 0 1.4-.6 1.4-1.4 0-.6-.4-1.1-.9-1.3A2.2 2.2 0 0 0 9 7.4a2.2 2.2 0 0 0-2 .9c-.6.1-1 .6-1 1.2 0 .7.6 1.3 1.3 1.3z"/><path fill="white" opacity="0.95" d="M8.1 9.4 9 8.2l1 1.2 1.5-1.8 1 1-2.5 3-2-2.4z"/></svg>',
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#EAB308"/><path fill="white" d="M6.3 11.8h4.2c.8 0 1.4-.6 1.4-1.4 0-.6-.4-1.1-.9-1.3A2.2 2.2 0 0 0 9 7.4a2.2 2.2 0 0 0-2 .9c-.6.1-1 .6-1 1.2 0 .7.6 1.3 1.3 1.3z"/><path fill="white" opacity="0.95" d="M8.1 9.4 9 8.2l1 1.2 1.5-1.8 1 1-2.5 3-2-2.4z"/></svg>',
   "pasqal-cloud":
     '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#1E1B4B"/><circle cx="9" cy="9" r="1.5" fill="white"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(60 9 9)"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(-60 9 9)"/></svg>',
   slack:
@@ -99,6 +101,10 @@ export const CONNECTION_ICONS: Record<string, string> = {
     '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#24292F" d="M9 3.2a5.9 5.9 0 0 0-1.86 11.48c.29.05.4-.13.4-.28V13.4c-1.55.34-1.87-.66-1.87-.66-.25-.64-.62-.81-.62-.81-.5-.34.04-.33.04-.33.56.04.85.57.85.57.5.85 1.3.6 1.62.46.05-.36.19-.6.35-.74-1.23-.14-2.52-.62-2.52-2.74 0-.6.22-1.1.57-1.48-.06-.14-.25-.7.05-1.45 0 0 .47-.15 1.54.56A5.34 5.34 0 0 1 9 6.35c.48 0 .96.06 1.41.19 1.07-.71 1.54-.56 1.54-.56.3.75.11 1.31.05 1.45.35.38.57.88.57 1.48 0 2.13-1.3 2.6-2.53 2.74.2.17.38.5.38 1.02v1.51c0 .16.1.34.4.28A5.9 5.9 0 0 0 9 3.2z"/></svg>',
   linear:
     '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#5E6AD2"/><path fill="white" d="M6.4 5.6h1.7L10.3 9 8 12.5H6.3L8.6 9 6.4 5.6z"/><path fill="white" opacity="0.75" d="M11.2 5.6h1.2v6.9h-1.2z"/></svg>',
+  google:
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#4285F4" d="M9.2 13.3c1.5 0 2.5-.5 3.3-1.4l-1.5-1.3c-.3.4-.7.8-1.8.8-1.4 0-2.4-1-2.4-2.3s1-2.3 2.4-2.3c.6 0 1 .2 1.3.4l1.1-1.1C10.9 5.5 10 5 9.2 5 6.9 5 5 6.7 5 9s1.9 4 4.2 4z"/><path fill="#34A853" d="M13.6 9.2c0-.3 0-.5-.1-.8H9.2v1.5h2.5c-.1.6-.5 1.1-1 1.4l1.5 1.2c.9-.8 1.4-2 1.4-3.3z"/><path fill="#FBBC04" d="M7.8 11.3c-.2-.5-.3-1-.3-1.6s.1-1.1.3-1.6L6.2 6.8C5.7 7.7 5.5 8.3 5.5 9s.2 1.3.7 2.2l1.6-1z"/><path fill="#EA4335" d="M9.2 6.3c.8 0 1.3.3 1.6.6l1.2-1.2C11.1 5 10.1 4.6 9.2 4.6 6.9 4.6 5 6.3 5 8.6l1.6 1.3c.4-.9 1.2-1.6 2.6-1.6z"/></svg>',
+  "google-drive":
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#4285F4" d="M10.2 4.2 4.5 13.8h3.4l5.7-9.6z"/><path fill="#34A853" d="M10.2 4.2h3.4L9 12.1 7.3 9.2z"/><path fill="#FBBC04" d="M4.5 13.8 9 12.1 7.3 9.2 4.5 13.8z"/></svg>',
 }
 
 export function isCustomConnectionId(id: string): boolean {
@@ -138,6 +144,8 @@ export function connectionTitle(id: string): string {
   if (id === SLACK_ID) return "Slack"
   if (id === GITHUB_ID) return "GitHub"
   if (id === LINEAR_ID) return "Linear"
+  if (id === GOOGLE_ID) return "Google"
+  if (id === GOOGLE_DRIVE_ID) return "Google Drive"
   if (isCustomConnectionId(id)) return id // caller should use view.name when available
   return id
 }
@@ -435,7 +443,7 @@ export type ConnectionFormKind = "base-url-token" | "pasqal-credentials" | "toke
 
 export function connectionFormKind(id: string): ConnectionFormKind {
   if (id === PASQAL_ID) return "pasqal-credentials"
-  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID) return "token-only"
+  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID || id === GOOGLE_ID || id === GOOGLE_DRIVE_ID) return "token-only"
   if (isCustomConnectionId(id)) return "custom"
   return "base-url-token"
 }
