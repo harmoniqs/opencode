@@ -71,31 +71,60 @@ export type ConnectionView = {
   /** choose-project: the authenticated account's projects (name falls back
    *  to id; entries without an id are dropped) */
   projects?: ConnectionProject[]
+  /** #327: optional icon svg or letter for logo rendering */
+  icon?: string
+  /** #327: display name from registry */
+  name?: string
 }
 
 export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; error?: string }
 export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; error?: string }
 
 export const COMPANY_COMPUTE_ID = "company-compute"
-
-/** Every connection renders in the Connections tab, Harmoniqs Cloud included.
- *
- *  This REVERSES amicode#200's render filter. That change moved Company Compute
- *  out of the tab, reasoning that it was one credential for one service rather
- *  than a separate product. The effect, though, was that Pasqal Cloud appeared
- *  as a connectable service and Harmoniqs Cloud — ours — did not: users went
- *  looking for it exactly where Pasqal is, found nothing, and had nowhere to
- *  enter an API key (2026-07-28). A cloud we sell has to be connectable in the
- *  place that lists clouds.
- *
- *  The solver capsule keeps its own connect affordance; both routes write the
- *  same credential, so connecting in either place shows up in both. Kept as a
- *  function rather than dropping the call sites, so there is still one obvious
- *  place to filter if a genuinely internal connection ever appears. */
-export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
-  return connections
-}
 export const PASQAL_ID = "pasqal-cloud"
+export const SLACK_ID = "slack"
+export const GITHUB_ID = "github"
+export const LINEAR_ID = "linear"
+
+export const BUILT_IN_IDS = [COMPANY_COMPUTE_ID, PASQAL_ID, SLACK_ID, GITHUB_ID, LINEAR_ID] as const
+
+export const CONNECTION_ICONS: Record<string, string> = {
+  "company-compute":
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M6 9h6M9 6v6" stroke="white" stroke-width="1.2"/></svg>',
+  "pasqal-cloud":
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7"/><text x="9" y="13" text-anchor="middle" font-size="9" fill="white" font-weight="700">P</text></svg>',
+  slack:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 13.5 3 3h3v3z"/></svg>',
+  github:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a7 7 0 0 0-2.2 13.6c.35.06.48-.15.48-.34v-1.2C5.4 14.4 4.7 13 4.7 13c-.3-.77-.74-.97-.74-.97-.6-.41.05-.4.05-.4.67.05 1.02.69 1.02.69.59 1 1.55.71 1.93.54.06-.42.23-.72.42-.88-1.46-.17-3- .73-3-3.24 0-.72.26-1.3.68-1.76-.07-.17-.3-.83.06-1.73 0 0 .56-.18 1.84.67A6.3 6.3 0 0 1 9 5.8a6.3 6.3 0 0 1 1.68.23c1.27-.85 1.83-.67 1.83-.67.36.9.13 1.56.06 1.73.42.46.68 1.04.68 1.76 0 2.52-1.54 3.07-3 3.24.24.2.45.6.45 1.2v1.78c0 .19.13.4.48.33A7 7 0 0 0 9 2z"/></svg>',
+  linear:
+    '<svg viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 4l8 4-8 4V4z"/></svg>',
+}
+
+export function isCustomConnectionId(id: string): boolean {
+  return id.startsWith("custom-")
+}
+
+export function catalogForPicker(connections: ConnectionView[]): { id: string; name: string; icon: string; authShape: string }[] {
+  const configured = new Set(connections.filter((c) => c.state !== "needs-key").map((c) => c.id))
+  return BUILT_IN_IDS.filter((id) => !configured.has(id)).map((id) => ({
+    id,
+    name: connectionTitle(id),
+    icon: CONNECTION_ICONS[id] ?? "",
+    authShape: connectionFormKind(id),
+  }))
+}
+
+/** #327: Only configured connections visible. The panel shows only connections
+ *  that have been configured (connected or previously attempted). Unconfigured
+ *  built-ins (needs-key) are hidden and surface via the Add picker. */
+export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
+  return connections.filter((c) => c.state !== "needs-key")
+}
+export function unconfiguredBuiltIns(connections: ConnectionView[]): string[] {
+  const configured = new Set(connections.filter((c) => c.state !== "needs-key").map((c) => c.id))
+  return BUILT_IN_IDS.filter((id) => !configured.has(id)) as unknown as string[]
+}
 
 /** Product names are not translated; ids without one render verbatim. */
 export function connectionTitle(id: string): string {
@@ -106,7 +135,16 @@ export function connectionTitle(id: string): string {
   // The wire id stays "company-compute": server contract, not presentation.
   if (id === COMPANY_COMPUTE_ID) return "Harmoniqs Cloud"
   if (id === PASQAL_ID) return "Pasqal Cloud"
+  if (id === SLACK_ID) return "Slack"
+  if (id === GITHUB_ID) return "GitHub"
+  if (id === LINEAR_ID) return "Linear"
+  if (isCustomConnectionId(id)) return id // caller should use view.name when available
   return id
+}
+
+export function connectionDisplayName(view: ConnectionView): string {
+  if (view.name) return view.name
+  return connectionTitle(view.id)
 }
 
 const WIRE_STATES: ReadonlySet<string> = new Set(CONNECTION_WIRE_STATES)
@@ -185,6 +223,8 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     verificationUrl: str(entry.verification_url),
     codeExpiresAt: codeExpires === "—" ? undefined : codeExpires,
     projects: parseProjects(entry.projects),
+    icon: str(entry.icon),
+    name: str(entry.name),
   }
 }
 
@@ -384,14 +424,34 @@ export type PasqalCredentialsPayload = { id: string; username: string; password:
  *  the only path where project id stays a typed field (no authenticated
  *  listing exists before connect) */
 export type PasqalTokenPayload = { id: string; token: string; project_id: string }
-export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload | PasqalTokenPayload
+export type TokenOnlyPayload = { id: string; token: string }
+export type CustomConnectionPayload = { id?: string; name: string; token: string; url?: string }
+export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload | PasqalTokenPayload | TokenOnlyPayload
 
 /** Which credential fields a card's form collects (169): pasqal-cloud takes
- *  username/password/project_id; every other id keeps base_url + token. */
-export type ConnectionFormKind = "base-url-token" | "pasqal-credentials"
+ *  username/password/project_id; every other id keeps base_url + token.
+ *  #327: slack/github/linear take token-only; custom takes name+token+url. */
+export type ConnectionFormKind = "base-url-token" | "pasqal-credentials" | "token-only" | "custom"
 
 export function connectionFormKind(id: string): ConnectionFormKind {
-  return id === PASQAL_ID ? "pasqal-credentials" : "base-url-token"
+  if (id === PASQAL_ID) return "pasqal-credentials"
+  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID) return "token-only"
+  if (isCustomConnectionId(id)) return "custom"
+  return "base-url-token"
+}
+
+export function tokenOnlySubmitPayload(id: string, token: string): TokenOnlyPayload | undefined {
+  const key = token.trim()
+  if (key === "") return undefined
+  return { id, token: key }
+}
+
+export function customConnectionPayload(name: string, token: string, url?: string): CustomConnectionPayload | undefined {
+  const n = name.trim()
+  const key = token.trim()
+  if (n === "" || key === "") return undefined
+  const trimmedUrl = url?.trim()
+  return { name: n, token: key, ...(trimmedUrl ? { url: trimmedUrl } : {}) }
 }
 
 // --- auth-path scaffold (#194): method model + start/choose payload gates.
@@ -408,12 +468,17 @@ export function connectionAuthMethods(view: ConnectionView): ConnectionAuthMetho
 
 /** What the entry area renders for a chosen method: a field set or a start
  *  button ("none" — browser/device-code hand the work elsewhere). */
-export type MethodEntryKind = "base-url-token" | "pasqal-credentials" | "pasqal-token" | "none"
+export type MethodEntryKind = ConnectionFormKind | "pasqal-token" | "none"
 
 export function methodEntryKind(id: string, method: ConnectionAuthMethod): MethodEntryKind {
   if (method === "browser" || method === "device-code") return "none"
   if (method === "credentials") return connectionFormKind(id)
-  return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  if (method === "token") {
+    const kind = connectionFormKind(id)
+    if (kind === "token-only" || kind === "custom") return kind
+    return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  }
+  return connectionFormKind(id)
 }
 
 export type StartAuthPayload = { id: string; method: ConnectionAuthMethod }
