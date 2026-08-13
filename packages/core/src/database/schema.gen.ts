@@ -98,6 +98,18 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`provider_permission\` (
+          \`id\` text PRIMARY KEY,
+          \`project_id\` text NOT NULL,
+          \`tier_id\` text NOT NULL,
+          \`action\` text NOT NULL,
+          \`resource\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`fk_provider_permission_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`project_directory\` (
           \`project_id\` text NOT NULL,
           \`directory\` text NOT NULL,
@@ -240,6 +252,9 @@ export default {
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
       yield* tx.run(
         `CREATE UNIQUE INDEX \`permission_project_action_resource_idx\` ON \`permission\` (\`project_id\`,\`action\`,\`resource\`);`,
+      )
+      yield* tx.run(
+        `CREATE UNIQUE INDEX \`provider_permission_project_tier_action_resource_idx\` ON \`provider_permission\` (\`project_id\`,\`tier_id\`,\`action\`,\`resource\`);`,
       )
       yield* tx.run(
         `CREATE INDEX \`message_session_time_created_id_idx\` ON \`message\` (\`session_id\`,\`time_created\`,\`id\`);`,

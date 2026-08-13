@@ -288,7 +288,7 @@ const layer = Layer.effect(
       ),
     )
 
-    const reply = (input: ReplyInput) =>
+    const reply = EffectRuntime.fn("PermissionV2.reply")((input: ReplyInput) =>
       EffectRuntime.uninterruptible(
         EffectRuntime.gen(function* () {
           const existing = pending.get(input.requestID)
@@ -393,7 +393,8 @@ const layer = Layer.effect(
             pending.delete(id)
           }
         }),
-      )
+      ),
+    )
 
     const list = EffectRuntime.fn("PermissionV2.list")(function* () {
       return Array.from(pending.values(), (item) => item.request)
