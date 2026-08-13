@@ -411,13 +411,6 @@ function AmicodeThemeBridge() {
   const onMsg = (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; colorScheme?: string } | undefined
     if (d?.source !== "amicode") return
-    // amicode#363: navigate to an in-app route (e.g. /new-session?prompt=...)
-    // without a full page reload — the router picks up the pushState.
-    if (d.kind === "navigate" && (d as any).path) {
-      history.pushState(null, "", (d as any).path)
-      window.dispatchEvent(new PopStateEvent("popstate"))
-      return
-    }
     // amicode#200 AC6: the Connect Cloud palette command deep-links into the
     // defaults capsule's compute-connect flow (consumed when home is showing).
     if (d.kind === "open-compute-connect") {
@@ -454,6 +447,29 @@ function AmicodeThemeBridge() {
   // extension re-posts open-bug-report if a bug session is live, so a lost
   // one-shot open (cold-boot race, webview reload) self-heals.
   postBugReportPoke()
+  return null
+}
+
+/** amicode#363: bridge for the extension to open a new draft session with a
+ *  pre-filled prompt. Must live inside TabsProvider + ServerProvider so it has
+ *  access to useTabs().newDraft. */
+function AmicodeNavigateBridge() {
+  const tabs = useTabs()
+  const server = useServer()
+  const onMsg = (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; path?: string } | undefined
+    if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
+    // Parse prompt from the path (expected: /new-session?prompt=...)
+    try {
+      const url = new URL(d.path, window.location.origin)
+      if (url.pathname === "/new-session") {
+        const prompt = url.searchParams.get("prompt") || undefined
+        tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+      }
+    } catch { /* malformed path — ignore */ }
+  }
+  window.addEventListener("message", onMsg)
+  onCleanup(() => window.removeEventListener("message", onMsg))
   return null
 }
 
@@ -657,6 +673,7 @@ export function AppInterface(props: {
                 component={props.router ?? Router}
                 root={(routerProps) => (
                   <TabsProvider>
+                    <AmicodeNavigateBridge />
                     <PermissionProvider>
                       <NotificationProvider>
                         <ServerShell>
