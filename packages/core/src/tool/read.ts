@@ -12,6 +12,7 @@ import { ReadToolFileSystem } from "./read-filesystem"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { registerSourcePath } from "../provider-permission"
 
 export const name = "read"
 const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
@@ -77,6 +78,8 @@ const layer = Layer.effectDiscard(
                 agent: context.agent,
                 source,
               })
+              // Source-path tagging for history redaction (preserved on tool results)
+              registerSourcePath(context.sessionID, context.toolCallID, resource)
               if (type === "directory")
                 return yield* reader.list(absolute, { offset: input.offset, limit: input.limit })
               const content = yield* reader.read(absolute, resource, {

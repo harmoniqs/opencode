@@ -14,6 +14,7 @@ import { PositiveInt } from "../schema"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { registerSourcePath } from "../provider-permission"
 
 export const name = "bash"
 export const DEFAULT_TIMEOUT_MS = 2 * 60 * 1_000
@@ -147,6 +148,8 @@ const layer = Layer.effectDiscard(
                 agent: context.agent,
                 source,
               })
+              // Tag command as sourcePath for auditing / redaction context
+              registerSourcePath(context.sessionID, context.toolCallID, input.command)
 
               if ((yield* fs.stat(target.canonical)).type !== "Directory")
                 return yield* Effect.fail(new Error(`Working directory is not a directory: ${target.canonical}`))

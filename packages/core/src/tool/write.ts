@@ -15,6 +15,7 @@ import { PermissionV2 } from "../permission"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { registerSourcePath } from "../provider-permission"
 
 export const name = "write"
 
@@ -84,6 +85,7 @@ const layer = Layer.effectDiscard(
                   agent: context.agent,
                   source,
                 })
+                registerSourcePath(context.sessionID, context.toolCallID, target.resource)
                 return yield* files.writeTextPreservingBom({ target, content: input.content })
               }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to write ${input.path}` }))),
           }),

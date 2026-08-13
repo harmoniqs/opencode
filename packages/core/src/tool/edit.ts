@@ -18,6 +18,7 @@ import { PermissionV2 } from "../permission"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { registerSourcePath } from "../provider-permission"
 
 export const name = "edit"
 
@@ -158,6 +159,7 @@ const layer = Layer.effectDiscard(
                     source: permissionSource,
                   }),
                 )
+                registerSourcePath(context.sessionID, context.toolCallID, target.resource)
                 const source = decodeUtf8(yield* unableToEdit(fs.readFile(target.canonical)))
                 const ending = detectLineEnding(source.text)
                 const oldString = convertToLineEnding(input.oldString, ending)

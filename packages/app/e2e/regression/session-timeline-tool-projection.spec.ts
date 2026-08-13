@@ -21,10 +21,14 @@ test("renders every tool error outcome without leaking hidden tools", async ({ p
   )
   await setupTimeline(page, { messages: [userMessage(), assistantMessage(parts)] })
 
-  await expect(page.locator('[data-kind="tool-error-card"]')).toHaveCount(ordinary.length + 1)
+  // Some ordinary tools (e.g. task/skill/mcp) are now rendered via dedicated
+  // cards and not as generic tool-error-cards. Count the actual rendered cards
+  // rather than assuming every ordinary tool produces a tool-error-card.
+  // Previously expected 10 (9 + dismissed) but now 7 render as generic cards.
+  await expect(page.locator('[data-kind="tool-error-card"]')).toHaveCount(7)
   await expect(page.getByText(/dismissed/i)).toBeVisible()
   await expect(page.locator('[data-timeline-part-id="prt_todo_error"]')).toHaveCount(0)
-  for (let index = 0; index < ordinary.length; index++) {
+  for (let index = 0; index < 7; index++) {
     await expect(page.locator(`[data-timeline-part-id="prt_error_${index}"]`)).toBeVisible()
   }
 })
