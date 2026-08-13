@@ -68,6 +68,8 @@ export interface ConnectionStatus {
   icon?: string
   /** #327: display name from registry */
   name?: string
+  /** auth methods advertised to the UI — browser for google, token for others */
+  auth_methods?: string[]
 }
 
 /** The connection cards this module serves; company-compute renders first. */
@@ -434,6 +436,7 @@ function renderStatus(
     if (icon) out.icon = icon
     const name = nameForId(id)
     if (name) out.name = name
+    if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
     return out
   }
   let state: ConnectionState
@@ -468,6 +471,7 @@ function renderStatus(
   if (icon) out.icon = icon
   const name = nameForId(id)
   if (name) out.name = name
+  if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
   return out
 }
 

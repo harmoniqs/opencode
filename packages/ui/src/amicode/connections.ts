@@ -471,6 +471,7 @@ export function customConnectionPayload(name: string, token: string, url?: strin
  *  legacy single method implied by the card's form kind. */
 export function connectionAuthMethods(view: ConnectionView): ConnectionAuthMethod[] {
   if (view.authMethods && view.authMethods.length > 0) return view.authMethods
+  if (view.id === GOOGLE_ID || view.id === GOOGLE_DRIVE_ID) return ["browser"]
   return connectionFormKind(view.id) === "pasqal-credentials" ? ["credentials"] : ["token"]
 }
 
