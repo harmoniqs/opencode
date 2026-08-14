@@ -208,7 +208,7 @@ const defaultSettings: Settings = {
     terminal: "",
   },
   developer: {
-    enabled: false,
+    enabled: true,
     opencodePath: "",
     amicodePath: "",
   },
