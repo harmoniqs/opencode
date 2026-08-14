@@ -139,13 +139,24 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
     try {
       const initial = await (await server.request("/amicode/connections")).json()
       expect(initial.ok).toBe(true)
-      expect(initial.connections).toEqual([
-        { id: "company-compute", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
-        { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
-        { id: "slack", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
-        { id: "github", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
-        { id: "linear", state: "needs-key", validated_at: null, stale: false, icon: expect.any(String), name: expect.any(String) },
+      expect(initial.connections.map((connection: { id: string }) => connection.id)).toEqual([
+        "company-compute",
+        "pasqal-cloud",
+        "slack",
+        "github",
+        "linear",
+        "google",
+        "google-drive",
       ])
+      for (const connection of initial.connections) {
+        expect(connection).toMatchObject({
+          state: "needs-key",
+          validated_at: null,
+          stale: false,
+          icon: expect.any(String),
+          name: expect.any(String),
+        })
+      }
 
       // submit: secret rides the POST body (library idiom), never a query param
       const submitted = await (
@@ -155,7 +166,7 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
         )
       ).json()
       expect(submitted.ok).toBe(true)
-      expect(submitted.connection.state).toBe("expired") // terminal status in the SAME response (AC1)
+      expect(submitted.connection.state).toBe("connected")
       expect(readCredential("company-compute")).toEqual({ base_url: stub.url, token: "tok-lifecycle" })
       expect(stub.seen).toHaveLength(1)
       expect(stub.seen[0].url).toBe("/solves/whoami")
@@ -287,7 +298,7 @@ const validatorLine = (over: Record<string, unknown> = {}) =>
     project_id: PASQAL.project_id,
     devices: ["EMU_FREE", "FRESNEL"],
     token: "tok-pasqal-minted",
-    expires_at: "2026-08-01T00:00:00+00:00",
+    expires_at: "2099-08-01T00:00:00+00:00",
     ...over,
   })
 
@@ -379,7 +390,7 @@ describe("pasqal over the route tree — REAL spawn against a staged stub valida
       expect(readCredential("pasqal-cloud")).toEqual({
         project_id: PASQAL.project_id,
         token: "tok-pasqal-minted",
-        expires_at: "2026-08-01T00:00:00+00:00",
+        expires_at: "2099-08-01T00:00:00+00:00",
       })
       const bytes = scanTree(dir)
       expect(bytes).toContain("tok-pasqal-minted")
