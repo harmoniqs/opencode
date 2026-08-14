@@ -1,4 +1,4 @@
-import { createSignal, onCleanup } from "solid-js"
+import { createSignal, onCleanup, onMount } from "solid-js"
 import { useSettings } from "@/context/settings"
 import { inAmicode } from "@/utils/amicode-bridge"
 
@@ -13,6 +13,8 @@ export interface DevToolsStatus {
   buildError?: string
 }
 
+export type RebuildState = "idle" | "rebuilding" | "rebuilt" | "failed"
+
 /** Default repo paths autofilled when the toggle is turned ON with empty fields. */
 const DEFAULT_OPENCODE_PATH = "~/harmoniqs/opencode"
 const DEFAULT_AMICODE_PATH = "~/harmoniqs/amicode"
@@ -21,8 +23,24 @@ export function createDeveloperToolsController() {
   const settings = useSettings()
   const [status, setStatus] = createSignal<DevToolsStatus | undefined>(undefined)
   const [pending, setPending] = createSignal(false)
+  const [rebuildState, setRebuildState] = createSignal<RebuildState>("idle")
+  const [rebuildError, setRebuildError] = createSignal<string | undefined>(undefined)
 
-  // Listen for the extension host's validation reply
+  // On mount, check if we just came back from a successful rebuild reload
+  onMount(() => {
+    try {
+      if (localStorage.getItem("amicode:devtools-rebuilt") === "1") {
+        localStorage.removeItem("amicode:devtools-rebuilt")
+        setRebuildState("rebuilt")
+        // Clear the "rebuilt" badge after 5 seconds
+        setTimeout(() => setRebuildState("idle"), 5000)
+      }
+    } catch {
+      // non-critical
+    }
+  })
+
+  // Listen for the extension host's replies
   const handleMessage = (event: MessageEvent) => {
     const d = event.data
     if (d && d.source === "amicode" && d.kind === "dev-tools-status") {
@@ -43,10 +61,23 @@ export function createDeveloperToolsController() {
       if (d.reloadNeeded) {
         try {
           localStorage.setItem("amicode:devtools-reopen", "1")
+          localStorage.setItem("amicode:devtools-rebuilt", "1")
         } catch {
           // localStorage unavailable — non-critical
         }
       }
+    }
+
+    // Rebuild status messages
+    if (d && d.source === "amicode" && d.kind === "dev-tools-rebuild-status") {
+      if (d.state === "rebuilding") {
+        setRebuildState("rebuilding")
+        setRebuildError(undefined)
+      } else if (d.state === "failed") {
+        setRebuildState("failed")
+        setRebuildError(d.error ?? "Unknown error")
+      }
+      // "done" state triggers a reload — the "rebuilt" flag is read on next mount
     }
   }
 
@@ -64,6 +95,29 @@ export function createDeveloperToolsController() {
         source: "amicode",
         kind: "dev-tools-update",
         enabled: settings.developer.enabled(),
+        opencodePath: settings.developer.opencodePath(),
+        amicodePath: settings.developer.amicodePath(),
+      },
+      "*",
+    )
+  }
+
+  const rebuild = (mode: "local" | "remote") => {
+    if (!inAmicode()) return
+    if (rebuildState() === "rebuilding") return // prevent double-clicks
+    setRebuildState("rebuilding")
+    setRebuildError(undefined)
+    try {
+      localStorage.setItem("amicode:devtools-reopen", "1")
+      localStorage.setItem("amicode:devtools-rebuilt", "1")
+    } catch {
+      // non-critical
+    }
+    window.parent.postMessage(
+      {
+        source: "amicode",
+        kind: "dev-tools-rebuild",
+        mode,
         opencodePath: settings.developer.opencodePath(),
         amicodePath: settings.developer.amicodePath(),
       },
@@ -97,8 +151,12 @@ export function createDeveloperToolsController() {
     /** Trigger validation + apply on blur */
     commitOpencodePath: () => sendUpdate(),
     commitAmicodePath: () => sendUpdate(),
+    /** Trigger a full rebuild (local = from disk, remote = git pull first) */
+    rebuild,
     status,
     pending,
+    rebuildState,
+    rebuildError,
   }
 }
 

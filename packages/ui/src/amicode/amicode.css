@@ -1483,6 +1483,53 @@
   background: color-mix(in srgb, var(--surface-success-strong) 16%, transparent);
 }
 
+/* ---- Developer Tools rebuild status + buttons ─────────────────────────── */
+.devtools-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.devtools-rebuild-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+}
+.devtools-rebuild-status--building { color: var(--text-warning-base, #ee9d2b); }
+.devtools-rebuild-status--done { color: var(--text-on-success-base, #2dba26); }
+.devtools-rebuild-status--failed { color: var(--text-danger-base, #e5484d); }
+
+.devtools-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.devtools-status-dot--orange {
+  background: var(--surface-warning-strong, #ee9d2b);
+  animation: devtools-pulse 1.2s ease-in-out infinite;
+}
+.devtools-status-dot--green {
+  background: var(--surface-success-strong, #12c905);
+}
+.devtools-status-dot--red {
+  background: var(--surface-danger-strong, #e5484d);
+}
+
+@keyframes devtools-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.devtools-rebuild-row {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    APPROVAL CARD — [data-component="amicode-approval-card"] (approval-card.tsx)
    The capability-warrant card (spec-20260727-164748 §9.5). Sibling of the ask

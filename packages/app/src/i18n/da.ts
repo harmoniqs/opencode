@@ -842,6 +842,10 @@ export const dict = {
   "settings.general.row.amicodePath.error.buildFailed": "Extension build failed",
   "settings.general.row.amicodePath.building": "Building extension…",
   "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
+  "settings.general.row.devTools.rebuildLocally": "Rebuild Locally",
+  "settings.general.row.devTools.rebuildRemotely": "Rebuild Remotely",
+  "settings.general.row.devTools.rebuilding": "Rebuilding…",
+  "settings.general.row.devTools.rebuilt": "Rebuilt!",
   "settings.general.row.releaseNotes.title": "Udgivelsesnoter",
   "settings.general.row.releaseNotes.description": 'Vis "Hvad er nyt"-popups efter opdateringer',
 
