@@ -26,6 +26,7 @@ import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
+import { channelBadgeText } from "./titlebar-channel"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -616,6 +617,11 @@ function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
 
 function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () => void } }) {
   const channel = import.meta.env.VITE_OPENCODE_CHANNEL
+  const settings = useSettings()
+
+  // When the build channel is "dev" AND debug tools are available, render
+  // the interactive DEV button (toggles the debug panel). This is the
+  // build-plumbing path for local opencode development.
   if (channel === "dev" && props.debugTools) {
     return (
       <button
@@ -630,15 +636,17 @@ function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () =
     )
   }
 
+  // For release builds: show DEV when developer mode is enabled in settings
+  // (so the user knows they're running against a local binary/asset override),
+  // BETA when running a pre-release channel, or nothing on prod.
+  const badgeText = () => channelBadgeText(channel, settings.developer.enabled())
+  const badgeSlot = () => (badgeText() === "DEV" ? "amicode-dev-tag" : "amicode-beta-tag")
+
   return (
     <>
-      {["beta", "dev"].includes(import.meta.env.VITE_OPENCODE_CHANNEL) && (
-        // amicode: always reads BETA, in the brand gold. "DEV" is build plumbing
-        // (the channel a local build happens to compile under); BETA is the
-        // product state users should see. Gold ties it to the Amico wordmark
-        // instead of the generic interactive blue.
-        <div data-slot="amicode-beta-tag" class="font-medium px-2 rounded-sm uppercase font-mono">
-          BETA
+      {badgeText() && (
+        <div data-slot={badgeSlot()} class="font-medium px-2 rounded-sm uppercase font-mono">
+          {badgeText()}
         </div>
       )}
     </>

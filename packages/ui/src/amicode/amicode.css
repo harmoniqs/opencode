@@ -1474,6 +1474,15 @@
   background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
 }
 
+/* ---- DEV channel tag (titlebar) ----------------------------------------- */
+/* Green pill signals developer mode is active — visually distinct from the
+   amber BETA so you never confuse a dev build with a release. Uses the
+   semantic success scale (auto light/dark via theme.css). */
+[data-slot="amicode-dev-tag"] {
+  color: var(--text-on-success-base);
+  background: color-mix(in srgb, var(--surface-success-strong) 16%, transparent);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    APPROVAL CARD — [data-component="amicode-approval-card"] (approval-card.tsx)
    The capability-warrant card (spec-20260727-164748 §9.5). Sibling of the ask

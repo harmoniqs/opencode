@@ -778,6 +778,22 @@ export const dict = {
   "settings.general.row.wayland.description": "X11-Fallback unter Wayland deaktivieren. Erfordert Neustart.",
   "settings.general.row.wayland.tooltip":
     "Unter Linux mit Monitoren unterschiedlicher Bildwiederholraten kann natives Wayland stabiler sein.",
+  "settings.general.section.developerTools": "Developer Tools",
+  "settings.general.row.developerMode.title": "Use developer build",
+  "settings.general.row.developerMode.description":
+    "Switch between the release and a local developer build of the opencode server and Amicode extension assets",
+  "settings.general.row.opencodePath.title": "opencode binary path",
+  "settings.general.row.opencodePath.description":
+    "Path to your local opencode repository root (the binary is resolved from here)",
+  "settings.general.row.opencodePath.placeholder": "e.g. ~/harmoniqs/opencode",
+  "settings.general.row.opencodePath.error.notFound": "Binary not found at this path",
+  "settings.general.row.opencodePath.error.notExecutable": "Binary exists but is not executable",
+  "settings.general.row.amicodePath.title": "Amicode extension path",
+  "settings.general.row.amicodePath.description":
+    "Path to your local Amicode extension source root (scores, templates, bin/ resolve from here)",
+  "settings.general.row.amicodePath.placeholder": "e.g. ~/harmoniqs/amicode/packages/extension",
+  "settings.general.row.amicodePath.error.notFound": "Directory does not exist",
+  "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
   "settings.general.row.releaseNotes.title": "Versionshinweise",
   "settings.general.row.releaseNotes.description": '"Neuigkeiten"-Pop-ups nach Updates anzeigen',
   "settings.updates.row.startup.title": "Beim Start nach Updates suchen",
