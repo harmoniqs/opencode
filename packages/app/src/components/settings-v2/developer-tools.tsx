@@ -56,6 +56,28 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
 
   return (
     <SettingsListV2>
+      {/* Rebuild buttons */}
+      <Show when={props.controller.enabled()}>
+        <div class="devtools-rebuild-row">
+          <ButtonV2
+            size="small"
+            variant="neutral"
+            onClick={() => props.controller.rebuild("local")}
+            disabled={isRebuilding()}
+          >
+            {language.t("settings.general.row.devTools.rebuildLocally")}
+          </ButtonV2>
+          <ButtonV2
+            size="small"
+            variant="neutral"
+            onClick={() => props.controller.rebuild("remote")}
+            disabled={isRebuilding()}
+          >
+            {language.t("settings.general.row.devTools.rebuildRemotely")}
+          </ButtonV2>
+        </div>
+      </Show>
+
       <SettingsRowV2
         title={language.t("settings.general.row.developerMode.title")}
         description={language.t("settings.general.row.developerMode.description")}
@@ -137,28 +159,6 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
           />
         </div>
       </SettingsRowV2>
-
-      {/* Rebuild buttons */}
-      <Show when={props.controller.enabled()}>
-        <div class="devtools-rebuild-row">
-          <ButtonV2
-            size="small"
-            variant="neutral"
-            onClick={() => props.controller.rebuild("local")}
-            disabled={isRebuilding()}
-          >
-            {language.t("settings.general.row.devTools.rebuildLocally")}
-          </ButtonV2>
-          <ButtonV2
-            size="small"
-            variant="neutral"
-            onClick={() => props.controller.rebuild("remote")}
-            disabled={isRebuilding()}
-          >
-            {language.t("settings.general.row.devTools.rebuildRemotely")}
-          </ButtonV2>
-        </div>
-      </Show>
     </SettingsListV2>
   )
 }
