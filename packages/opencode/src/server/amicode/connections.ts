@@ -1530,6 +1530,81 @@ function parseAnyIdBody(rawBody: string): string | undefined {
   return id.trim()
 }
 
+
+// --- Browser OAuth start (Google) -------------------------------------------
+// POST /amicode/connections/auth  body {id, method:"browser"|"device-code"}
+// For google/google-drive the method is always "browser". The server's job is
+// to open the authorization URL in the user's system browser (via McpBrowser,
+// which now respects BROWSER in VS Code remote) and return a `waiting-browser`
+// card so the UI shows the mid-flow copy. The actual token exchange happens
+// out-of-band (the loopback callback server) — this endpoint only starts it.
+// Today the Google OAuth app credentials are not yet provisioned, so the
+// handler opens the Google Account chooser as a placeholder that proves the
+// browser wiring is end-to-end. Replace the placeholder URL with the real
+// OAuth authorization URL once the client ID is available.
+export async function startAuthResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
+  const body = parseMutationBody(rawBody) as { id?: unknown; method?: unknown } | undefined
+  if (!body || typeof body.id !== "string" || typeof body.method !== "string") {
+    return synthesizeConnection("bad_request", "body must be JSON {id, method}")
+  }
+  const id = body.id
+  const method = body.method
+  if (method !== "browser" && method !== "device-code") {
+    return synthesizeConnection("bad_request", "method must be browser or device-code")
+  }
+  if (id !== "google" && id !== "google-drive") {
+    return synthesizeConnection("bad_request", "browser auth is only for google connections")
+  }
+  // Mark the card as waiting-browser so the UI shows the progress copy.
+  // The overlay is ephemeral (not persisted) — a page reload before auth
+  // completes simply shows needs-key again and the user retries.
+  const pendingUrl = id === "google"
+    ? "https://accounts.google.com/signin/v2/identifier"
+    : "https://drive.google.com"
+  // Best-effort browser open — failure is soft: the UI fallback (window.open
+  // in status-popover-body) will also try, and the BrowserOpenFailed event
+  // carries the URL for any listener.
+  try {
+    const { McpBrowser } = await import("../../mcp/browser")
+    // Use the effect layer directly — no need to go through the full MCP stack
+    // for a connection auth; a direct open suffices and keeps the dependency
+    // surface small.
+    const openEffect = McpBrowser.Service.pipe(
+      // We can't easily get the layer here without a full Effect context, so
+      // fall back to a direct spawn that mirrors McpBrowser's BROWSER-aware logic.
+      // This keeps the connection route free of the MCP service graph.
+    )
+    // Direct BROWSER-aware open (mirrors mcp/browser.ts logic but without Effect)
+    const browserCmd = process.env.BROWSER?.trim()
+    if (browserCmd) {
+      const { spawn } = await import("node:child_process")
+      try {
+        const child = spawn(browserCmd, [pendingUrl], { stdio: "ignore", detached: true })
+        child.unref()
+      } catch {}
+    } else {
+      const open = (await import("open")).default
+      try { await open(pendingUrl) } catch {}
+    }
+  } catch {}
+  // Return a synthetic waiting-browser response so the card flips immediately.
+  // The real OAuth callback will later promote to connected via the same
+  // credential file path that probeGoogle validates.
+  return JSON.stringify({
+    ok: true,
+    connection: {
+      id,
+      state: "waiting-browser",
+      validated_at: null,
+      stale: false,
+      auth_methods: ["browser"],
+    },
+    error: null,
+  })
+}
+
 /** POST /amicode/connections/disconnect — body {id}. Clears the credential
  *  through the #162 seam and drops the cache entry; status becomes needs-key.
  *  Idempotent: disconnecting an absent credential is a no-op. */

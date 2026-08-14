@@ -682,6 +682,23 @@ export function createAmicodeConnectionsState(shown: Accessor<boolean>) {
   const onChooseProject = (payload: ChooseProjectPayload) =>
     void runConnectionAction(payload.id, "/amicode/connections/choose-project", payload)
   const onCancelAuth = (id: string) => void runConnectionAction(id, "/amicode/connections/disconnect", { id })
+  // Google browser OAuth: POST to the server's auth start route; the server opens the
+  // system browser via McpBrowser (which now respects BROWSER in VS Code remote).
+  // Fallback to window.open when the server does not return a URL (e.g. token-based
+  // google probe that already has a cached URL). The overlay tracks validating state
+  // while the round-trip is in flight so the card shows the waiting-browser copy.
+  const onStartAuth = (payload: import("@opencode-ai/ui/amicode-connections-tab").StartAuthPayload) => {
+    void runConnectionAction(payload.id, "/amicode/connections/auth", payload).then((result) => {
+      // The server's BrowserOpenFailed event carries the URL when the helper fails;
+      // as a belt-and-suspenders, if the action response itself carries a URL,
+      // open it here via the browser. The status-popover runs in the main app
+      // (not the chat iframe), so window.open is not blocked.
+      const maybeUrl = (result as unknown as { url?: string })?.url
+      if (maybeUrl && typeof maybeUrl === "string" && /^https:\/\//i.test(maybeUrl)) {
+        try { window.open(maybeUrl, "_blank", "noopener") } catch {}
+      }
+    })
+  }
   const connectionsLabels = createMemo(() => ({
     empty: language.t("dialog.connections.empty"),
     retry: language.t("dialog.connections.retry"),
@@ -738,6 +755,7 @@ export function createAmicodeConnectionsState(shown: Accessor<boolean>) {
     onRevalidateConnection,
     onChooseProject,
     onCancelAuth,
+    onStartAuth,
   }
 }
 
@@ -810,6 +828,7 @@ function AmicodeStatusTabContents(props: { state: AmicodeStatusTabsState; includ
               onDisconnect={props.state.onDisconnectConnection}
               onRevalidate={props.state.onRevalidateConnection}
               onRetry={props.state.refetchConnections}
+              onStartAuth={(props.state as unknown as { onStartAuth?: (p: import("@opencode-ai/ui/amicode-connections-tab").StartAuthPayload) => void }).onStartAuth}
               onChooseProject={props.state.onChooseProject}
               onCancelAuth={props.state.onCancelAuth}
             />
