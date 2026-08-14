@@ -77,6 +77,7 @@ import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } fro
 import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
 import { AmicodeFileRefBridge } from "@/components/amicode-file-ref-bridge"
+import { DevToolsReopenBridge } from "@/components/settings-dialog"
 
 const NewSession = lazy(() => import("@/pages/new-session"))
 
@@ -501,6 +502,7 @@ export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
               <QueryProvider>
                 <WslServersProvider>
                   <DialogProvider>
+                    <DevToolsReopenBridge />
                     <MarkedProvider>
                       <FileComponentProvider component={File}>{props.children}</FileComponentProvider>
                     </MarkedProvider>
