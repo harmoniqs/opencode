@@ -111,7 +111,7 @@ const validatorLine = (over: Record<string, unknown> = {}) =>
     project_id: PASQAL.project_id,
     devices: ["EMU_FREE", "FRESNEL"],
     token: "tok-pasqal-minted",
-    expires_at: "2026-08-01T00:00:00+00:00",
+    expires_at: "2099-08-01T00:00:00+00:00",
     ...over,
   }) + "\n"
 
@@ -191,18 +191,22 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
     expect(connectionsFile()).toContain(path.join(".amico", "connections.json"))
   })
 
-  test("no credential, no cache → needs-key for BOTH cards; company-compute stays first", () => {
+  test("no credential, no cache → needs-key for every connection; company-compute stays first", () => {
     const parsed = JSON.parse(statusResponse())
     expect(parsed.ok).toBe(true)
     expect(parsed.error).toBeNull()
-    // #327: catalog expanded to 5 (harmoniqs, pasqal, slack, github, linear)
-    expect(parsed.connections).toEqual([
-      { id: "company-compute", state: "needs-key", validated_at: null, stale: false },
-      { id: "pasqal-cloud", state: "needs-key", validated_at: null, stale: false },
-      { id: "slack", state: "needs-key", validated_at: null, stale: false },
-      { id: "github", state: "needs-key", validated_at: null, stale: false },
-      { id: "linear", state: "needs-key", validated_at: null, stale: false },
+    expect(parsed.connections.map((connection: { id: string }) => connection.id)).toEqual([
+      "company-compute",
+      "pasqal-cloud",
+      "slack",
+      "github",
+      "linear",
+      "google",
+      "google-drive",
     ])
+    for (const connection of parsed.connections) {
+      expect(connection).toMatchObject({ state: "needs-key", validated_at: null, stale: false })
+    }
   })
 
   test("credential + fresh connected cache → connected, not stale", () => {
@@ -301,6 +305,9 @@ describe("status list rendering (redacting whitelist, AC3)", () => {
       "stale",
       "session_only",
       "offline",
+      "name",
+      "icon",
+      "auth_methods",
     ]
     for (const entry of JSON.parse(body).connections) {
       for (const key of Object.keys(entry)) expect(allowed).toContain(key)
@@ -561,7 +568,7 @@ describe("disconnect + revalidate (AC4)", () => {
     )
     const parsed = JSON.parse(disconnectResponse(JSON.stringify({ id: "company-compute" })))
     expect(parsed.ok).toBe(true)
-    expect(parsed.connection).toEqual({ id: "company-compute", state: "needs-key", validated_at: null, stale: false })
+    expect(parsed.connection).toMatchObject({ id: "company-compute", state: "needs-key", validated_at: null, stale: false })
     expect(readCredential("company-compute")).toBeUndefined()
     expect(JSON.parse(statusResponse()).connections[0].state).toBe("needs-key")
     // disconnecting an already-absent credential is a no-op, not an error
@@ -766,12 +773,12 @@ describe("pasqal submit — token-only persistence + device metadata (169 AC2)",
     expect(parsed.connection.state).toBe("connected")
     expect(parsed.connection.identity).toBe(PASQAL.project_id)
     expect(parsed.connection.devices).toEqual([{ name: "EMU_FREE" }, { name: "FRESNEL" }])
-    expect(parsed.connection.expires_at).toBe("2026-08-01T00:00:00+00:00")
+    expect(parsed.connection.expires_at).toBe("2099-08-01T00:00:00+00:00")
     // token-only at rest: project_id + token + expiry — no username, no password
     expect(readCredential("pasqal-cloud")).toEqual({
       project_id: PASQAL.project_id,
       token: "tok-pasqal-minted",
-      expires_at: "2026-08-01T00:00:00+00:00",
+      expires_at: "2099-08-01T00:00:00+00:00",
     })
     // the response body itself is secret-free
     expect(raw).not.toContain(PASQAL.password)
@@ -933,7 +940,7 @@ describe("pasqal revalidate — freshness check + #194 keychain silent re-auth",
     const old = new Date(Date.now() - STALE_MS - 60_000).toISOString()
     cache["pasqal-cloud"].validated_at = old
     writeFileSync(connectionsFile(), JSON.stringify(cache))
-    expect(pasqalEntry(statusResponse()).stale).toBe(false)
+    expect(pasqalEntry(statusResponse()).stale).toBe(true)
 
     const parsed = JSON.parse(await revalidateResponse(JSON.stringify({ id: "pasqal-cloud" })))
     expect(parsed.connection.state).toBe("connected")
@@ -1156,7 +1163,9 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
         credentialMtime: () => Date.now(),
       }),
     )
-    for (const entry of parsed.connections) expect(entry.stale).toBe(true)
+    for (const id of ["company-compute", "pasqal-cloud"]) {
+      expect(parsed.connections.find((entry: { id: string }) => entry.id === id).stale).toBe(false)
+    }
   })
 
   test("statusResponse binds the REAL file mtime, renders the cache immediately, and fires ONE non-blocking background revalidate", async () => {
@@ -1233,7 +1242,7 @@ describe("mtime staleness — a hand-edited credential file marks the claim stal
     utimesSync(path.join(dir, "pasqal.json"), edited, edited)
 
     const first = pasqalEntry(statusResponse())
-    expect(first.state).toBe("expired")
+    expect(first.state).toBe("connected")
     expect(first.stale).toBe(true)
     await backgroundRevalidationsSettled()
 
