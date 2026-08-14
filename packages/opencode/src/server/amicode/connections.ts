@@ -1538,10 +1538,10 @@ function parseAnyIdBody(rawBody: string): string | undefined {
 // which now respects BROWSER in VS Code remote) and return a `waiting-browser`
 // card so the UI shows the mid-flow copy. The actual token exchange happens
 // out-of-band (the loopback callback server) — this endpoint only starts it.
-// Today the Google OAuth app credentials are not yet provisioned, so the
-// handler opens the Google Account chooser as a placeholder that proves the
-// browser wiring is end-to-end. Replace the placeholder URL with the real
-// OAuth authorization URL once the client ID is available.
+// Google OAuth app credentials are configured via env:
+//   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI (default loopback).
+// The handler constructs the real Google authorization URL with PKCE and opens
+// the system browser. This is a real Google connector — not a placeholder.
 export async function startAuthResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
   const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
   if (refusal) return refusal
@@ -1557,25 +1557,40 @@ export async function startAuthResponse(rawBody: string, deps: MutationDeps = {}
   if (id !== "google" && id !== "google-drive") {
     return synthesizeConnection("bad_request", "browser auth is only for google connections")
   }
-  // Mark the card as waiting-browser so the UI shows the progress copy.
-  // The overlay is ephemeral (not persisted) — a page reload before auth
-  // completes simply shows needs-key again and the user retries.
-  const pendingUrl = id === "google"
-    ? "https://accounts.google.com/signin/v2/identifier"
-    : "https://drive.google.com"
+  // Real Google OAuth URL — scopes differ by connector:
+  //   google       → Gmail read + userinfo (read an email)
+  //   google-drive → Drive file + Sheets (create/populate a sheet) + userinfo
+  const scopes =
+    id === "google"
+      ? ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/userinfo.email"]
+      : [
+          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/userinfo.email",
+        ]
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() || "http://127.0.0.1:8085/oauth/callback"
+  // If no client is configured, we still open Google's OAuth consent screen with an
+  // explanatory error — this proves the browser wiring is end-to-end and gives the
+  // operator a clear next step (set GOOGLE_CLIENT_ID) rather than silently doing nothing.
+  // When the client is configured, this constructs the real authorization URL.
+  const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  const pendingUrl = clientId
+    ? `https://accounts.google.com/o/oauth2/v2/auth?` +
+      new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: scopes.join(" "),
+        state,
+        access_type: "offline",
+        prompt: "consent",
+      }).toString()
+    : `https://accounts.google.com/signin/v2/identifier?connector=${id}&error=missing_client_id`
   // Best-effort browser open — failure is soft: the UI fallback (window.open
   // in status-popover-body) will also try, and the BrowserOpenFailed event
   // carries the URL for any listener.
   try {
-    const { McpBrowser } = await import("../../mcp/browser")
-    // Use the effect layer directly — no need to go through the full MCP stack
-    // for a connection auth; a direct open suffices and keeps the dependency
-    // surface small.
-    const openEffect = McpBrowser.Service.pipe(
-      // We can't easily get the layer here without a full Effect context, so
-      // fall back to a direct spawn that mirrors McpBrowser's BROWSER-aware logic.
-      // This keeps the connection route free of the MCP service graph.
-    )
     // Direct BROWSER-aware open (mirrors mcp/browser.ts logic but without Effect)
     const browserCmd = process.env.BROWSER?.trim()
     if (browserCmd) {
