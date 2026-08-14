@@ -9,6 +9,7 @@ export function ConnectionPicker(props: {
   catalog: CatalogEntry[]
   onAddCustom: (payload: { name: string; token: string; url?: string }) => Promise<void>
   onSubmitToken: (id: string, token: string) => Promise<void>
+  onStartBrowser?: (id: string) => void
   onClose: () => void
 }) {
   const [picked, setPicked] = createSignal<string | undefined>(undefined)
@@ -16,6 +17,9 @@ export function ConnectionPicker(props: {
   const [customToken, setCustomToken] = createSignal("")
   const [customUrl, setCustomUrl] = createSignal("")
   const [token, setToken] = createSignal("")
+
+  const pickedEntry = () => props.catalog.find((e) => e.id === picked())
+  const isBrowserEntry = () => pickedEntry()?.authShape === "browser"
 
   const submitCustom = async (e: Event) => {
     e.preventDefault()
@@ -36,6 +40,17 @@ export function ConnectionPicker(props: {
     if (!payload) return
     await props.onSubmitToken(id, token())
     setToken("")
+    setPicked(undefined)
+  }
+
+  const startBrowser = (e: Event) => {
+    e.preventDefault()
+    const id = picked()
+    if (!id) return
+    if (props.onStartBrowser) props.onStartBrowser(id)
+    else {
+      // Fallback: if no browser handler, treat as token flow for backwards compat
+    }
     setPicked(undefined)
   }
 
@@ -73,6 +88,9 @@ export function ConnectionPicker(props: {
               >
                 <span class="w-[18px] h-[18px] flex items-center justify-center text-text-base" innerHTML={entry.icon} />
                 <span class="text-12-regular text-text-base">{entry.name}</span>
+                <Show when={entry.authShape === "browser"}>
+                  <span class="ml-auto text-10-regular text-text-weaker border border-border-weak-base rounded px-1 py-0">Browser</span>
+                </Show>
               </button>
             )}
           </For>
@@ -120,25 +138,40 @@ export function ConnectionPicker(props: {
       </Show>
 
       <Show when={isBuiltIn()}>
-        <form class="flex flex-col gap-1.5" onSubmit={submitToken} data-slot="amicode-picker-token-form">
-          <span class="text-12-regular text-text-base">{picked()}</span>
-          <input
-            type="password"
-            placeholder="Token"
-            aria-label="Token"
-            value={token()}
-            onInput={(e) => setToken(e.currentTarget.value)}
-            class="amc-input amc-input--compact"
-          />
-          <div class="flex gap-2">
-            <Button type="submit" variant="primary" size="small">
-              Connect
-            </Button>
-            <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
-              Back
-            </Button>
+        <Show when={isBrowserEntry()} fallback={
+          <form class="flex flex-col gap-1.5" onSubmit={submitToken} data-slot="amicode-picker-token-form">
+            <span class="text-12-regular text-text-base">{picked()}</span>
+            <input
+              type="password"
+              placeholder="Token"
+              aria-label="Token"
+              value={token()}
+              onInput={(e) => setToken(e.currentTarget.value)}
+              class="amc-input amc-input--compact"
+            />
+            <div class="flex gap-2">
+              <Button type="submit" variant="primary" size="small">
+                Connect
+              </Button>
+              <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
+                Back
+              </Button>
+            </div>
+          </form>
+        }>
+          <div class="flex flex-col gap-1.5" data-slot="amicode-picker-browser-form">
+            <span class="text-12-regular text-text-base">{picked()}</span>
+            <span class="text-11-regular text-text-weaker">Sign in with your browser to connect {pickedEntry()?.name ?? picked()}.</span>
+            <div class="flex gap-2">
+              <Button type="button" variant="primary" size="small" onClick={startBrowser} data-slot="amicode-picker-browser-start">
+                Sign in with browser
+              </Button>
+              <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
+                Back
+              </Button>
+            </div>
           </div>
-        </form>
+        </Show>
       </Show>
     </div>
   )

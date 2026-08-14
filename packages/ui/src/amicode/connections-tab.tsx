@@ -132,6 +132,13 @@ export function AmicodeConnectionsTab(props: {
                         if (payload) await props.onSubmit(payload as CredentialSubmitPayload)
                         setShowPicker(false)
                       }}
+                      onStartBrowser={(id) => {
+                        // Browser login for google/google-drive: start OAuth in browser
+                        const fakeView = { id, state: "needs-key" as const, rawState: "needs-key", validatedAt: "—", stale: false, authMethods: ["browser" as const] }
+                        const payload = startAuthPayload(fakeView as any, "browser")
+                        if (payload) props.onStartAuth?.(payload)
+                        setShowPicker(false)
+                      }}
                       onClose={() => setShowPicker(false)}
                     />
                   </Show>
@@ -170,6 +177,12 @@ export function AmicodeConnectionsTab(props: {
                     onSubmitToken={async (id, token) => {
                       const payload = tokenOnlySubmitPayload(id, token)
                       if (payload) await props.onSubmit(payload as CredentialSubmitPayload)
+                      setShowPicker(false)
+                    }}
+                    onStartBrowser={(id) => {
+                      const fakeView = { id, state: "needs-key" as const, rawState: "needs-key", validatedAt: "—", stale: false, authMethods: ["browser" as const] }
+                      const payload = startAuthPayload(fakeView as any, "browser")
+                      if (payload) props.onStartAuth?.(payload)
                       setShowPicker(false)
                     }}
                     onClose={() => setShowPicker(false)}
