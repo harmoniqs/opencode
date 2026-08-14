@@ -17,7 +17,7 @@ export function ContextWarningBanner() {
       (level) => {
         if (level === "warn" && warning.store.lastNotifiedWarn === 0) {
           warning.setStore("lastNotifiedWarn", Date.now())
-          showToast({ variant: "warning", title: language.t("context.warning.toast.warn.title"), description: language.t("context.warning.toast.warn.description") })
+          showToast({ variant: "default", title: language.t("context.warning.toast.warn.title"), description: language.t("context.warning.toast.warn.description") })
         }
         if (level === "critical" && warning.store.lastNotifiedCritical === 0) {
           warning.setStore("lastNotifiedCritical", Date.now())
