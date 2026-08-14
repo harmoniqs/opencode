@@ -231,6 +231,20 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
       }
       if (key === "a") {
         event.preventDefault()
+        // Scope select-all to the code block when the focused target is inside one
+        const block =
+          target instanceof Element ? target.closest('[data-component="markdown-code"]') : null
+        if (block instanceof HTMLElement) {
+          const pre = block.querySelector("pre")
+          const selection = win.getSelection()
+          if (selection && pre) {
+            selection.removeAllRanges()
+            const range = win.document.createRange()
+            range.selectNodeContents(pre)
+            selection.addRange(range)
+          }
+          return
+        }
         // Scope select-all to the preview panel if the target is inside one
         const panel = target instanceof Element && target.closest('#review-panel:not([aria-hidden="true"])')
         if (panel) {

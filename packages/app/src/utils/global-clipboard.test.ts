@@ -59,6 +59,20 @@ function editableDiv(text: string) {
   return el
 }
 
+function codeBlock(text: string) {
+  const wrapper = document.createElement("div")
+  wrapper.setAttribute("data-component", "markdown-code")
+  wrapper.tabIndex = -1
+  const pre = document.createElement("pre")
+  pre.className = "shiki"
+  const code = document.createElement("code")
+  code.textContent = text
+  pre.appendChild(code)
+  wrapper.appendChild(pre)
+  document.body.appendChild(wrapper)
+  return wrapper
+}
+
 function selectWithin(el: HTMLElement, start: number, end: number) {
   const range = document.createRange()
   range.setStart(el.firstChild!, start)
@@ -513,6 +527,62 @@ describe("installGlobalClipboardFallback", () => {
     expect(bridge.posted).toEqual([
       { source: "amicode", kind: "clipboard-write", text: "User: hello\nAssistant: world" },
     ])
+  })
+
+  test("mod+A inside a markdown-code block selects only that block's text", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const block = codeBlock('console.log("hi")')
+
+    const event = keydown(block, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    expect(selection.toString()).toBe('console.log("hi")')
+  })
+
+  test("mod+A inside a markdown-code block then mod+C bridges only the block text", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const block = codeBlock("const a = 1")
+
+    setSessionCopyProvider(() => "FULL SESSION with 100 messages")
+    cleanups.push(() => setSessionCopyProvider(undefined))
+
+    keydown(block, "a")
+    const event = keydown(block, "c")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "const a = 1" },
+    ])
+  })
+
+  test("mod+A on a non-code target still selects the full timeline", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const viewport = document.createElement("div")
+    viewport.tabIndex = 0
+    viewport.appendChild(timeline)
+    document.body.appendChild(viewport)
+
+    const event = keydown(viewport, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    expect(selection.toString()).toBe("chat messages")
   })
 
   // --- Session copy provider (data-model full copy) ---
