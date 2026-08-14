@@ -610,6 +610,7 @@ export const dict = {
   "common.rename": "Gi nytt navn",
   "common.reset": "Tilbakestill",
   "common.archive": "Arkiver",
+  "common.unarchive": "Unarchive",
   "common.delete": "Slett",
   "common.close": "Lukk",
   "common.edit": "Rediger",
@@ -961,6 +962,8 @@ export const dict = {
 
   "session.child.promptDisabled": "Underagentsesjoner kan ikke motta forespørsler.",
   "session.child.backToParent": "Tilbake til hovedsesjonen.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "wsl.server.add": "Legg til WSL-server",
   "wsl.server.addShort": "Legg til WSL",

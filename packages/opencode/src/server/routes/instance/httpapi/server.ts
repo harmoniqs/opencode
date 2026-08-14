@@ -458,6 +458,26 @@ const amicodeConnectionsRoute = HttpRouter.use((router) =>
         return HttpServerResponse.text(out, { contentType: "application/json" })
       }),
     )
+    yield* router.add("GET", "/amicode/connections/catalog", () =>
+      Effect.sync(() =>
+        HttpServerResponse.text(AmicodeConnections.catalogResponse(), { contentType: "application/json" }),
+      ),
+    )
+    yield* router.add("POST", "/amicode/connections/add-custom", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        const out = yield* Effect.promise(() => AmicodeConnections.addCustomConnectionResponse(body))
+        return HttpServerResponse.text(out, { contentType: "application/json" })
+      }),
+    )
+    yield* router.add("POST", "/amicode/connections/remove", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        return HttpServerResponse.text(AmicodeConnections.removeCustomConnectionResponse(body), {
+          contentType: "application/json",
+        })
+      }),
+    )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 

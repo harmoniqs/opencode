@@ -541,6 +541,7 @@ export const dict = {
   "common.rename": "이름 바꾸기",
   "common.reset": "초기화",
   "common.archive": "보관",
+  "common.unarchive": "Unarchive",
   "common.delete": "삭제",
   "common.close": "닫기",
   "common.edit": "편집",
@@ -870,6 +871,8 @@ export const dict = {
   "common.clear": "지우기",
   "session.child.promptDisabled": "하위 에이전트 세션에는 프롬프트를 입력할 수 없습니다.",
   "session.child.backToParent": "메인 세션으로 돌아가기.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "wsl.server.add": "WSL 서버 추가",
   "wsl.server.addShort": "WSL 추가",

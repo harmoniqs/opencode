@@ -23,6 +23,7 @@ import { InstallationVersion } from "./installation/version"
 import { Slug } from "./util/slug"
 import { ProjectTable } from "./project/sql"
 import path from "path"
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { fromRow } from "./session/info"
 import { SessionRunner } from "./session/runner/index"
 import { SessionStore } from "./session/store"
@@ -36,6 +37,7 @@ import { Snapshot } from "./snapshot"
 import { SessionRevert } from "./session/revert"
 import { Revert } from "@opencode-ai/schema/revert"
 import { FSUtil } from "./fs-util"
+import { Global } from "./global"
 import { SessionDurable } from "@opencode-ai/schema/durable-event-manifest"
 
 export const RevertState = Revert.State
@@ -180,6 +182,43 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Session") {}
+
+/**
+ * Persist the selected model to ~/.local/state/opencode/model.json so it
+ * survives server restarts. Mirrors the TUI's persistence in local.tsx.
+ * Reads the existing file, prepends the new model to `recent` (deduped, max 10),
+ * preserves `favorite` and `variant`, then atomic-writes back.
+ */
+const persistRecentModel = (providerID: string, modelID: string) =>
+  Effect.promise(async () => {
+    const filePath = path.join(Global.Path.state, "model.json")
+    let existing: { recent?: unknown[]; favorite?: unknown[]; variant?: unknown } = {}
+    try {
+      existing = JSON.parse(await readFile(filePath, "utf8"))
+    } catch {}
+    const prev: { providerID: string; modelID: string }[] = Array.isArray(existing.recent)
+      ? existing.recent.filter(
+          (x): x is { providerID: string; modelID: string } =>
+            !!x && typeof x === "object" && typeof (x as any).providerID === "string" && typeof (x as any).modelID === "string",
+        )
+      : []
+    const seen = new Set<string>()
+    const next = [{ providerID, modelID }, ...prev]
+      .filter((item) => {
+        const key = `${item.providerID}/${item.modelID}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 10)
+    const data = { recent: next, favorite: existing.favorite ?? [], variant: existing.variant ?? {} }
+    await mkdir(path.dirname(filePath), { recursive: true })
+    const tmp = `${filePath}.${process.pid}.tmp`
+    await writeFile(tmp, JSON.stringify(data))
+    await rename(tmp, filePath).catch(async () => {
+      await rm(tmp, { force: true }).catch(() => {})
+    })
+  })
 
 const layer = Layer.effect(
   Service,
@@ -413,6 +452,9 @@ const layer = Layer.effect(
           timestamp: yield* DateTime.now,
           model: input.model,
         })
+        // Persist the model selection to model.json so it survives server restarts.
+        // Fire-and-forget: a failure to write state must never break model switching.
+        yield* persistRecentModel(input.model.providerID, input.model.id).pipe(Effect.ignore)
       }),
       compact: Effect.fn("V2Session.compact")(function* (input) {
         yield* result.get(input.sessionID)

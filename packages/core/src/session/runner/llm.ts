@@ -39,6 +39,8 @@ import { MAX_STEPS_PROMPT } from "./max-steps"
 import { Snapshot } from "../../snapshot"
 import { makeLocationNode } from "../../effect/app-node"
 import { llmClient } from "../../effect/app-node-platform"
+import { ProviderPermission } from "@opencode-ai/schema/provider-permission"
+import { filterSystemBaseline, redactSessionMessages } from "../../provider-permission"
 
 /**
  * Runs one durable coding-agent Session until it settles.
@@ -197,15 +199,29 @@ const layer = Layer.effect(
       const system =
         initialized ?? (yield* SessionContextEpoch.prepare(db, events, loadSystemContext(agent), session.id))
       const model = yield* models.resolve(session)
-      const entries = yield* SessionHistory.entriesForRunner(db, session.id, system.baselineSeq)
-      const context = entries.map((entry) => entry.message)
+      // Provider-permission context filtering & history redaction (spec: strict privacy filtering including history redaction on model switch)
+      // Resolve provider tier config (global opencode.jsonc) — synchronous via Config latest
+      const cfgEntries = yield* config.entries()
+      const rawPP = Config.latest(cfgEntries, "providerPermissions") as unknown as ProviderPermission.Config | undefined
+      const ppConfig: ProviderPermission.Config =
+        rawPP && Array.isArray((rawPP as ProviderPermission.Config).tiers)
+          ? (rawPP as ProviderPermission.Config)
+          : ProviderPermission.DEFAULT_CONFIG
+      const activeModelId = `${model.provider}/${model.id}`
+      // System prompt filtering: drop instruction blocks from denied directories (active tier re-evaluates on model switch)
+      const filteredBaseline = filterSystemBaseline(system.baseline, ppConfig, activeModelId)
+      const filteredSystem = { ...system, baseline: filteredBaseline }
+      const entries = yield* SessionHistory.entriesForRunner(db, session.id, filteredSystem.baselineSeq)
+      const rawContext = entries.map((entry) => entry.message)
+      // History redaction at send-time only — never mutates stored history
+      const context = redactSessionMessages(rawContext, ppConfig, activeModelId, session.id) as typeof rawContext
       const isLastStep = agent.info?.steps !== undefined && currentStep >= agent.info.steps
       const toolMaterialization = isLastStep ? undefined : yield* tools.materialize(agent.info?.permissions)
       const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const request = LLM.request({
         model,
         providerOptions: { openai: { promptCacheKey } },
-        system: [agent.info?.system, system.baseline]
+        system: [agent.info?.system, filteredSystem.baseline]
           .filter((part): part is string => part !== undefined && part.length > 0)
           .map(SystemPart.make),
         messages: [...toLLMMessages(context, model), ...(isLastStep ? [Message.assistant(MAX_STEPS_PROMPT)] : [])],

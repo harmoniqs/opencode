@@ -97,6 +97,7 @@ import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
+import { authTokenFromCredentials } from "@/utils/server"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
@@ -739,6 +740,62 @@ export default function Page() {
     }
     return accumulateDiffs(editParts)
   })
+
+  // All files touched by edit tools in this session — fetched from the server
+  // which scans ALL messages regardless of client-side pagination.
+  const touchedFilesQuery = createQuery(() => {
+    const sessionID = params.id
+    return {
+      queryKey: ["session-touched-files", sessionID ?? "", sessionDiffVersion()] as const,
+      enabled: !!sessionID,
+      placeholderData: [] as Array<{ file: string; status: string }>,
+      staleTime: 30_000,
+      queryFn: sessionID
+        ? async () => {
+            const server = serverSDK()
+            const url = new URL(`/session/${sessionID}/touched-files`, server.url)
+            url.searchParams.set("directory", sdk().directory)
+            const headers: Record<string, string> = {}
+            const httpServer = server.server.http
+            if (httpServer.password) {
+              headers.Authorization = `Basic ${authTokenFromCredentials({ username: httpServer.username, password: httpServer.password })}`
+            }
+            const res = await fetch(url.toString(), { headers })
+            if (!res.ok) return [] as Array<{ file: string; status: string }>
+            return (await res.json()) as Array<{ file: string; status: string }>
+          }
+        : skipToken,
+    }
+  })
+  const touchedFiles = createMemo(() => {
+    const serverFiles = touchedFilesQuery.data ?? []
+    if (serverFiles.length > 0) {
+      // Keep absolute paths from the server — the file read endpoint handles them directly.
+      // Do NOT normalize to ~/ (the webview can't reliably resolve ~ back to $HOME).
+      return serverFiles.map((f) => ({ file: f.file, status: f.status }))
+    }
+    // Fallback: derive from loaded tool parts (covers live edits before server catches up)
+    const allMessages = messages()
+    if (!allMessages.length) return [] as Array<{ file: string; status: string }>
+    const seen = new Map<string, string>()
+    for (const msg of allMessages) {
+      const msgParts = sync().data.part[msg.id]
+      if (!msgParts) continue
+      for (const part of msgParts) {
+        if (part.type !== "tool" || !EDIT_TOOLS.has(part.tool)) continue
+        if (part.state.status !== "completed") continue
+        const meta = part.state.metadata as Record<string, unknown> | undefined
+        const filediff = meta?.filediff as { file?: string } | undefined
+        if (filediff?.file) {
+          if (!seen.has(filediff.file)) {
+            seen.set(filediff.file, part.tool === "write" ? "added" : "modified")
+          }
+        }
+      }
+    }
+    return Array.from(seen, ([file, status]) => ({ file, status }))
+  })
+
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
     const selected = reviewFile()
@@ -2259,6 +2316,7 @@ export default function Page() {
               focusReviewDiff={focusReviewDiff}
               reviewSnap={ui.reviewSnap}
               size={size}
+              touchedFiles={touchedFiles}
             />
           </Suspense>
         </Show>
@@ -2311,6 +2369,7 @@ export default function Page() {
                       reviewSnap={ui.reviewSnap}
                       size={size}
                       stacked={desktopV2PanelLayout().stacked}
+                      touchedFiles={touchedFiles}
                     />
                   </Suspense>
                 </div>

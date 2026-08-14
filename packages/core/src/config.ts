@@ -5,6 +5,7 @@ import path from "path"
 import { type ParseError, parse } from "jsonc-parser"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Permission } from "@opencode-ai/schema/permission"
+import { ProviderPermission } from "@opencode-ai/schema/provider-permission"
 import { FSUtil } from "./fs-util"
 import { Global } from "./global"
 import { Location } from "./location"
@@ -104,6 +105,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   experimental: ConfigExperimental.Experimental.pipe(Schema.optional),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(Schema.optional),
+  providerPermissions: ProviderPermission.Config.pipe(Schema.optional).annotate({
+    description: "Provider permission trust tiers — directory × action matrices per tier",
+  }),
 }) {}
 
 export class Document extends Schema.Class<Document>("Config.Document")({

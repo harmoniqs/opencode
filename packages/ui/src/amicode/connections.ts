@@ -71,31 +71,66 @@ export type ConnectionView = {
   /** choose-project: the authenticated account's projects (name falls back
    *  to id; entries without an id are dropped) */
   projects?: ConnectionProject[]
+  /** #327: optional icon svg or letter for logo rendering */
+  icon?: string
+  /** #327: display name from registry */
+  name?: string
 }
 
 export type ConnectionsView = { ok: boolean; connections: ConnectionView[]; error?: string }
 export type ConnectionActionView = { ok: boolean; connection?: ConnectionView; error?: string }
 
 export const COMPANY_COMPUTE_ID = "company-compute"
-
-/** Every connection renders in the Connections tab, Harmoniqs Cloud included.
- *
- *  This REVERSES amicode#200's render filter. That change moved Company Compute
- *  out of the tab, reasoning that it was one credential for one service rather
- *  than a separate product. The effect, though, was that Pasqal Cloud appeared
- *  as a connectable service and Harmoniqs Cloud — ours — did not: users went
- *  looking for it exactly where Pasqal is, found nothing, and had nowhere to
- *  enter an API key (2026-07-28). A cloud we sell has to be connectable in the
- *  place that lists clouds.
- *
- *  The solver capsule keeps its own connect affordance; both routes write the
- *  same credential, so connecting in either place shows up in both. Kept as a
- *  function rather than dropping the call sites, so there is still one obvious
- *  place to filter if a genuinely internal connection ever appears. */
-export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
-  return connections
-}
 export const PASQAL_ID = "pasqal-cloud"
+export const SLACK_ID = "slack"
+export const GITHUB_ID = "github"
+export const LINEAR_ID = "linear"
+export const GOOGLE_ID = "google"
+export const GOOGLE_DRIVE_ID = "google-drive"
+
+export const BUILT_IN_IDS = [COMPANY_COMPUTE_ID, PASQAL_ID, SLACK_ID, GITHUB_ID, LINEAR_ID, GOOGLE_ID, GOOGLE_DRIVE_ID] as const
+
+export const CONNECTION_ICONS: Record<string, string> = {
+  "company-compute":
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#EAB308"/><path fill="white" d="M6.3 11.8h4.2c.8 0 1.4-.6 1.4-1.4 0-.6-.4-1.1-.9-1.3A2.2 2.2 0 0 0 9 7.4a2.2 2.2 0 0 0-2 .9c-.6.1-1 .6-1 1.2 0 .7.6 1.3 1.3 1.3z"/><path fill="white" opacity="0.95" d="M8.1 9.4 9 8.2l1 1.2 1.5-1.8 1 1-2.5 3-2-2.4z"/></svg>',
+  "pasqal-cloud":
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#1E1B4B"/><circle cx="9" cy="9" r="1.5" fill="white"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(60 9 9)"/><ellipse cx="9" cy="9" rx="4.6" ry="1.65" fill="none" stroke="#FB713C" stroke-width="0.95" opacity="0.98" transform="rotate(-60 9 9)"/></svg>',
+  slack:
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><g transform="translate(3.2 3.2)"><path fill="#E01E5A" d="M3.6 5a1.35 1.35 0 1 1-2.7 0 1.35 1.35 0 0 1 2.7 0zm1.45 0H7.6a1.35 1.35 0 1 0 0-2.7H5.05z"/><path fill="#2EB67D" d="M6.6 3.6a1.35 1.35 0 1 1 0-2.7 1.35 1.35 0 0 1 0 2.7zm0 1.45V7.6a1.35 1.35 0 1 0 2.7 0V5.05z"/><path fill="#ECB22E" d="M8 6.6a1.35 1.35 0 1 1 2.7 0 1.35 1.35 0 0 1-2.7 0zm-1.45 0H4a1.35 1.35 0 1 0 0 2.7h2.55z"/><path fill="#36C5F0" d="M5 8a1.35 1.35 0 1 1 0 2.7 1.35 1.35 0 0 1 0-2.7zm0-1.45V4a1.35 1.35 0 1 0-2.7 0v2.55z"/></g></svg>',
+  github:
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#24292F" d="M9 3.2a5.9 5.9 0 0 0-1.86 11.48c.29.05.4-.13.4-.28V13.4c-1.55.34-1.87-.66-1.87-.66-.25-.64-.62-.81-.62-.81-.5-.34.04-.33.04-.33.56.04.85.57.85.57.5.85 1.3.6 1.62.46.05-.36.19-.6.35-.74-1.23-.14-2.52-.62-2.52-2.74 0-.6.22-1.1.57-1.48-.06-.14-.25-.7.05-1.45 0 0 .47-.15 1.54.56A5.34 5.34 0 0 1 9 6.35c.48 0 .96.06 1.41.19 1.07-.71 1.54-.56 1.54-.56.3.75.11 1.31.05 1.45.35.38.57.88.57 1.48 0 2.13-1.3 2.6-2.53 2.74.2.17.38.5.38 1.02v1.51c0 .16.1.34.4.28A5.9 5.9 0 0 0 9 3.2z"/></svg>',
+  linear:
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="#5E6AD2"/><path fill="white" d="M6.4 5.6h1.7L10.3 9 8 12.5H6.3L8.6 9 6.4 5.6z"/><path fill="white" opacity="0.75" d="M11.2 5.6h1.2v6.9h-1.2z"/></svg>',
+  google:
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#4285F4" d="M9.2 13.3c1.5 0 2.5-.5 3.3-1.4l-1.5-1.3c-.3.4-.7.8-1.8.8-1.4 0-2.4-1-2.4-2.3s1-2.3 2.4-2.3c.6 0 1 .2 1.3.4l1.1-1.1C10.9 5.5 10 5 9.2 5 6.9 5 5 6.7 5 9s1.9 4 4.2 4z"/><path fill="#34A853" d="M13.6 9.2c0-.3 0-.5-.1-.8H9.2v1.5h2.5c-.1.6-.5 1.1-1 1.4l1.5 1.2c.9-.8 1.4-2 1.4-3.3z"/><path fill="#FBBC04" d="M7.8 11.3c-.2-.5-.3-1-.3-1.6s.1-1.1.3-1.6L6.2 6.8C5.7 7.7 5.5 8.3 5.5 9s.2 1.3.7 2.2l1.6-1z"/><path fill="#EA4335" d="M9.2 6.3c.8 0 1.3.3 1.6.6l1.2-1.2C11.1 5 10.1 4.6 9.2 4.6 6.9 4.6 5 6.3 5 8.6l1.6 1.3c.4-.9 1.2-1.6 2.6-1.6z"/></svg>',
+  "google-drive":
+    '<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect width="18" height="18" rx="4" fill="white" stroke="#E5E7EB" stroke-width="0.5"/><path fill="#4285F4" d="M10.2 4.2 4.5 13.8h3.4l5.7-9.6z"/><path fill="#34A853" d="M10.2 4.2h3.4L9 12.1 7.3 9.2z"/><path fill="#FBBC04" d="M4.5 13.8 9 12.1 7.3 9.2 4.5 13.8z"/></svg>',
+}
+
+export function isCustomConnectionId(id: string): boolean {
+  return id.startsWith("custom-")
+}
+
+export function catalogForPicker(connections: ConnectionView[]): { id: string; name: string; icon: string; authShape: string }[] {
+  const configured = new Set(connections.filter((c) => c.state !== "needs-key").map((c) => c.id))
+  return BUILT_IN_IDS.filter((id) => !configured.has(id)).map((id) => ({
+    id,
+    name: connectionTitle(id),
+    icon: CONNECTION_ICONS[id] ?? "",
+    authShape: connectionFormKind(id),
+  }))
+}
+
+/** #327: Only configured connections visible. The panel shows only connections
+ *  that have been configured (connected or previously attempted). Unconfigured
+ *  built-ins (needs-key) are hidden and surface via the Add picker. */
+export function statusTabConnections(connections: ConnectionView[]): ConnectionView[] {
+  return connections.filter((c) => c.state !== "needs-key")
+}
+export function unconfiguredBuiltIns(connections: ConnectionView[]): string[] {
+  const configured = new Set(connections.filter((c) => c.state !== "needs-key").map((c) => c.id))
+  return BUILT_IN_IDS.filter((id) => !configured.has(id)) as unknown as string[]
+}
 
 /** Product names are not translated; ids without one render verbatim. */
 export function connectionTitle(id: string): string {
@@ -106,7 +141,18 @@ export function connectionTitle(id: string): string {
   // The wire id stays "company-compute": server contract, not presentation.
   if (id === COMPANY_COMPUTE_ID) return "Harmoniqs Cloud"
   if (id === PASQAL_ID) return "Pasqal Cloud"
+  if (id === SLACK_ID) return "Slack"
+  if (id === GITHUB_ID) return "GitHub"
+  if (id === LINEAR_ID) return "Linear"
+  if (id === GOOGLE_ID) return "Google"
+  if (id === GOOGLE_DRIVE_ID) return "Google Drive"
+  if (isCustomConnectionId(id)) return id // caller should use view.name when available
   return id
+}
+
+export function connectionDisplayName(view: ConnectionView): string {
+  if (view.name) return view.name
+  return connectionTitle(view.id)
 }
 
 const WIRE_STATES: ReadonlySet<string> = new Set(CONNECTION_WIRE_STATES)
@@ -185,6 +231,8 @@ function parseConnectionEntry(raw: unknown): ConnectionView {
     verificationUrl: str(entry.verification_url),
     codeExpiresAt: codeExpires === "—" ? undefined : codeExpires,
     projects: parseProjects(entry.projects),
+    icon: str(entry.icon),
+    name: str(entry.name),
   }
 }
 
@@ -384,14 +432,34 @@ export type PasqalCredentialsPayload = { id: string; username: string; password:
  *  the only path where project id stays a typed field (no authenticated
  *  listing exists before connect) */
 export type PasqalTokenPayload = { id: string; token: string; project_id: string }
-export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload | PasqalTokenPayload
+export type TokenOnlyPayload = { id: string; token: string }
+export type CustomConnectionPayload = { id?: string; name: string; token: string; url?: string }
+export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPayload | PasqalTokenPayload | TokenOnlyPayload
 
 /** Which credential fields a card's form collects (169): pasqal-cloud takes
- *  username/password/project_id; every other id keeps base_url + token. */
-export type ConnectionFormKind = "base-url-token" | "pasqal-credentials"
+ *  username/password/project_id; every other id keeps base_url + token.
+ *  #327: slack/github/linear take token-only; custom takes name+token+url. */
+export type ConnectionFormKind = "base-url-token" | "pasqal-credentials" | "token-only" | "custom"
 
 export function connectionFormKind(id: string): ConnectionFormKind {
-  return id === PASQAL_ID ? "pasqal-credentials" : "base-url-token"
+  if (id === PASQAL_ID) return "pasqal-credentials"
+  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID || id === GOOGLE_ID || id === GOOGLE_DRIVE_ID) return "token-only"
+  if (isCustomConnectionId(id)) return "custom"
+  return "base-url-token"
+}
+
+export function tokenOnlySubmitPayload(id: string, token: string): TokenOnlyPayload | undefined {
+  const key = token.trim()
+  if (key === "") return undefined
+  return { id, token: key }
+}
+
+export function customConnectionPayload(name: string, token: string, url?: string): CustomConnectionPayload | undefined {
+  const n = name.trim()
+  const key = token.trim()
+  if (n === "" || key === "") return undefined
+  const trimmedUrl = url?.trim()
+  return { name: n, token: key, ...(trimmedUrl ? { url: trimmedUrl } : {}) }
 }
 
 // --- auth-path scaffold (#194): method model + start/choose payload gates.
@@ -403,17 +471,23 @@ export function connectionFormKind(id: string): ConnectionFormKind {
  *  legacy single method implied by the card's form kind. */
 export function connectionAuthMethods(view: ConnectionView): ConnectionAuthMethod[] {
   if (view.authMethods && view.authMethods.length > 0) return view.authMethods
+  if (view.id === GOOGLE_ID || view.id === GOOGLE_DRIVE_ID) return ["browser"]
   return connectionFormKind(view.id) === "pasqal-credentials" ? ["credentials"] : ["token"]
 }
 
 /** What the entry area renders for a chosen method: a field set or a start
  *  button ("none" — browser/device-code hand the work elsewhere). */
-export type MethodEntryKind = "base-url-token" | "pasqal-credentials" | "pasqal-token" | "none"
+export type MethodEntryKind = ConnectionFormKind | "pasqal-token" | "none"
 
 export function methodEntryKind(id: string, method: ConnectionAuthMethod): MethodEntryKind {
   if (method === "browser" || method === "device-code") return "none"
   if (method === "credentials") return connectionFormKind(id)
-  return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  if (method === "token") {
+    const kind = connectionFormKind(id)
+    if (kind === "token-only" || kind === "custom") return kind
+    return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
+  }
+  return connectionFormKind(id)
 }
 
 export type StartAuthPayload = { id: string; method: ConnectionAuthMethod }

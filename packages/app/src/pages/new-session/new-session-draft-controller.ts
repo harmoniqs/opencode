@@ -1,5 +1,5 @@
 import { useSearchParams } from "@solidjs/router"
-import { createEffect, untrack } from "solid-js"
+import { createEffect, createSignal, untrack } from "solid-js"
 import { usePromptInputV2Controller } from "@/components/prompt-input-v2"
 import { useComments } from "@/context/comments"
 import { useLocal } from "@/context/local"
@@ -10,13 +10,18 @@ import { createPromptModelSelection } from "@/pages/session/composer/prompt-mode
 import { useSessionKey } from "@/pages/session/session-layout"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 
+// amicode#363: global flag the navigate bridge sets before creating a draft.
+// The draft controller reads + clears it on mount to auto-submit.
+const [pendingAutoSend, setPendingAutoSend] = createSignal(false)
+export { setPendingAutoSend }
+
 export function createNewSessionDraftController(workspace: { worktree: () => string; resetWorktree: () => void }) {
   const prompt = usePrompt()
   const serverSync = useServerSync()
   const comments = useComments()
   const local = useLocal()
   const route = useSessionKey()
-  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string; autoSend?: string }>()
   const model = createPromptModelSelection({ agent: () => local.agent.current() })
 
   useComposerCommands({ model })
@@ -43,9 +48,16 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
     if (!prompt.ready()) return
     untrack(() => {
       const text = searchParams.prompt
-      if (!text) return
-      prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
-      setSearchParams({ ...searchParams, prompt: undefined })
+      if (text) {
+        prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+        setSearchParams({ ...searchParams, prompt: undefined, autoSend: undefined })
+      }
+      // amicode#363: auto-submit when the navigate bridge flagged it
+      if (pendingAutoSend()) {
+        setPendingAutoSend(false)
+        // Delay to ensure the prompt input and submission machinery are fully mounted
+        setTimeout(() => input.view.submit.onSubmit(), 100)
+      }
     })
   })
 

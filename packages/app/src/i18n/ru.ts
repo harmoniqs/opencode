@@ -248,6 +248,8 @@ export const dict = {
   "prompt.mode.shell.exit": "esc для выхода",
   "session.child.promptDisabled": "В сессиях субагентов нельзя отправлять запросы.",
   "session.child.backToParent": "Вернуться к основной сессии.",
+  "session.archived.readOnly": "This session is archived and read-only.",
+  "session.archived.unarchive": "Unarchive to resume.",
 
   "prompt.example.1": "Исправить TODO в коде",
   "prompt.example.2": "Какой технологический стек этого проекта?",
@@ -727,6 +729,7 @@ export const dict = {
   "common.rename": "Переименовать",
   "common.reset": "Сбросить",
   "common.archive": "Архивировать",
+  "common.unarchive": "Unarchive",
   "common.delete": "Удалить",
   "common.close": "Закрыть",
   "common.edit": "Редактировать",
