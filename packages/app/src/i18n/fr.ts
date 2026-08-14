@@ -776,6 +776,28 @@ export const dict = {
   "settings.general.row.wayland.description": "Désactiver le repli X11 sur Wayland. Nécessite un redémarrage.",
   "settings.general.row.wayland.tooltip":
     "Sur Linux avec des moniteurs à taux de rafraîchissement mixte, Wayland natif peut être plus stable.",
+  "settings.general.section.developerTools": "Developer Tools",
+  "settings.general.row.developerMode.title": "Use developer build",
+  "settings.general.row.developerMode.description":
+    "Switch between the release and a local developer build of the opencode server and Amicode extension",
+  "settings.general.row.opencodePath.title": "opencode repo path",
+  "settings.general.row.opencodePath.description":
+    "Path to your local opencode repository root (the binary is resolved from here)",
+  "settings.general.row.opencodePath.placeholder": "~/harmoniqs/opencode",
+  "settings.general.row.opencodePath.error.notFound": "Binary not found at this path",
+  "settings.general.row.opencodePath.error.notExecutable": "Binary exists but is not executable",
+  "settings.general.row.amicodePath.title": "Amicode repo path",
+  "settings.general.row.amicodePath.description":
+    "Path to your local Amicode repository root (rebuilds extension and reloads on change)",
+  "settings.general.row.amicodePath.placeholder": "~/harmoniqs/amicode",
+  "settings.general.row.amicodePath.error.notFound": "Directory does not exist",
+  "settings.general.row.amicodePath.error.buildFailed": "Extension build failed",
+  "settings.general.row.amicodePath.building": "Building extension…",
+  "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
+  "settings.general.row.devTools.rebuildLocally": "Rebuild Locally",
+  "settings.general.row.devTools.rebuildRemotely": "Rebuild Remotely",
+  "settings.general.row.devTools.rebuilding": "Rebuilding…",
+  "settings.general.row.devTools.rebuilt": "Rebuilt!",
   "settings.general.row.releaseNotes.title": "Notes de version",
   "settings.general.row.releaseNotes.description": 'Afficher des pop-ups "Quoi de neuf" après les mises à jour',
   "settings.updates.row.startup.title": "Vérifier les mises à jour au démarrage",

@@ -46,6 +46,11 @@ export interface Settings {
     sans: string
     terminal: string
   }
+  developer: {
+    enabled: boolean
+    opencodePath: string
+    amicodePath: string
+  }
   keybinds: Record<string, string>
   permissions: {
     autoApprove: boolean
@@ -201,6 +206,11 @@ const defaultSettings: Settings = {
     mono: "",
     sans: "",
     terminal: "",
+  },
+  developer: {
+    enabled: true,
+    opencodePath: "",
+    amicodePath: "",
   },
   keybinds: {},
   permissions: {
@@ -531,6 +541,20 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         errors: withFallback(() => store.sounds?.errors, defaultSettings.sounds.errors),
         setErrors(value: string) {
           setStore("sounds", "errors", value)
+        },
+      },
+      developer: {
+        enabled: withFallback(() => store.developer?.enabled, defaultSettings.developer.enabled),
+        setEnabled(value: boolean) {
+          setStore("developer", "enabled", value)
+        },
+        opencodePath: withFallback(() => store.developer?.opencodePath, defaultSettings.developer.opencodePath),
+        setOpencodePath(value: string) {
+          setStore("developer", "opencodePath", value)
+        },
+        amicodePath: withFallback(() => store.developer?.amicodePath, defaultSettings.developer.amicodePath),
+        setAmicodePath(value: string) {
+          setStore("developer", "amicodePath", value)
         },
       },
     }
