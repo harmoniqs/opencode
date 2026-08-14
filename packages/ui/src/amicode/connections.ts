@@ -439,11 +439,12 @@ export type CredentialSubmitPayload = BaseUrlTokenPayload | PasqalCredentialsPay
 /** Which credential fields a card's form collects (169): pasqal-cloud takes
  *  username/password/project_id; every other id keeps base_url + token.
  *  #327: slack/github/linear take token-only; custom takes name+token+url. */
-export type ConnectionFormKind = "base-url-token" | "pasqal-credentials" | "token-only" | "custom"
+export type ConnectionFormKind = "base-url-token" | "pasqal-credentials" | "token-only" | "custom" | "browser"
 
 export function connectionFormKind(id: string): ConnectionFormKind {
   if (id === PASQAL_ID) return "pasqal-credentials"
-  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID || id === GOOGLE_ID || id === GOOGLE_DRIVE_ID) return "token-only"
+  if (id === GOOGLE_ID || id === GOOGLE_DRIVE_ID) return "browser"
+  if (id === SLACK_ID || id === GITHUB_ID || id === LINEAR_ID) return "token-only"
   if (isCustomConnectionId(id)) return "custom"
   return "base-url-token"
 }
@@ -484,7 +485,7 @@ export function methodEntryKind(id: string, method: ConnectionAuthMethod): Metho
   if (method === "credentials") return connectionFormKind(id)
   if (method === "token") {
     const kind = connectionFormKind(id)
-    if (kind === "token-only" || kind === "custom") return kind
+    if (kind === "token-only" || kind === "custom" || kind === "browser") return kind
     return id === PASQAL_ID ? "pasqal-token" : "base-url-token"
   }
   return connectionFormKind(id)

@@ -101,7 +101,7 @@ export interface ConnectionEntry {
   name: string
   icon: { kind: "svg"; svg: string } | { kind: "letter"; letter: string }
   validator: "company-compute" | "pasqal" | "slack" | "github" | "linear" | "google" | "google-drive" | "none"
-  authShape: "base-url-token" | "token-only" | "pasqal-credentials"
+  authShape: "base-url-token" | "token-only" | "pasqal-credentials" | "browser"
   url?: string
 }
 
@@ -152,7 +152,7 @@ export const BUILT_IN_CATALOG: ConnectionEntry[] = [
     name: "Google",
     icon: { kind: "svg", svg: CONNECTION_ICONS["google"] },
     validator: "google",
-    authShape: "token-only",
+    authShape: "browser",
   },
   {
     id: "google-drive",
@@ -160,7 +160,7 @@ export const BUILT_IN_CATALOG: ConnectionEntry[] = [
     name: "Google Drive",
     icon: { kind: "svg", svg: CONNECTION_ICONS["google-drive"] },
     validator: "google-drive",
-    authShape: "token-only",
+    authShape: "browser",
   },
 ]
 
