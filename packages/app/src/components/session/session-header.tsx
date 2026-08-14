@@ -54,7 +54,6 @@ import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
 import { useTitlebarRightMount } from "../titlebar"
-import { SessionContextUsage } from "@/components/session-context-usage"
 
 const OPEN_APPS = [
   "vscode",
@@ -581,8 +580,6 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
   return (
     <div class="flex items-center gap-2">
 
-      {/* 376: always-visible context usage — promoted from the hidden Context tab */}
-      <SessionContextUsage variant="indicator" buttonAppearance="v2" placement="bottom" />
       {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
       <SessionChatsDropdown />
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
