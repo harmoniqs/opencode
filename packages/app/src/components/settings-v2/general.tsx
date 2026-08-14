@@ -25,6 +25,7 @@ import {
   type ShellSettingsController,
   type SoundSettingsController,
 } from "./general-controllers"
+import { DataStorageSection } from "./data-storage"
 import { DeveloperToolsSection } from "./developer-tools"
 import "./settings-v2.css"
 
@@ -567,6 +568,8 @@ export const SettingsGeneralV2: Component<{
         </Show>
 
         <DisplaySection />
+
+        <DataStorageSection />
 
         <AdvancedSection />
 
