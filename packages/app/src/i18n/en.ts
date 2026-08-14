@@ -1032,6 +1032,16 @@ export const dict = {
   "settings.general.row.devTools.rebuilding": "Rebuilding…",
   "settings.general.row.devTools.rebuilt": "Rebuilt!",
 
+  "settings.general.section.dataStorage": "Data & Storage",
+  "settings.general.row.dataStorage.database.title": "Session database",
+  "settings.general.row.dataStorage.database.description":
+    "Override the path to the opencode session database. Leave empty to use the default location.",
+  "settings.general.row.dataStorage.database.error.invalidPath": "Parent directory does not exist",
+  "settings.general.row.dataStorage.configDir.title": "Configuration directory",
+  "settings.general.row.dataStorage.configDir.description":
+    "Override the opencode configuration directory. Leave empty to use the default location.",
+  "settings.general.row.dataStorage.configDir.error.invalidPath": "Directory does not exist",
+
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",
 

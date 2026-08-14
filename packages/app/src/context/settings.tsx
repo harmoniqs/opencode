@@ -46,6 +46,10 @@ export interface Settings {
     sans: string
     terminal: string
   }
+  storage: {
+    databasePath: string
+    configDir: string
+  }
   developer: {
     enabled: boolean
     opencodePath: string
@@ -206,6 +210,10 @@ const defaultSettings: Settings = {
     mono: "",
     sans: "",
     terminal: "",
+  },
+  storage: {
+    databasePath: "",
+    configDir: "",
   },
   developer: {
     enabled: true,
@@ -541,6 +549,16 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         errors: withFallback(() => store.sounds?.errors, defaultSettings.sounds.errors),
         setErrors(value: string) {
           setStore("sounds", "errors", value)
+        },
+      },
+      storage: {
+        databasePath: withFallback(() => store.storage?.databasePath, defaultSettings.storage.databasePath),
+        setDatabasePath(value: string) {
+          setStore("storage", "databasePath", value)
+        },
+        configDir: withFallback(() => store.storage?.configDir, defaultSettings.storage.configDir),
+        setConfigDir(value: string) {
+          setStore("storage", "configDir", value)
         },
       },
       developer: {
