@@ -1,5 +1,7 @@
 import { Layer, Effect, Schedule, Duration } from "effect"
 import { OtlpLogger } from "effect/unstable/observability"
+import type { Context } from "@opentelemetry/api"
+import type { ReadableSpan, Span, SpanExporter, SpanProcessor } from "@opentelemetry/sdk-trace-base"
 import { Flag } from "../flag/flag"
 import { InstallationChannel, InstallationVersion } from "../installation/version"
 import { runID } from "./shared"
@@ -48,76 +50,111 @@ export function resource(): { serviceName: string; serviceVersion: string; attri
 }
 
 // Rate limiting configuration to prevent AWS CloudFront bans
-const TELEMETRY_BATCH_SIZE = 100 // Maximum spans per batch
-const TELEMETRY_BATCH_DELAY_MS = 5000 // Send batch every 5 seconds
-const TELEMETRY_MAX_QUEUE_SIZE = 1000 // Maximum spans to queue before dropping
+const TELEMETRY_BATCH_SIZE = 100
+const TELEMETRY_BATCH_DELAY_MS = 5000
+const TELEMETRY_MAX_QUEUE_SIZE = 1000
+const TELEMETRY_EXPORT_RETRIES = 3
 
-class RateLimitedSpanProcessor {
-  private spans: any[] = []
-  private timer: NodeJS.Timeout | null = null
-  private exporter: any
+class RateLimitedSpanProcessor implements SpanProcessor {
+  private spans: ReadableSpan[] = []
+  private timer: NodeJS.Timeout | undefined
+  private exporting: Promise<void> | undefined
+  private nextExportAt = 0
+  private shutdownPromise: Promise<void> | undefined
+  private isShutdown = false
 
-  constructor(exporter: any) {
-    this.exporter = exporter
+  constructor(private readonly exporter: SpanExporter) {}
+
+  onStart(_span: Span, _parentContext: Context): void {}
+
+  onEnd(span: ReadableSpan): void {
+    if (this.isShutdown || this.spans.length >= TELEMETRY_MAX_QUEUE_SIZE) return
+    this.spans.push(span)
+    this.scheduleExport()
   }
 
-  onStart(span: any, parentContext: any) {
-    // Don't block on start
+  async forceFlush(): Promise<void> {
+    this.clearTimer()
+    while (this.exporting || this.spans.length > 0) {
+      if (this.exporting) {
+        await this.exporting
+        continue
+      }
+      await this.exportWithRetry(this.spans.splice(0, TELEMETRY_BATCH_SIZE))
+    }
+    await this.exporter.forceFlush?.()
   }
 
-  onEnd(span: any) {
-    // Add to queue with size limit
-    if (this.spans.length < TELEMETRY_MAX_QUEUE_SIZE) {
-      this.spans.push(span)
-    }
-    
-    // Schedule batch send
-    if (!this.timer) {
-      this.timer = setTimeout(() => this.flush(), TELEMETRY_BATCH_DELAY_MS)
-    }
-    
-    // Flush immediately if batch is full
-    if (this.spans.length >= TELEMETRY_BATCH_SIZE) {
-      this.flush()
-    }
+  shutdown(): Promise<void> {
+    this.shutdownPromise ??= this.shutdownProcessor()
+    return this.shutdownPromise
   }
 
-  private flush() {
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
-    
-    if (this.spans.length === 0) return
-    
-    const batch = this.spans.splice(0, TELEMETRY_BATCH_SIZE)
-    
-    // Export with retry logic
-    this.exportWithRetry(batch, 3)
-  }
-
-  private async exportWithRetry(spans: any[], retries: number) {
+  private async shutdownProcessor(): Promise<void> {
+    this.isShutdown = true
     try {
-      await this.exporter.export(spans, (result: any) => {
-        if (result.code !== 0) {
-          console.warn(`Telemetry export failed: ${result.error?.message || 'Unknown error'}`)
-        }
+      await this.forceFlush()
+    } finally {
+      await this.exporter.shutdown()
+    }
+  }
+
+  private scheduleExport(): void {
+    if (this.isShutdown || this.exporting || this.timer || this.spans.length === 0) return
+    const delay = this.spans.length >= TELEMETRY_BATCH_SIZE ? Math.max(0, this.nextExportAt - Date.now()) : TELEMETRY_BATCH_DELAY_MS
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      this.exportNextBatch()
+    }, delay)
+  }
+
+  private exportNextBatch(): void {
+    if (this.exporting || this.spans.length === 0) return
+    const batch = this.spans.splice(0, TELEMETRY_BATCH_SIZE)
+    const exporting = this.exportWithRetry(batch)
+    this.exporting = exporting
+    void exporting.catch((error) => console.warn("Telemetry export failed after retries:", error))
+    void exporting
+      .finally(() => {
+        this.exporting = undefined
+        this.nextExportAt = Date.now() + TELEMETRY_BATCH_DELAY_MS
+        this.scheduleExport()
       })
-    } catch (error) {
-      if (retries > 0) {
-        setTimeout(() => this.exportWithRetry(spans, retries - 1), 1000)
-      } else {
-        console.warn("Telemetry export failed after retries:", error)
+      .catch(() => undefined)
+  }
+
+  private async exportWithRetry(spans: ReadableSpan[]): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.export(spans)
+        return
+      } catch (error) {
+        if (attempt >= TELEMETRY_EXPORT_RETRIES) throw error
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * 2 ** attempt))
       }
     }
   }
 
-  shutdown() {
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
-    this.flush()
+  private export(spans: ReadableSpan[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.exporter.export(spans, (result) => {
+          if (result.code === 0) {
+            resolve()
+            return
+          }
+          reject(result.error ?? new Error("Telemetry export failed"))
+        })
+      } catch (error) {
+        reject(error)
+      }
+    })
+  }
+
+  private clearTimer(): void {
+    if (!this.timer) return
+    clearTimeout(this.timer)
+    this.timer = undefined
   }
 }
 
@@ -132,7 +169,6 @@ export async function tracingLayer() {
   if (Flag.OPENCODE_DISABLE_TELEMETRY || !endpoint) return Layer.empty
   const NodeSdk = await import("@effect/opentelemetry/NodeSdk")
   const OTLP = await import("@opentelemetry/exporter-trace-otlp-http")
-  const SdkBase = await import("@opentelemetry/sdk-trace-base")
   const { AsyncLocalStorageContextManager } = await import("@opentelemetry/context-async-hooks")
   const { context } = await import("@opentelemetry/api")
 
@@ -141,19 +177,17 @@ export async function tracingLayer() {
   manager.enable()
   context.setGlobalContextManager(manager)
 
-  // Create rate-limited exporter
   const exporter = new OTLP.OTLPTraceExporter({
     url: `${endpoint}/v1/traces`,
     headers,
     timeoutMillis: 30000, // 30 second timeout
   })
 
-  // Use rate-limited processor instead of BatchSpanProcessor
   const processor = new RateLimitedSpanProcessor(exporter)
 
   return NodeSdk.layer(() => ({
     resource: resource(),
-    spanProcessor: processor as any,
+    spanProcessor: processor,
   }))
 }
 
