@@ -28,7 +28,6 @@ export function useSettingsCommand() {
   const command = useCommand()
   const language = useLanguage()
   const show = useSettingsDialog()
-  const showDevTools = useSettingsDialog("general", "settings-developer-tools")
 
   command.register("settings", () => [
     {
@@ -40,19 +39,31 @@ export function useSettingsCommand() {
     },
   ])
 
-  // After a dev-tools rebuild + reload, auto-open settings scrolled to the
-  // developer tools section for continuity.
+  return show
+}
+
+/** Renders nothing. On mount, checks if a dev-tools rebuild just completed and
+ *  auto-opens the settings dialog scrolled to Developer Tools. Must be placed
+ *  inside DialogProvider so it works on every page (dashboard, session, etc). */
+export function DevToolsReopenBridge() {
+  const dialog = useDialog()
+
   onMount(() => {
     try {
       if (localStorage.getItem("amicode:devtools-reopen") === "1") {
         localStorage.removeItem("amicode:devtools-reopen")
-        // Small delay to let the page finish rendering before opening the dialog
-        setTimeout(showDevTools, 300)
+        setTimeout(() => {
+          void import("@/components/settings-v2").then((module) => {
+            void dialog.show(() => (
+              <module.DialogSettings defaultValue="general" scrollTo="settings-developer-tools" />
+            ))
+          })
+        }, 300)
       }
     } catch {
       // localStorage unavailable — non-critical
     }
   })
 
-  return show
+  return null
 }
