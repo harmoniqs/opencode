@@ -10,6 +10,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { LayoutRoute, useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
@@ -323,6 +324,19 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
             }
             const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
 
+            const dialog = useDialog()
+            const [settingsOpen, setSettingsOpen] = createSignal(false)
+            const showSettings = () => {
+              const sessionID = params.id
+              void import("@/components/settings-v2").then((module) => {
+                setSettingsOpen(true)
+                void dialog.show(
+                  () => <module.DialogSettings sessionID={sessionID} />,
+                  () => setSettingsOpen(false),
+                )
+              })
+            }
+
             command.register("titlebar-home", () => [
               {
                 id: "home.toggle",
@@ -382,6 +396,27 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
+                <TooltipV2
+                  placement="bottom"
+                  value={
+                    <>
+                      {language.t("command.settings.open")}
+                      <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
+                    </>
+                  }
+                  class="shrink-0"
+                >
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<IconV2 name="settings-gear" />}
+                    state={settingsOpen() ? "pressed" : undefined}
+                    onClick={showSettings}
+                    aria-label={language.t("command.settings.open")}
+                  />
+                </TooltipV2>
                 <TooltipV2
                   placement="bottom"
                   value={
