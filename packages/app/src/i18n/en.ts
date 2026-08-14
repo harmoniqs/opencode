@@ -494,6 +494,13 @@ export const dict = {
   "context.usage.clickToView": "Click to view context",
   "context.usage.view": "View context usage",
 
+  "context.warning.banner.warn": "Context {{percent}}% full — compact soon to keep quality",
+  "context.warning.banner.critical": "Context {{percent}}% full — next message may fail. Compact now.",
+  "context.warning.toast.warn.title": "Context 75% full",
+  "context.warning.toast.warn.description": "Consider compacting to keep quality",
+  "context.warning.toast.critical.title": "Context 90% full",
+  "context.warning.toast.critical.description": "Next message may fail — compact now",
+
   "language.en": "English",
   "language.zh": "简体中文",
   "language.zht": "繁體中文",
