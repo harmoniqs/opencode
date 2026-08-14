@@ -19,8 +19,10 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
   const amicodeError = () => {
     const s = props.controller.status()
     if (!s || s.amicodeValid) return undefined
+    if (s.buildError) return s.buildError
     return s.amicodeError ?? language.t("settings.general.row.amicodePath.error.notFound")
   }
+  const building = () => props.controller.status()?.building ?? false
   const reloadNeeded = () => props.controller.status()?.reloadNeeded ?? false
 
   return (
@@ -72,6 +74,11 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
         description={
           <>
             {language.t("settings.general.row.amicodePath.description")}
+            <Show when={building()}>
+              <span class="settings-v2-field-info">
+                {language.t("settings.general.row.amicodePath.building")}
+              </span>
+            </Show>
             <Show when={amicodeError()}>
               <span class="settings-v2-field-error">{amicodeError()}</span>
             </Show>
@@ -108,8 +115,9 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
 export const DeveloperToolsSection: Component = () => {
   const language = useLanguage()
   const controller = createDeveloperToolsController()
+
   return (
-    <div class="settings-v2-section">
+    <div id="settings-developer-tools" class="settings-v2-section">
       <h3 class="settings-v2-section-title">
         {language.t("settings.general.section.developerTools")}
       </h3>
