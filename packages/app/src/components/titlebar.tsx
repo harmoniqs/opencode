@@ -15,6 +15,7 @@ import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
+import { useSettingsDialog } from "@/components/settings-dialog"
 import { WindowsAppMenu } from "./windows-app-menu"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
@@ -76,6 +77,19 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
     return undefined
   }
   const windowsControlsWidth = () => `${windowsControlsBaseWidth / Math.max(titlebarZoom(), 1)}px`
+
+  // After a dev-tools rebuild + reload, auto-open settings at Developer Tools
+  const showDevTools = useSettingsDialog("general", "settings-developer-tools")
+  onMount(() => {
+    try {
+      if (localStorage.getItem("amicode:devtools-reopen") === "1") {
+        localStorage.removeItem("amicode:devtools-reopen")
+        setTimeout(showDevTools, 300)
+      }
+    } catch {
+      // non-critical
+    }
+  })
 
   const [history, setHistory] = createStore({
     stack: [] as string[],

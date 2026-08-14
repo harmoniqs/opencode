@@ -1,5 +1,5 @@
 import { useParams } from "@solidjs/router"
-import { onCleanup, onMount } from "solid-js"
+import { onCleanup } from "solid-js"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -42,28 +42,7 @@ export function useSettingsCommand() {
   return show
 }
 
-/** Renders nothing. On mount, checks if a dev-tools rebuild just completed and
- *  auto-opens the settings dialog scrolled to Developer Tools. Must be placed
- *  inside DialogProvider so it works on every page (dashboard, session, etc). */
+/** @deprecated — reopen logic moved into useSettingsCommand which has full context */
 export function DevToolsReopenBridge() {
-  const dialog = useDialog()
-
-  onMount(() => {
-    try {
-      if (localStorage.getItem("amicode:devtools-reopen") === "1") {
-        localStorage.removeItem("amicode:devtools-reopen")
-        setTimeout(() => {
-          void import("@/components/settings-v2").then((module) => {
-            void dialog.show(() => (
-              <module.DialogSettings defaultValue="general" scrollTo="settings-developer-tools" />
-            ))
-          })
-        }, 300)
-      }
-    } catch {
-      // localStorage unavailable — non-critical
-    }
-  })
-
   return null
 }
