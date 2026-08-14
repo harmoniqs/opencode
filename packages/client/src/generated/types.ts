@@ -475,6 +475,12 @@ export type SessionsPromptOutput = {
         readonly name: string
         readonly source?: { readonly start: number; readonly end: number; readonly text: string }
       }>
+      readonly skills?: ReadonlyArray<{
+        readonly name: string
+        readonly description?: string
+        readonly content?: string
+        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+      }>
     }
     readonly delivery: "steer" | "queue"
     readonly timeCreated: number
@@ -746,6 +752,12 @@ export type SessionsHistoryOutput = {
               readonly name: string
               readonly source?: { readonly start: number; readonly end: number; readonly text: string }
             }>
+            readonly skills?: ReadonlyArray<{
+              readonly name: string
+              readonly description?: string
+              readonly content?: string
+              readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+            }>
           }
           readonly delivery: "steer" | "queue"
         }
@@ -771,6 +783,12 @@ export type SessionsHistoryOutput = {
             }>
             readonly agents?: ReadonlyArray<{
               readonly name: string
+              readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+            }>
+            readonly skills?: ReadonlyArray<{
+              readonly name: string
+              readonly description?: string
+              readonly content?: string
               readonly source?: { readonly start: number; readonly end: number; readonly text: string }
             }>
           }
@@ -1204,6 +1222,12 @@ export type SessionsEventsOutput =
             readonly name: string
             readonly source?: { readonly start: number; readonly end: number; readonly text: string }
           }>
+          readonly skills?: ReadonlyArray<{
+            readonly name: string
+            readonly description?: string
+            readonly content?: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
         }
         readonly delivery: "steer" | "queue"
       }
@@ -1229,6 +1253,12 @@ export type SessionsEventsOutput =
           }>
           readonly agents?: ReadonlyArray<{
             readonly name: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
+          readonly skills?: ReadonlyArray<{
+            readonly name: string
+            readonly description?: string
+            readonly content?: string
             readonly source?: { readonly start: number; readonly end: number; readonly text: string }
           }>
         }
