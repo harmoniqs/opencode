@@ -585,6 +585,47 @@ describe("installGlobalClipboardFallback", () => {
     expect(selection.toString()).toBe("chat messages")
   })
 
+  test("mod+A inside a textarea nested in #review-panel selects the textarea's own text (issue 183)", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const panel = document.createElement("aside")
+    panel.id = "review-panel"
+    const textarea = document.createElement("textarea")
+    textarea.value = "raw editor content"
+    panel.appendChild(textarea)
+    document.body.appendChild(panel)
+
+    const event = keydown(textarea, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(textarea.selectionStart).toBe(0)
+    expect(textarea.selectionEnd).toBe("raw editor content".length)
+  })
+
+  test("mod+A inside a code block nested in #review-panel still scopes to the block (issue 154)", () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const timeline = document.createElement("div")
+    timeline.setAttribute("data-timeline-virtual-content", "")
+    timeline.textContent = "chat messages"
+    document.body.appendChild(timeline)
+    const panel = document.createElement("aside")
+    panel.id = "review-panel"
+    const block = codeBlock('console.log("hi")')
+    panel.appendChild(block)
+    document.body.appendChild(panel)
+
+    const event = keydown(block, "a")
+
+    expect(event.defaultPrevented).toBe(true)
+    const selection = window.getSelection()!
+    expect(selection.toString()).toBe('console.log("hi")')
+  })
+
   // --- Session copy provider (data-model full copy) ---
 
   test("mod+A then mod+C with a session copy provider uses the provider text", () => {

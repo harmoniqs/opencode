@@ -277,19 +277,6 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     // --- Select all ---
     if (key === "a") {
       event.preventDefault()
-      // If the target is inside the review/file panel, select that panel's content
-      const panel = target.closest('#review-panel:not([aria-hidden="true"])')
-      if (panel) {
-        const content = panel.querySelector('[data-slot="session-review-v2-preview"]') ?? panel
-        const selection = win.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          const range = win.document.createRange()
-          range.selectNodeContents(content)
-          selection.addRange(range)
-        }
-        return
-      }
       // If the prompt composer is EMPTY, "select all" means the full chat session.
       // If the prompt has content, standard select-all (select the draft text).
       const promptEl = target.closest('[data-component="prompt-input"]')
