@@ -254,7 +254,8 @@ export function SessionSidePanel(props: {
     return false
   })
 
-  // Panel menu items
+  // Panel menu items — Files Changed lives as the "review" trigger, Context and
+  // Preview are the secondary tabs, and Run Inspector is the third requested tab.
   const panelMenuItems = createMemo((): PanelMenuItem[] => [
     {
       id: "context",
@@ -262,6 +263,13 @@ export function SessionSidePanel(props: {
       icon: "brain",
       available: () => true,
       active: contextOpen,
+    },
+    {
+      id: "runInspector",
+      label: "Run Inspector",
+      icon: "pulse",
+      available: () => true,
+      active: () => activeTab() === "runInspector",
     },
     {
       id: SESSION_PREVIEW_TAB,
@@ -447,6 +455,32 @@ export function SessionSidePanel(props: {
                                   </div>
                                 </Tabs.Trigger>
                               </div>
+                              <Tabs.Trigger
+                                value="runInspector"
+                                closeButton={
+                                  <TooltipKeybind
+                                    title={language.t("common.closeTab")}
+                                    keybind={command.keybind("tab.close")}
+                                    placement="bottom"
+                                    gutter={10}
+                                  >
+                                    <IconButton
+                                      icon="close-small"
+                                      variant="ghost"
+                                      class="h-5 w-5"
+                                      onClick={() => tabs().close("runInspector")}
+                                      aria-label={language.t("common.closeTab")}
+                                    />
+                                  </TooltipKeybind>
+                                }
+                                hideCloseButton
+                                onMiddleClick={() => tabs().close("runInspector")}
+                              >
+                                <div class="flex items-center gap-1.5">
+                                  <Icon name="pulse" size="small" />
+                                  <div>Run Inspector</div>
+                                </div>
+                              </Tabs.Trigger>
                               <div style={{ display: previewOpen() ? undefined : "none" }}>
                                 <Tabs.Trigger
                                   value={SESSION_PREVIEW_TAB}
@@ -526,6 +560,21 @@ export function SessionSidePanel(props: {
                             <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                               <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                                 <SessionContextTab />
+                              </div>
+                            </Tabs.Content>
+                          </Show>
+
+                          <Show when={activeTab() === "runInspector"}>
+                            <Tabs.Content value="runInspector" class="flex flex-col h-full overflow-hidden contain-strict">
+                              <div class="relative pt-2 flex-1 min-h-0 overflow-hidden flex flex-col gap-2 p-3">
+                                <div class="text-11-regular text-text-weak">Live run — reuses the same bridge as the Work Column</div>
+                                <div class="border border-border-weaker-base rounded-md p-3 bg-background-base">
+                                  <div class="text-12-medium">Run Inspector (sidebar)</div>
+                                  <div class="text-11-regular text-text-weak mt-1">Iterations, pulse, fidelity — third tab next to Files Changed + Context.</div>
+                                  <div class="mt-2 h-16 border border-border-weaker-base rounded bg-background-stronger flex items-center justify-center text-11-regular text-text-weak">sparkline placeholder</div>
+                                  <div class="mt-2 grid grid-cols-2 gap-1 text-11-regular"><span class="text-text-weak">Iteration</span><span class="text-right font-mono">137 / 200</span><span class="text-text-weak">Fidelity</span><span class="text-right font-mono">0.9987</span></div>
+                                </div>
+                                <div class="text-11-regular text-text-weak">Full plot stays in Work Column — click “Open in Work Column” to focus.</div>
                               </div>
                             </Tabs.Content>
                           </Show>
@@ -645,6 +694,38 @@ export function SessionSidePanel(props: {
                                 </div>
                               </Tabs.Trigger>
                             </div>
+                            <Tabs.Trigger
+                              value="runInspector"
+                              closeButton={
+                                <TooltipV2
+                                  value={
+                                    <>
+                                      {language.t("common.closeTab")}
+                                      <Show when={closeTabKeybind().length > 0}>
+                                        <KeybindV2 keys={closeTabKeybind()} variant="neutral" />
+                                      </Show>
+                                    </>
+                                  }
+                                  placement="bottom"
+                                  gutter={10}
+                                >
+                                  <IconButton
+                                    icon="close-small"
+                                    variant="ghost"
+                                    class="h-5 w-5"
+                                    onClick={() => tabs().close("runInspector")}
+                                    aria-label={language.t("common.closeTab")}
+                                  />
+                                </TooltipV2>
+                              }
+                              hideCloseButton
+                              onMiddleClick={() => tabs().close("runInspector")}
+                            >
+                              <div class="flex items-center gap-1.5">
+                                <Icon name="pulse" size="small" />
+                                <div>Run Inspector</div>
+                              </div>
+                            </Tabs.Trigger>
                             <div style={{ display: previewOpen() ? undefined : "none" }}>
                               <Tabs.Trigger
                                 value={SESSION_PREVIEW_TAB}
@@ -737,6 +818,21 @@ export function SessionSidePanel(props: {
                           <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                               <SessionContextTab />
+                            </div>
+                          </Tabs.Content>
+                        </Show>
+
+                        <Show when={activeTab() === "runInspector"}>
+                          <Tabs.Content value="runInspector" class="flex flex-col h-full overflow-hidden contain-strict">
+                            <div class="relative pt-2 flex-1 min-h-0 overflow-hidden flex flex-col gap-2 p-3">
+                              <div class="text-11-regular text-text-weak">Live run — same bridge as Work Column</div>
+                              <div class="border border-border-weaker-base rounded-md p-3 bg-background-base">
+                                <div class="text-12-medium">Run Inspector (sidebar)</div>
+                                <div class="text-11-regular text-text-weak mt-1">Iterations, pulse, fidelity — third tab next to Files Changed + Context.</div>
+                                <div class="mt-2 h-16 border border-border-weaker-base rounded bg-background-stronger flex items-center justify-center text-11-regular text-text-weak">sparkline placeholder</div>
+                                <div class="mt-2 grid grid-cols-2 gap-1 text-11-regular"><span class="text-text-weak">Iteration</span><span class="text-right font-mono">137 / 200</span><span class="text-text-weak">Fidelity</span><span class="text-right font-mono">0.9987</span></div>
+                              </div>
+                              <div class="text-11-regular text-text-weak">Full plot stays in Work Column — click “Open in Work Column” to focus.</div>
                             </div>
                           </Tabs.Content>
                         </Show>
