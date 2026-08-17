@@ -19,7 +19,18 @@ export function ConnectionPicker(props: {
   const [token, setToken] = createSignal("")
 
   const pickedEntry = () => props.catalog.find((e) => e.id === picked())
-  const isBrowserEntry = () => pickedEntry()?.authShape === "browser"
+  // Google now supports both token and browser — treat it as token in the picker
+  // so users can paste a token like Claude/Slack/GitHub, with browser as alternative
+  const isBrowserEntry = () => {
+    const entry = pickedEntry()
+    if (!entry) return false
+    if (entry.id === "google" || entry.id === "google-drive") return false
+    return entry.authShape === "browser"
+  }
+  const isGoogleEntry = () => {
+    const entry = pickedEntry()
+    return entry?.id === "google" || entry?.id === "google-drive"
+  }
 
   const submitCustom = async (e: Event) => {
     e.preventDefault()
@@ -139,25 +150,52 @@ export function ConnectionPicker(props: {
 
       <Show when={isBuiltIn()}>
         <Show when={isBrowserEntry()} fallback={
-          <form class="flex flex-col gap-1.5" onSubmit={submitToken} data-slot="amicode-picker-token-form">
-            <span class="text-12-regular text-text-base">{picked()}</span>
-            <input
-              type="password"
-              placeholder="Token"
-              aria-label="Token"
-              value={token()}
-              onInput={(e) => setToken(e.currentTarget.value)}
-              class="amc-input amc-input--compact"
-            />
-            <div class="flex gap-2">
-              <Button type="submit" variant="primary" size="small">
-                Connect
+          <Show when={isGoogleEntry()} fallback={
+            <form class="flex flex-col gap-1.5" onSubmit={submitToken} data-slot="amicode-picker-token-form">
+              <span class="text-12-regular text-text-base">{picked()}</span>
+              <input
+                type="password"
+                placeholder="Token"
+                aria-label="Token"
+                value={token()}
+                onInput={(e) => setToken(e.currentTarget.value)}
+                class="amc-input amc-input--compact"
+              />
+              <div class="flex gap-2">
+                <Button type="submit" variant="primary" size="small">
+                  Connect
+                </Button>
+                <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
+                  Back
+                </Button>
+              </div>
+            </form>
+          }>
+            {/* Google: token (paste like Claude) + browser alternative */}
+            <form class="flex flex-col gap-1.5" onSubmit={submitToken} data-slot="amicode-picker-token-form">
+              <span class="text-12-regular text-text-base">{picked()}</span>
+              <input
+                type="password"
+                placeholder="Paste Google token (or use browser below)"
+                aria-label="Token"
+                value={token()}
+                onInput={(e) => setToken(e.currentTarget.value)}
+                class="amc-input amc-input--compact"
+              />
+              <div class="flex gap-2">
+                <Button type="submit" variant="primary" size="small">
+                  Connect with token
+                </Button>
+                <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
+                  Back
+                </Button>
+              </div>
+              <div class="text-11-regular text-text-weaker text-center">— or —</div>
+              <Button type="button" variant="secondary" size="small" onClick={startBrowser} data-slot="amicode-picker-browser-start">
+                Sign in with browser
               </Button>
-              <Button type="button" variant="ghost" size="small" onClick={() => setPicked(undefined)}>
-                Back
-              </Button>
-            </div>
-          </form>
+            </form>
+          </Show>
         }>
           <div class="flex flex-col gap-1.5" data-slot="amicode-picker-browser-form">
             <span class="text-12-regular text-text-base">{picked()}</span>
