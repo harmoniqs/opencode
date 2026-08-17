@@ -11,6 +11,16 @@ Server-Sent Events (SSE). When the server restarts — due to a container rebuil
 explicit restart command, or process crash — the SSE stream disconnects and the
 client retries every 250 ms.
 
+The fundamental issue is an asymmetry in persistence lifetimes: the webview's
+localStorage lives on the **host machine** (or in VS Code Server's profile storage)
+and survives container rebuilds, process restarts, and window reloads. The server
+port, however, is **ephemeral** — determined at startup by whichever port happens
+to be free. There is no stable identity linking "this localStorage scope" to "this
+server instance." The extension host is the only component that knows the correct
+server URL at all times (it spawned the process), making it the authoritative
+source for runtime connection parameters. The webview should receive these from the
+host, not persist and re-read them independently.
+
 Three problems existed:
 
 1. **No restart detection**: the `server.connected` SSE event carried
@@ -76,3 +86,36 @@ Three problems existed:
 - The `lastBootId` persistence enables detecting restarts that happened while the
   webview was closed — on next open, the first `server.connected` event's boot-ID
   won't match, and the full refresh path fires.
+
+## Alternatives Considered
+
+### Boot-ID as HTTP response header on all responses
+
+Adding `X-OpenCode-Boot-ID` to every HTTP response via a global middleware. This
+would benefit non-SSE clients (REST API callers, CLI) but adds middleware
+complexity with no immediate gain for the webview client, which connects
+exclusively via SSE. The `BootId` module is importable by any future middleware
+should this be needed.
+
+### Self-healing reconnect via postMessage
+
+After the failure threshold, the SSE loop posts a `server-url-changed` message to
+itself, which the `AmicodeServerBridge` handles by updating the server store and
+reconnecting. This provides seamless recovery without user intervention. Deferred
+until Phase 4's bridge is validated — documented in
+`plans/followup-self-healing-reconnect.md`.
+
+### Forced page reload on failure threshold
+
+Calling `window.location.reload()` after 10 consecutive failures. Guarantees
+recovery (Phase 2 ensures the fresh load uses `location.origin`) but loses all
+in-memory state (open editors, scroll positions, draft prompts). Rejected as too
+disruptive for a recoverable failure.
+
+### Port 0 (OS-assigned) with readback
+
+Changing the extension to pass port `0` and read back the actual bound port from
+the server's response. Eliminates port collisions but requires restructuring the
+terminal launch protocol and does not address the stale-URL problem (the webview
+still needs to discover the new port). Deferred — the fixed-port default (43117)
+is the primary mitigation.
