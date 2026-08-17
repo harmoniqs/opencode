@@ -152,7 +152,7 @@ export const BUILT_IN_CATALOG: ConnectionEntry[] = [
     name: "Google",
     icon: { kind: "svg", svg: CONNECTION_ICONS["google"] },
     validator: "google",
-    authShape: "browser",
+    authShape: "token-only",
   },
   {
     id: "google-drive",
@@ -160,7 +160,7 @@ export const BUILT_IN_CATALOG: ConnectionEntry[] = [
     name: "Google Drive",
     icon: { kind: "svg", svg: CONNECTION_ICONS["google-drive"] },
     validator: "google-drive",
-    authShape: "browser",
+    authShape: "token-only",
   },
 ]
 
@@ -436,7 +436,7 @@ function renderStatus(
     if (icon) out.icon = icon
     const name = nameForId(id)
     if (name) out.name = name
-    if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
+    if (id === "google" || id === "google-drive") out.auth_methods = ["token", "browser"]
     return out
   }
   let state: ConnectionState
@@ -471,7 +471,7 @@ function renderStatus(
   if (icon) out.icon = icon
   const name = nameForId(id)
   if (name) out.name = name
-  if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
+  if (id === "google" || id === "google-drive") out.auth_methods = ["token", "browser"]
   return out
 }
 
