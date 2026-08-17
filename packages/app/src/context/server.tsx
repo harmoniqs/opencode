@@ -276,6 +276,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
         projects: {} as Record<string, StoredProject[]>,
         lastProject: {} as Record<string, string>,
         recentlyClosed: {} as Record<string, string[]>,
+        lastBootId: {} as Record<string, string>,
       }),
     )
 
@@ -360,6 +361,12 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       projects: {
         ...projects,
         forServer: projectsForServer,
+      },
+      getBootId(serverScope?: string) {
+        return store.lastBootId[serverScope ?? scope()]
+      },
+      setBootId(bootId: string, serverScope?: string) {
+        setStore("lastBootId", serverScope ?? scope(), bootId)
       },
     }
   },
