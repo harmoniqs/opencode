@@ -13,6 +13,7 @@ import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
 import { installWebviewContextMenu } from "@/utils/webview-context-menu"
 import { webZoom } from "@/utils/web-zoom"
 import { authFromToken } from "@/utils/server"
+import { inAmicode } from "@/utils/amicode-bridge"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
 
@@ -155,8 +156,14 @@ const getCurrentUrl = () => {
 }
 
 const getDefaultUrl = () => {
-  const lsDefault = readDefaultServerUrl()
-  if (lsDefault) return lsDefault
+  // In the Amicode webview (iframe), location.origin is always the correct
+  // server URL because the iframe IS served by the running server. Never let a
+  // stale localStorage override win over it — that causes the "no GUI response"
+  // bug when the server restarts on a different port.
+  if (!inAmicode()) {
+    const lsDefault = readDefaultServerUrl()
+    if (lsDefault) return lsDefault
+  }
   return getCurrentUrl()
 }
 
