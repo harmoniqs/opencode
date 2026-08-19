@@ -26,13 +26,35 @@ export function createDeveloperToolsController() {
   const [rebuildState, setRebuildState] = createSignal<RebuildState>("idle")
   const [rebuildError, setRebuildError] = createSignal<string | undefined>(undefined)
 
-  // On mount, check if we just came back from a successful rebuild reload
+  // On mount, check if we just came back from a rebuild (successful or in-progress).
+  // The "rebuilding" flag survives iframe reloads caused by file-watcher churn
+  // (e.g. git checkout in a watched workspace folder during remote rebuild).
   onMount(() => {
     try {
-      if (localStorage.getItem("amicode:devtools-rebuilt") === "1") {
+      const wasRebuilding = localStorage.getItem("amicode:devtools-rebuilding") === "1"
+      const didFinish = localStorage.getItem("amicode:devtools-rebuilt") === "1"
+
+      if (wasRebuilding && didFinish) {
+        // Rebuild completed during a reload — show success
+        localStorage.removeItem("amicode:devtools-rebuilding")
         localStorage.removeItem("amicode:devtools-rebuilt")
         setRebuildState("rebuilt")
-        // Clear the "rebuilt" badge after 5 seconds
+        setTimeout(() => setRebuildState("idle"), 5000)
+      } else if (wasRebuilding) {
+        // Still rebuilding — restore the indicator (iframe reloaded mid-rebuild)
+        setRebuildState("rebuilding")
+        // Safety timeout: clear after 5 min to avoid permanently stuck state
+        setTimeout(() => {
+          if (rebuildState() === "rebuilding") {
+            try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
+            setRebuildState("failed")
+            setRebuildError("Rebuild timed out")
+          }
+        }, 300_000)
+      } else if (didFinish) {
+        // Legacy path (rebuilding flag missing but rebuilt is set)
+        localStorage.removeItem("amicode:devtools-rebuilt")
+        setRebuildState("rebuilt")
         setTimeout(() => setRebuildState("idle"), 5000)
       }
     } catch {
@@ -74,10 +96,13 @@ export function createDeveloperToolsController() {
         setRebuildState("rebuilding")
         setRebuildError(undefined)
       } else if (d.state === "failed") {
+        try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
         setRebuildState("failed")
         setRebuildError(d.error ?? "Unknown error")
+      } else if (d.state === "done") {
+        try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
+        // The window reload follows shortly — "rebuilt" flag is read on next mount
       }
-      // "done" state triggers a reload — the "rebuilt" flag is read on next mount
     }
   }
 
@@ -108,6 +133,7 @@ export function createDeveloperToolsController() {
     setRebuildState("rebuilding")
     setRebuildError(undefined)
     try {
+      localStorage.setItem("amicode:devtools-rebuilding", "1")
       localStorage.setItem("amicode:devtools-reopen", "1")
       localStorage.setItem("amicode:devtools-rebuilt", "1")
     } catch {
