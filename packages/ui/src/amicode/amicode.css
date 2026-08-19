@@ -785,7 +785,7 @@
   cursor: default;
 }
 /* …except a not-recorded chip that IS a button (the pulse chip, which opens the
-   Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
+   Pulse Inspector before a pulse is banked): keep the dotted not-yet look, but it
    must READ clickable at rest — hover feedback alone failed the glance test
    (Kate 2026-07-28: "doesn't appear clickable"). Three signals: full-strength
    ink at weight 600 (faint ink is how a chip says "inert", and this one isn't;

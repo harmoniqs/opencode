@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { DragDropProvider as DndKitProvider, PointerSensor } from "@dnd-kit/solid"
@@ -30,6 +30,8 @@ import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
 import FileTree from "@/components/file-tree"
 import { normalizeFileTreeV2Path } from "@/components/file-tree-v2-model"
 import { SessionContextUsage } from "@/components/session-context-usage"
+import { RunInspector } from "@/amicode/inspector/run-inspector"
+import { useInspectorBridge } from "@/amicode/inspector/inspector-context"
 
 const reviewTabID = "session-side-panel-review-tab"
 const reviewTabPanelID = "session-side-panel-review-tabpanel"
@@ -57,6 +59,63 @@ import { setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { WORK_COLUMN_WIDTH_MIN } from "@/pages/session/session-panel-width"
 import { SessionFileBrowserTab, type SessionFileBrowserState } from "@/pages/session/v2/session-file-browser-tab"
+
+type PulseInspectorStage = "optimization" | "calibration" | "compilation"
+
+function PulseInspectorContent() {
+  const bridge = useInspectorBridge()
+  const [stage, setStage] = createSignal<PulseInspectorStage>("optimization")
+
+  const hasActiveRun = createMemo(() => {
+    const r = bridge.runs()
+    if (r.size === 0) return false
+    const activeId = bridge.activeRunId()
+    const state = activeId ? r.get(activeId) : r.values().next().value
+    return state ? !state.completion : false
+  })
+
+  return (
+    <div class="relative pt-2 flex-1 min-h-0 overflow-hidden flex flex-col gap-3 p-3">
+      {/* Stage segmented control */}
+      <div class="flex items-center gap-0.5 rounded-md border border-border-weaker-base p-0.5 bg-background-stronger min-w-0">
+        <button
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium transition-colors truncate"
+          classList={{
+            "bg-background-base shadow-sm text-text-base": stage() === "optimization",
+            "text-text-weak hover:text-text-base": stage() !== "optimization",
+          }}
+          onClick={() => setStage("optimization")}
+        >
+          <Show when={hasActiveRun()}>
+            <span class="shrink-0 inline-block w-[6px] h-[6px] rounded-full bg-green-500" />
+          </Show>
+          <span class="truncate">Optimization</span>
+        </button>
+        <button
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium opacity-50 cursor-default truncate"
+          disabled
+        >
+          <span class="truncate">Calibration</span>
+          <span class="shrink-0 text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
+        </button>
+        <button
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium opacity-50 cursor-default truncate"
+          disabled
+        >
+          <span class="truncate">Compilation</span>
+          <span class="shrink-0 text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
+        </button>
+      </div>
+
+      {/* Stage content */}
+      <Show when={stage() === "optimization"}>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+          <RunInspector bridge={bridge} />
+        </div>
+      </Show>
+    </div>
+  )
+}
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
 type RenderDiff = FileDiffInfo | (SnapshotFileDiff & { file: string }) | VcsFileDiff
@@ -254,7 +313,8 @@ export function SessionSidePanel(props: {
     return false
   })
 
-  // Panel menu items
+  // Panel menu items — Files Changed lives as the "review" trigger, Context and
+  // Preview are the secondary tabs, and Pulse Inspector is the third requested tab.
   const panelMenuItems = createMemo((): PanelMenuItem[] => [
     {
       id: "context",
@@ -262,6 +322,13 @@ export function SessionSidePanel(props: {
       icon: "brain",
       available: () => true,
       active: contextOpen,
+    },
+    {
+      id: "pulseInspector",
+      label: "Pulse Inspector",
+      icon: "pulse",
+      available: () => true,
+      active: () => activeTab() === "pulseInspector",
     },
     {
       id: SESSION_PREVIEW_TAB,
@@ -447,6 +514,32 @@ export function SessionSidePanel(props: {
                                   </div>
                                 </Tabs.Trigger>
                               </div>
+                              <Tabs.Trigger
+                                value="pulseInspector"
+                                closeButton={
+                                  <TooltipKeybind
+                                    title={language.t("common.closeTab")}
+                                    keybind={command.keybind("tab.close")}
+                                    placement="bottom"
+                                    gutter={10}
+                                  >
+                                    <IconButton
+                                      icon="close-small"
+                                      variant="ghost"
+                                      class="h-5 w-5"
+                                      onClick={() => tabs().close("pulseInspector")}
+                                      aria-label={language.t("common.closeTab")}
+                                    />
+                                  </TooltipKeybind>
+                                }
+                                hideCloseButton
+                                onMiddleClick={() => tabs().close("pulseInspector")}
+                              >
+                                 <div class="flex items-center gap-1.5">
+                                   <Icon name="pulse" size="small" />
+                                   <div>Pulse Inspector</div>
+                                 </div>
+                               </Tabs.Trigger>
                               <div style={{ display: previewOpen() ? undefined : "none" }}>
                                 <Tabs.Trigger
                                   value={SESSION_PREVIEW_TAB}
@@ -527,6 +620,12 @@ export function SessionSidePanel(props: {
                               <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                                 <SessionContextTab />
                               </div>
+                            </Tabs.Content>
+                          </Show>
+
+                          <Show when={activeTab() === "pulseInspector"}>
+                            <Tabs.Content value="pulseInspector" class="flex flex-col h-full overflow-hidden contain-strict">
+                              <PulseInspectorContent />
                             </Tabs.Content>
                           </Show>
 
@@ -645,6 +744,38 @@ export function SessionSidePanel(props: {
                                 </div>
                               </Tabs.Trigger>
                             </div>
+                            <Tabs.Trigger
+                              value="pulseInspector"
+                              closeButton={
+                                <TooltipV2
+                                  value={
+                                    <>
+                                      {language.t("common.closeTab")}
+                                      <Show when={closeTabKeybind().length > 0}>
+                                        <KeybindV2 keys={closeTabKeybind()} variant="neutral" />
+                                      </Show>
+                                    </>
+                                  }
+                                  placement="bottom"
+                                  gutter={10}
+                                >
+                                  <IconButton
+                                    icon="close-small"
+                                    variant="ghost"
+                                    class="h-5 w-5"
+                                    onClick={() => tabs().close("pulseInspector")}
+                                    aria-label={language.t("common.closeTab")}
+                                  />
+                                </TooltipV2>
+                              }
+                              hideCloseButton
+                              onMiddleClick={() => tabs().close("pulseInspector")}
+                            >
+                               <div class="flex items-center gap-1.5">
+                                 <Icon name="pulse" size="small" />
+                                 <div>Pulse Inspector</div>
+                               </div>
+                             </Tabs.Trigger>
                             <div style={{ display: previewOpen() ? undefined : "none" }}>
                               <Tabs.Trigger
                                 value={SESSION_PREVIEW_TAB}
@@ -738,6 +869,12 @@ export function SessionSidePanel(props: {
                             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                               <SessionContextTab />
                             </div>
+                          </Tabs.Content>
+                        </Show>
+
+                        <Show when={activeTab() === "pulseInspector"}>
+                          <Tabs.Content value="pulseInspector" class="flex flex-col h-full overflow-hidden contain-strict">
+                            <PulseInspectorContent />
                           </Tabs.Content>
                         </Show>
 

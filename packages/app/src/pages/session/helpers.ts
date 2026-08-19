@@ -44,6 +44,7 @@ export const createSessionTabs = (input: TabsInput) => {
       fileBrowser() &&
       (input.tabs().active() === SESSION_OPEN_FILE_TAB || input.tabs().all().includes(SESSION_OPEN_FILE_TAB)),
   )
+  const pulseInspectorOpen = createMemo(() => input.tabs().active() === "pulseInspector" || input.tabs().all().includes("pulseInspector"))
   const panelTabs = createMemo(
     () => {
       const seen = new Set<string>()
@@ -51,7 +52,7 @@ export const createSessionTabs = (input: TabsInput) => {
         .tabs()
         .all()
         .flatMap((tab) => {
-          if (tab === "context" || tab === "review" || tab === "vault" || tab === SESSION_PREVIEW_TAB) return []
+          if (tab === "context" || tab === "review" || tab === "vault" || tab === SESSION_PREVIEW_TAB || tab === "pulseInspector") return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
           if (seen.has(value)) return []
@@ -68,6 +69,7 @@ export const createSessionTabs = (input: TabsInput) => {
   const activeTab = createMemo(() => {
     const active = input.tabs().active()
     if (active === "context") return active
+    if (active === "pulseInspector") return active
     if (active === SESSION_PREVIEW_TAB && previewOpen()) return active
     if (active === "vault" && vaultOpen()) return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
@@ -79,6 +81,7 @@ export const createSessionTabs = (input: TabsInput) => {
     if (vaultOpen()) return "vault"
     if (previewOpen()) return SESSION_PREVIEW_TAB
     if (contextOpen()) return "context"
+    if (pulseInspectorOpen()) return "pulseInspector"
     if (review() && hasReview()) return "review"
     return "empty"
   })
@@ -98,6 +101,7 @@ export const createSessionTabs = (input: TabsInput) => {
   return {
     contextOpen,
     previewOpen,
+    pulseInspectorOpen,
     openFileOpen,
     panelTabs,
     openedTabs,
