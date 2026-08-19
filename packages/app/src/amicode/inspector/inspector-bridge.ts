@@ -5,18 +5,18 @@ export type RunPulseMeta = { runId: string; drives: number; knots: number; label
 export type RunPulse = { runId: string; iter: number; dt: number; values: number[][] }
 export type RunCompletion = { runId: string; fidelity: number; iterations: number; status: string }
 export type RunBridgeMessage =
-  | { type: "run:iteration"; runId: string; iter: number; objective: number; inf_pr: number; inf_du: number }
-  | { type: "run:pulse-meta"; runId: string; drives: number; knots: number; labels: string[]; bounds: [number, number][]; interp?: string }
-  | { type: "run:pulse"; runId: string; iter: number; dt: number; values: number[][] }
-  | { type: "run:completion"; runId: string; fidelity: number; iterations: number; status: string }
-  | { type: "run:activate"; runId: string }
-  | { type: "run:timing"; runId: string; elapsed: number }
-  | { type: "run:label"; runId: string; label: string }
+  | { kind: "run:iteration"; runId: string; iter: number; objective: number; inf_pr: number; inf_du: number }
+  | { kind: "run:pulse-meta"; runId: string; drives: number; knots: number; labels: string[]; bounds: [number, number][]; interp?: string }
+  | { kind: "run:pulse"; runId: string; iter: number; dt: number; values: number[][] }
+  | { kind: "run:completion"; runId: string; fidelity: number; iterations: number; status: string }
+  | { kind: "run:activate"; runId: string }
+  | { kind: "run:timing"; runId: string; elapsed: number }
+  | { kind: "run:label"; runId: string; label: string }
 
 export type DeviceBridgeMessage =
-  | { type: "device:status"; device: string; status: unknown }
-  | { type: "device:actions"; device: string; actions: unknown[] }
-  | { type: "device:activate"; device: string }
+  | { kind: "device:status"; device: string; status: unknown }
+  | { kind: "device:actions"; device: string; actions: unknown[] }
+  | { kind: "device:activate"; device: string }
 
 export type InspectorMessage = RunBridgeMessage | DeviceBridgeMessage
 
@@ -38,7 +38,7 @@ export function createInspectorBridge() {
   const onMessage = (e: MessageEvent) => {
     const d = e.data as InspectorMessage & { source?: string }
     if (!d || d.source !== "amicode") return
-    switch (d.type) {
+    switch (d.kind) {
       case "run:iteration": {
         setRuns((m) => {
           const n = new Map(m)

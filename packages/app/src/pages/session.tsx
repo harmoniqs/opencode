@@ -94,6 +94,7 @@ import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
+import { InspectorProvider } from "@/amicode/inspector/inspector-context"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
 import { Persist, persisted } from "@/utils/persist"
@@ -320,7 +321,9 @@ function SessionProviders(props: ParentProps) {
     <TerminalProvider>
       <FileProvider>
         <PromptProvider>
-          <CommentsProvider>{props.children}</CommentsProvider>
+          <CommentsProvider>
+            <InspectorProvider>{props.children}</InspectorProvider>
+          </CommentsProvider>
         </PromptProvider>
       </FileProvider>
     </TerminalProvider>
