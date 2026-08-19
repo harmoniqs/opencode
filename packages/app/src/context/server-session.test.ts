@@ -1359,7 +1359,9 @@ describe("server session", () => {
 
   test("does not cache skipped optimistic parts", () => {
     const message = userMessage("message")
-    const part = { id: "part", sessionID: "child", messageID: message.id, type: "step-start" as const }
+    // HARNESS: only `patch` remains skipped; step-start now flows through so the
+    // rail can slice. Use patch as the canonical skipped type for this check.
+    const part = { id: "part", sessionID: "child", messageID: message.id, type: "patch" as const }
     const store = setup({ child: session("child") }).store
 
     store.optimistic.add({ sessionID: "child", message, parts: [part] })

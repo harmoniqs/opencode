@@ -31,10 +31,12 @@ import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
   ContextToolGroup,
+  EditToolGroup,
   Message,
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  ShellToolGroup,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -1396,6 +1398,113 @@ export function MessageTimeline(props: {
           </TimelineRowFrame>
         )
       }
+      case "StepFrame": {
+        const stepFrameRow = row as Accessor<TimelineRowByTag<"StepFrame">>
+        const frame = stepFrameRow()
+        const isRunning = () => frame.state === "running"
+        const isError = () => frame.state === "error"
+        return (
+          <TimelineRowFrame row={stepFrameRow as unknown as Accessor<FramedTimelineRow>}>
+            <div data-slot="session-turn-message-container" class="w-full px-3 md:px-4 min-w-0 overflow-hidden">
+              <div
+                data-slot="harness-step-frame"
+                data-state={frame.state}
+                data-step-index={frame.stepIndex}
+                class="relative pl-4 border-l min-w-0 max-w-full overflow-hidden break-words transition-colors"
+                style={{
+                  "border-color": isError() ? "var(--v2-state-border-danger)" : isRunning() ? "var(--accent-edge)" : "var(--v2-border-border-weak-base)",
+                }}
+              >
+                <span
+                  data-slot="harness-step-dot"
+                  class="absolute -left-[6px] top-[14px] size-2.5 rounded-full border-2 bg-v2-background-bg-base shrink-0"
+                  style={{
+                    "border-color": isError() ? "var(--v2-state-fg-danger)" : isRunning() ? "var(--accent-fill-strong)" : "var(--v2-border-border-strong)",
+                    background: isRunning() ? "var(--accent-fill-strong)" : isError() ? "var(--v2-state-fg-danger)" : "var(--v2-background-bg-base)",
+                  }}
+                />
+                <div class="flex items-center gap-2 py-1.5 min-w-0">
+                  <span class="text-[11px] font-medium tracking-wide text-v2-text-text-faint shrink-0">Step {frame.stepIndex + 1}</span>
+                  <span class="text-[11px] text-v2-text-text-muted truncate min-w-0">
+                    {frame.reasoningHeading ? frame.reasoningHeading : frame.groups.length === 1 && frame.groups[0]?.type === "part" ? "response" : `${frame.groups.length} groups`}
+                  </span>
+
+                </div>
+                <Show when={frame.reasoningHeading}>
+                  <div class="pb-2 text-[12px] italic leading-5 text-v2-text-text-muted break-words whitespace-normal max-w-full overflow-hidden">{frame.reasoningHeading}</div>
+                </Show>
+                <div class="flex flex-col gap-1.5 pb-3 min-w-0 max-w-full overflow-hidden">
+                  <For each={frame.groups}>
+                    {(group) => {
+                      if (group.type === "context") {
+                        const parts = () =>
+                          group.refs
+                            .map((ref) => getMsgPart(ref.messageID, ref.partID))
+                            .filter((p): p is ToolPart => p?.type === "tool")
+                        const key = () => `context:${group.key}`
+                        const open = () => toolOpen[key()] === true
+                        return (
+                          <ContextToolGroup
+                            parts={parts()}
+                            open={open()}
+                            onOpenChange={(v) => setToolOpen(key(), v)}
+                            busy={workingTurn(frame.userMessageID) && frame.state === "running"}
+                            onSizeChange={onSizeChange}
+                          />
+                        )
+                      }
+                      if (group.type === "shell") {
+                        const parts = () =>
+                          group.refs
+                            .map((ref) => getMsgPart(ref.messageID, ref.partID))
+                            .filter((p): p is ToolPart => p?.type === "tool")
+                        return <ShellToolGroup parts={parts()} busy={workingTurn(frame.userMessageID) && frame.state === "running"} onSizeChange={onSizeChange} />
+                      }
+                      if (group.type === "edit") {
+                        const parts = () =>
+                          group.refs
+                            .map((ref) => getMsgPart(ref.messageID, ref.partID))
+                            .filter((p): p is ToolPart => p?.type === "tool")
+                        return <EditToolGroup parts={parts()} busy={workingTurn(frame.userMessageID) && frame.state === "running"} onSizeChange={onSizeChange} />
+                      }
+                      const msg = () => messageByID().get(group.ref.messageID)
+                      const part = () => getMsgPart(group.ref.messageID, group.ref.partID)
+                      const defaultOpen = () => {
+                        const item = part()
+                        if (!item) return
+                        return partDefaultOpen(item, settings.general.shellToolPartsExpanded(), settings.general.editToolPartsExpanded())
+                      }
+                      return (
+                        <Show when={msg()}>
+                          {(message) => (
+                            <Show when={part()}>
+                              {(part) => (
+                                <MessagePart
+                                  part={part()}
+                                  message={message()}
+                                  showAssistantCopyPartID={assistantCopyPartID(frame.userMessageID)}
+                                  turnDurationMs={turnDurationMs(frame.userMessageID)}
+                                  useV2Actions={settings.general.newLayoutDesigns()}
+                                  defaultOpen={defaultOpen()}
+                                  toolOpen={toolOpen[part().id] ?? defaultOpen()}
+                                  onToolOpenChange={(open) => setToolOpen(part().id, open)}
+                                  deferToolContent
+                                  virtualizeDiff={false}
+                                  onContentRendered={onSizeChange}
+                                />
+                              )}
+                            </Show>
+                          )}
+                        </Show>
+                      )
+                    }}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </TimelineRowFrame>
+        )
+      }
       case "Thinking": {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
         return (
@@ -2067,6 +2176,7 @@ export function MessageTimeline(props: {
                 )}
               </Show>
             </div>
+
             {/* amicode: problem-header rail (renders only when the session has
                 amicode_* parts) + ask/ui bridges — ported from the pre-merge
                 message-timeline (AMICODE-PATCHES.md "Upstream sync 2026-08-01") */}
@@ -2171,6 +2281,7 @@ export function MessageTimeline(props: {
             </Show>
           </div>
         </Show>
+
         {/* amicode#271: no-header fallback (new untitled sessions only) */}
         <Show when={!showHeader() && activeBubble()}>
           {(_) => {

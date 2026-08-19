@@ -25,6 +25,14 @@ export type TimelineRowMap = {
     group: PartGroup
     previousAssistantPart: boolean
   }
+  StepFrame: {
+    userMessageID: string
+    stepIndex: number
+    stepKey: string
+    state: "pending" | "running" | "done" | "error"
+    groups: PartGroup[]
+    reasoningHeading?: string
+  }
   Thinking: { userMessageID: string; reasoningHeading?: string }
   Retry: { userMessageID: string }
   DiffSummary: { userMessageID: string; diffs: SummaryDiff[] }
@@ -167,27 +175,68 @@ export namespace Timeline {
       )
     }
 
-    let assistantGroupIndex = 0
-    assistantItems.forEach((item) => {
-      if (item.type === "interrupted") {
+    // HARNESS — StepFrame slicing: if SDK step-start markers exist, chunk by them;
+    // else fallback to per-assistant-message chunking. When markers exist we
+    // emit StepFrames (new rail UI); otherwise we keep the legacy AssistantPart
+    // rows so existing tests/snapshots stay green.
+    const rawPartsByMessage = assistantMessages.map((m) => getMessageParts(m.id))
+    const hasStepMarkers = rawPartsByMessage.some((parts) => parts.some((p) => p.type === "step-start" || p.type === "step-finish"))
+    if (hasStepMarkers) {
+      const stepSlices = buildStepSlices(assistantMessages, getMessageParts, showReasoning)
+      stepSlices.forEach((slice, stepIdx) => {
+        const groups = groupParts(slice.refs.map((r) => ({ messageID: r.messageID, part: r.part })))
+        if (groups.length === 0) return
+        const isLast = stepIdx === stepSlices.length - 1
+        const hasRunning = slice.refs.some((r) => r.part.type === "tool" && (r.part.state.status === "running" || r.part.state.status === "pending"))
+        const hasError = slice.refs.some((r) => r.part.type === "tool" && r.part.state.status === "error")
+        const state: "pending" | "running" | "done" | "error" = hasError ? "error" : isLast && isActive && status === "busy" && hasRunning ? "running" : isLast && isActive && status === "busy" ? "pending" : "done"
+        const heading = slice.refs
+          .map((r) => r.part)
+          .map((p) => (p?.type === "reasoning" && (p as any).text ? reasoningHeading((p as any).text) : undefined))
+          .find((v): v is string => !!v)
+        rows.push(
+          new TimelineRow.StepFrame({
+            userMessageID: userMessage.id,
+            stepIndex: stepIdx,
+            stepKey: `step:${userMessage.id}:${stepIdx}:${slice.key}`,
+            state,
+            groups,
+            reasoningHeading: heading,
+          }),
+        )
+      })
+      // still surface the interrupted divider after stepping
+      if (interrupted && !compaction) {
         rows.push(
           new TimelineRow.TurnDivider({
             userMessageID: userMessage.id,
             label: "interrupted",
           }),
         )
-        return
       }
+    } else {
+      let assistantGroupIndex = 0
+      assistantItems.forEach((item) => {
+        if (item.type === "interrupted") {
+          rows.push(
+            new TimelineRow.TurnDivider({
+              userMessageID: userMessage.id,
+              label: "interrupted",
+            }),
+          )
+          return
+        }
 
-      rows.push(
-        new TimelineRow.AssistantPart({
-          userMessageID: userMessage.id,
-          group: item.group,
-          previousAssistantPart: assistantGroupIndex > 0,
-        }),
-      )
-      assistantGroupIndex += 1
-    })
+        rows.push(
+          new TimelineRow.AssistantPart({
+            userMessageID: userMessage.id,
+            group: item.group,
+            previousAssistantPart: assistantGroupIndex > 0,
+          }),
+        )
+        assistantGroupIndex += 1
+      })
+    }
 
     if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
       const heading = assistantMessages
@@ -314,6 +363,46 @@ export namespace Timeline {
 
   function record(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value)
+  }
+
+  // HARNESS — buildStepSlices: chunk renderable refs by step-start markers.
+  // Each slice's `key` is the first part id in the slice (stable for
+  // TimelineRow.key); refs are already filtered via renderable so the
+  // subsequent groupParts sees only visible parts.
+  function buildStepSlices(
+    assistantMessages: AssistantMessage[],
+    getMessageParts: (messageID: string) => Part[],
+    showReasoning: boolean,
+  ): Array<{ key: string; refs: Array<{ messageID: string; partID: string; part: Part }> }> {
+    const slices: Array<{ key: string; refs: Array<{ messageID: string; partID: string; part: Part }> }> = []
+    let current: Array<{ messageID: string; partID: string; part: Part }> = []
+    let sliceKey = ""
+    const flush = () => {
+      if (current.length === 0) return
+      slices.push({ key: sliceKey || current[0]!.partID, refs: current })
+      current = []
+      sliceKey = ""
+    }
+    for (const msg of assistantMessages) {
+      const parts = getMessageParts(msg.id)
+      for (const part of parts) {
+        if (part.type === "step-start") {
+          flush()
+          sliceKey = part.id
+          continue
+        }
+        if (part.type === "step-finish") {
+          flush()
+          sliceKey = ""
+          continue
+        }
+        if (!renderable(part, showReasoning)) continue
+        if (!sliceKey && current.length === 0) sliceKey = part.id
+        current.push({ messageID: msg.id, partID: part.id, part })
+      }
+    }
+    flush()
+    return slices
   }
 }
 

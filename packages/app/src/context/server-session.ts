@@ -27,7 +27,12 @@ type MessageApi = ServerApi["message"]
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const cmpMessage = (a: Message, b: Message) => a.time.created - b.time.created || cmp(a.id, b.id)
-const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+// HARNESS (feature/chat-railing-timeline): step markers must flow into the
+// store so rows.ts can slice into StepFrames. `patch` remains skipped (file
+// diff noise); step-start/finish are filtered only at the render layer
+// (renderable() / buildStepSlices), not at the store edge — otherwise
+// hasStepMarkers is permanently false and the rail never appears.
+const SKIP_PARTS = new Set(["patch"])
 const initialMessagePageSize = 20
 const historyMessagePageSize = 200
 const sessionInfoLimit = 2_048

@@ -785,7 +785,7 @@
   cursor: default;
 }
 /* …except a not-recorded chip that IS a button (the pulse chip, which opens the
-   Pulse Inspector before a pulse is banked): keep the dotted not-yet look, but it
+   Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
    must READ clickable at rest — hover feedback alone failed the glance test
    (Kate 2026-07-28: "doesn't appear clickable"). Three signals: full-strength
    ink at weight 600 (faint ink is how a chip says "inert", and this one isn't;
@@ -1474,6 +1474,8 @@
   background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
 }
 
+
+
 /* ---- DEV channel tag (titlebar) ----------------------------------------- */
 /* Green pill signals developer mode is active — visually distinct from the
    amber BETA so you never confuse a dev build with a release. Uses the
@@ -1601,4 +1603,22 @@
 [data-component="amicode-approval-card"] button[data-slot="amicode-approval-approve"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ---- HARNESS — Step rail (feature/chat-railing-timeline, Claude-like) ----- */
+/* No boxes — a thin left rail + dot per step, like Claude Code's timeline.
+   The rail lives on the StepFrame itself (border-l), the dot is the status
+   signal. Running → accent rail + pulsing dot, done → muted rail, error → red. */
+[data-slot="harness-step-frame"] {
+  transition: border-color 0.18s ease;
+}
+[data-slot="harness-step-dot"] {
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+[data-slot="harness-step-frame"][data-state="running"] [data-slot="harness-step-dot"] {
+  animation: harness-pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes harness-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-fill-strong) 28%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-fill-strong) 14%, transparent); }
 }

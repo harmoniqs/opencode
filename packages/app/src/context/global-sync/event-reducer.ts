@@ -16,7 +16,12 @@ import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"
 import { diffs as list, message as clean } from "@/utils/diffs"
 
-const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+// HARNESS (feature/chat-railing-timeline): step markers must flow into the
+// store so rows.ts can slice into StepFrames. `patch` remains skipped (file
+// diff noise); step-start/finish are filtered only at the render layer
+// (renderable() / buildStepSlices), not at the store edge — otherwise
+// hasStepMarkers is permanently false and the rail never appears.
+const SKIP_PARTS = new Set(["patch"])
 const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
 const SESSION_CONTENT_EVENTS = new Set([
   "session.diff",

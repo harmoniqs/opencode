@@ -24,6 +24,19 @@ export namespace TimelineRow {
     group: PartGroup
     previousAssistantPart: boolean
   }> {}
+  // HARNESS — StepFrame: one model-request + its tools within a turn, surfaced
+  // from SDK `step-start`/`step-finish` parts when present, else fallback to
+  // one frame per assistant-message grouping. The rail renders per-turn, frames
+  // render per-step; when no step markers exist we emit a single StepFrame
+  // that wraps the turn's legacy AssistantPart rows (backward-compat).
+  export class StepFrame extends Data.TaggedClass("StepFrame")<{
+    userMessageID: string
+    stepIndex: number
+    stepKey: string
+    state: "pending" | "running" | "done" | "error"
+    groups: PartGroup[]
+    reasoningHeading?: string
+  }> {}
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string
     reasoningHeading?: string
@@ -46,6 +59,7 @@ export namespace TimelineRow {
     | UserMessage
     | TurnDivider
     | AssistantPart
+    | StepFrame
     | Thinking
     | DiffSummary
     | Error
@@ -63,6 +77,8 @@ export namespace TimelineRow {
         return `turn-divider:${row.userMessageID}:${row.label}`
       case "AssistantPart":
         return `assistant-part:${row.userMessageID}:${row.group.key}`
+      case "StepFrame":
+        return `step-frame:${row.userMessageID}:${row.stepKey}`
       case "Thinking":
         return `thinking:${row.userMessageID}`
       case "DiffSummary":
