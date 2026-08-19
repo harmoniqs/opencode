@@ -77,9 +77,9 @@ function PulseInspectorContent() {
   return (
     <div class="relative pt-2 flex-1 min-h-0 overflow-hidden flex flex-col gap-3 p-3">
       {/* Stage segmented control */}
-      <div class="flex items-center gap-1 rounded-md border border-border-weaker-base p-0.5 bg-background-stronger">
+      <div class="flex items-center gap-0.5 rounded-md border border-border-weaker-base p-0.5 bg-background-stronger min-w-0">
         <button
-          class="flex-1 flex items-center justify-center gap-1.5 rounded px-2 py-1 text-11-medium transition-colors"
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium transition-colors truncate"
           classList={{
             "bg-background-base shadow-sm text-text-base": stage() === "optimization",
             "text-text-weak hover:text-text-base": stage() !== "optimization",
@@ -87,23 +87,23 @@ function PulseInspectorContent() {
           onClick={() => setStage("optimization")}
         >
           <Show when={hasActiveRun()}>
-            <span class="inline-block w-[6px] h-[6px] rounded-full bg-green-500" />
+            <span class="shrink-0 inline-block w-[6px] h-[6px] rounded-full bg-green-500" />
           </Show>
-          Optimization
+          <span class="truncate">Optimization</span>
         </button>
         <button
-          class="flex-1 flex items-center justify-center gap-1.5 rounded px-2 py-1 text-11-medium opacity-50 cursor-default"
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium opacity-50 cursor-default truncate"
           disabled
         >
-          Calibration
-          <span class="text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
+          <span class="truncate">Calibration</span>
+          <span class="shrink-0 text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
         </button>
         <button
-          class="flex-1 flex items-center justify-center gap-1.5 rounded px-2 py-1 text-11-medium opacity-50 cursor-default"
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 rounded px-1.5 py-1 text-11-medium opacity-50 cursor-default truncate"
           disabled
         >
-          Compilation
-          <span class="text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
+          <span class="truncate">Compilation</span>
+          <span class="shrink-0 text-[9px] uppercase tracking-wide bg-border-weaker-base text-text-faint rounded px-1 py-0.5">Soon</span>
         </button>
       </div>
 

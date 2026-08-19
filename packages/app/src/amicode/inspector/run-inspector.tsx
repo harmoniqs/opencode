@@ -3,12 +3,12 @@ import type { createInspectorBridge } from "./inspector-bridge"
 
 type Props = { bridge: ReturnType<typeof createInspectorBridge> }
 
-// Minimal pulse sparkline — renders correctly at 320px column width and responds
+// Minimal pulse sparkline — renders correctly at narrow column widths and responds
 // to resize via viewBox (no fixed pixel width). Each drive is a polyline.
-function PulseChart(props: { values: number[][]; bounds?: [number, number][] }) {
+function PulseChart(props: { values?: number[][]; bounds?: [number, number][] }) {
   const paths = createMemo(() => {
     const v = props.values
-    if (v.length === 0 || v[0].length === 0) return []
+    if (!v || v.length === 0 || v[0].length === 0) return []
     return v.map((drive, idx) => {
       const b = props.bounds?.[idx]
       const lo = b?.[0] ?? Math.min(...drive)
@@ -23,7 +23,10 @@ function PulseChart(props: { values: number[][]; bounds?: [number, number][] }) 
     })
   })
   return (
-    <svg viewBox="0 0 100 50" class="w-full h-[120px] bg-[var(--v2-background-bg-subtle)] rounded-md" preserveAspectRatio="none">
+    <svg viewBox="0 0 100 50" class="w-full h-[100px] bg-[var(--v2-background-bg-subtle)] rounded-md" preserveAspectRatio="none">
+      <Show when={paths().length === 0}>
+        <line x1="0" y1="25" x2="100" y2="25" stroke="var(--v2-border-border-base, #333)" stroke-width="0.5" vector-effect="non-scaling-stroke" stroke-dasharray="4 3" />
+      </Show>
       <For each={paths()}>{(p) => <path d={p.d} fill="none" stroke={p.color} stroke-width={1.2} vector-effect="non-scaling-stroke" />}</For>
     </svg>
   )
@@ -41,63 +44,76 @@ export function RunInspector(props: Props) {
   const latestPulse = createMemo(() => active()?.state.pulses.at(-1))
 
   return (
-    <div class="flex flex-col gap-3 p-3" data-component="run-inspector">
-      <div class="flex items-center justify-between">
-        <div class="text-12-medium">Run Inspector</div>
-        <Show when={runs().length > 1}>
+    <div class="flex flex-col gap-3" data-component="run-inspector">
+      {/* Run selector — only shown when multiple runs exist */}
+      <Show when={runs().length > 1}>
+        <div class="flex items-center justify-between">
           <select
-            class="text-12-regular border border-border-weaker-base rounded px-1 py-0.5 bg-background-base max-w-[140px] truncate"
+            class="text-11-regular border border-border-weaker-base rounded px-1 py-0.5 bg-background-base max-w-[160px] truncate"
             value={active()?.id ?? ""}
             onChange={(e) => props.bridge.setActiveRunId(e.currentTarget.value)}
           >
             <For each={runs()}>{([id, s]) => <option value={id}>{s.label ?? id}</option>}</For>
           </select>
-        </Show>
-      </div>
+        </div>
+      </Show>
 
       <Show when={!active()} fallback={
         <div class="flex flex-col gap-3">
-          <div class="text-11-regular text-text-weak truncate" title={active()!.id}>
-            {active()!.state.label ?? active()!.id}
-          </div>
+          {/* Pulse metadata */}
           <Show when={active()!.state.pulseMeta}>
             {(meta) => (
               <div class="text-11-regular text-text-weak">
-                {meta().drives} drive(s) · {meta().knots} knots · {meta().labels.join(", ")}
+                {meta().drives} control channel{meta().drives > 1 ? "s" : ""} · {meta().knots} timesteps
+                <Show when={meta().labels.length > 0}>
+                  <span class="text-text-faint"> · {meta().labels.join(", ")}</span>
+                </Show>
               </div>
             )}
           </Show>
-          <Show when={latestPulse()}>{(p) => <PulseChart values={p().values} bounds={active()!.state.pulseMeta?.bounds} />}</Show>
-          <Show when={!latestPulse() && active()!.state.pulseMeta}>
-            <div class="text-11-regular text-text-weak">Waiting for pulse data…</div>
-          </Show>
-          <div class="grid grid-cols-3 gap-2 text-11-regular">
-            <div>
-              <div class="text-text-faint">iter</div>
-              <div class="text-13-medium">{latestIter()?.iter ?? "—"}</div>
-            </div>
-            <div>
-              <div class="text-text-faint">objective</div>
-              <div class="font-mono text-11-regular">{latestIter() ? latestIter()!.objective.toExponential(2) : "—"}</div>
-            </div>
-            <div>
-              <div class="text-text-faint">inf</div>
-              <div class="font-mono text-11-regular">{latestIter() ? `${latestIter()!.inf_pr.toExponential(1)}/${latestIter()!.inf_du.toExponential(1)}` : "—"}</div>
-            </div>
+
+          {/* Pulse chart — always visible once a run exists */}
+          <PulseChart values={latestPulse()?.values} bounds={active()!.state.pulseMeta?.bounds} />
+
+          {/* Metrics table — horizontally scrollable at narrow widths */}
+          <div class="overflow-x-auto -mx-1 px-1">
+            <table class="w-full text-11-regular" style="font-variant-numeric: tabular-nums">
+              <thead>
+                <tr class="text-text-faint text-left">
+                  <th class="font-normal pr-2 whitespace-nowrap w-[48px]">Iter</th>
+                  <th class="font-normal pr-2 whitespace-nowrap">Objective</th>
+                  <th class="font-normal pr-2 whitespace-nowrap">Primal</th>
+                  <th class="font-normal whitespace-nowrap">Dual</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="font-mono">
+                  <td class="pr-2">{latestIter()?.iter ?? "—"}</td>
+                  <td class="pr-2">{latestIter() ? latestIter()!.objective.toExponential(2) : "—"}</td>
+                  <td class="pr-2">{latestIter() ? latestIter()!.inf_pr.toExponential(1) : "—"}</td>
+                  <td>{latestIter() ? latestIter()!.inf_du.toExponential(1) : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+
+          {/* Completion card */}
           <Show when={active()!.state.completion}>
             {(c) => (
               <div class="rounded-md border border-border-weaker-base p-2 text-11-regular">
-                <div class="text-text-faint">completion</div>
-                <div>
-                  {c().status} · F={c().fidelity.toFixed(5)} · {c().iterations} iters
+                <div class="text-text-faint text-[10px] uppercase tracking-wide mb-0.5">Result</div>
+                <div class="text-13-medium">F = {c().fidelity.toFixed(5)}</div>
+                <div class="text-text-weak mt-0.5">
+                  {c().status} · {c().iterations} iterations
                   <Show when={active()!.state.timing}> · {active()!.state.timing!.toFixed(1)}s</Show>
                 </div>
               </div>
             )}
           </Show>
+
+          {/* Running indicator */}
           <Show when={!active()!.state.completion && latestIter()}>
-            <div class="text-11-regular text-text-weak">running · iter {latestIter()!.iter}</div>
+            <div class="text-11-regular text-text-weak">solving · iteration {latestIter()!.iter}</div>
           </Show>
         </div>
       }>
