@@ -393,7 +393,7 @@ export function AmicodeOnboardingWizard(props: {
               </Show>
             </div>
             <div>
-              <div style={LABEL}>What you work on</div>
+              <div style={LABEL}>Research area</div>
               <input
                 class="amc-input"
                 value={fields().focus}

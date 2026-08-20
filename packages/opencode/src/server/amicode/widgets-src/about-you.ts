@@ -95,7 +95,7 @@ export default {
             }).join('') + '</div>'
           : '') +
         '</div>' +
-        '<input data-f-focus placeholder="focus (e.g. optimal control, ML research)" value="' + esc(draft.focus) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
+        '<input data-f-focus placeholder="research area (e.g. optimal control, ML, materials science)" value="' + esc(draft.focus) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
         '<input data-f-scholar placeholder="Google Scholar URL" value="' + esc(draft.scholar) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
         '<div style="display:flex;gap:8px">' +
         '<button type="button" data-save ' + (saving ? 'disabled' : '') + ' style="font-size:12px;padding:4px 12px;border:1px solid var(--amc-accent);border-radius:8px;background:var(--amc-layer2);color:var(--amc-text);cursor:pointer">' + (saving ? 'Saving\\u2026' : 'Save') + '</button>' +

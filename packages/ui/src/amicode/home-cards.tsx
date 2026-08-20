@@ -924,8 +924,8 @@ function AboutYouCard(props: {
                           data-amc-clipboard="self"
                           class="amc-input amc-input--compact"
                           value={draft().focus}
-                          placeholder="What you work on"
-                          aria-label="Research focus"
+                          placeholder="Research area"
+                          aria-label="Research area"
                           onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
                           onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
                         />
