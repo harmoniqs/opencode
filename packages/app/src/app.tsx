@@ -471,6 +471,13 @@ function AmicodeNavigateBridge() {
         const autoSend = url.searchParams.get("autoSend") === "1"
         if (autoSend) setPendingAutoSend(true)
         await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+      } else {
+        // Navigate to an existing session by path (e.g. /session/:id)
+        const sessionMatch = url.pathname.match(/^\/session\/([^/?]+)/)
+        if (sessionMatch) {
+          const sessionId = sessionMatch[1]
+          tabs.openPath(`/${server.key}/session/${sessionId}`, { activate: true })
+        }
       }
     } catch { /* malformed path — ignore */ }
     finally { setTimeout(() => { pending = false }, 2000) }
