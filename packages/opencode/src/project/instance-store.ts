@@ -13,6 +13,7 @@ import * as Project from "./project"
 
 export interface LoadInput {
   directory: string
+  directories?: string[]
   worktree?: string
   project?: Project.Info
 }
@@ -48,12 +49,14 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
           input.project && input.worktree
             ? {
                 directory: input.directory,
+                directories: input.directories,
                 worktree: input.worktree,
                 project: input.project,
               }
             : yield* project.fromDirectory(input.directory).pipe(
                 Effect.map((result) => ({
                   directory: input.directory,
+                  directories: input.directories,
                   worktree: result.sandbox,
                   project: result.project,
                 })),
