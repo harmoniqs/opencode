@@ -5,6 +5,7 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { useLanguage } from "@/context/language"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
+import { inAmicode } from "@/utils/amicode-bridge"
 import {
   createDeveloperToolsController,
   type DeveloperToolsController,
@@ -176,6 +177,28 @@ export const DeveloperToolsSection: Component = () => {
         <RebuildStatusIndicator controller={controller} />
       </div>
       <DeveloperToolsContent controller={controller} />
+
+      <Show when={inAmicode()}>
+        <SettingsListV2>
+          <SettingsRowV2
+            title="Redo Onboarding"
+            description="Reset onboarding state and re-run the setup flow. Your model config is preserved."
+          >
+            <ButtonV2
+              size="small"
+              variant="neutral"
+              onClick={() => {
+                window.parent.postMessage(
+                  { source: "amicode", kind: "redo-onboarding" },
+                  "*",
+                )
+              }}
+            >
+              Redo Onboarding
+            </ButtonV2>
+          </SettingsRowV2>
+        </SettingsListV2>
+      </Show>
     </div>
   )
 }

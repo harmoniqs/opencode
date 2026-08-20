@@ -35,11 +35,10 @@ export function createDeveloperToolsController() {
       const didFinish = localStorage.getItem("amicode:devtools-rebuilt") === "1"
 
       if (wasRebuilding && didFinish) {
-        // Rebuild completed during a reload — show success
+        // Rebuild completed during a reload — show success (persists until dialog closes)
         localStorage.removeItem("amicode:devtools-rebuilding")
         localStorage.removeItem("amicode:devtools-rebuilt")
         setRebuildState("rebuilt")
-        setTimeout(() => setRebuildState("idle"), 5000)
       } else if (wasRebuilding) {
         // Still rebuilding — restore the indicator (iframe reloaded mid-rebuild)
         setRebuildState("rebuilding")
@@ -55,7 +54,6 @@ export function createDeveloperToolsController() {
         // Legacy path (rebuilding flag missing but rebuilt is set)
         localStorage.removeItem("amicode:devtools-rebuilt")
         setRebuildState("rebuilt")
-        setTimeout(() => setRebuildState("idle"), 5000)
       }
     } catch {
       // non-critical

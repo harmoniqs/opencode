@@ -35,7 +35,22 @@ export const DialogSettings: Component<{
       // Delay to ensure DOM is rendered after tab switch
       setTimeout(() => {
         const el = document.getElementById(props.scrollTo!)
-        el?.scrollIntoView({ behavior: "smooth", block: "start" })
+        if (!el) return
+        // Find the scrollable panel ancestor
+        const panel = el.closest(".settings-v2-panel") as HTMLElement | null
+        if (!panel) {
+          el.scrollIntoView({ behavior: "smooth", block: "nearest" })
+          return
+        }
+        // Calculate element's position relative to the scroll container
+        const elRect = el.getBoundingClientRect()
+        const panelRect = panel.getBoundingClientRect()
+        const relativeTop = elRect.top - panelRect.top + panel.scrollTop
+        // Scroll so the element appears ~80px from the top of the panel,
+        // but cap at maxScroll to avoid empty space below.
+        const desiredScroll = Math.max(0, relativeTop - 80)
+        const maxScroll = panel.scrollHeight - panel.clientHeight
+        panel.scrollTo({ top: Math.min(desiredScroll, maxScroll), behavior: "smooth" })
       }, 100)
     }
   })
