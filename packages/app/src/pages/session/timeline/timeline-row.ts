@@ -34,6 +34,7 @@ export namespace TimelineRow {
     stepIndex: number
     stepKey: string
     state: "pending" | "running" | "done" | "error"
+    lastStep: boolean
     groups: PartGroup[]
     reasoningHeading?: string
   }> {}

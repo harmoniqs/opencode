@@ -187,9 +187,8 @@ export namespace Timeline {
         const groups = groupParts(slice.refs.map((r) => ({ messageID: r.messageID, part: r.part })))
         if (groups.length === 0) return
         const isLast = stepIdx === stepSlices.length - 1
-        const hasRunning = slice.refs.some((r) => r.part.type === "tool" && (r.part.state.status === "running" || r.part.state.status === "pending"))
         const hasError = slice.refs.some((r) => r.part.type === "tool" && r.part.state.status === "error")
-        const state: "pending" | "running" | "done" | "error" = hasError ? "error" : isLast && isActive && status === "busy" && hasRunning ? "running" : isLast && isActive && status === "busy" ? "pending" : "done"
+        const state: "pending" | "running" | "done" | "error" = hasError ? "error" : isActive && status === "busy" ? "running" : "done"
         const heading = slice.refs
           .map((r) => r.part)
           .map((p) => (p?.type === "reasoning" && (p as any).text ? reasoningHeading((p as any).text) : undefined))
@@ -200,6 +199,7 @@ export namespace Timeline {
             stepIndex: stepIdx,
             stepKey: `step:${userMessage.id}:${stepIdx}:${slice.key}`,
             state,
+            lastStep: isLast,
             groups,
             reasoningHeading: heading,
           }),
