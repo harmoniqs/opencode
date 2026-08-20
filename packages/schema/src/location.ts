@@ -8,6 +8,7 @@ import { WorkspaceID } from "./workspace-id"
 export interface Ref extends Schema.Schema.Type<typeof Ref> {}
 export const Ref = Schema.Struct({
   directory: AbsolutePath,
+  directories: optional(Schema.Array(AbsolutePath)),
   workspaceID: optional(WorkspaceID),
 }).annotate({ identifier: "Location.Ref" })
 

@@ -13,9 +13,14 @@ const builtIns = Layer.effectDiscard(
   Effect.gen(function* () {
     const location = yield* Location.Service
     const registry = yield* SystemContextRegistry.Service
+    const workspaceFolders = location.directories?.length ? location.directories : [location.directory]
+    const workspaceEnv =
+      workspaceFolders.length > 1
+        ? `  Working directory: ${location.directory}\n  Workspace folders:\n${workspaceFolders.map((d, i) => `  - ${d}${i === 0 ? " (primary)" : ""}`).join("\n")}`
+        : `  Working directory: ${location.directory}`
     const environment = [
       "<env>",
-      `  Working directory: ${location.directory}`,
+      workspaceEnv,
       `  Workspace root folder: ${location.project.directory}`,
       `  Is directory a git repo: ${location.vcs?.type === "git" ? "yes" : "no"}`,
       `  Platform: ${process.platform}`,
