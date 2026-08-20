@@ -59,7 +59,7 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
         // After restart, providers may take a moment to load.
         const trySubmit = (attempts = 0) => {
           if (attempts > 20) return // give up after ~10s
-          if (model.selection.ready() && model.selection.current()) {
+          if (model.ready() && model.current()) {
             input.view.submit.onSubmit()
           } else {
             setTimeout(() => trySubmit(attempts + 1), 500)
