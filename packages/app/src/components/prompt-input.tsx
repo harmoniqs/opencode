@@ -53,7 +53,7 @@ import { usePlatform } from "@/context/platform"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
-import { readClipboardViaBridge } from "./prompt-input/clipboard-bridge"
+import { readClipboardImageViaBridge, readClipboardViaBridge } from "./prompt-input/clipboard-bridge"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
@@ -83,6 +83,7 @@ import { createPromptInputTransientState } from "./prompt-input/transient-state"
 import { showToast } from "@/utils/toast"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
+import { setClipboardImageHandler } from "@/utils/global-clipboard"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 
 export { createPromptInputHistory }
@@ -1154,11 +1155,21 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       setCursorPosition(editorRef, promptLength(prompt.current()))
     },
     addPart,
-    readClipboardImage: platform.readClipboardImage,
+    // Amicode webview: image on the OS clipboard is only readable via the outer
+    // webview's navigator.clipboard.read() (chat_panel.ts). Bridge first so
+    // Ctrl+V in the iframe attaches the image directly (har-moniqs/amicode#365);
+    // platform fallback preserves desktop/TUI native clipboard.
+    readClipboardImage: async () => (await readClipboardImageViaBridge()) ?? (await platform.readClipboardImage?.()) ?? null,
     // Webview-iframe paste fallback; self-gates to a no-op outside the webview.
     readClipboardText: () => readClipboardViaBridge(),
     getPathForFile: platform.getPathForFile,
   })
+
+  // Framed webview: the window-level fallback (global-clipboard.ts) is the
+  // sole ⌘V owner. When the clipboard carries no text it offers the media to
+  // this slot, landing it in the composer's attachment pipeline (mirrors v2).
+  setClipboardImageHandler((file) => void addAttachments([file]))
+  onCleanup(() => setClipboardImageHandler(undefined))
 
   const fileAttachmentInput = () => (
     <input
