@@ -52,22 +52,28 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
         prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
         setSearchParams({ ...searchParams, prompt: undefined, autoSend: undefined })
       }
-      // amicode#363: auto-submit when the navigate bridge flagged it
-      if (pendingAutoSend()) {
-        setPendingAutoSend(false)
-        // Retry until model selection is ready and submit succeeds.
-        // After restart, providers may take a moment to load.
-        const trySubmit = (attempts = 0) => {
-          if (attempts > 20) return // give up after ~10s
-          if (model.ready() && model.current()) {
-            input.view.submit.onSubmit()
-          } else {
-            setTimeout(() => trySubmit(attempts + 1), 500)
-          }
-        }
-        setTimeout(() => trySubmit(), 500)
-      }
     })
+  })
+
+  // amicode#363: auto-submit when the navigate bridge flagged it.
+  // Separated from the text-fill effect so it works even when the draft
+  // controller is already mounted (no sessions open → already on /new-session).
+  createEffect(() => {
+    if (!pendingAutoSend()) return
+    if (!prompt.ready()) return
+    setPendingAutoSend(false)
+    // Retry until model selection is ready and the prompt has content.
+    const trySubmit = (attempts = 0) => {
+      if (attempts > 20) return // give up after ~10s
+      const parts = prompt.current()
+      const hasContent = Array.isArray(parts) && parts.some((p: any) => p.content && p.content.length > 0)
+      if (model.ready() && model.current() && hasContent) {
+        input.view.submit.onSubmit()
+      } else {
+        setTimeout(() => trySubmit(attempts + 1), 500)
+      }
+    }
+    setTimeout(() => trySubmit(), 500)
   })
 
   return {

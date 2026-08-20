@@ -5,11 +5,10 @@ import { createSignal, onCleanup, onMount } from "solid-js"
 // v2-token styling (dark/light correct); timings tuned to read, not distract.
 
 export const TAGLINE_PHRASES = [
-  "Your friendly Quantum Computing Agent",
-  "designs pulses from a conversation",
-  "warm-starts from your pulse bank",
-  "tunes & calibrates on real hardware",
-  "powered by the Piccolo engine",
+  "your research copilot",
+  "runs experiments from a conversation",
+  "remembers your results and context",
+  "adapts to your workflow",
   "Andiamo.",
 ]
 

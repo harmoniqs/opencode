@@ -475,8 +475,8 @@ function AmicodeNavigateBridge() {
       if (url.pathname === "/new-session") {
         const prompt = url.searchParams.get("prompt") || undefined
         const autoSend = url.searchParams.get("autoSend") === "1"
-        if (autoSend) setPendingAutoSend(true)
         await tabs.newDraft({ server: server.key, directory: server.projects.list()[0]?.worktree ?? "" }, prompt)
+        if (autoSend) setPendingAutoSend(true)
       } else {
         // Navigate to an existing session by path (e.g. /session/:id)
         const sessionMatch = url.pathname.match(/^\/session\/([^/?]+)/)

@@ -35,6 +35,7 @@ export interface ProfileYou {
   scholar: string | null
   affiliation_logo: string | null
   focus: string | null
+  description: string | null
   avatar: string | null
   platforms: string[]
   stats: ProfileStats
@@ -57,6 +58,7 @@ export function parseProfileResponse(raw: unknown): ProfileView {
       scholar: typeof you.scholar === "string" ? you.scholar : null,
       affiliation_logo: typeof you.affiliation_logo === "string" ? you.affiliation_logo : null,
       focus: typeof you.focus === "string" ? you.focus : null,
+      description: typeof you.description === "string" ? you.description : null,
       avatar: typeof you.avatar === "string" ? you.avatar : null,
       platforms: Array.isArray(you.platforms) ? you.platforms.filter((p: unknown) => typeof p === "string") : [],
       stats: {
@@ -924,8 +926,8 @@ function AboutYouCard(props: {
                           data-amc-clipboard="self"
                           class="amc-input amc-input--compact"
                           value={draft().focus}
-                          placeholder="What you work on"
-                          aria-label="Research focus"
+                          placeholder="Research area"
+                          aria-label="Research area"
                           onInput={(e) => setDraft({ ...draft(), focus: e.currentTarget.value })}
                           onKeyDown={pasteFallback((v) => setDraft({ ...draft(), focus: v }))}
                         />
@@ -989,6 +991,22 @@ function AboutYouCard(props: {
                     </For>
                   </div>
                 </Show>
+                <Show when={y().description}>
+                  <div
+                    style={{
+                      "font-size": "11px",
+                      "line-height": "15px",
+                      color: "var(--v2-text-text-muted)",
+                      "margin-top": "3px",
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      "-webkit-line-clamp": "2",
+                      "-webkit-box-orient": "vertical",
+                    }}
+                  >
+                    {y().description}
+                  </div>
+                </Show>
               </div>
             </div>
 
@@ -998,7 +1016,7 @@ function AboutYouCard(props: {
                 <>
                   <div style={DIVIDER} />
                   <div style={{ "font-size": "12px", color: "var(--v2-text-text-muted)", "margin-bottom": "8px" }}>
-                    No solves yet — tell Amico what you're working on and it'll start remembering.
+                    No experiments yet — tell Amico what you're working on and it'll start remembering.
                   </div>
                   <PrimaryButton
                     slot="amicode-card-you-firstrun"

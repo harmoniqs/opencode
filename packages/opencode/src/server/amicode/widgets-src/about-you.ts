@@ -95,7 +95,7 @@ export default {
             }).join('') + '</div>'
           : '') +
         '</div>' +
-        '<input data-f-focus placeholder="focus (e.g. transmon pulse design)" value="' + esc(draft.focus) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
+        '<input data-f-focus placeholder="research area (e.g. optimal control, ML, materials science)" value="' + esc(draft.focus) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
         '<input data-f-scholar placeholder="Google Scholar URL" value="' + esc(draft.scholar) + '" style="font-size:12px;padding:4px 8px;border:1px solid var(--amc-border);border-radius:8px;background:var(--amc-bg);color:var(--amc-text)">' +
         '<div style="display:flex;gap:8px">' +
         '<button type="button" data-save ' + (saving ? 'disabled' : '') + ' style="font-size:12px;padding:4px 12px;border:1px solid var(--amc-accent);border-radius:8px;background:var(--amc-layer2);color:var(--amc-text);cursor:pointer">' + (saving ? 'Saving\\u2026' : 'Save') + '</button>' +
@@ -114,6 +114,7 @@ export default {
           ? editForm
           : '<div style="font-size:12px;line-height:16px;color:var(--amc-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
             esc(you.focus || you.affiliation || 'tell Amico about your work') + '</div>' +
+            (you.description ? '<div style="font-size:11px;line-height:15px;color:var(--amc-text-muted);margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + esc(you.description) + '</div>' : '') +
             (platforms ? '<div style="font-size:11px;color:var(--amc-text-faint);margin-top:1px">' + platforms + '</div>' : '')) +
         '</div></div>'
 
@@ -121,7 +122,7 @@ export default {
       if (fresh && !editing) {
         body =
           '<div style="height:1px;background:var(--amc-border);margin:12px 0"></div>' +
-          '<div style="font-size:12px;color:var(--amc-text-muted);margin-bottom:8px">No solves yet \\u2014 tell Amico what you&#39;re working on and it&#39;ll start remembering.</div>' +
+          '<div style="font-size:12px;color:var(--amc-text-muted);margin-bottom:8px">No experiments yet \\u2014 tell Amico what you&#39;re working on and it&#39;ll start remembering.</div>' +
           '<button type="button" data-firstrun style="align-self:flex-start;border:1px solid var(--amc-accent);border-radius:8px;background:var(--amc-layer2);color:var(--amc-text);padding:5px 12px;font-size:12px;cursor:pointer">Get started &#8594;</button>'
       } else if (!editing) {
         var cells = chosen.map(function (k) {
@@ -169,7 +170,7 @@ export default {
         amico.action('open-external', { url: you.scholar })
       })
       on('[data-firstrun]', 'click', function () {
-        amico.prompt('help me set up my first pulse-design problem')
+        amico.prompt('help me get started with my first project')
       })
       on('[data-cancel]', 'click', function () {
         editing = false

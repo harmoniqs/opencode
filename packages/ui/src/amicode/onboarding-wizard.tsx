@@ -264,8 +264,8 @@ export function AmicodeOnboardingWizard(props: {
                   "max-width": "380px",
                 }}
               >
-                Amico is your quantum-computing agent — it designs pulses from a conversation, warm-starts from your
-                pulse bank, and tunes on real hardware. Thirty seconds of setup makes it yours.
+                Amico is your research and coding companion — it runs experiments from a conversation, remembers your
+                results, and adapts to your workflow. Thirty seconds of setup makes it yours.
               </div>
             </div>
             <div
@@ -393,12 +393,12 @@ export function AmicodeOnboardingWizard(props: {
               </Show>
             </div>
             <div>
-              <div style={LABEL}>What you work on</div>
+              <div style={LABEL}>Research area</div>
               <input
                 class="amc-input"
                 value={fields().focus}
                 onInput={(e) => setFields({ ...fields(), focus: e.currentTarget.value })}
-                placeholder="e.g. high-fidelity gates on transmons"
+                placeholder="e.g. optimal control, ML research, materials science"
               />
             </div>
             <div>
@@ -544,7 +544,7 @@ export function AmicodeOnboardingWizard(props: {
               </div>
             </div>
             <div style={{ "font-size": "13px", color: "var(--v2-text-text-muted)", "max-width": "360px" }}>
-              You're set — a personal vault is ready. Amico will remember this; say hi and design your first pulse.
+              You're set — a personal vault is ready. Amico will remember your context across sessions.
             </div>
             {/* attach-your-own-vault: quiet by default so it never crowds the payoff shot */}
             <Show when={props.onAttachVault}>
