@@ -234,6 +234,44 @@ describe("connections routes — full lifecycle, no extension host (AC6)", () =>
   })
 })
 
+describe("solver-mode route — releasing the HP tier over the route tree (opencode#78)", () => {
+  test("POST /amicode/solver-mode {mode:'piccolo'} releases the tier; {mode:'hp'} is refused", async () => {
+    const server = app()
+    const stub = await stubSolveService(() => 200)
+    try {
+      await server.request(
+        "/amicode/connections/credential",
+        post({ id: "company-compute", base_url: stub.url, token: "tok-release" }),
+      )
+      expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["issimo"]\n')
+
+      const released = await (await server.request("/amicode/solver-mode", post({ mode: "piccolo" }))).json()
+      expect(released.ok).toBe(true)
+      expect(released.mode).toBe("piccolo")
+      expect(readFileSync(entitlementsFile(), "utf8")).toBe("codes = []\n")
+      expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "piccolo", status: "switching" })
+
+      // hp is not selectable here — it follows a credential, and a second hp
+      // writer is the duplicate flip ADR 0001 forbids
+      const refused = await (await server.request("/amicode/solver-mode", post({ mode: "hp" }))).json()
+      expect(refused.ok).toBe(false)
+      expect(JSON.parse(readFileSync(solverModeFile(), "utf8")).mode).toBe("piccolo")
+    } finally {
+      await stub.close()
+    }
+  })
+
+  test("the route carries the same auth wrapper as every other amicode route (#163)", async () => {
+    const guarded = app({ password: "pw", username: "user" })
+    expect((await guarded.request("/amicode/solver-mode", post({ mode: "piccolo" }))).status).toBe(401)
+    const authed = await guarded.request("/amicode/solver-mode", {
+      ...post({ mode: "piccolo" }),
+      headers: { Authorization: basic("user", "pw") },
+    })
+    expect(authed.status).toBe(200)
+  })
+})
+
 describe("connections routes — HP flip artifacts over the route tree (167 AC1, AC3, AC4)", () => {
   test("valid submit over the route → both flip artifacts; disconnect leaves them (one-way); 401 never flips", async () => {
     const server = app()
