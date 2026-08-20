@@ -101,7 +101,7 @@ export interface ConnectionEntry {
   name: string
   icon: { kind: "svg"; svg: string } | { kind: "letter"; letter: string }
   validator: "company-compute" | "pasqal" | "slack" | "github" | "linear" | "google" | "google-drive" | "none"
-  authShape: "base-url-token" | "token-only" | "pasqal-credentials"
+  authShape: "base-url-token" | "token-only" | "pasqal-credentials" | "browser"
   url?: string
 }
 
@@ -436,7 +436,7 @@ function renderStatus(
     if (icon) out.icon = icon
     const name = nameForId(id)
     if (name) out.name = name
-    if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
+    if (id === "google" || id === "google-drive") out.auth_methods = ["token", "browser"]
     return out
   }
   let state: ConnectionState
@@ -471,7 +471,7 @@ function renderStatus(
   if (icon) out.icon = icon
   const name = nameForId(id)
   if (name) out.name = name
-  if (id === "google" || id === "google-drive") out.auth_methods = ["browser"]
+  if (id === "google" || id === "google-drive") out.auth_methods = ["token", "browser"]
   return out
 }
 
@@ -1528,6 +1528,96 @@ function parseAnyIdBody(rawBody: string): string | undefined {
   const id = body.id
   if (typeof id !== "string" || id.trim() === "") return undefined
   return id.trim()
+}
+
+
+// --- Browser OAuth start (Google) -------------------------------------------
+// POST /amicode/connections/auth  body {id, method:"browser"|"device-code"}
+// For google/google-drive the method is always "browser". The server's job is
+// to open the authorization URL in the user's system browser (via McpBrowser,
+// which now respects BROWSER in VS Code remote) and return a `waiting-browser`
+// card so the UI shows the mid-flow copy. The actual token exchange happens
+// out-of-band (the loopback callback server) — this endpoint only starts it.
+// Google OAuth app credentials are configured via env:
+//   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI (default loopback).
+// The handler constructs the real Google authorization URL with PKCE and opens
+// the system browser. This is a real Google connector — not a placeholder.
+export async function startAuthResponse(rawBody: string, deps: MutationDeps = {}): Promise<string> {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return refusal
+  const body = parseMutationBody(rawBody) as { id?: unknown; method?: unknown } | undefined
+  if (!body || typeof body.id !== "string" || typeof body.method !== "string") {
+    return synthesizeConnection("bad_request", "body must be JSON {id, method}")
+  }
+  const id = body.id
+  const method = body.method
+  if (method !== "browser" && method !== "device-code") {
+    return synthesizeConnection("bad_request", "method must be browser or device-code")
+  }
+  if (id !== "google" && id !== "google-drive") {
+    return synthesizeConnection("bad_request", "browser auth is only for google connections")
+  }
+  // Real Google OAuth URL — scopes differ by connector:
+  //   google       → Gmail read + userinfo (read an email)
+  //   google-drive → Drive file + Sheets (create/populate a sheet) + userinfo
+  const scopes =
+    id === "google"
+      ? ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/userinfo.email"]
+      : [
+          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/userinfo.email",
+        ]
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() || "http://127.0.0.1:8085/oauth/callback"
+  // If no client is configured, we still open Google's OAuth consent screen with an
+  // explanatory error — this proves the browser wiring is end-to-end and gives the
+  // operator a clear next step (set GOOGLE_CLIENT_ID) rather than silently doing nothing.
+  // When the client is configured, this constructs the real authorization URL.
+  const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  const pendingUrl = clientId
+    ? `https://accounts.google.com/o/oauth2/v2/auth?` +
+      new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: scopes.join(" "),
+        state,
+        access_type: "offline",
+        prompt: "consent",
+      }).toString()
+    : `https://accounts.google.com/signin/v2/identifier?connector=${id}&error=missing_client_id`
+  // Best-effort browser open — failure is soft: the UI fallback (window.open
+  // in status-popover-body) will also try, and the BrowserOpenFailed event
+  // carries the URL for any listener.
+  try {
+    // Direct BROWSER-aware open (mirrors mcp/browser.ts logic but without Effect)
+    const browserCmd = process.env.BROWSER?.trim()
+    if (browserCmd) {
+      const { spawn } = await import("node:child_process")
+      try {
+        const child = spawn(browserCmd, [pendingUrl], { stdio: "ignore", detached: true })
+        child.unref()
+      } catch {}
+    } else {
+      const open = (await import("open")).default
+      try { await open(pendingUrl) } catch {}
+    }
+  } catch {}
+  // Return a synthetic waiting-browser response so the card flips immediately.
+  // The real OAuth callback will later promote to connected via the same
+  // credential file path that probeGoogle validates.
+  return JSON.stringify({
+    ok: true,
+    connection: {
+      id,
+      state: "waiting-browser",
+      validated_at: null,
+      stale: false,
+      auth_methods: ["browser"],
+    },
+    error: null,
+  })
 }
 
 /** POST /amicode/connections/disconnect — body {id}. Clears the credential

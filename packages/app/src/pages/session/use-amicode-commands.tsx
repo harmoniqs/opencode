@@ -67,7 +67,7 @@ export function useAmicodeCommands() {
           }),
           amico({
             id: "amicode.openInspector",
-            title: "Open run inspector",
+            title: "Open pulse inspector",
             onSelect: () => postAmicode("amicode.openInspector"),
           }),
         ]

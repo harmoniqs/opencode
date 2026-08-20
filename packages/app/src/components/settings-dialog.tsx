@@ -4,7 +4,7 @@ import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 
-export function useSettingsDialog(defaultValue?: string) {
+export function useSettingsDialog(defaultValue?: string, scrollTo?: string) {
   const dialog = useDialog()
   const params = useParams<{ id?: string }>()
   let run = 0
@@ -19,7 +19,7 @@ export function useSettingsDialog(defaultValue?: string) {
     const sessionID = params.id
     void import("@/components/settings-v2").then((module) => {
       if (dead || run !== current) return
-      void dialog.show(() => <module.DialogSettings sessionID={sessionID} defaultValue={defaultValue} />)
+      void dialog.show(() => <module.DialogSettings sessionID={sessionID} defaultValue={defaultValue} scrollTo={scrollTo} />)
     })
   }
 }
@@ -40,4 +40,9 @@ export function useSettingsCommand() {
   ])
 
   return show
+}
+
+/** @deprecated — reopen logic moved into useSettingsCommand which has full context */
+export function DevToolsReopenBridge() {
+  return null
 }

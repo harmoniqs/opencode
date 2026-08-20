@@ -785,7 +785,7 @@
   cursor: default;
 }
 /* …except a not-recorded chip that IS a button (the pulse chip, which opens the
-   Run Inspector before a pulse is banked): keep the dotted not-yet look, but it
+   Pulse Inspector before a pulse is banked): keep the dotted not-yet look, but it
    must READ clickable at rest — hover feedback alone failed the glance test
    (Kate 2026-07-28: "doesn't appear clickable"). Three signals: full-strength
    ink at weight 600 (faint ink is how a chip says "inert", and this one isn't;
@@ -1472,6 +1472,62 @@
 [data-color-scheme="dark"] [data-slot="amicode-beta-tag"] {
   color: var(--amber-dark-11);
   background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
+}
+
+/* ---- DEV channel tag (titlebar) ----------------------------------------- */
+/* Green pill signals developer mode is active — visually distinct from the
+   amber BETA so you never confuse a dev build with a release. Uses the
+   semantic success scale (auto light/dark via theme.css). */
+[data-slot="amicode-dev-tag"] {
+  color: var(--text-on-success-base);
+  background: color-mix(in srgb, var(--surface-success-strong) 16%, transparent);
+}
+
+/* ---- Developer Tools rebuild status + buttons ─────────────────────────── */
+.devtools-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.devtools-rebuild-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+}
+.devtools-rebuild-status--building { color: var(--text-warning-base, #ee9d2b); }
+.devtools-rebuild-status--done { color: var(--text-on-success-base, #2dba26); }
+.devtools-rebuild-status--failed { color: var(--text-danger-base, #e5484d); }
+
+.devtools-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.devtools-status-dot--orange {
+  background: var(--surface-warning-strong, #ee9d2b);
+  animation: devtools-pulse 1.2s ease-in-out infinite;
+}
+.devtools-status-dot--green {
+  background: var(--surface-success-strong, #12c905);
+}
+.devtools-status-dot--red {
+  background: var(--surface-danger-strong, #e5484d);
+}
+
+@keyframes devtools-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+ .devtools-rebuild-row {
+  display: flex;
+  gap: 8px;
+  padding: 16px 0 4px;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

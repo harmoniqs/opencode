@@ -494,6 +494,13 @@ export const dict = {
   "context.usage.clickToView": "Click to view context",
   "context.usage.view": "View context usage",
 
+  "context.warning.banner.warn": "Context {{percent}}% full — compact soon to keep quality",
+  "context.warning.banner.critical": "Context {{percent}}% full — next message may fail. Compact now.",
+  "context.warning.toast.warn.title": "Context 75% full",
+  "context.warning.toast.warn.description": "Consider compacting to keep quality",
+  "context.warning.toast.critical.title": "Context 90% full",
+  "context.warning.toast.critical.description": "Next message may fail — compact now",
+
   "language.en": "English",
   "language.zh": "简体中文",
   "language.zht": "繁體中文",
@@ -1001,6 +1008,39 @@ export const dict = {
   "settings.general.row.wayland.description": "Disable X11 fallback on Wayland. Requires restart.",
   "settings.general.row.wayland.tooltip":
     "On Linux with mixed refresh-rate monitors, native Wayland can be more stable.",
+
+  "settings.general.section.developerTools": "Developer Tools",
+  "settings.general.row.developerMode.title": "Use developer build",
+  "settings.general.row.developerMode.description":
+    "Switch between the release and a local developer build of the opencode server and Amicode extension",
+  "settings.general.row.opencodePath.title": "opencode repo path",
+  "settings.general.row.opencodePath.description":
+    "Path to your local opencode repository root (the binary is resolved from here)",
+  "settings.general.row.opencodePath.placeholder": "~/harmoniqs/opencode",
+  "settings.general.row.opencodePath.error.notFound": "Binary not found at this path",
+  "settings.general.row.opencodePath.error.notExecutable": "Binary exists but is not executable",
+  "settings.general.row.amicodePath.title": "Amicode repo path",
+  "settings.general.row.amicodePath.description":
+    "Path to your local Amicode repository root (rebuilds extension and reloads on change)",
+  "settings.general.row.amicodePath.placeholder": "~/harmoniqs/amicode",
+  "settings.general.row.amicodePath.error.notFound": "Directory does not exist",
+  "settings.general.row.amicodePath.error.buildFailed": "Extension build failed",
+  "settings.general.row.amicodePath.building": "Building extension…",
+  "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
+  "settings.general.row.devTools.rebuildLocally": "Rebuild Locally",
+  "settings.general.row.devTools.rebuildRemotely": "Rebuild from Latest",
+  "settings.general.row.devTools.rebuilding": "Rebuilding…",
+  "settings.general.row.devTools.rebuilt": "Rebuilt!",
+
+  "settings.general.section.dataStorage": "Data & Storage",
+  "settings.general.row.dataStorage.database.title": "Session database",
+  "settings.general.row.dataStorage.database.description":
+    "Override the path to the opencode session database. Leave empty to use the default location.",
+  "settings.general.row.dataStorage.database.error.invalidPath": "Parent directory does not exist",
+  "settings.general.row.dataStorage.configDir.title": "Configuration directory",
+  "settings.general.row.dataStorage.configDir.description":
+    "Override the opencode configuration directory. Leave empty to use the default location.",
+  "settings.general.row.dataStorage.configDir.error.invalidPath": "Directory does not exist",
 
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",

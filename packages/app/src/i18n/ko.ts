@@ -603,6 +603,28 @@ export const dict = {
   "settings.general.row.wayland.description": "Wayland에서 X11 폴백을 비활성화합니다. 다시 시작해야 합니다.",
   "settings.general.row.wayland.tooltip":
     "혼합 주사율 모니터가 있는 Linux에서는 네이티브 Wayland가 더 안정적일 수 있습니다.",
+  "settings.general.section.developerTools": "Developer Tools",
+  "settings.general.row.developerMode.title": "Use developer build",
+  "settings.general.row.developerMode.description":
+    "Switch between the release and a local developer build of the opencode server and Amicode extension",
+  "settings.general.row.opencodePath.title": "opencode repo path",
+  "settings.general.row.opencodePath.description":
+    "Path to your local opencode repository root (the binary is resolved from here)",
+  "settings.general.row.opencodePath.placeholder": "~/harmoniqs/opencode",
+  "settings.general.row.opencodePath.error.notFound": "Binary not found at this path",
+  "settings.general.row.opencodePath.error.notExecutable": "Binary exists but is not executable",
+  "settings.general.row.amicodePath.title": "Amicode repo path",
+  "settings.general.row.amicodePath.description":
+    "Path to your local Amicode repository root (rebuilds extension and reloads on change)",
+  "settings.general.row.amicodePath.placeholder": "~/harmoniqs/amicode",
+  "settings.general.row.amicodePath.error.notFound": "Directory does not exist",
+  "settings.general.row.amicodePath.error.buildFailed": "Extension build failed",
+  "settings.general.row.amicodePath.building": "Building extension…",
+  "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
+  "settings.general.row.devTools.rebuildLocally": "Rebuild Locally",
+  "settings.general.row.devTools.rebuildRemotely": "Rebuild from Latest",
+  "settings.general.row.devTools.rebuilding": "Rebuilding…",
+  "settings.general.row.devTools.rebuilt": "Rebuilt!",
   "settings.general.row.releaseNotes.title": "릴리스 노트",
   "settings.general.row.releaseNotes.description": "업데이트 후 '새 소식' 팝업 표시",
   "settings.updates.row.startup.title": "시작 시 업데이트 확인",

@@ -102,6 +102,14 @@ const openExternal: Platform["openExternal"] = (value) => {
 }
 
 const restart: Platform["restart"] = async () => {
+  // Amicode webview (framed): the error page's Restart must also restart the
+  // underlying opencode server (issue #382) — browser reload alone leaves the
+  // panel in the error state when the server is down/unreachable.
+  if (window.parent !== window) {
+    window.parent.postMessage({ source: "amicode", kind: "command", command: "amicode.restartServer" }, "*")
+    // Give the extension host a moment to restart the server before reloading
+    await new Promise((resolve) => setTimeout(resolve, 800))
+  }
   window.location.reload()
 }
 

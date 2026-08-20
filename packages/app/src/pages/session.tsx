@@ -37,6 +37,7 @@ import { showToast } from "@/utils/toast"
 import { base64Encode, checksum } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
+import { ContextWarningBanner } from "@/components/session/context-warning-banner"
 import { ErrorPage } from "@/pages/error"
 import { CommentsProvider, useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
@@ -93,6 +94,7 @@ import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useAmicodeCommands } from "@/pages/session/use-amicode-commands"
+import { InspectorProvider } from "@/amicode/inspector/inspector-context"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
 import { Persist, persisted } from "@/utils/persist"
@@ -319,7 +321,9 @@ function SessionProviders(props: ParentProps) {
     <TerminalProvider>
       <FileProvider>
         <PromptProvider>
-          <CommentsProvider>{props.children}</CommentsProvider>
+          <CommentsProvider>
+            <InspectorProvider>{props.children}</InspectorProvider>
+          </CommentsProvider>
         </PromptProvider>
       </FileProvider>
     </TerminalProvider>
@@ -2068,42 +2072,54 @@ export default function Page() {
           <Match when={params.id}>
             <Show when={messagesReady() ? params.id : undefined} keyed>
               {(_id) => (
-                <MessageTimeline
-                  actions={actions}
-                  scroll={ui.scroll}
-                  onResumeScroll={resumeScroll}
-                  setScrollRef={setScrollRef}
-                  onScheduleScrollState={scheduleScrollState}
-                  onAutoScrollHandleScroll={autoScroll.handleScroll}
-                  onMarkScrollGesture={markScrollGesture}
-                  hasScrollGesture={hasScrollGesture}
-                  onUserScroll={markUserScroll}
-                  onHistoryScroll={onHistoryScroll}
-                  onAutoScrollInteraction={autoScroll.handleInteraction}
-                  shouldAnchorBottom={() =>
-                    !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
+                <Show
+                  when={visibleUserMessages().length > 0 || rolled().length === 0}
+                  fallback={
+                    <div class="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                      <div class="text-14-regular text-text-weak">All messages are rolled back</div>
+                      <div class="text-12-regular text-text-weaker max-w-sm">
+                        Use the rolled-back bar below to restore a message and continue.
+                      </div>
+                    </div>
                   }
-                  centered={centered()}
-                  setContentRef={(el) => {
-                    content = el
-                    autoScroll.contentRef(el)
+                >
+                  <MessageTimeline
+                    actions={actions}
+                    scroll={ui.scroll}
+                    onResumeScroll={resumeScroll}
+                    setScrollRef={setScrollRef}
+                    onScheduleScrollState={scheduleScrollState}
+                    onAutoScrollHandleScroll={autoScroll.handleScroll}
+                    onMarkScrollGesture={markScrollGesture}
+                    hasScrollGesture={hasScrollGesture}
+                    onUserScroll={markUserScroll}
+                    onHistoryScroll={onHistoryScroll}
+                    onAutoScrollInteraction={autoScroll.handleInteraction}
+                    shouldAnchorBottom={() =>
+                      !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
+                    }
+                    centered={centered()}
+                    setContentRef={(el) => {
+                      content = el
+                      autoScroll.contentRef(el)
 
-                    const root = scroller
-                    if (root) scheduleScrollState(root)
-                  }}
-                  userMessages={visibleUserMessages()}
-                  setHistoryAnchor={(handlers) => {
-                    captureHistoryAnchor = handlers.capture
-                    restoreHistoryAnchor = handlers.restore
-                  }}
-                  anchor={anchor}
-                  setRevealMessage={(fn) => {
-                    revealMessage = fn
-                  }}
-                  setScrollToEnd={(fn) => {
-                    scrollToEnd = fn
-                  }}
-                />
+                      const root = scroller
+                      if (root) scheduleScrollState(root)
+                    }}
+                    userMessages={visibleUserMessages()}
+                    setHistoryAnchor={(handlers) => {
+                      captureHistoryAnchor = handlers.capture
+                      restoreHistoryAnchor = handlers.restore
+                    }}
+                    anchor={anchor}
+                    setRevealMessage={(fn) => {
+                      revealMessage = fn
+                    }}
+                    setScrollToEnd={(fn) => {
+                      scrollToEnd = fn
+                    }}
+                  />
+                </Show>
               )}
             </Show>
           </Match>
@@ -2248,6 +2264,7 @@ export default function Page() {
   return (
     <SessionRouteFrame>
       <SessionHeader />
+      <ContextWarningBanner />
       <div
         ref={panelRow}
         class="flex-1 min-h-0 flex flex-col md:flex-row"

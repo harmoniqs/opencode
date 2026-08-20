@@ -89,26 +89,30 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
     })
   }
 
+  const usageColor = createMemo(() => {
+    const u = context()?.usage ?? 0
+    if (u >= 90) return "var(--v2-text-text-danger, #ef4444)"
+    if (u >= 75) return "var(--v2-text-text-warning, #f59e0b)"
+    return "var(--v2-icon-icon-base, var(--icon-base))"
+  })
   const circle = () => (
-    <div class="flex items-center justify-center">
+    <div class="flex items-center justify-center" data-usage={context()?.usage ?? 0}>
       <ProgressCircle
         size={16}
         strokeWidth={2}
         percentage={context()?.usage ?? 0}
         style={
-          variant() === "indicator"
-            ? {
-                "--progress-circle-background": "var(--v2-background-bg-layer-04, var(--border-weak-base))",
-                "--progress-circle-background-overlay": "var(--v2-overlay-simple-overlay-pressed, transparent)",
-                "--progress-circle-progress": "var(--v2-icon-icon-base, var(--icon-base))",
-              }
-            : undefined
+          {
+            "--progress-circle-background": "var(--v2-background-bg-layer-04, var(--border-weak-base))",
+            "--progress-circle-background-overlay": "var(--v2-overlay-simple-overlay-pressed, transparent)",
+            "--progress-circle-progress": usageColor(),
+          } as never
         }
       />
     </div>
   )
   const circleV2 = () => (
-    <div class="flex items-center justify-center">
+    <div class="flex items-center justify-center" data-usage={context()?.usage ?? 0}>
       <ProgressCircleV2 percentage={context()?.usage ?? 0} />
     </div>
   )

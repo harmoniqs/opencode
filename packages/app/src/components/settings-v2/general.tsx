@@ -25,6 +25,8 @@ import {
   type ShellSettingsController,
   type SoundSettingsController,
 } from "./general-controllers"
+import { DataStorageSection } from "./data-storage"
+import { DeveloperToolsSection } from "./developer-tools"
 import "./settings-v2.css"
 
 const schemeOptions: ("system" | "light" | "dark")[] = ["system", "light", "dark"]
@@ -567,7 +569,11 @@ export const SettingsGeneralV2: Component<{
 
         <DisplaySection />
 
+        <DataStorageSection />
+
         <AdvancedSection />
+
+        <DeveloperToolsSection />
       </div>
     </>
   )

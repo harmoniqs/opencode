@@ -1,4 +1,4 @@
-import { Component, createMemo, createSignal, startTransition } from "solid-js"
+import { Component, createMemo, createSignal, onMount, startTransition } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/v2/dialog-v2"
 import { TabsV2 } from "@opencode-ai/ui/v2/tabs-v2"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -19,6 +19,7 @@ import { useServerSync } from "@/context/server-sync"
 export const DialogSettings: Component<{
   sessionID?: string
   defaultValue?: string
+  scrollTo?: string
 }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
@@ -27,6 +28,32 @@ export const DialogSettings: Component<{
   const tabs = useTabs()
   const serverSync = useServerSync()
   const [tab, setTab] = createSignal(props.defaultValue ?? "general")
+
+  // After mount, scroll to the target section if specified
+  onMount(() => {
+    if (props.scrollTo) {
+      // Delay to ensure DOM is rendered after tab switch
+      setTimeout(() => {
+        const el = document.getElementById(props.scrollTo!)
+        if (!el) return
+        // Find the scrollable panel ancestor
+        const panel = el.closest(".settings-v2-panel") as HTMLElement | null
+        if (!panel) {
+          el.scrollIntoView({ behavior: "smooth", block: "nearest" })
+          return
+        }
+        // Calculate element's position relative to the scroll container
+        const elRect = el.getBoundingClientRect()
+        const panelRect = panel.getBoundingClientRect()
+        const relativeTop = elRect.top - panelRect.top + panel.scrollTop
+        // Scroll so the element appears ~80px from the top of the panel,
+        // but cap at maxScroll to avoid empty space below.
+        const desiredScroll = Math.max(0, relativeTop - 80)
+        const maxScroll = panel.scrollHeight - panel.clientHeight
+        panel.scrollTo({ top: Math.min(desiredScroll, maxScroll), behavior: "smooth" })
+      }, 100)
+    }
+  })
   const directory = createMemo(() => {
     const route = layout.route()
     if (route.type === "dir-new-sesssion") return route.dir

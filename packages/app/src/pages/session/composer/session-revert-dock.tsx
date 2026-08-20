@@ -21,10 +21,19 @@ export function SessionRevertDock(props: {
     collapsed: true,
   })
 
+  // Don't force-collapse on every items change — that makes the dock
+  // un-dismissable (issue #381). Only collapse when the revert first appears
+  // (0 → >0) or the revert boundary changes to a different message.
+  let prevLen = 0
+  let prevFirstId: string | undefined
   createEffect(() => {
-    props.items.length
-    props.items[0]?.id
-    setStore("collapsed", true)
+    const len = props.items.length
+    const firstId = props.items[0]?.id
+    if (len > 0 && (prevLen === 0 || firstId !== prevFirstId)) {
+      setStore("collapsed", true)
+    }
+    prevLen = len
+    prevFirstId = firstId
   })
 
   const toggle = () => setStore("collapsed", (value) => !value)
@@ -58,7 +67,7 @@ export function SessionRevertDock(props: {
             <Show when={store.collapsed && preview()}>
               <span class="min-w-0 flex-1 truncate text-14-regular text-text-base cursor-default">{preview()}</span>
             </Show>
-            <div class="ml-auto shrink-0">
+            <div class="ml-auto flex items-center gap-1 shrink-0">
               <IconButton
                 icon="chevron-down"
                 size="normal"
@@ -75,6 +84,21 @@ export function SessionRevertDock(props: {
                 aria-label={
                   store.collapsed ? language.t("session.revertDock.expand") : language.t("session.revertDock.collapse")
                 }
+              />
+              <IconButton
+                icon="xmark-small"
+                size="normal"
+                variant="ghost"
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setStore("collapsed", true)
+                }}
+                aria-label="Dismiss"
+                title="Collapse"
               />
             </div>
           </div>
@@ -132,7 +156,7 @@ export function SessionRevertDock(props: {
               {preview()}
             </span>
           </Show>
-          <div class="ml-auto shrink-0">
+          <div class="ml-auto flex items-center gap-1 shrink-0">
             <IconButtonV2
               icon={<IconV2 name="outline-chevron-down" size="small" />}
               size="large"
@@ -149,6 +173,21 @@ export function SessionRevertDock(props: {
               aria-label={
                 store.collapsed ? language.t("session.revertDock.expand") : language.t("session.revertDock.collapse")
               }
+            />
+            <IconButtonV2
+              icon={<IconV2 name="xmark-small" size="small" />}
+              size="large"
+              variant="ghost-muted"
+              onMouseDown={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                setStore("collapsed", true)
+              }}
+              aria-label="Dismiss"
+              title="Collapse"
             />
           </div>
         </div>
