@@ -55,8 +55,17 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
       // amicode#363: auto-submit when the navigate bridge flagged it
       if (pendingAutoSend()) {
         setPendingAutoSend(false)
-        // Delay to ensure the prompt input and submission machinery are fully mounted
-        setTimeout(() => input.view.submit.onSubmit(), 100)
+        // Retry until model selection is ready and submit succeeds.
+        // After restart, providers may take a moment to load.
+        const trySubmit = (attempts = 0) => {
+          if (attempts > 20) return // give up after ~10s
+          if (model.selection.ready() && model.selection.current()) {
+            input.view.submit.onSubmit()
+          } else {
+            setTimeout(() => trySubmit(attempts + 1), 500)
+          }
+        }
+        setTimeout(() => trySubmit(), 500)
       }
     })
   })
