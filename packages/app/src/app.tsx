@@ -459,6 +459,12 @@ function AmicodeNavigateBridge() {
   const tabs = useTabs()
   const server = useServer()
   let pending = false
+
+  // Signal to the extension host that the app is mounted and ready to
+  // receive navigate messages. The extension uses this to dismiss the
+  // onboarding splash and post the greeting (instead of blind timeouts).
+  window.parent.postMessage({ source: "amicode", kind: "app-ready" }, "*")
+
   const onMsg = async (e: MessageEvent) => {
     const d = e.data as { source?: string; kind?: string; path?: string } | undefined
     if (d?.source !== "amicode" || d.kind !== "navigate" || !d.path) return
