@@ -21,19 +21,19 @@ import { AmicodeTagline } from "./tagline"
 // BE the recommendation, so we honor it verbatim and let the row wrap.
 export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   {
-    label: "Design a pulse — walk me through it",
-    prompt: "walk me through designing a pulse",
+    label: "Walk me through my first experiment",
+    prompt: "walk me through setting up my first experiment",
   },
   {
-    label: "Optimize an X gate on my transmon",
-    prompt: "optimize an X gate on my transmon — use what you know from my history",
+    label: "Help me with a coding task",
+    prompt: "I have a coding task — let's get started",
   },
   // NOTE(spec B): the static "Resume my pulse design" chip was replaced by the
   // conditional resumeName-driven chip below — Resume renders only when a
   // problem workspace actually exists (no empty chrome).
   {
-    label: "Warm-start from my pulse bank",
-    prompt: "warm-start a new solve from my pulse bank",
+    label: "Warm-start from a previous result",
+    prompt: "warm-start a new experiment from my previous results",
   },
   {
     label: "Go fast with Veloce",
@@ -45,8 +45,8 @@ export const AMICODE_STARTERS: readonly { label: string; prompt: string }[] = [
   },
 ]
 
-// The three-beat arc of a pulse-design session, from setup to hardware.
-const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Execute and tune on hardware"]
+// The three-beat arc of a research session, from setup to results.
+const STEPS = ["① Define your system and problem", "② Optimize and iterate", "③ Analyze and refine"]
 
 /** amicode chat-redesign (Kate): chips-only row for the composer-as-hero start
  *  screen — no tagline, no byline, no steps. Quiet neutral pills (Kimi-style):
