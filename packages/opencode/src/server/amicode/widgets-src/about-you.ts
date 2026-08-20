@@ -114,6 +114,7 @@ export default {
           ? editForm
           : '<div style="font-size:12px;line-height:16px;color:var(--amc-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
             esc(you.focus || you.affiliation || 'tell Amico about your work') + '</div>' +
+            (you.description ? '<div style="font-size:11px;line-height:15px;color:var(--amc-text-muted);margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + esc(you.description) + '</div>' : '') +
             (platforms ? '<div style="font-size:11px;color:var(--amc-text-faint);margin-top:1px">' + platforms + '</div>' : '')) +
         '</div></div>'
 
