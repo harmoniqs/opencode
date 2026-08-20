@@ -117,15 +117,23 @@ const layer = Layer.effect(
       }
     })
 
+    const isLexicallyInternal = (abs: string) =>
+      FSUtil.contains(location.directory, abs) ||
+      (location.directories?.some((d) => FSUtil.contains(d, abs)) ?? false)
+
     const resolve = Effect.fn("LocationMutation.resolve")(function* (input: ResolveInput) {
       const relative = !path.isAbsolute(input.path)
       const absolute = path.resolve(location.directory, input.path)
-      const lexicallyInternal = FSUtil.contains(location.directory, absolute)
+      const lexicallyInternal = isLexicallyInternal(absolute)
       if (relative && !lexicallyInternal) return yield* new PathError({ path: input.path, reason: "relative_escape" })
 
       const resolved = yield* resolvePath(absolute)
       if (lexicallyInternal && !FSUtil.contains(locationRoot, resolved.canonical)) {
-        return yield* new PathError({ path: input.path, reason: "location_escape" })
+        // Multi-root: also allow canonical inside any workspace directory
+        const canonicalInternal =
+          FSUtil.contains(locationRoot, resolved.canonical) ||
+          (location.directories?.some((d) => FSUtil.contains(d, resolved.canonical)) ?? false)
+        if (!canonicalInternal) return yield* new PathError({ path: input.path, reason: "location_escape" })
       }
 
       const external = !lexicallyInternal
