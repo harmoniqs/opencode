@@ -342,6 +342,22 @@ const scenarios: Scenario[] = [
     }),
   http.protected.get("/file/status", "file.status").json(200, array),
   http.protected
+    .post("/file/write", "file.write")
+    .mutating()
+    .at((ctx) => ({
+      path: "/file/write",
+      headers: ctx.headers(),
+      body: { path: "written.txt", content: "written by the HTTP API exerciser\n" },
+    }))
+    .jsonEffect(200, (body, ctx) =>
+      Effect.gen(function* () {
+        object(body)
+        check(body.ok === true, "file write should confirm success")
+        const content = yield* Effect.promise(() => Bun.file(path.join(ctx.directory!, "written.txt")).text())
+        check(content === "written by the HTTP API exerciser\n", "file write should persist content")
+      }),
+    ),
+  http.protected
     .get("/find", "find.text")
     .seeded((ctx) => ctx.file("hello.txt", "hello\n"))
     .at((ctx) => ({ path: `/find?${new URLSearchParams({ pattern: "hello" })}`, headers: ctx.headers() }))
@@ -1272,6 +1288,17 @@ const scenarios: Scenario[] = [
     .seeded((ctx) => ctx.session({ title: "Diff session" }))
     .at((ctx) => ({ path: route("/session/{sessionID}/diff", { sessionID: ctx.state.id }), headers: ctx.headers() }))
     .json(200, array),
+  http.protected
+    .get("/session/{sessionID}/touched-files", "session.touchedFiles")
+    .seeded((ctx) => ctx.session({ title: "Touched files session" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/touched-files", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      array(body)
+      check(body.length === 0, "new session should have no touched files")
+    }),
   http.protected
     .get("/session/{sessionID}/message", "session.messages")
     .seeded((ctx) => ctx.session({ title: "Messages session" }))
