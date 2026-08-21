@@ -735,6 +735,10 @@
    labelled selects) because the settings dialog gives a tier card ~390px at
    a normal window, and the table layout only switches on once the card is
    wide enough to hold five columns. */
+.settings-v2-tab-header.settings-v2-permissions-header {
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+}
 .settings-v2-permissions-intro {
   font-size: var(--font-size-md);
   font-weight: 400;
@@ -759,18 +763,21 @@
 }
 .settings-v2-permissions-card-header {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-3);
 }
 .settings-v2-permissions-card-title-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   flex: 1 1 auto;
   min-width: 0;
+}
+.settings-v2-permissions-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .settings-v2-permissions-card-title {
   font-size: var(--font-size-base, 14px);
@@ -790,7 +797,11 @@
   margin-left: auto;
 }
 
-/* ── directory × action matrix ── */
+/* ── directory × action matrix ──
+   Stacked (default): each directory rule is a small settings list — the
+   pattern as its heading with the remove control, then one row per action
+   in the General-tab idiom (label left, inline select right). Table mode
+   (container ≥ 540px): header row + one grid row per pattern. */
 .settings-v2-permissions-matrix {
   display: flex;
   flex-direction: column;
@@ -806,24 +817,24 @@
   letter-spacing: 0.05em;
 }
 .settings-v2-permissions-matrix-head {
-  text-align: center;
+  text-align: right;
 }
-.settings-v2-permissions-matrix-row {
+.settings-v2-permissions-rule {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "pattern pattern remove"
-    "read    write   ."
-    "execute network .";
-  gap: var(--space-2);
+    "pattern remove"
+    "read    read"
+    "write   write"
+    "execute execute"
+    "network network";
+  column-gap: var(--space-2);
+  row-gap: 0;
   align-items: center;
   min-width: 0;
-  padding-bottom: var(--space-3);
-  border-bottom: var(--border-width) solid var(--v2-border-border-muted);
-}
-.settings-v2-permissions-matrix-row:last-of-type {
-  padding-bottom: 0;
-  border-bottom: 0;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--v2-border-border-muted);
+  padding: var(--space-1) var(--space-3);
 }
 .settings-v2-permissions-matrix-pattern {
   grid-area: pattern;
@@ -834,15 +845,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  padding-block: var(--space-2);
 }
 .settings-v2-permissions-matrix-remove {
   grid-area: remove;
 }
 .settings-v2-permissions-matrix-cell {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   min-width: 0;
+  padding-block: var(--space-1);
+  border-top: var(--border-width) solid var(--v2-border-border-muted);
 }
 .settings-v2-permissions-matrix-cell[data-group="read"] {
   grid-area: read;
@@ -857,33 +872,24 @@
   grid-area: network;
 }
 .settings-v2-permissions-matrix-cell-label {
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-emphasis);
-  color: var(--v2-text-text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.settings-v2-permissions-select {
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-md);
-  border: var(--border-width) solid var(--v2-border-border-base);
-  background: var(--v2-background-bg-base);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
+  font-weight: 500;
   color: var(--v2-text-text-base);
-  cursor: pointer;
+  cursor: default;
 }
-.settings-v2-permissions-select:hover {
-  border-color: var(--v2-border-border-strong);
+/* execute / network = allow is the risky cell: value reads in the danger
+   colour, and a small marker so colour isn't the only signal */
+/* outranks select-v2's own value-text rule (lazy-loaded after this file) */
+[data-component="select-v2"][data-appearance]
+  [data-slot="select-v2-value-text"].settings-v2-permissions-effect--danger {
+  color: var(--v2-state-fg-danger);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
-.settings-v2-permissions-select:focus-visible {
-  outline: 2px solid var(--v2-border-border-focus);
-  outline-offset: 1px;
-}
-.settings-v2-permissions-select--danger {
-  border-color: var(--v2-state-fg-danger);
-  background: color-mix(in srgb, var(--v2-state-fg-danger) 8%, var(--v2-background-bg-base));
+.settings-v2-permissions-matrix-cell[data-danger] .settings-v2-permissions-matrix-cell-label::after {
+  content: " · risky";
+  font-size: var(--font-size-xs);
+  font-weight: 400;
   color: var(--v2-state-fg-danger);
 }
 .settings-v2-permissions-matrix-help {
@@ -898,21 +904,34 @@
     gap: var(--space-2);
   }
   .settings-v2-permissions-matrix-header,
-  .settings-v2-permissions-matrix-row {
+  .settings-v2-permissions-rule {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, 112px)) 28px;
+    grid-template-columns: minmax(0, 1fr) repeat(4, minmax(72px, 96px)) 28px;
     grid-template-areas: none;
     gap: var(--space-2);
     align-items: center;
   }
-  .settings-v2-permissions-matrix-row {
-    padding-bottom: 0;
-    border-bottom: 0;
+  .settings-v2-permissions-rule {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .settings-v2-permissions-rule + .settings-v2-permissions-rule {
+    border-top: var(--border-width) solid var(--v2-border-border-muted);
+    padding-top: var(--space-2);
   }
   .settings-v2-permissions-matrix-pattern,
   .settings-v2-permissions-matrix-remove,
   .settings-v2-permissions-matrix-cell[data-group] {
     grid-area: auto;
+  }
+  .settings-v2-permissions-matrix-pattern {
+    padding-block: 0;
+  }
+  .settings-v2-permissions-matrix-cell {
+    justify-content: flex-end;
+    border-top: 0;
+    padding-block: 0;
   }
   /* the header row carries the column names; keep the per-cell label for
      assistive tech only */

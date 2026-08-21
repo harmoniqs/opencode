@@ -1,6 +1,7 @@
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
+import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { showToast } from "@/utils/toast"
 import { createMemo, createSignal, For, Show, type Component } from "solid-js"
 import { useLanguage } from "@/context/language"
@@ -21,6 +22,8 @@ const DEFAULT_TIERS: TrustTier[] = [
 ]
 const DEFAULT_CONFIG: ProviderPermissionsConfig = { defaultTier: "unassigned", tiers: DEFAULT_TIERS, assignments: {} }
 
+const EFFECTS: Effect[] = ["allow", "deny", "ask"]
+const EFFECT_LABEL: Record<Effect, string> = { allow: "Allow", deny: "Deny", ask: "Ask" }
 const ACTION_GROUPS = ["read", "write", "execute", "network"] as const
 type ActionGroup = (typeof ACTION_GROUPS)[number]
 const GROUP_LABEL: Record<ActionGroup, string> = { read: "Read", write: "Write", execute: "Execute", network: "Network" }
@@ -182,16 +185,18 @@ export const SettingsPermissionsV2: Component = () => {
   const [editValue, setEditValue] = createSignal("")
 
   return (
-    <div class="settings-v2-tab-header settings-v2-tab-header--stacked">
-      <div class="settings-v2-tab-header-row">
-        <h2 class="settings-v2-tab-title">{language.t("settings.permissions.title") ?? "Permissions"}</h2>
-        <ButtonV2 size="small" variant="neutral" icon="plus" onClick={addTier}>
-          {language.t("settings.permissions.action.addTier") ?? "Add tier"}
-        </ButtonV2>
+    <>
+      <div class="settings-v2-tab-header settings-v2-tab-header--stacked settings-v2-permissions-header">
+        <div class="settings-v2-tab-header-row">
+          <h2 class="settings-v2-tab-title">{language.t("settings.permissions.title") ?? "Permissions"}</h2>
+          <ButtonV2 size="small" variant="neutral" icon="plus" onClick={addTier}>
+            {language.t("settings.permissions.action.addTier") ?? "Add tier"}
+          </ButtonV2>
+        </div>
+        <p class="settings-v2-permissions-intro">
+          {language.t("settings.permissions.description") ?? "Trust tiers control which directories and actions each model can access. Assigned models inherit their tier's matrix; unassigned models use Unassigned."}
+        </p>
       </div>
-      <p class="settings-v2-permissions-intro">
-        {language.t("settings.permissions.description") ?? "Trust tiers control which directories and actions each model can access. Assigned models inherit their tier's matrix; unassigned models use Unassigned."}
-      </p>
 
       <div class="settings-v2-tab-body settings-v2-permissions" data-component="permissions-tab">
         <For each={tiers()}>
@@ -216,9 +221,14 @@ export const SettingsPermissionsV2: Component = () => {
                             {summary()}
                           </Tag>
                           <Show when={!isUnassigned()}>
-                            <ButtonV2 size="small" variant="ghost-muted" icon="pencil" onClick={() => { setEditingLabel(tier.id); setEditValue(tier.label) }}>
-                              {language.t("common.rename") ?? "Rename"}
-                            </ButtonV2>
+                            <ButtonV2
+                              size="small"
+                              variant="ghost-muted"
+                              icon="edit"
+                              aria-label={language.t("common.rename") ?? "Rename"}
+                              title={language.t("common.rename") ?? "Rename"}
+                              onClick={() => { setEditingLabel(tier.id); setEditValue(tier.label) }}
+                            />
                           </Show>
                         </>
                       }
@@ -284,25 +294,27 @@ export const SettingsPermissionsV2: Component = () => {
                     <span class="settings-v2-permissions-matrix-head settings-v2-permissions-matrix-head-actions" />
                   </div>
                   <For each={Object.entries(tier.directories)}>{([pattern, perms]) => (
-                    <div class="settings-v2-permissions-matrix-row">
+                    <div class="settings-v2-permissions-rule">
                       <span class="settings-v2-permissions-matrix-pattern" title={pattern}>{pattern}</span>
                       <For each={ACTION_GROUPS}>{(group) => {
                         const effect = () => perms[group]
                         const isDanger = () => (group === "execute" || group === "network") && effect() === "allow"
                         return (
-                          <label class="settings-v2-permissions-matrix-cell" data-group={group}>
-                            <span class="settings-v2-permissions-matrix-cell-label">{GROUP_LABEL[group]}</span>
-                            <select
-                              value={effect()}
-                              title={GROUP_TOOLS[group]}
-                              onChange={(e) => updateDirectoryEffect(tier.id, pattern, group, e.currentTarget.value as Effect)}
-                              class={isDanger() ? "settings-v2-permissions-select settings-v2-permissions-select--danger" : "settings-v2-permissions-select"}
-                            >
-                              <option value="allow">Allow</option>
-                              <option value="deny">Deny</option>
-                              <option value="ask">Ask</option>
-                            </select>
-                          </label>
+                          <div class="settings-v2-permissions-matrix-cell" data-group={group} data-danger={isDanger() ? "" : undefined}>
+                            <span class="settings-v2-permissions-matrix-cell-label" title={GROUP_TOOLS[group]}>
+                              {GROUP_LABEL[group]}
+                            </span>
+                            <SelectV2
+                              appearance="inline"
+                              options={EFFECTS}
+                              current={effect()}
+                              placement="bottom-end"
+                              gutter={6}
+                              label={(o) => EFFECT_LABEL[o]}
+                              valueClass={isDanger() ? "settings-v2-permissions-effect--danger" : undefined}
+                              onSelect={(o) => o && updateDirectoryEffect(tier.id, pattern, group, o)}
+                            />
+                          </div>
                         )
                       }}</For>
                       <ButtonV2
@@ -311,6 +323,7 @@ export const SettingsPermissionsV2: Component = () => {
                         icon="xmark-small"
                         class="settings-v2-permissions-matrix-remove"
                         aria-label={`Remove rule ${pattern}`}
+                        title="Remove rule"
                         disabled={pattern === "**"}
                         onClick={() => removeDirectoryRule(tier.id, pattern)}
                       />
@@ -370,6 +383,6 @@ export const SettingsPermissionsV2: Component = () => {
           }}
         </For>
       </div>
-    </div>
+    </>
   )
 }
