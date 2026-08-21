@@ -41,6 +41,11 @@
   --font-weight-emphasis: 600; --font-weight-strong: 650;
 
   --border-width: 1px;
+
+  /* ── elevation ── the one float shadow, for transient overlays that sit above
+     the app ground (toasts, the solver-switch banner). Named so it stops being
+     re-invented as a scattered rgba() literal. */
+  --elev-float: 0 8px 24px rgb(0 0 0 / 0.35);
 }
 
 /* ── accent role tokens — per-scheme OPACITY, same hue ──
@@ -127,3 +132,50 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
 /* the rail: controls use the control corner */
 [data-component="sidebar-rail"] button,
 [data-component="chat-first-rail"] button { border-radius: var(--radius-md); }
+
+
+/* solver-switch banner (opencode#78 follow-up) — narrates the server restart a
+   solver switch triggers. Progress reads NEUTRAL (yellow may never be a
+   foreground on light); completion is the brand chip: --accent fill with
+   near-black --accent-ink, identical in both schemes. */
+[data-component="amicode-solver-switch"] {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--v2-border-border-base);
+  background: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-emphasis);
+  box-shadow: var(--elev-float);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+[data-component="amicode-solver-switch"][data-phase="ready"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+/* currentColor, so the dot is neutral ink while switching and near-black on the
+   yellow chip — never a yellow glyph on a light ground. */
+[data-component="amicode-solver-switch"] > i {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  animation: amc-solver-switch-pulse 1.2s ease-in-out infinite;
+}
+[data-component="amicode-solver-switch"][data-phase="ready"] > i {
+  animation: none;
+}
+/* the global prefers-reduced-motion reset above collapses this duration. */
+@keyframes amc-solver-switch-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
