@@ -15,6 +15,7 @@ import { testEffect } from "../lib/effect"
 
 const directory = AbsolutePath.make(FSUtil.resolve("/repo/packages/core"))
 const projectDirectory = AbsolutePath.make(FSUtil.resolve("/repo"))
+const secondaryDirectory = AbsolutePath.make(FSUtil.resolve("/repo/packages/schema"))
 const instructionFile = FSUtil.resolve("/repo/AGENTS.md")
 const timestamp = Date.parse("2026-06-03T12:00:00.000Z")
 const localDate = (time: number) => new Date(time).toDateString()
@@ -27,10 +28,25 @@ const locationLayer = Layer.succeed(
     ),
   ),
 )
+const multiRootLocationLayer = Layer.succeed(
+  Location.Service,
+  Location.Service.of(
+    location(
+      { directory, directories: [directory, secondaryDirectory] },
+      { projectDirectory, vcs: { type: "git", store: AbsolutePath.make(FSUtil.resolve("/repo/.git")) } },
+    ),
+  ),
+)
 const builtInsNode = LayerNode.group([SystemContextBuiltIns.node, SystemContextRegistry.node])
 const it = testEffect(
   AppNodeBuilder.build(builtInsNode, [
     [Location.node, locationLayer],
+    [Global.node, Global.layerWith({ config: "/global" })],
+  ]),
+)
+const itMultiRoot = testEffect(
+  AppNodeBuilder.build(builtInsNode, [
+    [Location.node, multiRootLocationLayer],
     [Global.node, Global.layerWith({ config: "/global" })],
   ]),
 )
@@ -122,6 +138,31 @@ describe("SystemContextBuiltIns", () => {
           `Today's date: ${localDate(timestamp)}`,
           "",
           `Instructions from: ${instructionFile}\nBe precise.`,
+        ].join("\n"),
+      )
+    }),
+  )
+
+  itMultiRoot.effect("lists workspace folders when multiple directories are configured", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(timestamp)
+      const context = yield* SystemContextRegistry.Service
+      const initialized = yield* SystemContext.initialize(yield* context.load())
+
+      expect(initialized.baseline).toBe(
+        [
+          "Here is some useful information about the environment you are running in:",
+          "<env>",
+          `  Working directory: ${directory}`,
+          `  Workspace folders:`,
+          `  - ${directory} (primary)`,
+          `  - ${secondaryDirectory}`,
+          `  Workspace root folder: ${projectDirectory}`,
+          "  Is directory a git repo: yes",
+          `  Platform: ${process.platform}`,
+          "</env>",
+          "",
+          `Today's date: ${localDate(timestamp)}`,
         ].join("\n"),
       )
     }),

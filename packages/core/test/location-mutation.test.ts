@@ -21,6 +21,25 @@ function provide(directory: string) {
   )
 }
 
+function provideMultiRoot(directory: string, directories: string[]) {
+  return Effect.provide(
+    LayerNode.compile(LocationMutation.node, [
+      [
+        Location.node,
+        Layer.succeed(
+          Location.Service,
+          Location.Service.of(
+            location({
+              directory: AbsolutePath.make(directory),
+              directories: directories.map((d) => AbsolutePath.make(d)),
+            }),
+          ),
+        ),
+      ],
+    ]),
+  )
+}
+
 function withTmp<A, E, R>(f: (directory: string) => Effect.Effect<A, E, R>) {
   return Effect.acquireRelease(
     Effect.promise(() => tmpdir()),
@@ -175,4 +194,33 @@ describe("LocationMutation", () => {
       path: "README.md",
     })
   })
+
+  it.live("accepts an absolute path inside a secondary workspace directory without external authorization", () =>
+    withTmp((primary) =>
+      withTmp((secondary) =>
+        Effect.gen(function* () {
+          const targetPath = path.join(secondary, "lib.ts")
+          yield* Effect.promise(() => fs.writeFile(targetPath, "export const x = 1"))
+          const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
+          expect(target.externalDirectory).toBeUndefined()
+        }).pipe(provideMultiRoot(primary, [primary, secondary])),
+      ),
+    ),
+  )
+
+  it.live("rejects an absolute path outside all workspace directories", () =>
+    withTmp((primary) =>
+      withTmp((secondary) =>
+        withTmp((outside) =>
+          Effect.gen(function* () {
+            const targetPath = path.join(outside, "rogue.txt")
+            yield* Effect.promise(() => fs.writeFile(targetPath, "rogue"))
+            const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
+            // Should require external authorization — externalDirectory is set
+            expect(target.externalDirectory).toBeDefined()
+          }).pipe(provideMultiRoot(primary, [primary, secondary])),
+        ),
+      ),
+    ),
+  )
 })
