@@ -129,6 +129,20 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
 [data-action="prompt-submit"] svg { color: var(--accent-ink) !important; }
 [data-action="prompt-submit"]:hover { filter: brightness(1.06); transform: translateY(-1px); }
 
+/* accent tag (badge-v2 `variant="accent"`): the shared primitive paints
+   --v2-text-text-contrast over bg-accent, which on dark is LIGHT text on
+   yellow — the one pairing the accent law forbids. Ink on a yellow fill is
+   always near-black, both schemes. Chips never wrap: the label is a single
+   line or it isn't a chip. The element selector is deliberate: badge-v2.css
+   is injected when the component lazy-loads (AFTER this file), so an
+   equal-specificity rule here would lose the cascade. */
+span[data-component="tag"][data-variant="accent"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* the rail: controls use the control corner */
 [data-component="sidebar-rail"] button,
 [data-component="chat-first-rail"] button { border-radius: var(--radius-md); }

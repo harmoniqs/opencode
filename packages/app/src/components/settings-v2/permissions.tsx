@@ -208,8 +208,11 @@ export const SettingsPermissionsV2: Component = () => {
                       fallback={
                         <>
                           <h3 class="settings-v2-permissions-card-title">{tier.label}</h3>
-                          <Tag variant={badgeVariant(summary()) === "danger" ? "accent" : "neutral"} class="settings-v2-permissions-badge">
-                            <Show when={summary() === "Full Access"}>⚠️ </Show>
+                          <Tag
+                            variant={badgeVariant(summary()) === "danger" ? "accent" : "neutral"}
+                            class="settings-v2-permissions-badge"
+                            title={summary() === "Full Access" ? "Every action is allowed everywhere" : undefined}
+                          >
                             {summary()}
                           </Tag>
                           <Show when={!isUnassigned()}>
@@ -243,10 +246,22 @@ export const SettingsPermissionsV2: Component = () => {
                     </Show>
                   </div>
                   <div class="settings-v2-permissions-card-actions">
-                    <ButtonV2 size="small" variant="ghost-muted" disabled={tiers().indexOf(tier) === 0} onClick={() => moveTier(tier.id, -1)}>
+                    <ButtonV2
+                      size="small"
+                      variant="ghost-muted"
+                      aria-label="Move tier up"
+                      disabled={tiers().indexOf(tier) === 0}
+                      onClick={() => moveTier(tier.id, -1)}
+                    >
                       ↑
                     </ButtonV2>
-                    <ButtonV2 size="small" variant="ghost-muted" disabled={tiers().indexOf(tier) === tiers().length - 1} onClick={() => moveTier(tier.id, 1)}>
+                    <ButtonV2
+                      size="small"
+                      variant="ghost-muted"
+                      aria-label="Move tier down"
+                      disabled={tiers().indexOf(tier) === tiers().length - 1}
+                      onClick={() => moveTier(tier.id, 1)}
+                    >
                       ↓
                     </ButtonV2>
                     <Show when={!isUnassigned()}>
@@ -259,7 +274,7 @@ export const SettingsPermissionsV2: Component = () => {
 
                 {/* Directory × Action Matrix */}
                 <div class="settings-v2-permissions-matrix">
-                  <div class="settings-v2-permissions-matrix-header">
+                  <div class="settings-v2-permissions-matrix-header" aria-hidden="true">
                     <span class="settings-v2-permissions-matrix-corner">Directory</span>
                     <For each={ACTION_GROUPS}>{(g) => (
                       <span class="settings-v2-permissions-matrix-head" data-group={g} title={GROUP_TOOLS[g]}>
@@ -275,20 +290,30 @@ export const SettingsPermissionsV2: Component = () => {
                         const effect = () => perms[group]
                         const isDanger = () => (group === "execute" || group === "network") && effect() === "allow"
                         return (
-                          <select
-                            value={effect()}
-                            onChange={(e) => updateDirectoryEffect(tier.id, pattern, group, e.currentTarget.value as Effect)}
-                            class={isDanger() ? "settings-v2-permissions-select settings-v2-permissions-select--danger" : "settings-v2-permissions-select"}
-                          >
-                            <option value="allow">Allow</option>
-                            <option value="deny">Deny</option>
-                            <option value="ask">Ask</option>
-                          </select>
+                          <label class="settings-v2-permissions-matrix-cell" data-group={group}>
+                            <span class="settings-v2-permissions-matrix-cell-label">{GROUP_LABEL[group]}</span>
+                            <select
+                              value={effect()}
+                              title={GROUP_TOOLS[group]}
+                              onChange={(e) => updateDirectoryEffect(tier.id, pattern, group, e.currentTarget.value as Effect)}
+                              class={isDanger() ? "settings-v2-permissions-select settings-v2-permissions-select--danger" : "settings-v2-permissions-select"}
+                            >
+                              <option value="allow">Allow</option>
+                              <option value="deny">Deny</option>
+                              <option value="ask">Ask</option>
+                            </select>
+                          </label>
                         )
                       }}</For>
-                      <ButtonV2 size="small" variant="ghost-muted" disabled={pattern === "**"} onClick={() => removeDirectoryRule(tier.id, pattern)}>
-                        ×
-                      </ButtonV2>
+                      <ButtonV2
+                        size="small"
+                        variant="ghost-muted"
+                        icon="xmark-small"
+                        class="settings-v2-permissions-matrix-remove"
+                        aria-label={`Remove rule ${pattern}`}
+                        disabled={pattern === "**"}
+                        onClick={() => removeDirectoryRule(tier.id, pattern)}
+                      />
                     </div>
                   )}</For>
                   <ButtonV2 size="small" variant="ghost-muted" onClick={() => addDirectoryRule(tier.id)}>
@@ -305,7 +330,7 @@ export const SettingsPermissionsV2: Component = () => {
                       <For each={assignedModels()}>{(mid) => (
                         <span class="settings-v2-permissions-model-chip">
                           {mid}
-                          <button type="button" class="settings-v2-permissions-model-remove" onClick={() => assignModel(mid, "unassigned")}>×</button>
+                          <button type="button" class="settings-v2-permissions-model-remove" aria-label={`Unassign ${mid}`} onClick={() => assignModel(mid, "unassigned")}>×</button>
                         </span>
                       )}</For>
                     </div>
