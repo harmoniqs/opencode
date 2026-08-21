@@ -48,6 +48,7 @@ import { startPrompt } from "@/utils/start-prompt"
 import { authTokenFromCredentials } from "@/utils/server"
 import { GLOBAL_STATUS_DEFAULT_TAB } from "./status-popover-model"
 import { useServerProtocol } from "@/context/server-sdk"
+import { beginSolverSwitch } from "@/components/solver-switch-banner"
 
 const pluginEmptyMessage = (value: string, file: string): JSXElement => {
   const parts = value.split(file)
@@ -692,6 +693,7 @@ export function createAmicodeConnectionsState(shown: Accessor<boolean>) {
   const onSelectPiccolo = () => {
     const conn = server.current
     if (!conn) return
+    beginSolverSwitch("piccolo") // narrate the restart this is about to trigger
     void (async () => {
       try {
         await fetch(new URL("/amicode/solver-mode", conn.http.url), {

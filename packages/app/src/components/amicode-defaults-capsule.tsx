@@ -12,6 +12,7 @@ import {
   solverConnectionDot,
   type SolverMode,
 } from "@opencode-ai/ui/amicode-solver-toggle"
+import { beginSolverSwitch } from "@/components/solver-switch-banner"
 import {
   ConnectionCard,
   type ConnectionActionView,
@@ -112,7 +113,12 @@ export function AmicodeDefaultsCapsule(props: { compute?: AmicodeComputeControl 
   }
   const submitCredential = async (payload: CredentialSubmitPayload) => {
     const result = await props.compute!.onSubmit(payload)
-    if (hpAfterConnect(result)) pick("hp")
+    if (hpAfterConnect(result)) {
+      // #167 writes {mode:"hp",status:"switching"} on this same valid outcome,
+      // so the restart starts here — narrate it (opencode#78 follow-up).
+      beginSolverSwitch("hp")
+      pick("hp")
+    }
     return result
   }
   const disconnectCompute = (id: string) => {
