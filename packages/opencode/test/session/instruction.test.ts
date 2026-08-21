@@ -262,3 +262,45 @@ describe("Instruction.systemPaths global config", () => {
     }),
   )
 })
+
+describe("Instruction.systemPaths multi-root", () => {
+  it.live("discovers AGENTS.md in a secondary workspace directory", () =>
+    Effect.gen(function* () {
+      const primary = yield* tmpWithFiles({})
+      const secondary = yield* tmpWithFiles({ "AGENTS.md": "# Secondary Instructions" })
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const paths = yield* svc.systemPaths()
+        expect(paths.has(path.join(secondary, "AGENTS.md"))).toBe(true)
+      }).pipe(
+        provideInstance(primary, [primary, secondary]),
+        provideInstruction({ home: primary, config: primary }),
+      )
+    }),
+  )
+
+  it.live("does not walk past a secondary directory into unrelated parent directories", () =>
+    Effect.gen(function* () {
+      // Create two independent git-initialized project directories.
+      // Place an AGENTS.md above the secondary's git root — it should NOT be discovered
+      // because the secondary's findUp stops at the secondary root itself.
+      const primary = yield* tmpdirScoped({ git: true })
+      const secondary = yield* tmpdirScoped({ git: true })
+      const fs = yield* FileSystem.FileSystem
+      // Put AGENTS.md above the secondary's git root
+      const aboveSecondary = path.dirname(secondary)
+      yield* fs.writeFileString(path.join(aboveSecondary, "AGENTS.md"), "# Should NOT be found")
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const paths = yield* svc.systemPaths()
+        // The AGENTS.md above the secondary's git root should NOT be found
+        expect(paths.has(path.join(aboveSecondary, "AGENTS.md"))).toBe(false)
+      }).pipe(
+        provideInstance(primary, [primary, secondary]),
+        provideInstruction({ home: "/nonexistent-global", config: "/nonexistent-global" }),
+      )
+    }),
+  )
+})

@@ -37,6 +37,16 @@ const multiRootLocationLayer = Layer.succeed(
     ),
   ),
 )
+// directories array with primary NOT at index 0
+const multiRootReversedLocationLayer = Layer.succeed(
+  Location.Service,
+  Location.Service.of(
+    location(
+      { directory, directories: [secondaryDirectory, directory] },
+      { projectDirectory, vcs: { type: "git", store: AbsolutePath.make(FSUtil.resolve("/repo/.git")) } },
+    ),
+  ),
+)
 const builtInsNode = LayerNode.group([SystemContextBuiltIns.node, SystemContextRegistry.node])
 const it = testEffect(
   AppNodeBuilder.build(builtInsNode, [
@@ -47,6 +57,12 @@ const it = testEffect(
 const itMultiRoot = testEffect(
   AppNodeBuilder.build(builtInsNode, [
     [Location.node, multiRootLocationLayer],
+    [Global.node, Global.layerWith({ config: "/global" })],
+  ]),
+)
+const itMultiRootReversed = testEffect(
+  AppNodeBuilder.build(builtInsNode, [
+    [Location.node, multiRootReversedLocationLayer],
     [Global.node, Global.layerWith({ config: "/global" })],
   ]),
 )
@@ -144,6 +160,31 @@ describe("SystemContextBuiltIns", () => {
   )
 
   itMultiRoot.effect("lists workspace folders when multiple directories are configured", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(timestamp)
+      const context = yield* SystemContextRegistry.Service
+      const initialized = yield* SystemContext.initialize(yield* context.load())
+
+      expect(initialized.baseline).toBe(
+        [
+          "Here is some useful information about the environment you are running in:",
+          "<env>",
+          `  Working directory: ${directory}`,
+          `  Workspace folders:`,
+          `  - ${directory} (primary)`,
+          `  - ${secondaryDirectory}`,
+          `  Workspace root folder: ${projectDirectory}`,
+          "  Is directory a git repo: yes",
+          `  Platform: ${process.platform}`,
+          "</env>",
+          "",
+          `Today's date: ${localDate(timestamp)}`,
+        ].join("\n"),
+      )
+    }),
+  )
+
+  itMultiRootReversed.effect("marks the correct folder as primary even when directories[0] is not the primary", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(timestamp)
       const context = yield* SystemContextRegistry.Service
