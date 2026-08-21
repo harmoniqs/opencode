@@ -485,6 +485,17 @@ const amicodeConnectionsRoute = HttpRouter.use((router) =>
         })
       }),
     )
+    // opencode#78: RELEASING the solver tier. Selecting hp is not served here —
+    // that flip rides a validated Company Compute credential (the route above),
+    // and a second hp writer is the duplicate flip ADR 0001 forbids.
+    yield* router.add("POST", "/amicode/solver-mode", (request) =>
+      Effect.gen(function* () {
+        const body = yield* Effect.orDie(request.text)
+        return HttpServerResponse.text(AmicodeConnections.solverModeResponse(body), {
+          contentType: "application/json",
+        })
+      }),
+    )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 

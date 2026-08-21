@@ -216,6 +216,7 @@ function HomeDesign() {
     onSubmit: chromeConnections.onSubmitCredential,
     onDisconnect: chromeConnections.onDisconnectConnection,
     onRevalidate: chromeConnections.onRevalidateConnection,
+    onSelectPiccolo: chromeConnections.onSelectPiccolo,
     refetch: chromeConnections.refetchConnections,
   }
   let focusSessionSearch: (() => void) | undefined

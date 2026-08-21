@@ -29,6 +29,7 @@ import {
   pasqalValidatorScript,
   probeCompanyCompute,
   solverModeFile,
+  solverModeResponse,
   statusResponse,
   STALE_MS,
   statusBody,
@@ -1749,5 +1750,108 @@ describe("pasqal two-step project picker (#194)", () => {
     )
     expect(parsed.connection.state).toBe("connected")
     expect(parsed.connection.identity).toBe("proj-direct")
+  })
+})
+
+// --- Piccolo flip: the way BACK OUT of HP (opencode#78). #167 gave the tier a
+// durable way IN — a valid credential grants `issimo` and requests the hp
+// switch — but nothing ever wrote the other direction, so `connections.ts` had
+// exactly one `switching` writer and it was hardcoded to hp. The toggle's
+// Piccolo button wrote localStorage and left the ops dir on hp, which is why
+// amico-run kept refusing local launches while the UI read "Piccolo".
+
+describe("Piccolo flip — releasing the HP tier (opencode#78)", () => {
+  test("selecting piccolo revokes issimo AND writes the piccolo switching request", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) }) // land in hp
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["issimo"]\n')
+
+    const parsed = JSON.parse(solverModeResponse(JSON.stringify({ mode: "piccolo" })))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.error).toBeNull()
+    // both artifacts flip together: a piccolo request with `issimo` still
+    // granted is the split-brain state #259's reconcileSolverMode heals
+    // straight back to hp
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe("codes = []\n")
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "piccolo", status: "switching" })
+  })
+})
+
+describe("Piccolo flip — the same guards every other mutation carries", () => {
+  test("non-loopback bind is refused, and refuses INERTLY — an hp setup is left untouched", async () => {
+    await submitCredentialResponse(validSubmit, { fetchImpl: respond(200) })
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+
+    setBindHostname("0.0.0.0")
+    const refused = JSON.parse(solverModeResponse(JSON.stringify({ mode: "piccolo" })))
+    setBindHostname(undefined)
+
+    expect(refused.ok).toBe(false)
+    expect(refused.error).toContain("non_loopback")
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
+  })
+
+  test("only release: {mode:'hp'} and malformed bodies are refused, and write nothing (ADR 0001 single hp writer)", async () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(solverModeFile(), JSON.stringify({ mode: "hp", status: "ready" }))
+    writeFileSync(entitlementsFile(), 'codes = ["issimo"]\n')
+    const entitlementBytes = readFileSync(entitlementsFile(), "utf8")
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+
+    const rejects = [
+      JSON.stringify({ mode: "hp" }), // hp is granted by connecting a key, never by asking
+      JSON.stringify({ mode: "nonsense" }),
+      JSON.stringify({}),
+      "not json {{{",
+    ]
+    for (const body of rejects) {
+      const parsed = JSON.parse(solverModeResponse(body))
+      expect(parsed.ok).toBe(false)
+      expect(parsed.mode).toBeNull()
+      expect(typeof parsed.error).toBe("string")
+    }
+    // an hp setup survives every one of them byte-for-byte
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe(entitlementBytes)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes)
+  })
+})
+
+describe("Piccolo flip — release semantics mirror the grant (167 AC4 idiom)", () => {
+  test("revoke PRESERVES every other code and the expired list — read-modify-write, byte-compatible", () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(entitlementsFile(), 'codes = ["pasqal-hackathon-2026", "issimo"]\nexpired = ["old-2025"]\n')
+    solverModeResponse(JSON.stringify({ mode: "piccolo" }))
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe('codes = ["pasqal-hackathon-2026"]\nexpired = ["old-2025"]\n')
+  })
+
+  test("repeat release on an already-settled piccolo setup: the watcher is NOT poked again", () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(entitlementsFile(), "codes = []\n")
+    writeFileSync(
+      solverModeFile(),
+      JSON.stringify({ mode: "piccolo", status: "ready", switched_at: new Date().toISOString() }),
+    )
+    const modeBytes = readFileSync(solverModeFile(), "utf8")
+    expect(JSON.parse(solverModeResponse(JSON.stringify({ mode: "piccolo" }))).ok).toBe(true)
+    expect(readFileSync(solverModeFile(), "utf8")).toBe(modeBytes) // no restart for a no-op
+  })
+
+  test("piccolo already selected but the grant LINGERS → the switch IS re-requested (the split-brain heal)", () => {
+    mkdirSync(amicodeOpsDir(), { recursive: true })
+    writeFileSync(solverModeFile(), JSON.stringify({ mode: "piccolo", status: "ready" }))
+    writeFileSync(entitlementsFile(), 'codes = ["issimo"]\n') // exactly the state that stranded the tier
+    solverModeResponse(JSON.stringify({ mode: "piccolo" }))
+    expect(readFileSync(entitlementsFile(), "utf8")).toBe("codes = []\n")
+    expect(JSON.parse(readFileSync(solverModeFile(), "utf8"))).toEqual({ mode: "piccolo", status: "switching" })
+  })
+
+  test("flip write failure → ok:false with a fixed, value-free warning (no path, no errno)", () => {
+    writeFileSync(path.join(dir, "blocker-piccolo"), "")
+    process.env.AMICODE_OPS_DIR = path.join(dir, "blocker-piccolo", "ops")
+    const raw = solverModeResponse(JSON.stringify({ mode: "piccolo" }))
+    expect(JSON.parse(raw).ok).toBe(false)
+    expect(JSON.parse(raw).error).toStartWith("piccolo_flip_failed:")
+    expect(raw).not.toContain(dir)
   })
 })

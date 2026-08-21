@@ -62,6 +62,16 @@ export function modeAfterDisconnect(): SolverMode {
   return "piccolo"
 }
 
+/** opencode#78: a pick only travels to the server when it RELEASES the tier.
+ *  Selecting hp is never a client request — that flip rides a validated
+ *  Company Compute credential (the server's submitCredentialResponse), and a
+ *  second hp writer is exactly the duplicate flip ADR 0001 forbids. Returning
+ *  the mode rather than a bare boolean keeps the call site honest about WHAT
+ *  it is asking the server for. */
+export function releaseRequestForPick(mode: SolverMode): "piccolo" | undefined {
+  return mode === "piccolo" ? "piccolo" : undefined
+}
+
 export function AmicodeSolverToggle() {
   const [mode, setMode] = createSignal<SolverMode>(loadSolverMode())
   const pick = (m: SolverMode) => {

@@ -1076,6 +1076,38 @@ function grantIssimo(file: string): { alreadyGranted: boolean } {
   return { alreadyGranted: false }
 }
 
+/** Revoke `issimo` PRESERVING every other code — the exact mirror of
+ *  grantIssimo, byte-compatible with the extension's applyEntitlementForMode
+ *  (`codes = [...]` + optional `expired = [...]`). Returns whether the code
+ *  was already absent, so a settled piccolo setup writes nothing. */
+function revokeIssimo(file: string): { alreadyRevoked: boolean } {
+  let codes: string[] = []
+  let expired: string[] = []
+  try {
+    const parsed = parseTomlLite(readFileSync(file, "utf8"))
+    if (parsed.ok) {
+      const value = parsed.value as { codes?: unknown; expired?: unknown }
+      if (Array.isArray(value.codes)) codes = value.codes.filter((c): c is string => typeof c === "string")
+      if (Array.isArray(value.expired)) expired = value.expired.filter((c): c is string => typeof c === "string")
+    }
+  } catch (e) {
+    // A file that isn't there has no grant to revoke — the fresh-install state,
+    // and a legitimate no-op. Any OTHER fault (an unwritable ops dir, a path
+    // blocked by a regular file) must NOT masquerade as "already released":
+    // readSolverMode falls back to piccolo on the same broken dir, so swallowing
+    // it here would short-circuit the whole flip and report success having
+    // written nothing.
+    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return { alreadyRevoked: true }
+    throw e
+  }
+  if (!codes.includes("issimo")) return { alreadyRevoked: true }
+  codes = codes.filter((c) => c !== "issimo")
+  const lines = [`codes = [${codes.map((c) => JSON.stringify(c)).join(", ")}]`]
+  if (expired.length > 0) lines.push(`expired = [${expired.map((c) => JSON.stringify(c)).join(", ")}]`)
+  atomicWriteFileSync(file, lines.join("\n") + "\n")
+  return { alreadyRevoked: false }
+}
+
 /** Tolerant {mode,status} read — the extension's readSolverModeState
  *  semantics: anything absent/off-shape collapses to piccolo/ready. */
 function readSolverMode(file: string): { mode: "piccolo" | "hp"; status: "ready" | "switching" } {
@@ -1094,6 +1126,10 @@ function readSolverMode(file: string): { mode: "piccolo" | "hp"; status: "ready"
  *  credential save stands; only the flip write went wrong. Value-free by the
  *  module contract — never a token, path, or errno. */
 export const HP_FLIP_WARNING = "hp_flip_failed: connected, but the HP solver switch could not be requested"
+
+/** Sibling of HP_FLIP_WARNING for the release direction. Value-free by the
+ *  module contract — never a token, path, or errno. */
+export const PICCOLO_FLIP_WARNING = "piccolo_flip_failed: the local solver switch could not be requested"
 
 /** After a VALID save: grant the entitlement, then request the hp switch the
  *  watcher re-preps from — but ONLY when a re-prep would change anything (the
@@ -1115,6 +1151,49 @@ function requestHpFlip(): string | undefined {
   }
 }
 
+/** The mirror of requestHpFlip, and the half opencode#78 was missing: RELEASE
+ *  the tier. Revokes the entitlement and requests the piccolo switch in one
+ *  operation — both, or the setup is split-brained (a piccolo mode file beside
+ *  a granted `issimo` is precisely what amicode#259's reconcileSolverMode
+ *  heals straight back to hp). No-ops when the setup is already settled at
+ *  piccolo with no grant, so the watcher — whose one re-prep restarts THIS
+ *  server — is never poked for nothing. NEVER throws. */
+function requestPiccoloFlip(): string | undefined {
+  try {
+    const { alreadyRevoked } = revokeIssimo(entitlementsFile())
+    const modeFile = solverModeFile()
+    if (alreadyRevoked && readSolverMode(modeFile).mode === "piccolo") return undefined
+    atomicWriteFileSync(modeFile, JSON.stringify({ mode: "piccolo", status: "switching" }))
+    return undefined
+  } catch {
+    return PICCOLO_FLIP_WARNING
+  }
+}
+
+/** POST /amicode/solver-mode — body {mode:"piccolo"}. Releasing the tier is
+ *  the ONLY direction this route serves: hp is granted by connecting a
+ *  credential (submitCredentialResponse), and a second hp writer is the
+ *  duplicate-flip ADR 0001 forbids. */
+export function solverModeResponse(rawBody: string, deps: MutationDeps = {}): string {
+  const refusal = loopbackRefusal(deps.bindHostname ?? bindHostname)
+  if (refusal) return synthesizeSolverMode("non_loopback", "solver mutations serve loopback binds only")
+  const parsed = parseMutationBody(rawBody)
+  if (!parsed || typeof parsed.mode !== "string")
+    return synthesizeSolverMode("bad_request", 'body must be JSON {mode:"piccolo"}')
+  if (parsed.mode !== "piccolo")
+    return synthesizeSolverMode(
+      "unsupported_mode",
+      "only piccolo is selectable here; hp follows a Company Compute credential",
+    )
+  const warning = requestPiccoloFlip()
+  // Unlike the hp flip — a rider on a credential save that stands on its own —
+  // the flip IS this route's whole operation, so trouble is a failure, not a
+  // partial one. PICCOLO_FLIP_WARNING is already in the sibling "code: detail"
+  // shape, so it rides the error field verbatim.
+  if (warning) return JSON.stringify({ ok: false, mode: null, error: warning })
+  return JSON.stringify({ ok: true, mode: "piccolo", error: null })
+}
+
 // --- mutation bodies (POST routes). One shape per route family, sibling
 // discipline: never reject, ok:false + "code: detail" on failure. SECURITY:
 // every failure message is a FIXED string — nothing the caller sent (token,
@@ -1122,6 +1201,12 @@ function requestHpFlip(): string | undefined {
 
 export function synthesizeConnection(code: string, detail: string): string {
   return JSON.stringify({ ok: false, connection: null, error: `${code}: ${detail}` })
+}
+
+/** Sibling shape for the solver-mode family — no `connection` rides this
+ *  route, so it carries the settled-mode field instead. */
+export function synthesizeSolverMode(code: string, detail: string): string {
+  return JSON.stringify({ ok: false, mode: null, error: `${code}: ${detail}` })
 }
 
 // --- loopback guard: credential mutations serve LOCAL callers only. The bind
@@ -1197,6 +1282,7 @@ function renderCurrent(id: ConnectionType, warning?: string): string {
 
 interface MutationBody {
   id?: unknown
+  mode?: unknown
   base_url?: unknown
   token?: unknown
   username?: unknown
