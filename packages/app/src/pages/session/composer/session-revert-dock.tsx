@@ -86,7 +86,7 @@ export function SessionRevertDock(props: {
                 }
               />
               <IconButton
-                icon="xmark-small"
+                icon="close-small"
                 size="normal"
                 variant="ghost"
                 onMouseDown={(event) => {

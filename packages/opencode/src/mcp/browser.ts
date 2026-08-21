@@ -24,9 +24,9 @@ const layer = Layer.succeed(
           try: () => import("node:child_process"),
           catch: (error) => (error instanceof Error ? error : new Error(String(error))),
         })
-        const subprocess = yield* Effect.tryPromise({
+        const subprocess: import("node:child_process").ChildProcess = yield* Effect.tryPromise({
           try: () =>
-            new Promise((resolve, reject) => {
+            new Promise<import("node:child_process").ChildProcess>((resolve, reject) => {
               try {
                 const child = spawn(browserCmd, [url], { stdio: "ignore", detached: true })
                 child.unref()
@@ -39,11 +39,11 @@ const layer = Layer.succeed(
         })
         yield* Effect.callback<void, Error>((resume) => {
           const timer = setTimeout(() => resume(Effect.void), 800)
-          subprocess.on("error", (error) => {
+          subprocess.on("error", (error: unknown) => {
             clearTimeout(timer)
-            resume(Effect.fail(error))
+            resume(Effect.fail(error instanceof Error ? error : new Error(String(error))))
           })
-          subprocess.on("exit", (code) => {
+          subprocess.on("exit", (code: number | null) => {
             if (code === null || code === 0) return
             clearTimeout(timer)
             resume(Effect.fail(new Error(`Browser open failed with exit code ${code} (BROWSER=${browserCmd})`)))
@@ -51,17 +51,17 @@ const layer = Layer.succeed(
         })
         return
       }
-      const subprocess = yield* Effect.tryPromise({
-        try: () => open(url),
+      const subprocess2: import("node:child_process").ChildProcess = yield* Effect.tryPromise({
+        try: () => open(url) as Promise<import("node:child_process").ChildProcess>,
         catch: (error) => (error instanceof Error ? error : new Error(String(error))),
       })
       yield* Effect.callback<void, Error>((resume) => {
         const timer = setTimeout(() => resume(Effect.void), 500)
-        subprocess.on("error", (error) => {
+        subprocess2.on("error", (error: unknown) => {
           clearTimeout(timer)
-          resume(Effect.fail(error))
+          resume(Effect.fail(error instanceof Error ? error : new Error(String(error))))
         })
-        subprocess.on("exit", (code) => {
+        subprocess2.on("exit", (code: number | null) => {
           if (code === null || code === 0) return
           clearTimeout(timer)
           resume(Effect.fail(new Error(`Browser open failed with exit code ${code}`)))
