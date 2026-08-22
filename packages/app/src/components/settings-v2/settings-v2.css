@@ -846,6 +846,54 @@
   white-space: nowrap;
   min-width: 0;
   padding-block: var(--space-2);
+  justify-self: start;
+  max-width: 100%;
+}
+/* exception patterns are click-to-edit */
+button.settings-v2-permissions-matrix-pattern {
+  border: 0;
+  background: transparent;
+  padding-inline: 0;
+  cursor: text;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.16s ease;
+}
+button.settings-v2-permissions-matrix-pattern:hover {
+  text-decoration-color: var(--v2-text-text-muted);
+}
+button.settings-v2-permissions-matrix-pattern:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: 2px;
+}
+.settings-v2-permissions-pattern-input {
+  grid-area: pattern;
+  font-family: var(--font-mono, monospace);
+  min-width: 0;
+}
+/* the ** rule reads as a plain label, not a glob */
+.settings-v2-permissions-matrix-pattern--default {
+  font-family: inherit;
+  font-weight: var(--font-weight-emphasis);
+}
+.settings-v2-permissions-group-label {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-emphasis);
+  color: var(--v2-text-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+/* the default rule sits directly in the card — no box, its rows are the
+   card's own rows; exceptions are boxed so they read as overrides */
+.settings-v2-permissions-rule[data-default] {
+  border: 0;
+  padding-inline: 0;
+}
+.settings-v2-permissions-rule[data-default] .settings-v2-permissions-matrix-remove {
+  display: none;
 }
 .settings-v2-permissions-matrix-remove {
   grid-area: remove;
@@ -919,6 +967,16 @@
   .settings-v2-permissions-rule + .settings-v2-permissions-rule {
     border-top: var(--border-width) solid var(--v2-border-border-muted);
     padding-top: var(--space-2);
+  }
+  .settings-v2-permissions-rule[data-default] .settings-v2-permissions-matrix-remove {
+    display: block;
+    visibility: hidden;
+  }
+  .settings-v2-permissions-group-label {
+    margin-top: var(--space-1);
+  }
+  .settings-v2-permissions-pattern-input {
+    grid-area: auto;
   }
   .settings-v2-permissions-matrix-pattern,
   .settings-v2-permissions-matrix-remove,

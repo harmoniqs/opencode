@@ -165,10 +165,26 @@ export const SettingsPermissionsV2: Component = () => {
   }
 
   const addDirectoryRule = (tierId: string) => {
-    const pattern = `src/private/**`
+    const tier = tiers().find((t) => t.id === tierId)
+    if (!tier) return
+    let pattern = "folder/**"
+    for (let n = 2; tier.directories[pattern]; n++) pattern = `folder-${n}/**`
+    updateTier(tierId, (t) => ({
+      ...t,
+      directories: { ...t.directories, [pattern]: { read: "deny", write: "deny", execute: "deny", network: "deny" } },
+    }))
+    setEditingPattern(`${tierId}:${pattern}`)
+    setPatternValue(pattern)
+  }
+
+  const renameDirectoryRule = (tierId: string, from: string, to: string) => {
+    const next = to.trim()
+    if (!next || next === from || next === "**") return
     updateTier(tierId, (t) => {
-      if (t.directories[pattern]) return t
-      return { ...t, directories: { ...t.directories, [pattern]: { read: "deny", write: "deny", execute: "deny", network: "deny" } } }
+      if (!t.directories[from] || t.directories[next]) return t
+      const directories: Record<string, DirectoryPermissions> = {}
+      for (const [k, v] of Object.entries(t.directories)) directories[k === from ? next : k] = v
+      return { ...t, directories }
     })
   }
 
@@ -183,6 +199,9 @@ export const SettingsPermissionsV2: Component = () => {
 
   const [editingLabel, setEditingLabel] = createSignal<string | null>(null)
   const [editValue, setEditValue] = createSignal("")
+  // exception pattern being edited, keyed `${tierId}:${pattern}`
+  const [editingPattern, setEditingPattern] = createSignal<string | null>(null)
+  const [patternValue, setPatternValue] = createSignal("")
 
   return (
     <>
@@ -204,6 +223,91 @@ export const SettingsPermissionsV2: Component = () => {
             const summary = () => tierSummary(tier)
             const isUnassigned = () => tier.id === "unassigned"
             const assignedModels = () => modelsByTier().get(tier.id) ?? []
+            const exceptions = () => Object.entries(tier.directories).filter(([p]) => p !== "**")
+
+            const renderRule = (t: TrustTier, pattern: string, perms: DirectoryPermissions) => {
+              const isDefault = pattern === "**"
+              const editKey = `${t.id}:${pattern}`
+              const commitPattern = () => {
+                renameDirectoryRule(t.id, pattern, patternValue())
+                setEditingPattern(null)
+              }
+              return (
+                <div class="settings-v2-permissions-rule" data-default={isDefault ? "" : undefined}>
+                  <Show
+                    when={isDefault}
+                    fallback={
+                      <Show
+                        when={editingPattern() === editKey}
+                        fallback={
+                          <button
+                            type="button"
+                            class="settings-v2-permissions-matrix-pattern"
+                            title="Edit pattern"
+                            onClick={() => { setEditingPattern(editKey); setPatternValue(pattern) }}
+                          >
+                            {pattern}
+                          </button>
+                        }
+                      >
+                        <TextInputV2
+                          class="settings-v2-permissions-pattern-input"
+                          value={patternValue()}
+                          placeholder="e.g. ~/secrets/**"
+                          onInput={(e) => setPatternValue(e.currentTarget.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitPattern()
+                            if (e.key === "Escape") setEditingPattern(null)
+                          }}
+                          onBlur={commitPattern}
+                          // eslint-disable-next-line jsx-a11y/no-autofocus
+                          autofocus
+                        />
+                      </Show>
+                    }
+                  >
+                    <span
+                      class="settings-v2-permissions-matrix-pattern settings-v2-permissions-matrix-pattern--default"
+                      title="Applies to every directory unless a folder exception matches"
+                    >
+                      Everywhere
+                    </span>
+                  </Show>
+                  <For each={ACTION_GROUPS}>{(group) => {
+                    const effect = () => perms[group]
+                    const isDanger = () => (group === "execute" || group === "network") && effect() === "allow"
+                    return (
+                      <div class="settings-v2-permissions-matrix-cell" data-group={group} data-danger={isDanger() ? "" : undefined}>
+                        <span class="settings-v2-permissions-matrix-cell-label" title={GROUP_TOOLS[group]}>
+                          {GROUP_LABEL[group]}
+                        </span>
+                        <SelectV2
+                          appearance="inline"
+                          options={EFFECTS}
+                          current={effect()}
+                          placement="bottom-end"
+                          gutter={6}
+                          label={(o) => EFFECT_LABEL[o]}
+                          valueClass={isDanger() ? "settings-v2-permissions-effect--danger" : undefined}
+                          onSelect={(o) => o && updateDirectoryEffect(t.id, pattern, group, o)}
+                        />
+                      </div>
+                    )
+                  }}</For>
+                  <Show when={!isDefault} fallback={<span class="settings-v2-permissions-matrix-remove" aria-hidden="true" />}>
+                    <ButtonV2
+                      size="small"
+                      variant="ghost-muted"
+                      icon="xmark-small"
+                      class="settings-v2-permissions-matrix-remove"
+                      aria-label={`Remove exception ${pattern}`}
+                      title="Remove exception"
+                      onClick={() => removeDirectoryRule(t.id, pattern)}
+                    />
+                  </Show>
+                </div>
+              )
+            }
             return (
               <div class="settings-v2-permissions-card" data-tier-id={tier.id}>
                 <div class="settings-v2-permissions-card-header">
@@ -282,7 +386,7 @@ export const SettingsPermissionsV2: Component = () => {
                   </div>
                 </div>
 
-                {/* Directory × Action Matrix */}
+                {/* Default permissions ("Everywhere" = the ** rule) + folder exceptions */}
                 <div class="settings-v2-permissions-matrix">
                   <div class="settings-v2-permissions-matrix-header" aria-hidden="true">
                     <span class="settings-v2-permissions-matrix-corner">Directory</span>
@@ -293,46 +397,17 @@ export const SettingsPermissionsV2: Component = () => {
                     )}</For>
                     <span class="settings-v2-permissions-matrix-head settings-v2-permissions-matrix-head-actions" />
                   </div>
-                  <For each={Object.entries(tier.directories)}>{([pattern, perms]) => (
-                    <div class="settings-v2-permissions-rule">
-                      <span class="settings-v2-permissions-matrix-pattern" title={pattern}>{pattern}</span>
-                      <For each={ACTION_GROUPS}>{(group) => {
-                        const effect = () => perms[group]
-                        const isDanger = () => (group === "execute" || group === "network") && effect() === "allow"
-                        return (
-                          <div class="settings-v2-permissions-matrix-cell" data-group={group} data-danger={isDanger() ? "" : undefined}>
-                            <span class="settings-v2-permissions-matrix-cell-label" title={GROUP_TOOLS[group]}>
-                              {GROUP_LABEL[group]}
-                            </span>
-                            <SelectV2
-                              appearance="inline"
-                              options={EFFECTS}
-                              current={effect()}
-                              placement="bottom-end"
-                              gutter={6}
-                              label={(o) => EFFECT_LABEL[o]}
-                              valueClass={isDanger() ? "settings-v2-permissions-effect--danger" : undefined}
-                              onSelect={(o) => o && updateDirectoryEffect(tier.id, pattern, group, o)}
-                            />
-                          </div>
-                        )
-                      }}</For>
-                      <ButtonV2
-                        size="small"
-                        variant="ghost-muted"
-                        icon="xmark-small"
-                        class="settings-v2-permissions-matrix-remove"
-                        aria-label={`Remove rule ${pattern}`}
-                        title="Remove rule"
-                        disabled={pattern === "**"}
-                        onClick={() => removeDirectoryRule(tier.id, pattern)}
-                      />
-                    </div>
-                  )}</For>
-                  <ButtonV2 size="small" variant="ghost-muted" onClick={() => addDirectoryRule(tier.id)}>
-                    + Add directory rule
+                  <Show when={tier.directories["**"]}>{(perms) => renderRule(tier, "**", perms())}</Show>
+                  <Show when={exceptions().length > 0}>
+                    <h5 class="settings-v2-permissions-group-label">Folder exceptions</h5>
+                    <For each={exceptions()}>{([pattern, perms]) => renderRule(tier, pattern, perms)}</For>
+                  </Show>
+                  <ButtonV2 size="small" variant="ghost-muted" icon="plus" onClick={() => addDirectoryRule(tier.id)}>
+                    Add folder exception
                   </ButtonV2>
-                  <p class="settings-v2-permissions-matrix-help">Glob patterns supported, e.g. ~/secrets/**, src/private/**. Most-specific pattern wins.</p>
+                  <p class="settings-v2-permissions-matrix-help">
+                    Exceptions override the defaults for matching folders. Glob patterns, e.g. ~/secrets/**, src/private/**. Most-specific pattern wins.
+                  </p>
                 </div>
 
                 {/* Model Assignment — multi-select picker inside tier card */}
