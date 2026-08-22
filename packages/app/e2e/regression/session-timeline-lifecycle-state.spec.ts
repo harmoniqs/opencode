@@ -41,9 +41,9 @@ test("shows and expands a running shell command without shimmering it", async ({
   })
 
   const tool = page.locator(`[data-timeline-part-id="${id}"]`)
-  await expect(tool.locator('[data-component="text-shimmer"]')).toHaveAttribute("data-active", "true")
+  await expect(tool.locator('[data-slot="basic-tool-tool-title"] [data-pending]')).toHaveAttribute("data-pending", "true")
   await expect(tool.locator('[data-component="shell-submessage"]')).toHaveText(command)
-  await expect(tool.locator('[data-component="shell-submessage"] [data-component="text-shimmer"]')).toHaveCount(0)
+  await expect(tool.locator('[data-component="shell-submessage"] [data-pending]')).toHaveCount(0)
   await tool.locator('[data-slot="collapsible-trigger"]').click()
   await expect(tool.locator('[data-slot="collapsible-trigger"]')).toHaveAttribute("aria-expanded", "true")
   await expect(tool.locator('[data-slot="bash-pre"]')).toContainText("still running")

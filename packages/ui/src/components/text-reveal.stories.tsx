@@ -37,7 +37,7 @@ const TEXTS = [
 const btn = (accent?: boolean) =>
   ({
     padding: "5px 12px",
-    "border-radius": "6px",
+    "border-radius": "var(--radius-sm)",
     border: accent ? "1px solid var(--color-accent, #58f)" : "1px solid var(--color-divider, #333)",
     background: accent ? "var(--color-accent, #58f)" : "var(--color-fill-element, #222)",
     color: "var(--color-text, #eee)",
@@ -54,7 +54,7 @@ const sliderLabel = {
 
 const cardStyle = {
   padding: "20px 24px",
-  "border-radius": "10px",
+  "border-radius": "var(--radius-md)",
   border: "1px solid var(--color-divider, #333)",
   background: "var(--color-fill-element, #1a1a1a)",
   display: "grid",

@@ -111,7 +111,7 @@ export function DialogReleaseNotes(props: { highlights: Highlight[] }) {
                     onClick={() => setIndex(i)}
                   >
                     <div
-                      class="w-full h-0.5 rounded-[1px] transition-colors duration-200"
+                      class="w-full h-0.5 rounded-xs transition-colors duration-200"
                       classList={{
                         "bg-icon-strong-base": i === index(),
                         "bg-icon-weak-base": i !== index(),

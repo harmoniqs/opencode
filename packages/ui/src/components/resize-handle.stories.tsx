@@ -51,7 +51,7 @@ export const Basic = {
             width: `${size()}px`,
             height: "48px",
             "background-color": "var(--background-stronger)",
-            "border-radius": "6px",
+            "border-radius": "var(--radius-sm)",
           }}
         />
         <mod.ResizeHandle
@@ -77,7 +77,7 @@ export const Vertical = {
           style={{
             height: `${size()}px`,
             "background-color": "var(--background-stronger)",
-            "border-radius": "6px",
+            "border-radius": "var(--radius-sm)",
           }}
         />
         <mod.ResizeHandle
@@ -111,7 +111,7 @@ export const Collapse = {
             width: `${collapsed() ? 0 : size()}px`,
             height: "48px",
             "background-color": "var(--background-stronger)",
-            "border-radius": "6px",
+            "border-radius": "var(--radius-sm)",
           }}
         />
         <mod.ResizeHandle
@@ -143,7 +143,7 @@ export const EdgeStart = {
             width: `${size()}px`,
             height: "48px",
             "background-color": "var(--background-stronger)",
-            "border-radius": "6px",
+            "border-radius": "var(--radius-sm)",
           }}
         />
         <mod.ResizeHandle

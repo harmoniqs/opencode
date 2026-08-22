@@ -90,10 +90,11 @@ import { parseProblemsResponse } from "@opencode-ai/ui/amicode-problem-switcher"
 import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
 import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
+import { useTheme } from "@opencode-ai/ui/theme/context"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
-  "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-[6px] bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none"
+  "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-sm bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none"
 const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
 // amicode#203: session rows share the project row's rhythm (h-7, px-1.5, rounded)
 // but read as CHILDREN — lighter weight, muted until hover, and (when nested)
@@ -703,6 +704,7 @@ function HomeDesign() {
     return { tokens: resolveTokens((name) => style.getPropertyValue(name), density), density }
   }
   const [themeState, setThemeState] = createSignal(readTokens())
+  const theme = useTheme()
   createEffect(() => {
     const refresh = () => setThemeState(readTokens())
     window.addEventListener("resize", refresh)
@@ -712,6 +714,18 @@ function HomeDesign() {
       window.removeEventListener("resize", refresh)
       observer.disconnect()
     })
+  })
+  // A non-default theme's tokens are injected by JS AFTER this component mounts,
+  // and the attribute flip that would trigger the observer above has already
+  // happened by then — so the first read can capture the stock accent and never
+  // correct itself. Track the theme signals directly and re-read on the next
+  // frame, once the injected stylesheet is in the cascade.
+  createEffect(() => {
+    theme.themeId()
+    theme.mode()
+    theme.themes()
+    const id = requestAnimationFrame(() => setThemeState(readTokens()))
+    onCleanup(() => cancelAnimationFrame(id))
   })
 
   const widgetContext = createMemo(() => ({
@@ -1063,7 +1077,7 @@ function HomeDesign() {
   }
 
   return (
-    <div class="rounded-[10px] shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
+    <div class="rounded-md shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
       <div
         data-slot="amicode-home-shell"
         class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"
@@ -1115,7 +1129,7 @@ function HomeDesign() {
                     "align-items": "center",
                     gap: "6px",
                     border: "1px solid var(--v2-border-border-base)",
-                    "border-radius": "7px",
+                    "border-radius": "var(--radius-sm)",
                     background: "var(--v2-background-bg-layer-01)",
                     color: "var(--v2-text-text-base)",
                     padding: "4px 10px",
@@ -1154,7 +1168,7 @@ function HomeDesign() {
                       gap: "12px",
                       overflow: "hidden auto",
                       border: "1px solid var(--v2-border-border-base)",
-                      "border-radius": "10px",
+                      "border-radius": "var(--radius-md)",
                       background: "var(--v2-background-bg-base)",
                       "box-shadow": "0 14px 40px -18px rgba(0, 0, 0, 0.55)",
                       padding: "14px",
@@ -1571,7 +1585,7 @@ function HomeServerRow(props: {
 }) {
   const [state, setState] = createStore({ menuOpen: false })
   return (
-    <div class="group/server relative flex h-7 min-w-0 items-center rounded-[6px]">
+    <div class="group/server relative flex h-7 min-w-0 items-center rounded-sm">
       <button
         type="button"
         class={`${HOME_PROJECT_NAV_ROW} pr-16 disabled:opacity-60`}
@@ -1586,7 +1600,7 @@ function HomeServerRow(props: {
           <span class={HOME_PROJECT_NAV_LABEL}>{props.server.displayName ?? new URL(props.server.http.url).host}</span>
           <Show when={props.server.label}>
             {(label) => (
-              <span class="shrink-0 rounded-[3px] border border-v2-border-border-base px-1 py-0.5 text-[9px] leading-none text-v2-text-text-muted">
+              <span class="shrink-0 rounded-xs border border-v2-border-border-base px-1 py-0.5 text-[9px] leading-none text-v2-text-text-muted">
                 {label()}
               </span>
             )}
@@ -1699,7 +1713,7 @@ function HomeProjectRow(props: {
 }) {
   const [state, setState] = createStore({ menuOpen: false })
   return (
-    <div class="group/project relative flex h-7 min-w-0 items-center rounded-[6px]">
+    <div class="group/project relative flex h-7 min-w-0 items-center rounded-sm">
       <button
         type="button"
         data-component="home-project-row"
@@ -1863,7 +1877,7 @@ function HomeSessionSearch(props: {
         <Show when={props.open}>
           <div
             data-component="home-session-search-panel"
-            class="absolute flex flex-col rounded-[12px] bg-v2-background-bg-base shadow-[var(--v2-elevation-floating)]"
+            class="absolute flex flex-col rounded-lg bg-v2-background-bg-base shadow-[var(--v2-elevation-floating)]"
             style={{
               top: "-6px",
               left: "-6px",
@@ -1937,7 +1951,7 @@ function HomeSessionSearch(props: {
           </div>
         </Show>
         <label
-          class="relative z-20 flex h-9 w-full items-center gap-2 rounded-[6px] py-1 pl-3 pr-2 text-v2-icon-icon-muted transition-[background-color,box-shadow] duration-[120ms] ease-in-out"
+          class="relative z-20 flex h-9 w-full items-center gap-2 rounded-sm py-1 pl-3 pr-2 text-v2-icon-icon-muted transition-[background-color,box-shadow] duration-[120ms] ease-in-out"
           classList={{
             "bg-v2-background-bg-deep focus-within:bg-v2-background-bg-base focus-within:shadow-[0_0_0_0.5px_var(--v2-border-border-focus),var(--v2-elevation-raised)]":
               !props.open,
@@ -2061,7 +2075,7 @@ function HomeSessionRow(props: {
   const showLabel = () => !props.hideLabel && !!props.record.projectName
 
   return (
-    <div class="group/session relative flex h-7 min-w-0 items-center rounded-[6px]">
+    <div class="group/session relative flex h-7 min-w-0 items-center rounded-sm">
       <button
         type="button"
         data-component="home-session-row"
@@ -2073,8 +2087,8 @@ function HomeSessionRow(props: {
             <span
               class="shrink-0 size-[6px] rounded-full"
               style={{
-                background: "#34d399",
-                "box-shadow": "0 0 3px #34d39980",
+                background: "var(--v2-state-fg-success)",
+                "box-shadow": "0 0 3px color-mix(in srgb, var(--v2-state-fg-success) 50%, transparent)",
                 animation: "session-open-glow 2.4s ease-in-out infinite",
               }}
             />
@@ -2122,7 +2136,7 @@ function HomeSessionSkeleton(props: { label: string }) {
         <div class={HOME_SECTION_LABEL}>{props.label}</div>
       </div>
       <div class="flex min-w-0 flex-col gap-px" aria-hidden="true">
-        <For each={[0, 1, 2, 3]}>{() => <div class="h-10 rounded-[6px] bg-v2-background-bg-deep opacity-70" />}</For>
+        <For each={[0, 1, 2, 3]}>{() => <div class="h-10 rounded-sm bg-v2-background-bg-deep opacity-70" />}</For>
       </div>
     </div>
   )
@@ -2141,7 +2155,7 @@ function HomeCardsSkeleton() {
       <For each={[0, 1, 2, 3, 4, 5]}>
         {() => (
           <div
-            class="rounded-[12px] motion-safe:animate-pulse"
+            class="rounded-lg motion-safe:animate-pulse"
             style={{
               height: "150px",
               border: "1px solid var(--v2-border-border-muted)",
@@ -2166,7 +2180,7 @@ function ArchivedSessionRow(props: {
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
 
   return (
-    <div class="group/archived relative flex h-7 min-w-0 items-center rounded-[6px]">
+    <div class="group/archived relative flex h-7 min-w-0 items-center rounded-sm">
       <button
         type="button"
         data-component="archived-session-row"

@@ -3,39 +3,79 @@
    unlayered too, and imported AFTER the v2 theme in index.css. */
 
 /* ============================================================
-   AMICODE DESIGN SYSTEM  (see .claude/skills/amicode-design-system)
+   AMICODE BRAND SHEET — THE SINGLE SOURCE OF TRUTH
+   (see .claude/skills/amicode-design-system)
+
+   THE RULE: every colour, radius, and face in the app resolves from a token
+   defined here or in the active theme. Components consume tokens; they never
+   carry literals. `script/check-design-tokens.mjs` enforces this — run it with
+   `npm run check:design`, and it fails the moment a raw literal reappears.
 
    Division of ownership:
-   - The v2 THEME (`packages/ui/src/theme/themes/oc-2.json`) owns the `--v2-*`
-     palette per scheme — surfaces, text, borders, AND the accent. The accent
-     there is the single brand yellow #fff676 (gold deleted): on DARK it's the
-     foreground+fill hue; on LIGHT the fill (`bg-accent`) is yellow while the
-     text/icon accents are NEUTRAL (yellow is illegible on white — accent
-     foregrounds go neutral on light; yellow lives in fills).
-   - THIS file owns the design-system ADDITIONS: geometry tokens (radius,
-     spacing), the accent role tokens (--accent, --accent-ink, --accent-fill-soft,
-     --accent-edge), type gaps, and a few component skins. It does NOT redefine
-     `--v2-*` tokens (the theme wins) — it only consumes them.
+   - The active THEME (`packages/ui/src/theme/themes/*.json`, currently
+     `harmoniqs.json`, pinned in app.tsx) owns the `--v2-*` palette per scheme —
+     surfaces, text, borders, AND the accent. Those values are generated from
+     harmoniqs.ai's `app/globals.css`, so the site is the upstream reference:
+     brand yellow #FFE614, ink #000, cream #EFEDCD, deep #000.
+     On DARK the accent is both foreground and fill; on LIGHT the fill
+     (`bg-accent`) is yellow while text/icon accents go NEUTRAL — #FFE614 is
+     1.27:1 on white, so yellow lives in fills and never in light foregrounds.
+   - THIS file owns everything else brand-bearing: geometry tokens (radius,
+     spacing), the accent role tokens (--accent, --accent-hover, --accent-ink,
+     --accent-edge-ink, --accent-fill-soft, --accent-edge), the type faces and
+     scale, and a few component skins. It does NOT redefine `--v2-*` tokens
+     (the theme wins) — it only consumes them.
+
+   The ONLY sanctioned literals in the codebase, all deliberate:
+   - `amicode/connections.ts`   third-party provider logos (Slack, GitHub,
+                                Google, Linear, Pasqal) — other companies' marks.
+   - `amicode/run-card.tsx`     the shareable export poster, intentionally
+                                theme-independent so it renders identically
+                                wherever it's shared.
+   - `amicode/brain-engine.ts`, `amicode/context-tree-engine.ts`
+                                data visualisation — exempt from the single-hue
+                                rule, may use a categorical palette.
+   - `app/src/components/terminal.tsx`
+                                last-resort defaults used only when no theme is
+                                resolvable; kept in brand (deep/cream).
+   - `index.css` @font-face     face declarations, by definition.
    ============================================================ */
 
 :root {
   /* ── the one accent ── */
-  --accent: #fff676;         /* brand hue — chip / CTA / fill, both schemes */
-  --accent-ink: #111214;     /* text/icon ON a yellow fill — always near-black */
+  /* Brand yellow, from harmoniqs-ai/app/globals.css (--brand-yellow). The
+     website is the reference; an earlier pass read a different repo and landed
+     on #fff676, which was never the site's colour. */
+  --accent: #FFE614;         /* brand hue — chip / CTA / fill, both schemes */
+  --accent-hover: #F0D600;   /* --brand-yellow-hover */
+  --accent-ink: #000000;     /* text/icon ON a yellow fill — always ink */
+  --accent-edge-ink: #000000;/* --brand-yellow-border: every yellow fill takes an ink edge */
 
-  /* ── radius scale ── */
-  --radius-xs: 0.125rem;  /* 2px  — hairline insets */
-  --radius-sm: 0.25rem;   /* 4px  — dense chips, tooltips */
-  --radius-md: 0.5rem;    /* 8px  — controls: buttons, inputs, rail icons, toggles */
-  --radius-lg: 0.75rem;   /* 12px — cards & panels: composer, modals, rail panel */
-  --radius-xl: 1rem;      /* 16px — large / hero surfaces (reserve) */
-  --radius-full: 999px;   /* pills, dots, send button */
+  /* ── radius ──
+     The site sets ONE radius for everything — buttons, cards, chips, inputs,
+     the nav pill (--radius-brand: 4px); only decorative dots stay circular.
+     The scale names are kept so the ~140 call sites don't churn, and so a
+     future hierarchy change stays a one-file edit. */
+  --radius-xs: 4px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-full: 999px;   /* dots and round pills only */
 
   /* ── spacing (4px grid) ── */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
 
-  /* ── type ── */
+  /* ── type ──
+     Faces mirror harmoniqs.ai: DM Sans carries display AND body (the site
+     aliases --font-display to --font-body), JuliaMono carries data, code and
+     labels. FBS Machro is retired — the site's copy gate blocks its return. */
+  --font-body: var(--font-family-text);
+  --font-display: var(--font-body);
+  --font-mono: "JuliaMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-julia: "JuliaMono", monospace;
+
   --font-size-2xs: 10px; --font-size-xs: 11px; --font-size-sm: 12px; --font-size-md: 13px;
   --font-size-x-small: var(--font-size-xs);   /* fix dangling ref */
   --font-weight-emphasis: 600; --font-weight-strong: 650;
@@ -106,14 +146,21 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
 /* the composer — a soft card at the card corner (was a one-off 22px; unified
    to --radius-lg so it matches every other card/panel) */
 [data-component="session-new-composer"],
-[data-component="session-composer"] {
+[data-component="session-composer"],
+[data-component="prompt-input-v2"] {
   border-radius: var(--radius-lg) !important;
   border: var(--border-width) solid var(--v2-border-border-base);
+  /* One even edge. --v2-elevation-raised carries BOTH a 0.5px ring and a
+     -0.5px top highlight, which stacked on this border and made the top read
+     visibly thicker than the sides. The site differentiates with borders, not
+     bevels, so the composer takes the border alone. */
+  box-shadow: none !important;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 [data-component="session-new-composer"] { min-height: 88px !important; }
 [data-component="session-new-composer"]:focus-within,
-[data-component="session-composer"]:focus-within {
+[data-component="session-composer"]:focus-within,
+[data-component="prompt-input-v2"]:focus-within {
   border-color: var(--v2-border-border-strong);
 }
 

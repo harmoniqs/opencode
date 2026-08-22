@@ -14,6 +14,7 @@ import everforestThemeJson from "./themes/everforest.json"
 import flexokiThemeJson from "./themes/flexoki.json"
 import githubThemeJson from "./themes/github.json"
 import gruvboxThemeJson from "./themes/gruvbox.json"
+import harmoniqsThemeJson from "./themes/harmoniqs.json"
 import kanagawaThemeJson from "./themes/kanagawa.json"
 import lucentOrngThemeJson from "./themes/lucent-orng.json"
 import materialThemeJson from "./themes/material.json"
@@ -52,6 +53,7 @@ export const everforestTheme = everforestThemeJson as DesktopTheme
 export const flexokiTheme = flexokiThemeJson as DesktopTheme
 export const githubTheme = githubThemeJson as DesktopTheme
 export const gruvboxTheme = gruvboxThemeJson as DesktopTheme
+export const harmoniqsTheme = harmoniqsThemeJson as DesktopTheme
 export const kanagawaTheme = kanagawaThemeJson as DesktopTheme
 export const lucentOrngTheme = lucentOrngThemeJson as DesktopTheme
 export const materialTheme = materialThemeJson as DesktopTheme
@@ -91,6 +93,7 @@ export const DEFAULT_THEMES: Record<string, DesktopTheme> = {
   flexoki: flexokiTheme,
   github: githubTheme,
   gruvbox: gruvboxTheme,
+  harmoniqs: harmoniqsTheme,
   kanagawa: kanagawaTheme,
   "lucent-orng": lucentOrngTheme,
   material: materialTheme,

@@ -44,7 +44,7 @@ const messages = [
 const btn = (accent?: boolean) =>
   ({
     padding: "6px 12px",
-    "border-radius": "6px",
+    "border-radius": "var(--radius-sm)",
     border: "1px solid var(--v2-border-border-base, #0000001a)",
     background: accent ? "var(--v2-background-bg-contrast, #242424)" : "var(--v2-background-bg-base, #fff)",
     color: accent ? "var(--v2-text-text-contrast, #fafafa)" : "var(--v2-text-text-base, #161616)",
@@ -83,7 +83,7 @@ function Stage(props: { count: number }) {
           data-dock-border-underlay={v2() ? "v2" : "legacy"}
           style={{ position: "relative", "z-index": 70, "margin-top": "-18px" }}
           classList={{
-            "min-h-24 w-full rounded-[12px] px-4 py-3 text-[13px]": true,
+            "min-h-24 w-full rounded-lg px-4 py-3 text-[13px]": true,
             "bg-v2-background-bg-base text-v2-text-text-faint": v2(),
             "text-text-weak": !v2(),
           }}

@@ -142,7 +142,7 @@ export const ItemWrapper = {
       items={["One", "Two", "Three"]}
       key={(item) => item}
       itemWrapper={(item, node) => (
-        <div style={{ border: "1px solid var(--border-weak)", "border-radius": "6px", margin: "4px 0" }}>{node}</div>
+        <div style={{ border: "1px solid var(--border-weak)", "border-radius": "var(--radius-sm)", margin: "4px 0" }}>{node}</div>
       )}
     >
       {(item) => item}

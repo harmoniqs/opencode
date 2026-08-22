@@ -1542,7 +1542,7 @@
   gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--amc-rule, rgba(0, 0, 0, 0.1));
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--amc-card-bg, transparent);
 }
 [data-component="amicode-approval-card"] .amc-ap-head {
