@@ -182,6 +182,7 @@ function SelectedServerProviders(props: ParentProps) {
       <ServerSDKProvider>
         <ServerSyncProvider>
           <AmicodeFileRefBridge />
+          <ConnectionBanner />
           {props.children}
         </ServerSyncProvider>
       </ServerSDKProvider>
@@ -707,7 +708,6 @@ export function AppInterface(props: {
                   <TabsProvider>
                     <AmicodeNavigateBridge />
                     <AmicodeServerBridge />
-                    <ConnectionBanner />
                     <PermissionProvider>
                       <NotificationProvider>
                         <ServerShell>
