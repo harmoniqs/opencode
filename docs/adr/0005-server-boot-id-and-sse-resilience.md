@@ -55,11 +55,19 @@ Three problems existed:
 ### Client-side: reconnect escalation
 
 - A `consecutiveFailures` counter in `server-sdk.tsx` tracks connection failures.
-- After 10 consecutive failures (2.5 seconds), the SSE loop breaks with a warning
-  log. The `streamStatus` signal remains `"disconnected"` — the ConnectionBanner
-  surfaces this to the user.
-- A page visibility cycle (`pagehide` → `pageshow`) restarts the loop, providing
-  a user-initiated recovery path.
+- The reconnect delay grows exponentially: `250ms × 2^consecutiveFailures`, capped
+  at 30 seconds. This starts aggressive (250ms) for fast recovery and backs off to
+  reduce CPU burn when the server is genuinely unreachable.
+- The loop **never terminates**. In a VS Code webview context, there is no reliable
+  page-visibility recovery (`pagehide`/`pageshow` don't fire consistently for
+  webview panels), so indefinite retry with exponential backoff is the only correct
+  behavior.
+- The `streamStatus` signal reflects `"connected"` / `"disconnected"` — the
+  `ConnectionBanner` component surfaces disconnection to the user and shows a
+  recovery confirmation when the stream re-establishes.
+- On the extension side, a health heartbeat (30s ping/pong between extension host
+  and webview relay) detects when the webview itself is unreachable (e.g., port
+  forwarding severed) and offers to recreate the panel.
 
 ### Client-side: boot-ID persistence and mismatch detection
 
@@ -80,9 +88,16 @@ Three problems existed:
   connects, receives the new boot-ID, and triggers a refresh.
 - Servers on a different port after restart are handled by the extension host's
   panel-recreation mechanism (see amicode ADR 0008).
-- The 10-failure abort prevents infinite CPU burn on genuinely unreachable servers.
-- Future: the abort will be upgraded to self-healing (post `server-url-changed` to
-  self and redirect) once Phase 4's `AmicodeServerBridge` listener is stable.
+- The exponential backoff (250ms → 30s cap) prevents CPU burn on unreachable
+  servers while ensuring recovery happens within one backoff interval once the
+  server returns.
+- The `ConnectionBanner` gives the user immediate visual feedback during
+  disconnection ("Server connection dropped — reconnecting…") and on recovery
+  ("Server reconnected").
+- The extension-side heartbeat (WI-4) provides a secondary recovery path: if the
+  webview relay itself becomes unreachable (port forwarding severed, iframe load
+  failure), the extension detects this within 35 seconds and offers to recreate
+  the panel.
 - The `lastBootId` persistence enables detecting restarts that happened while the
   webview was closed — on next open, the first `server.connected` event's boot-ID
   won't match, and the full refresh path fires.
@@ -101,9 +116,11 @@ should this be needed.
 
 After the failure threshold, the SSE loop posts a `server-url-changed` message to
 itself, which the `AmicodeServerBridge` handles by updating the server store and
-reconnecting. This provides seamless recovery without user intervention. Deferred
-until Phase 4's bridge is validated — documented in
-`plans/followup-self-healing-reconnect.md`.
+reconnecting. This provides seamless recovery without user intervention. Partially
+addressed: the extension-side heartbeat (WI-4) now detects unreachable webviews and
+offers panel recreation as a user-confirmed recovery path. Fully automatic
+self-healing (no confirmation) remains a future option if the heartbeat proves
+reliable in practice.
 
 ### Forced page reload on failure threshold
 
