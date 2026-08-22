@@ -356,6 +356,11 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
           focus: field("focus"),
           scholar: field("scholar"),
           affiliation_logo: field("affiliation_logo"),
+          role: field("role"),
+          description: field("description"),
+          github: field("github"),
+          custom_link_url: field("custom_link_url"),
+          custom_link_label: field("custom_link_label"),
         })
         return HttpServerResponse.text(body, { contentType: "application/json" })
       }),
