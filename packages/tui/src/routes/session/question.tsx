@@ -25,7 +25,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   const [store, setStore] = createStore({
     tab: 0,
     answers: [] as QuestionAnswer[],
-    custom: [] as string[],
+    custom: props.request.questions.map((q) => q.default ?? "") as string[],
     selected: 0,
     editing: false,
   })
