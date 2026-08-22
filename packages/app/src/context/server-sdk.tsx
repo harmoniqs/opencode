@@ -220,7 +220,6 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   type Queued = QueuedServerEvent
   const FLUSH_FRAME_MS = 16
   const STREAM_YIELD_MS = 8
-  const RECONNECT_DELAY_MS = 250
 
   let queue: Queued[] = []
   let buffer: Queued[] = []
@@ -255,15 +254,15 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
 
   let streamErrorLogged = false
   let consecutiveFailures = 0
-  const MAX_CONSECUTIVE_FAILURES = 10
+  const RECONNECT_DELAY_MAX_MS = 30_000
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   let attempt: AbortController | undefined
   let run: Promise<void> | undefined
   let started = false
   let generation = 0
   // Amicode webview: connection visibility for the ConnectionBanner. The loop
-  // below reconnects silently every RECONNECT_DELAY_MS, so without a signal a
-  // dead server reads as an endless "thinking" wave. (The branch's 15s
+  // below reconnects with exponential backoff (250ms → 30s cap), so without a
+  // signal a dead server reads as an endless "thinking" wave. (The branch's 15s
   // heartbeat timer is NOT carried — upstream's bounded SSE heartbeat already
   // governs liveness; two abort clocks would fight.)
   const [streamStatus, setStreamStatus] = createSignal<"connected" | "disconnected">("disconnected")
@@ -353,14 +352,11 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
         }
 
         if (abort.signal.aborted || !started || generation !== active) return
-        await wait(RECONNECT_DELAY_MS)
-
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          console.warn("[server-sdk] server unreachable after", MAX_CONSECUTIVE_FAILURES, "retries — SSE loop stopped", {
-            url: server.http.url,
-          })
-          break
-        }
+        // Exponential backoff: 250ms → 500ms → 1s → 2s → ... → 30s cap.
+        // Never abort permanently — in a webview there is no page-visibility
+        // recovery, so the loop must keep trying indefinitely.
+        const backoff = Math.min(250 * Math.pow(2, consecutiveFailures), RECONNECT_DELAY_MAX_MS)
+        await wait(backoff)
       }
     })().finally(() => {
       if (run !== current) return
