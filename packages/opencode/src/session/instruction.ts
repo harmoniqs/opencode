@@ -119,16 +119,29 @@ const layer: Layer.Layer<
         }
       }
 
-      // The first project-level match wins so we don't stack AGENTS.md/CLAUDE.md from every ancestor.
+      // Multi-root: run findUp from each workspace directory, dedup by resolved path.
+      // Primary first, then remaining in workspace order; each walks to its own boundary.
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
+        const allDirs: string[] = ctx.directories?.length
+          ? ctx.directories
+          : [ctx.directory]
+        // Preserve order but ensure primary is first
+        const ordered = allDirs[0] === ctx.directory ? allDirs : [ctx.directory, ...allDirs.filter((d) => d !== ctx.directory)]
         for (const file of instructionFiles) {
-          const matches = yield* fs
-            .findUp(file, ctx.directory, ctx.worktree)
-            .pipe(Effect.catch(() => Effect.succeed([])))
-          if (matches.length > 0) {
-            matches.forEach((item) => paths.add(path.resolve(item)))
-            break
+          let foundAny = false
+          for (const dir of ordered) {
+            // Primary uses worktree as boundary; secondary directories use themselves
+            // as boundary (don't walk past the workspace root into unrelated parents).
+            const stop = dir === ctx.directory ? ctx.worktree : dir
+            const matches = yield* fs
+              .findUp(file, dir, stop)
+              .pipe(Effect.catch(() => Effect.succeed([])))
+            if (matches.length > 0) {
+              matches.forEach((item) => paths.add(path.resolve(item)))
+              foundAny = true
+            }
           }
+          if (foundAny) break
         }
       }
 

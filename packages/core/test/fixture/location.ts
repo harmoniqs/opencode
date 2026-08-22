@@ -7,6 +7,7 @@ import { tmpdir } from "./tmpdir"
 export function location(ref: Location.Ref, input: { projectDirectory?: AbsolutePath; vcs?: Project.Vcs } = {}) {
   return {
     directory: ref.directory,
+    directories: ref.directories,
     workspaceID: ref.workspaceID,
     project: { id: Project.ID.global, directory: input.projectDirectory ?? ref.directory },
     vcs: input.vcs,

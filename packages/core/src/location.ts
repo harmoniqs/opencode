@@ -9,6 +9,7 @@ export * as Location from "./location"
 export { Info, Ref, response }
 
 export interface Interface extends Info {
+  readonly directories?: readonly string[]
   readonly vcs?: Project.Vcs
 }
 
@@ -24,6 +25,7 @@ const layer = (ref: Ref) =>
       const resolved = yield* project.resolve(ref.directory)
       return Service.of({
         directory: ref.directory,
+        directories: ref.directories,
         workspaceID: ref.workspaceID,
         project: { id: resolved.id, directory: resolved.directory },
         vcs: resolved.vcs,
