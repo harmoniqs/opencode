@@ -80,6 +80,12 @@
   --font-size-x-small: var(--font-size-xs);   /* fix dangling ref */
   --font-weight-emphasis: 600; --font-weight-strong: 650;
 
+  /* Content sitting on a FIXED dark scrim (media overlays, poster art) does not
+     flip with the scheme — the ground under it is always dark. Mirrors the
+     site's --fg-on-dark. Cream rather than pure white keeps it in the family. */
+  --fg-on-dark: #EFEDCD;
+  --fg-on-dark-muted: #C9C7A6;
+
   --border-width: 1px;
 
   /* ── elevation ── the one float shadow, for transient overlays that sit above
@@ -96,7 +102,10 @@
   --accent-fill-soft: color-mix(in srgb, var(--accent) 18%, transparent);
   /* one step past soft — the hover of an already-soft-filled control */
   --accent-fill-hover: color-mix(in srgb, var(--accent) 26%, transparent);
-  --accent-edge: var(--v2-border-border-strong);
+  /* INK, not a neutral. #FFE614 is 1.27:1 on white and 1.07:1 on cream — it
+     cannot define its own edge on a light ground, so every yellow surface
+     takes an ink border. This is the site's --brand-yellow-border rule. */
+  --accent-edge: var(--accent-edge-ink);
 }
 [data-color-scheme="dark"] {
   --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);

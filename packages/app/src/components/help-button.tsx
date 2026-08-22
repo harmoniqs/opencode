@@ -61,10 +61,10 @@ export function TabsInfoPopup() {
               onContextMenu={(event) => event.preventDefault()}
             />
             <div class="absolute inset-x-0 bottom-0 flex w-full flex-col items-start gap-1.5 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,#000000_100%)] px-3 py-5">
-              <p class="w-full select-none text-[13px] font-[530] leading-none tracking-[-0.04px] text-[#FFFFFF]">
+              <p class="w-full select-none text-[13px] font-[530] leading-none tracking-[-0.04px] text-[var(--fg-on-dark)]">
                 Introducing Tabs
               </p>
-              <p class="w-full select-none text-[13px] font-[440] leading-[140%] tracking-[-0.04px] text-[#808080]">
+              <p class="w-full select-none text-[13px] font-[440] leading-[140%] tracking-[-0.04px] text-[var(--fg-on-dark-muted)]">
                 Organize your work and active sessions with tabs
               </p>
             </div>

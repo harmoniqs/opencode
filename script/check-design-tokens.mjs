@@ -72,6 +72,10 @@ const ARB_RADIUS = /rounded-\[(\d+)px\]/g
 // CSS-wide keywords are not hardcoded stacks — `inherit` is exactly the
 // right answer when a control should take its parent's face.
 const RAW_FONT = /font-family\s*:\s*["']?(?!var\(|inherit|initial|unset|revert)([A-Za-z"][^;,}]*)/g
+// --- rule 6: Tailwind arbitrary COLOUR classes, e.g. text-[#FFF] / bg-[#1e1e1e].
+// These bypass every token and are invisible to a `color:` search, which is how
+// three of them survived the first sweep. var(--token) inside the brackets is fine.
+const ARB_COLOUR = /\b(?:text|bg|border|fill|stroke|from|via|to|shadow|ring|outline|decoration|caret|accent)-\[#[0-9a-fA-F]{3,8}\]/g
 // --- rule 5: no literal painted directly onto an element via inline style ---
 const RAW_INLINE = /(style\.backgroundColor|setAttribute\("content")\s*(=|,)\s*["']#[0-9a-fA-F]{3,8}["']/g
 
@@ -91,6 +95,7 @@ for (const dir of SCAN) {
         [ARB_RADIUS, "arbitrary Tailwind radius — use rounded-xs/sm/md/lg/full"],
         [RAW_FONT, "hardcoded font stack — use var(--font-family-text) or var(--font-mono)"],
         [RAW_INLINE, "literal painted onto an element — derive it from the active theme"],
+        [ARB_COLOUR, "Tailwind arbitrary colour — use a token, e.g. text-[var(--fg-on-dark)]"],
       ]) {
         re.lastIndex = 0
         let m
