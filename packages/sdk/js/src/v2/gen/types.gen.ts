@@ -738,6 +738,7 @@ export type QuestionInfo = {
    * Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)
    */
   kind?: "choice" | "text"
+  default?: string
   custom?: boolean
 }
 
@@ -3077,6 +3078,7 @@ export type ModelRef = {
 
 export type LocationRef = {
   directory: string
+  directories?: Array<string>
   workspaceID?: string
 }
 
@@ -3197,6 +3199,7 @@ export type QuestionV2Info = {
    * Question shape: "choice" (default, an option list) or "text" (a free-form text card, no options)
    */
   kind?: "choice" | "text"
+  default?: string
   custom?: boolean
 }
 

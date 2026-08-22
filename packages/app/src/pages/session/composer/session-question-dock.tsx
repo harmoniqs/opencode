@@ -73,10 +73,11 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const total = createMemo(() => questions().length)
 
   const cached = cache.get(cacheKey)
+  const defaults = props.request.questions.map((q) => q.default ?? "")
   const [store, setStore] = createStore({
     tab: cached?.tab ?? 0,
     answers: cached?.answers ?? ([] as QuestionAnswer[]),
-    custom: cached?.custom ?? ([] as string[]),
+    custom: cached?.custom ?? defaults,
     customOn: cached?.customOn ?? ([] as boolean[]),
     editing: false,
     focus: 0,
