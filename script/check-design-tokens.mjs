@@ -69,7 +69,9 @@ const RAW_COLOUR = /(background|background-color|color|border|border-color|fill|
 const RAW_RADIUS = /border-radius\s*:\s*["']?(\d+)px/g
 const ARB_RADIUS = /rounded-\[(\d+)px\]/g
 // --- rule 3: no hardcoded font stacks --------------------------------------
-const RAW_FONT = /font-family\s*:\s*["']?(?!var\()([A-Za-z"][^;,}]*)/g
+// CSS-wide keywords are not hardcoded stacks — `inherit` is exactly the
+// right answer when a control should take its parent's face.
+const RAW_FONT = /font-family\s*:\s*["']?(?!var\(|inherit|initial|unset|revert)([A-Za-z"][^;,}]*)/g
 // --- rule 5: no literal painted directly onto an element via inline style ---
 const RAW_INLINE = /(style\.backgroundColor|setAttribute\("content")\s*(=|,)\s*["']#[0-9a-fA-F]{3,8}["']/g
 
