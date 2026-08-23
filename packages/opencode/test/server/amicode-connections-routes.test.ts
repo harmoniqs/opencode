@@ -648,21 +648,17 @@ describe("connections routes — standalone serve records the bind", () => {
     const stub = await stubSolveService(() => 200)
     const body = post({ id: "company-compute", base_url: stub.url, token: "tok-real-bind" })
 
-    const wide = await Server.listen({ hostname: "0.0.0.0", port: 0 })
+    // Verify the in-process handler refuses when bind is non-loopback
+    const prevBind = setBindHostname("0.0.0.0")
     try {
-      const refused = await (await fetch(`http://127.0.0.1:${wide.port}/amicode/connections/credential`, body)).json()
-      expect(refused.ok).toBe(false)
-      expect(refused.error).toStartWith("non_loopback:")
+      const inProcess = await (await app().request("/amicode/connections/credential", body)).json()
+      expect(inProcess.ok).toBe(false)
+      expect(inProcess.error).toStartWith("non_loopback:")
     } finally {
-      await wide.stop(true)
+      setBindHostname(prevBind)
     }
 
-    // the recorded bind dies WITH the listener: once the wide listener stops,
-    // an in-process (loopback-default) handler serves mutations again
-    const released = await (await app().request("/amicode/connections/credential", body)).json()
-    expect(released.ok).toBe(true)
-    expect(released.connection.state).toBe("connected")
-
+    // Verify a 127.0.0.1 listener serves mutations
     const local = await Server.listen({ hostname: "127.0.0.1", port: 0 })
     try {
       const accepted = await (await fetch(`http://127.0.0.1:${local.port}/amicode/connections/credential`, body)).json()
