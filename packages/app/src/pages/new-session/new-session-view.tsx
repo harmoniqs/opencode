@@ -17,13 +17,7 @@ import {
 import { inAmicode } from "@/pages/session/use-amicode-commands"
 import { StatusPopoverV2 } from "@/components/status-popover"
 import { SessionChatsDropdown } from "@/components/session/session-header"
-import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
-import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { useLanguage } from "@/context/language"
-import { useLayout } from "@/context/layout"
-import { useCommand } from "@/context/command"
-import { createMediaQuery } from "@solid-primitives/media"
-import { reviewTooltipKeybind } from "@/components/command-tooltip-keybind"
 import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useProviders } from "@/hooks/use-providers"
@@ -109,9 +103,6 @@ export function NewSessionView(props: {
 
 export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; visible: Accessor<boolean> }) {
   const language = useLanguage()
-  const layout = useLayout()
-  const command = useCommand()
-  const isDesktop = createMediaQuery("(min-width: 768px)")
 
   return (
     <Show when={props.mount()} keyed>
@@ -119,39 +110,9 @@ export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; v
         <Portal mount={mount}>
           <div class="flex items-center gap-2">
             <SessionChatsDropdown />
-            <Show when={props.visible()}>
-              <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
-                <StatusPopoverV2 />
-              </Tooltip>
-            </Show>
-            <Show when={isDesktop()}>
-              <TooltipV2
-                class="shrink-0"
-                placement="bottom"
-                value={
-                  <>
-                    {language.t("command.review.toggle")}
-                    {(() => {
-                      const keys = reviewTooltipKeybind(command)
-                      return keys.length > 0 ? <KeybindV2 keys={keys} variant="neutral" /> : null
-                    })()}
-                  </>
-                }
-              >
-                <IconButtonV2
-                  type="button"
-                  variant="ghost-muted"
-                  size="large"
-                  class="!w-9 shrink-0"
-                  state={layout.sidebar.opened() ? "pressed" : undefined}
-                  onClick={() => layout.sidebar.toggle()}
-                  aria-label={language.t("command.review.toggle")}
-                  aria-expanded={layout.sidebar.opened()}
-                  aria-controls="review-panel"
-                  icon={<IconV2 name="sidebar-right" />}
-                />
-              </TooltipV2>
-            </Show>
+            <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
+              <StatusPopoverV2 />
+            </Tooltip>
           </div>
         </Portal>
       )}
