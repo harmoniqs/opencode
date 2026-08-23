@@ -13,10 +13,6 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.32; }
 }
-@keyframes amc-blip {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--v2-icon-icon-accent) 30%, transparent); }
-  50% { opacity: 0.45; box-shadow: 0 0 0 4px color-mix(in srgb, var(--v2-icon-icon-accent) 12%, transparent); }
-}
 @keyframes amc-shimmer {
   100% { transform: translateX(100%); }
 }
@@ -234,14 +230,6 @@
   border-color: color-mix(in srgb, var(--v2-state-fg-danger) 38%, var(--v2-border-border-base));
   background: color-mix(in srgb, var(--v2-state-fg-danger) 6%, var(--v2-background-bg-layer-01));
 }
-[data-component="amicode-card"][data-state="error"] .amc-mark,
-[data-component="amicode-card"][data-state="error"] .amc-wordmark {
-  color: var(--v2-state-fg-danger);
-}
-[data-component="amicode-card"] .amc-mark {
-  width: 13px;
-  height: 13px;
-}
 
 [data-component="amicode-card"] .amc-body {
   display: inline-flex;
@@ -313,15 +301,6 @@
   height: 12px;
   color: var(--v2-state-fg-success);
   flex-shrink: 0;
-}
-[data-component="amicode-card"] .amc-livedot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--v2-icon-icon-accent);
-}
-@media (prefers-reduced-motion: no-preference) {
-  [data-component="amicode-card"][data-state="running"] .amc-livedot { animation: amc-blip 1.2s ease-in-out infinite; }
 }
 [data-component="amicode-card"] .amc-chev {
   color: var(--v2-text-text-faint);

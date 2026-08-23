@@ -23,6 +23,15 @@ export namespace TimelineRow {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    /** no further assistant part follows in this turn — the rail's tail */
+    lastAssistantPart: boolean
+    /** the turn is still working, so the tail step is in flight rather than done */
+    turnRunning: boolean
+    /** eyebrow naming the action for steps whose content doesn't already open
+     *  with its own title — assistant prose ("Update") and reasoning
+     *  ("Reasoning"). Tool cards and the Explored / Worked-in-shell / Edited
+     *  group headers announce themselves, so they carry no label here. */
+    railLabel?: string
   }> {}
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string

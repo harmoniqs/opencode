@@ -24,6 +24,9 @@ export type TimelineRowMap = {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    lastAssistantPart: boolean
+    turnRunning: boolean
+    railLabel?: string
   }
   Thinking: { userMessageID: string; reasoningHeading?: string }
   Retry: { userMessageID: string }
@@ -168,7 +171,29 @@ export namespace Timeline {
     }
 
     let assistantGroupIndex = 0
-    assistantItems.forEach((item) => {
+    // The thought rail fills a step when its SUCCESSOR appears — the same grammar
+    // the website animation uses. That deliberately sidesteps out-of-order tool
+    // completion: adjacency decides, not each tool's own lifecycle, so a filled
+    // dot can never appear above a hollow one.
+    const lastRenderableIndex = assistantItems.reduce(
+      (acc, item, index) => (item.type === "interrupted" ? acc : index),
+      -1,
+    )
+    const turnIsRunning = isActive && status === "busy" && !error
+    // The rail label names steps whose content doesn't already open with its
+    // own title. Group rows announce themselves ("Explored", "Worked in
+    // shell", "Edited files") and tool cards wear their chips, so only bare
+    // prose and reasoning steps need a name here.
+    const railLabel = (group: PartGroup): string | undefined => {
+      if (group.type !== "part") return undefined
+      const part = assistantPartRefs.find(
+        (ref) => ref.messageID === group.ref.messageID && ref.part.id === group.ref.partID,
+      )?.part
+      if (part?.type === "text") return "Update"
+      if (part?.type === "reasoning") return "Reasoning"
+      return undefined
+    }
+    assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
           new TimelineRow.TurnDivider({
@@ -184,6 +209,9 @@ export namespace Timeline {
           userMessageID: userMessage.id,
           group: item.group,
           previousAssistantPart: assistantGroupIndex > 0,
+          lastAssistantPart: itemIndex === lastRenderableIndex,
+          turnRunning: turnIsRunning,
+          railLabel: railLabel(item.group),
         }),
       )
       assistantGroupIndex += 1

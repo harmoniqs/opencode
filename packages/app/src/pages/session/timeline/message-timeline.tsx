@@ -19,6 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -1267,6 +1268,19 @@ export function MessageTimeline(props: {
       const row = input.row()
       return row._tag === "AssistantPart" && row.previousAssistantPart
     }
+    const assistantPart = () => input.row()._tag === "AssistantPart"
+    const railLabel = () => {
+      const row = input.row()
+      return row._tag === "AssistantPart" ? row.railLabel : undefined
+    }
+    // The thought rail: a spine down a turn's assistant steps. Drawn per-row
+    // because the timeline is virtualised and consecutive rows share no ancestor.
+    const rail = () => {
+      const row = input.row()
+      if (row._tag !== "AssistantPart") return undefined
+      if (!shouldRenderRail(row)) return undefined
+      return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
+    }
 
     return (
       <div
@@ -1281,7 +1295,15 @@ export function MessageTimeline(props: {
         }}
       >
         <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
-          {input.children}
+          <Show when={rail()}>{(r) => <ThoughtRail first={r().first} last={r().last} running={r().running} />}</Show>
+          {/* The gutter is reserved for EVERY assistant part, not only the ones
+              that draw a rail. Gating it on rail() left a single-step turn's
+              content 16px to the left of a multi-step turn's, so the column
+              stepped in and out as turns changed length. */}
+          <div classList={{ "min-w-0 w-full": true, [THOUGHT_RAIL_INSET]: assistantPart() }}>
+            <Show when={rail() && railLabel()}>{(label) => <ThoughtRailLabel label={label()} />}</Show>
+            {input.children}
+          </div>
         </div>
       </div>
     )
