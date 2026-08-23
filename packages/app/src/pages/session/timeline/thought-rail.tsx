@@ -138,10 +138,20 @@ export function ThoughtRailLabel(props: { label: string }) {
 export const THOUGHT_RAIL_INSET = "pl-6"
 
 /**
- * A lone step is not a sequence: one dot on its own reads as decoration rather
- * than as a rail, so a single-part turn gets nothing.
+ * A lone COMPLETED step is not a sequence: one dot on its own reads as
+ * decoration, so a finished single-part turn gets nothing. A RUNNING turn rails
+ * from its very first step, though — the live dot is the timeline's only
+ * "working" mark (the card's pulsing sig and Livedot are gone), and a turn's
+ * first step is often its longest, so waiting for step two meant the turn's
+ * whole opening had no status signal at all. The lone live dot carries no line
+ * (first && last draws zero-height segments), so nothing retracts visibly when
+ * a one-step turn completes: the dot simply fills, then yields the row.
  */
-export function shouldRenderRail(input: { previousAssistantPart: boolean; lastAssistantPart: boolean }) {
+export function shouldRenderRail(input: {
+  previousAssistantPart: boolean
+  lastAssistantPart: boolean
+  turnRunning: boolean
+}) {
   const isOnlyStep = !input.previousAssistantPart && input.lastAssistantPart
-  return !isOnlyStep
+  return !isOnlyStep || input.turnRunning
 }

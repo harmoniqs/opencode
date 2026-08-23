@@ -19,9 +19,17 @@ const turn = (n: number, running: boolean) =>
   )
 
 describe("thought rail", () => {
-  test("a single-step turn draws no rail — one dot is decoration, not a sequence", () => {
+  test("a finished single-step turn draws no rail — one dot is decoration, not a sequence", () => {
     expect(turn(1, false)[0].render).toBe(false)
-    expect(turn(1, true)[0].render).toBe(false)
+  })
+
+  test("a RUNNING turn rails from its very first step — the live dot is the only working mark", () => {
+    const step = turn(1, true)[0]
+    expect(step.render).toBe(true)
+    expect(step.running).toBe(true)
+    // first && last: the lone live dot carries no line, so nothing visibly
+    // retracts when a one-step turn completes — the dot fills, then yields
+    expect(step.first && step.last).toBe(true)
   })
 
   test("a multi-step turn draws a rail on every step", () => {
