@@ -24,37 +24,53 @@ export function sessionTabStatus(input: {
   return "idle"
 }
 
+// These come from --status-* in design-polish.css, NOT from the state text
+// foregrounds. A dot needs 3:1, not 4.5:1; using the text tones over-darkened it
+// (attention was a near-brown at 7.74:1) and read as dull.
 const TONE: Record<SessionTabStatus, { color: string; label: string }> = {
-  // a quiet neutral, so the dot still holds its slot and the strip stays aligned
-  idle: { color: "var(--v2-icon-icon-muted)", label: "Idle" },
-  // the brand's live hue — same language the brain uses for active thought
-  running: { color: "var(--accent)", label: "Working" },
-  attention: { color: "var(--v2-state-fg-warning)", label: "Needs you" },
-  done: { color: "var(--v2-state-fg-success)", label: "Finished — unread" },
+  // quiet on purpose — it still holds the slot so the strip stays aligned
+  idle: { color: "var(--status-idle)", label: "Idle" },
+  // the brand's live hue; it cannot reach 3:1 on white at any saturation, so for
+  // this one the ink edge is what makes it visible rather than just crisp
+  running: { color: "var(--status-running)", label: "Working" },
+  attention: { color: "var(--status-attention)", label: "Needs you" },
+  done: { color: "var(--status-done)", label: "Finished — unread" },
 }
 
-export function SessionTabStatusDot(props: { status: SessionTabStatus }) {
-  const tone = () => TONE[props.status]
+/** The dot itself. Exported so every surface that shows session state — the tab
+ *  strip, the sessions dropdown — renders the SAME mark rather than each rolling
+ *  its own green. If the treatment changes, it changes in one place. */
+export function StatusDot(props: { color: string; label: string; status?: string; boxed?: boolean }) {
   return (
     <span
-      data-component="session-tab-status"
+      data-component="session-status-dot"
       data-status={props.status}
       role="img"
-      aria-label={tone().label}
-      title={tone().label}
-      class="relative inline-flex size-4 shrink-0 items-center justify-center"
+      aria-label={props.label}
+      title={props.label}
+      class={
+        props.boxed
+          ? "relative inline-flex size-4 shrink-0 items-center justify-center"
+          : "relative inline-flex shrink-0 items-center justify-center"
+      }
     >
       <span
         aria-hidden="true"
         class="block size-1.5 rounded-full"
         style={{
-          background: tone().color,
-          // Brand yellow is 1.27:1 on a light ground, so the running dot would
-          // vanish there without an edge. Every state takes the same ring so the
-          // dots stay the same size and the strip does not shift between states.
-          "box-shadow": `0 0 0 1px color-mix(in srgb, ${tone().color} 55%, transparent)`,
+          background: props.color,
+          // Every dot takes the ink ring, the same edge every brand surface wears.
+          // box-shadow rather than border so the ring sits OUTSIDE the 6px core —
+          // the dot never shrinks and no strip shifts between states.
+          "box-shadow": "0 0 0 1px var(--status-ring)",
         }}
       />
     </span>
   )
+}
+
+export function SessionTabStatusDot(props: { status: SessionTabStatus }) {
+  const tone = () => TONE[props.status]
+  // boxed: the tab strip reserves a 16px slot so rows stay aligned
+  return <StatusDot color={tone().color} label={tone().label} status={props.status} boxed />
 }

@@ -91,6 +91,7 @@ import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
 import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { StatusDot } from "@/pages/layout/session-tab-status"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -2083,15 +2084,9 @@ function HomeSessionRow(props: {
         onClick={() => props.openSession(props.record.session)}
       >
         <Show when={props.isOpenTab}>
+          {/* same mark as the tab strip and the sessions dropdown */}
           <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
-            <span
-              class="shrink-0 size-[6px] rounded-full"
-              style={{
-                background: "var(--v2-state-fg-success)",
-                "box-shadow": "0 0 3px color-mix(in srgb, var(--v2-state-fg-success) 50%, transparent)",
-                animation: "session-open-glow 2.4s ease-in-out infinite",
-              }}
-            />
+            <StatusDot color="var(--status-done)" label="Open" status="open" />
           </TooltipV2>
         </Show>
         <span

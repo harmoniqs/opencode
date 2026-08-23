@@ -22,6 +22,7 @@ import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useServer, ServerConnection } from "@/context/server"
 import { useSettings } from "@/context/settings"
+import { StatusDot } from "@/pages/layout/session-tab-status"
 import { useSync } from "@/context/sync"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useTerminal } from "@/context/terminal"
@@ -1085,15 +1086,10 @@ function SessionDropdownRow(props: {
         onClick={() => props.onOpen(props.session)}
       >
         <Show when={props.isOpenTab}>
+          {/* the same mark the tab strip uses — it was its own green with a glow
+              instead of the ink ring, so the two surfaces disagreed */}
           <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
-            <span
-              class="shrink-0 size-[6px] rounded-full"
-              style={{
-                background: "var(--v2-state-fg-success)",
-                "box-shadow": "0 0 3px color-mix(in srgb, var(--v2-state-fg-success) 50%, transparent)",
-                animation: "session-open-glow 2.4s ease-in-out infinite",
-              }}
-            />
+            <StatusDot color="var(--status-done)" label="Open" status="open" />
           </TooltipV2>
         </Show>
         <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">

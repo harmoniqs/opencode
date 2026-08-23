@@ -376,21 +376,3 @@
   }
 }
 
-/* amicode#274: soft breathing glow for the "open session" indicator dot in the
-   chats flyout — matches the tab-mark-glow cadence (2.4s ease-in-out). */
-@keyframes session-open-glow {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 2px #34d39960;
-  }
-  50% {
-    opacity: 0.7;
-    box-shadow: 0 0 5px #34d399a0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  @keyframes session-open-glow {
-    0%, 100% { opacity: 1; box-shadow: 0 0 2px #34d39960; }
-  }
-}

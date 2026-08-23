@@ -98,6 +98,43 @@
   --elev-float: 0 8px 24px rgb(0 0 0 / 0.35);
 }
 
+/* ── session status dots ──
+   A 6px dot is a GRAPHICAL OBJECT: it needs 3:1, not the 4.5:1 body-text
+   minimum. Borrowing the text foregrounds (state-fg-*) spent all the saturation
+   on contrast the dot never needed and left them muddy — attention was a
+   near-brown #6B4E00 at 7.74:1. These are picked for vividness at just past 3:1.
+
+   Brand yellow is the exception: at 1.27:1 on white it cannot reach 3:1 at ANY
+   saturation, so the running dot keeps the fill and takes an INK ring — the same
+   rule every other yellow surface follows. */
+:root,
+[data-color-scheme="light"] {
+  --status-idle: #767676;        /* 4.54:1 — quiet on purpose */
+  --status-running: var(--accent);
+  --status-attention: #d97706;   /* 3.19:1, 97% sat */
+  --status-done: #16a34a;        /* 3.30:1, 87% sat */
+  --status-ring: var(--accent-edge-ink);   /* ink — every dot takes the same edge */
+}
+[data-color-scheme="dark"] {
+  --status-idle: #A9A88C;        /* 7.92:1 */
+  --status-running: var(--accent);
+  --status-attention: #f2cf76;   /* 12.76:1 */
+  --status-done: #4ade80;        /* 11.01:1 */
+  /* Ink here too. On the dark ground it is nearly invisible, but it separates the
+     dot from the lighter raised surface of a hovered or active tab, and it keeps
+     the dots one family across both schemes. */
+  --status-ring: var(--accent-edge-ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --status-idle: #A9A88C;
+    --status-running: var(--accent);
+    --status-attention: #f2cf76;
+    --status-done: #4ade80;
+    --status-ring: var(--accent-edge-ink);
+  }
+}
+
 /* ── accent role tokens — per-scheme OPACITY, same hue ──
    fill = yellow warmth (both); selected edge = neutral on light (yellow can't
    define on white), yellow on dark. */
