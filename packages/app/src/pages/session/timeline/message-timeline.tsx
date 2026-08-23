@@ -19,7 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { ThoughtRail, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
+import { ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -1269,6 +1269,10 @@ export function MessageTimeline(props: {
       return row._tag === "AssistantPart" && row.previousAssistantPart
     }
     const assistantPart = () => input.row()._tag === "AssistantPart"
+    const railLabel = () => {
+      const row = input.row()
+      return row._tag === "AssistantPart" ? row.railLabel : undefined
+    }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     const rail = () => {
@@ -1296,7 +1300,10 @@ export function MessageTimeline(props: {
               that draw a rail. Gating it on rail() left a single-step turn's
               content 16px to the left of a multi-step turn's, so the column
               stepped in and out as turns changed length. */}
-          <div classList={{ "min-w-0 w-full": true, [THOUGHT_RAIL_INSET]: assistantPart() }}>{input.children}</div>
+          <div classList={{ "min-w-0 w-full": true, [THOUGHT_RAIL_INSET]: assistantPart() }}>
+            <Show when={rail() && railLabel()}>{(label) => <ThoughtRailLabel label={label()} />}</Show>
+            {input.children}
+          </div>
         </div>
       </div>
     )

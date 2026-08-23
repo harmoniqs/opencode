@@ -26,6 +26,7 @@ export type TimelineRowMap = {
     previousAssistantPart: boolean
     lastAssistantPart: boolean
     turnRunning: boolean
+    railLabel?: string
   }
   Thinking: { userMessageID: string; reasoningHeading?: string }
   Retry: { userMessageID: string }
@@ -179,6 +180,19 @@ export namespace Timeline {
       -1,
     )
     const turnIsRunning = isActive && status === "busy" && !error
+    // The rail label names steps whose content doesn't already open with its
+    // own title. Group rows announce themselves ("Explored", "Worked in
+    // shell", "Edited files") and tool cards wear their chips, so only bare
+    // prose and reasoning steps need a name here.
+    const railLabel = (group: PartGroup): string | undefined => {
+      if (group.type !== "part") return undefined
+      const part = assistantPartRefs.find(
+        (ref) => ref.messageID === group.ref.messageID && ref.part.id === group.ref.partID,
+      )?.part
+      if (part?.type === "text") return "Update"
+      if (part?.type === "reasoning") return "Reasoning"
+      return undefined
+    }
     assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
@@ -197,6 +211,7 @@ export namespace Timeline {
           previousAssistantPart: assistantGroupIndex > 0,
           lastAssistantPart: itemIndex === lastRenderableIndex,
           turnRunning: turnIsRunning,
+          railLabel: railLabel(item.group),
         }),
       )
       assistantGroupIndex += 1

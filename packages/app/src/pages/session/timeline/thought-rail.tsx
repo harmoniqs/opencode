@@ -114,8 +114,28 @@ export function ThoughtRail(props: {
   )
 }
 
-/** The gutter a rail occupies, so content clears it. */
-export const THOUGHT_RAIL_INSET = "pl-4"
+/**
+ * Eyebrow naming a step's action, for rows whose content doesn't open with its
+ * own title (assistant prose, reasoning). Sits on the dot's line so the rail
+ * reads as a labelled list of actions; tool cards and group headers are their
+ * own labels. Mono, uppercase, faint — the same voice as the timeline's other
+ * structural furniture, quieter than the content it introduces.
+ */
+export function ThoughtRailLabel(props: { label: string }) {
+  return (
+    <span
+      data-slot="thought-rail-label"
+      class="block font-mono text-[10px] font-medium uppercase tracking-[0.08em] leading-[22px] text-v2-text-text-faint select-none"
+    >
+      {props.label}
+    </span>
+  )
+}
+
+/** The gutter a rail occupies, so content clears it. GUTTER + NODE ends at
+ *  15px; pl-6 (24px) leaves the same ~9px dot-to-content breath the website's
+ *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. */
+export const THOUGHT_RAIL_INSET = "pl-6"
 
 /**
  * A lone step is not a sequence: one dot on its own reads as decoration rather
