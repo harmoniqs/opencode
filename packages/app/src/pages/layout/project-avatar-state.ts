@@ -45,5 +45,8 @@ export function useSessionTabAvatarState(
     if (needsAttention()) return false
     return serverSync.session.data.session_working(sessionId())
   })
-  return { unread, loading }
+  // needsAttention is surfaced separately so the tab dot can distinguish
+  // "blocked, waiting on you" from "finished, unseen output" — folded together
+  // they were both just `unread`.
+  return { unread, loading, needsAttention }
 }

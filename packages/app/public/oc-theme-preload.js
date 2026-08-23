@@ -40,11 +40,11 @@
   // Brand ground, tracking harmoniqs.json palette.neutral (dark #000, light #fff).
   // This paints before any stylesheet, so a stock literal here shows through as
   // the old brand for the first frame.
-  document.documentElement.style.backgroundColor = isDark ? "#0F0F0D" : "#EFEDCD"
+  document.documentElement.style.backgroundColor = isDark ? "#0F0F0D" : "#ffffff"
 
   // Update theme-color meta tag to match app color scheme
   var metas = document.querySelectorAll("meta[name='theme-color']")
-  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#0F0F0D" : "#EFEDCD")
+  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#0F0F0D" : "#ffffff")
 
   if (themeId === "oc-2") return // stock theme needs no cached CSS
 

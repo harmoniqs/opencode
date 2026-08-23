@@ -1,14 +1,14 @@
 [data-component="image-preview"] {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
 
   [data-slot="image-preview-container"] {
     position: relative;
-    z-index: 50;
+    z-index: var(--z-overlay);
     width: min(calc(100vw - 32px), 90vw);
     max-width: 1200px;
     height: min(calc(100vh - 32px), 90vh);

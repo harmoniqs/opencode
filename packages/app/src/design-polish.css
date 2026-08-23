@@ -16,7 +16,11 @@
      `harmoniqs.json`, pinned in app.tsx) owns the `--v2-*` palette per scheme —
      surfaces, text, borders, AND the accent. Those values are generated from
      harmoniqs.ai's `app/globals.css`, so the site is the upstream reference:
-     brand yellow #FFE614, ink #000, cream #EFEDCD, deep #000.
+     brand yellow #FFE614, ink #000, deep #000. LIGHT USES WHITE, not the site's
+     cream: on a mid-tone ground nothing separates by fill (every surface pair
+     measured 1.00-1.20:1), which broke the ~83 components that distinguish a
+     raised surface from its track by fill. The ink and the yellow rule carry
+     the brand on light; the ground does not.
      On DARK the accent is both foreground and fill; on LIGHT the fill
      (`bg-accent`) is yellow while text/icon accents go NEUTRAL — #FFE614 is
      1.27:1 on white, so yellow lives in fills and never in light foregrounds.
@@ -102,9 +106,9 @@
   --accent-fill-soft: color-mix(in srgb, var(--accent) 18%, transparent);
   /* one step past soft — the hover of an already-soft-filled control */
   --accent-fill-hover: color-mix(in srgb, var(--accent) 26%, transparent);
-  /* INK, not a neutral. #FFE614 is 1.27:1 on white and 1.07:1 on cream — it
-     cannot define its own edge on a light ground, so every yellow surface
-     takes an ink border. This is the site's --brand-yellow-border rule. */
+  /* INK, not a neutral. #FFE614 is 1.27:1 on white — it cannot define its own
+     edge on a light ground, so every yellow surface takes an ink border. This
+     is the site's --brand-yellow-border rule, and it holds on white too. */
   --accent-edge: var(--accent-edge-ink);
 }
 [data-color-scheme="dark"] {
@@ -230,7 +234,7 @@ span[data-component="tag"][data-variant="accent"] {
 [data-component="amicode-solver-switch"][data-phase="ready"] {
   background: var(--accent);
   /* INK, not the accent. A yellow edge on a yellow fill is no edge at all, and
-     against cream it measures 1.07:1 — the ready chip had no boundary on light. */
+     against white it measures 1.27:1 — the ready chip had no boundary on light. */
   border-color: var(--accent-edge-ink);
   color: var(--accent-ink);
 }
