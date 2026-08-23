@@ -16,6 +16,7 @@ import {
 } from "@/components/prompt-project-selector"
 import { inAmicode } from "@/pages/session/use-amicode-commands"
 import { StatusPopoverV2 } from "@/components/status-popover"
+import { SessionChatsDropdown } from "@/components/session/session-header"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
@@ -107,11 +108,12 @@ export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; v
     <Show when={props.mount()} keyed>
       {(mount) => (
         <Portal mount={mount}>
-          <Show when={props.visible()}>
+          <div class="flex items-center gap-2">
+            <SessionChatsDropdown />
             <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
               <StatusPopoverV2 />
             </Tooltip>
-          </Show>
+          </div>
         </Portal>
       )}
     </Show>

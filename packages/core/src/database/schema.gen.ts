@@ -199,6 +199,7 @@ export default {
           \`slug\` text NOT NULL,
           \`directory\` text NOT NULL,
           \`path\` text,
+          \`directories\` text,
           \`title\` text NOT NULL,
           \`version\` text NOT NULL,
           \`share_url\` text,

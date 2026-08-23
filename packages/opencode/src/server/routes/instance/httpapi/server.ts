@@ -347,15 +347,35 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
       }),
     )
     yield* router.add("POST", "/amicode/profile", (request) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         const params = new URL(request.url, "http://localhost").searchParams
-        const field = (k: string) => (params.has(k) ? (params.get(k) ?? "") : undefined)
+        // Merge: query params for simple fields, JSON body for large ones (avatar)
+        let bodyFields: Record<string, string> = {}
+        const ct = request.headers["content-type"] ?? ""
+        if (ct.includes("application/json")) {
+          try {
+            const raw = yield* Effect.orDie(request.text)
+            const parsed = JSON.parse(raw)
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) bodyFields = parsed
+          } catch { /* ignore parse failures */ }
+        }
+        const field = (k: string): string | undefined => {
+          if (params.has(k)) return params.get(k) ?? ""
+          if (k in bodyFields && typeof bodyFields[k] === "string") return bodyFields[k]
+          return undefined
+        }
         const body = AmicodeProfile.saveProfile({
           name: field("name"),
           affiliation: field("affiliation"),
           focus: field("focus"),
           scholar: field("scholar"),
           affiliation_logo: field("affiliation_logo"),
+          role: field("role"),
+          description: field("description"),
+          github: field("github"),
+          avatar: field("avatar"),
+          custom_link_url: field("custom_link_url"),
+          custom_link_label: field("custom_link_label"),
         })
         return HttpServerResponse.text(body, { contentType: "application/json" })
       }),

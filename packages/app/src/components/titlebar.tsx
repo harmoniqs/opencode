@@ -23,6 +23,7 @@ import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
+import { ProfilePopoverTrigger } from "@/components/profile-popover"
 import { useGlobal } from "@/context/global"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
@@ -322,8 +323,6 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
 
               tabs.newDraft({ server: fallback.server, directory: fallback.project.worktree }, "")
             }
-            const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
-
             const dialog = useDialog()
             const [settingsOpen, setSettingsOpen] = createSignal(false)
             const showSettings = () => {
@@ -337,16 +336,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
               })
             }
 
-            command.register("titlebar-home", () => [
-              {
-                id: "home.toggle",
-                title: language.t("home.title"),
-                category: language.t("command.category.view"),
-                keybind: "mod+b",
-                hidden: true,
-                onSelect: toggleHome,
-              },
-            ])
+            command.register("titlebar-home", () => [])
 
             command.register("tabs", () => {
               const current = currentTab()
@@ -398,6 +388,13 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 </Show>
                 <TooltipV2
                   placement="bottom"
+                  value={language.t("profile.title") || "Profile"}
+                  class="shrink-0"
+                >
+                  <ProfilePopoverTrigger />
+                </TooltipV2>
+                <TooltipV2
+                  placement="bottom"
                   value={
                     <>
                       {language.t("command.settings.open")}
@@ -415,28 +412,6 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     state={settingsOpen() ? "pressed" : undefined}
                     onClick={showSettings}
                     aria-label={language.t("command.settings.open")}
-                  />
-                </TooltipV2>
-                <TooltipV2
-                  placement="bottom"
-                  value={
-                    <>
-                      {language.t("home.title")}
-                      <KeybindV2 keys={command.keybindParts("home.toggle")} variant="neutral" />
-                    </>
-                  }
-                  class="shrink-0"
-                >
-                  <IconButtonV2
-                    type="button"
-                    variant="ghost-muted"
-                    size="large"
-                    class="!w-9 shrink-0"
-                    icon={<IconV2 name="grid-plus" />}
-                    state={layout.route().type === "home" ? "pressed" : undefined}
-                    onClick={toggleHome}
-                    aria-label={language.t("home.title")}
-                    aria-pressed={layout.route().type === "home"}
                   />
                 </TooltipV2>
                 {/* Removed: sidebar-left toggle button (harmoniqs/amicode#265).

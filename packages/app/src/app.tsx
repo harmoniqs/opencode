@@ -59,7 +59,7 @@ import { setPendingAutoSend } from "@/pages/new-session/new-session-draft-contro
 import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider, useSettings } from "@/context/settings"
-import { TabsProvider, useTabs, type DraftTab } from "@/context/tabs"
+import { TabsProvider, tabHref, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { WslServersProvider } from "@/wsl/context"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
@@ -74,7 +74,6 @@ import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 import { postBugReportPoke } from "@/utils/amicode-bug-report"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
-import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
 import { AmicodeFileRefBridge } from "@/components/amicode-file-ref-bridge"
 import { DevToolsReopenBridge } from "@/components/settings-dialog"
@@ -741,12 +740,46 @@ function Routes(props: { serverScoped?: JSX.Element }) {
         </Route>
       </Route>
       <Show when={settings.general.newLayoutDesigns()}>
-        <Route path="/" component={NewHome} />
+        <Route path="/" component={NewSessionLanding} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>
       <Route path="/new-session" component={DraftRoute} />
     </>
+  )
+}
+
+/** Landing route when the Home/Dashboard page is removed: creates a new draft
+ *  session tab on mount and navigates to it. If a session tab already exists,
+ *  navigates to the most recent one instead of creating a duplicate. */
+function NewSessionLanding() {
+  const tabs = useTabs()
+  const global = useGlobal()
+  const navigate = useNavigate()
+
+  const land = () => {
+    // If there's already a session or draft tab, navigate to it
+    const existing = tabs.store.find((tab) => tab.type === "session" || tab.type === "draft")
+    if (existing) {
+      navigate(tabHref(existing), { replace: true })
+      return
+    }
+
+    // Otherwise create a new draft — find a server + project to use
+    const connections = global.servers.list()
+    const conn = connections[0]
+    if (!conn) return // no server connected yet — will re-render when one connects
+
+    const project = global.ensureServerCtx(conn).projects.list()[0]
+    if (!project) return // no project yet
+
+    tabs.newDraft({ server: ServerConnection.key(conn), directory: project.worktree }, "")
+  }
+
+  return (
+    <Show when={tabs.ready()}>
+      {(() => { land(); return null })()}
+    </Show>
   )
 }
 

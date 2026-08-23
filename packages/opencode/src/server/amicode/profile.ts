@@ -263,6 +263,12 @@ export function saveProfile(fields: {
   focus?: string
   scholar?: string
   affiliation_logo?: string
+  role?: string
+  description?: string
+  github?: string
+  avatar?: string
+  custom_link_url?: string
+  custom_link_label?: string
 }): string {
   const fp = profileFile()
   let current: any = {}
@@ -274,13 +280,20 @@ export function saveProfile(fields: {
   // A JSON primitive ("x", 42) survives the ?? {} and current[key]= would
   // throw a 500 the client swallows — only an object merge makes sense.
   if (typeof current !== "object" || current === null || Array.isArray(current)) current = {}
-  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo"] as const) {
+  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo", "role", "description", "github", "avatar"] as const) {
     const v = fields[key]
     if (typeof v === "string") {
       const t = v.trim()
       if (t === "") delete current[key]
       else current[key] = t
     }
+  }
+  // custom_link is a compound field: url + label stored as an object
+  if (typeof fields.custom_link_url === "string") {
+    const url = fields.custom_link_url.trim()
+    const label = (typeof fields.custom_link_label === "string" ? fields.custom_link_label.trim() : "") || ""
+    if (url === "") delete current.custom_link
+    else current.custom_link = { url, label }
   }
   mkdirSync(path.dirname(fp), { recursive: true })
   writeFileSync(fp, JSON.stringify(current, null, 2) + "\n")
@@ -313,6 +326,13 @@ export function profileBody(input: {
     affiliation_logo: typeof profile.affiliation_logo === "string" ? profile.affiliation_logo : null,
     focus: typeof profile.focus === "string" ? profile.focus : null,
     avatar: typeof profile.avatar === "string" ? profile.avatar : null,
+    role: typeof profile.role === "string" ? profile.role : null,
+    description: typeof profile.description === "string" ? profile.description : null,
+    github: typeof profile.github === "string" ? profile.github : null,
+    custom_link:
+      profile.custom_link && typeof profile.custom_link === "object" && typeof profile.custom_link.url === "string"
+        ? { url: profile.custom_link.url, label: typeof profile.custom_link.label === "string" ? profile.custom_link.label : "" }
+        : null,
     platforms: mix.map((p) => p.key),
     stats: {
       problems: countProblems(input.problemsRoot),
