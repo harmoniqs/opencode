@@ -27,7 +27,11 @@
 }
 
 [data-component="tag"][data-variant="accent"] {
-  border: 0;
+  /* Was `border: 0`, which stripped the base rule's edge and left a bare yellow
+     chip at 1.07:1 against cream — the outline was not perceivable at all.
+     Every yellow fill carries an ink edge, and its label is ink, never contrast
+     (which is a light colour and unreadable on yellow). */
+  border: 1px solid var(--accent-edge-ink, #000);
   background: var(--v2-background-bg-accent);
-  color: var(--v2-text-text-contrast);
+  color: var(--accent-ink, #000);
 }

@@ -41,7 +41,10 @@ describe("resolveTokens", () => {
     expect(tokens["--amc-radius-sm"]).toBe("4px") // fallback; resolves from --radius-md
     expect(tokens["--amc-font-sans"]).toContain("DM Sans")
     expect(tokens["--amc-font-mono"]).toContain("JuliaMono")
-    expect(Object.keys(tokens)).toHaveLength(19) // 13 colors + 2 radii + 2 fonts + 2 pads
+    // the ink edge crosses the seam too — without it the iframe cannot express
+    // "every yellow fill takes a 1px ink border" at all
+    expect(tokens["--amc-accent-edge"]).toBe("#000000")
+    expect(Object.keys(tokens)).toHaveLength(20) // 14 colors + 2 radii + 2 fonts + 2 pads
   })
   test("geometry and faces resolve from the host when set", () => {
     const tokens = resolveTokens(

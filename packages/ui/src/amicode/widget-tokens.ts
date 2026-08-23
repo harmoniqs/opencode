@@ -50,6 +50,10 @@ const SOURCES: [amc: string, v2: string, fallback: string][] = [
   ["--amc-accent-fill", "--accent", "#FFE614"],
   // Ink ON a yellow fill: always near-black, never --amc-bg (which is white on light).
   ["--amc-accent-ink", "--accent-ink", "#000000"],
+  // Widgets render in an iframe, so the ink-edge rule ("every yellow fill takes a
+  // 1px ink border") could not be expressed inside them at all — the CTA improvised
+  // a 14%-ink edge that composited to 1.46:1 on the light card ground.
+  ["--amc-accent-edge", "--accent-edge-ink", "#000000"],
   ["--amc-success", "--v2-state-fg-success", "#5BC873"],
   ["--amc-warning", "--v2-state-fg-warning", "#E5B454"],
   ["--amc-danger", "--v2-state-fg-danger", "#E56A6A"],

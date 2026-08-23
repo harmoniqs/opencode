@@ -64,6 +64,6 @@ describe("theme preload", () => {
     run()
 
     // light scheme (matchMedia stubbed to no-match) — brand ground, not the stock #fafafa
-    expect(document.documentElement.style.backgroundColor.toLowerCase()).toBe("#ffffff")
+    expect(document.documentElement.style.backgroundColor.toLowerCase()).toBe("#efedcd")
   })
 })

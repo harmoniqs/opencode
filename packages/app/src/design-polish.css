@@ -229,7 +229,9 @@ span[data-component="tag"][data-variant="accent"] {
 }
 [data-component="amicode-solver-switch"][data-phase="ready"] {
   background: var(--accent);
-  border-color: var(--accent);
+  /* INK, not the accent. A yellow edge on a yellow fill is no edge at all, and
+     against cream it measures 1.07:1 — the ready chip had no boundary on light. */
+  border-color: var(--accent-edge-ink);
   color: var(--accent-ink);
 }
 /* currentColor, so the dot is neutral ink while switching and near-black on the

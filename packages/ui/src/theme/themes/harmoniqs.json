@@ -19,14 +19,14 @@
     "overrides": {
       "text-strong": "#000000",
       "text-base": "#444444",
-      "text-weak": "#666666",
-      "text-weaker": "#8A8770",
+      "text-weak": "#555555",
+      "text-weaker": "#696651",
       "text-diff-add-base": "var(--v2-state-fg-success)",
       "text-diff-delete-base": "var(--v2-state-fg-danger)",
       "border-weak-base": "#d3d0ad",
       "border-weaker-base": "#DEDBB6",
       "icon-base": "#444444",
-      "icon-weak-base": "#c7c7c7",
+      "icon-weak-base": "#7d7a66",
       "surface-raised-base": "#EFEDCD",
       "surface-raised-base-hover": "#F6F4DF",
       "surface-base": "#EFEDCD",
@@ -38,7 +38,7 @@
       "syntax-keyword": "var(--v2-pink-800)",
       "syntax-string": "var(--v2-green-800)",
       "syntax-primitive": "var(--v2-pink-800)",
-      "syntax-property": "var(--v2-orange-800)",
+      "syntax-property": "#b35624",
       "syntax-type": "var(--v2-purple-800)",
       "syntax-constant": "#4A4200",
       "syntax-critical": "var(--v2-red-800)",
@@ -46,6 +46,7 @@
       "syntax-diff-delete": "var(--v2-state-fg-danger)",
       "syntax-diff-unknown": "#a753ae",
       "surface-critical-base": "#fde2e2",
+      "icon-warning-base": "#7e590f",
       "surface-success-strong": "#15803d",
       "text-on-success-base": "#166534"
     },
@@ -187,7 +188,7 @@
       "v2-border-border-base": "var(--v2-grey-400)",
       "v2-border-border-strong": "#00000033",
       "v2-border-border-inverse": "#000000",
-      "v2-border-border-focus": "var(--v2-blue-500)",
+      "v2-border-border-focus": "#2c47c8",
       "v2-overlay-simple-overlay-hover": "var(--v2-alpha-dark-4)",
       "v2-overlay-simple-overlay-pressed": "var(--v2-alpha-dark-8)",
       "v2-overlay-simple-overlay-contrast-hover": "var(--v2-alpha-light-12)",
@@ -238,7 +239,8 @@
       "v2-elevation-switch-on": "inset 0px 2px 2px 0px var(--v2-alpha-dark-10), inset 0px 1px 1px 0px var(--v2-alpha-dark-10), inset 0px 0px 0px 0.5px var(--v2-alpha-dark-20)",
       "v2-illustration-illustration-layer-01": "var(--v2-grey-300)",
       "v2-illustration-illustration-layer-02": "var(--v2-grey-400)",
-      "v2-illustration-illustration-layer-03": "var(--v2-grey-500)"
+      "v2-illustration-illustration-layer-03": "var(--v2-grey-500)",
+      "v2-avatar-fg": "#000000"
     }
   },
   "dark": {
