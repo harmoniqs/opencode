@@ -113,10 +113,8 @@ export function ProfilePopoverTrigger() {
   const saveAvatar = async (dataUrl: string) => {
     // Resize to 96x96 to keep profile.json small
     const resized = await resizeImage(dataUrl, 96)
-    const params = new URLSearchParams()
-    params.set("avatar", resized)
     try {
-      const data = await amicodePost(server.current, `/amicode/profile?${params.toString()}`) as any
+      const data = await amicodePost(server.current, "/amicode/profile", { avatar: resized }) as any
       if (data.ok && data.you) setProfile(data.you)
     } catch {
       /* silent */
@@ -124,10 +122,8 @@ export function ProfilePopoverTrigger() {
   }
 
   const removeAvatar = async () => {
-    const params = new URLSearchParams()
-    params.set("avatar", "")
     try {
-      const data = await amicodePost(server.current, `/amicode/profile?${params.toString()}`) as any
+      const data = await amicodePost(server.current, "/amicode/profile", { avatar: "" }) as any
       if (data.ok && data.you) setProfile(data.you)
     } catch {
       /* silent */
