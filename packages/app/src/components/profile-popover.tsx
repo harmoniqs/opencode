@@ -1,9 +1,9 @@
-import { batch, createEffect, createSignal, Show, type ComponentProps } from "solid-js"
+import { batch, createEffect, createSignal, Show, type ComponentProps, type JSX } from "solid-js"
 import { Popover } from "@opencode-ai/ui/popover"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
-import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { useServer } from "@/context/server"
+import { usePlatform } from "@/context/platform"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 
 interface ProfileData {
@@ -13,6 +13,7 @@ interface ProfileData {
   affiliation_logo: string | null
   focus: string | null
   description: string | null
+  avatar: string | null
   github: string | null
   scholar: string | null
   custom_link: { url: string; label: string } | null
@@ -34,6 +35,7 @@ export function ProfilePopoverTrigger() {
     custom_link_label: "",
   })
   const server = useServer()
+  const platform = usePlatform()
 
   const setShown = (next: boolean) => {
     batch(() => {
@@ -105,7 +107,20 @@ export function ProfilePopoverTrigger() {
   }
 
   const openExternal = (url: string) => {
-    window.open(url, "_blank", "noreferrer")
+    platform.openExternal(url)
+  }
+
+  const saveAvatar = async (dataUrl: string) => {
+    // Resize to 96x96 to keep profile.json small
+    const resized = await resizeImage(dataUrl, 96)
+    const params = new URLSearchParams()
+    params.set("avatar", resized)
+    try {
+      const data = await amicodePost(server.current, `/amicode/profile?${params.toString()}`) as any
+      if (data.ok && data.you) setProfile(data.you)
+    } catch {
+      /* silent */
+    }
   }
 
   return (
@@ -143,7 +158,7 @@ export function ProfilePopoverTrigger() {
             when={!editing() && !isEmpty()}
             fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} isEmpty={isEmpty()} />}
           >
-            <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} />
+            <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} onAvatarChange={saveAvatar} />
           </Show>
         </div>
       </Show>
@@ -156,15 +171,41 @@ function ReadView(props: {
   initials: string
   onEdit: () => void
   onOpenExternal: (url: string) => void
+  onAvatarChange: (dataUrl: string) => void
 }) {
   const [logoBroken, setLogoBroken] = createSignal(false)
+  let fileInput: HTMLInputElement | undefined
+
+  const handleFileSelect = (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      props.onAvatarChange(result)
+    }
+    reader.readAsDataURL(file)
+    input.value = ""
+  }
 
   return (
     <div>
+      {/* Hidden file input for avatar upload */}
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleFileSelect}
+      />
       {/* Header: avatar + name/role/affiliation */}
       <div style={{ display: "flex", gap: "12px", "align-items": "flex-start" }}>
-        {/* Avatar */}
+        {/* Avatar — clickable to change photo */}
         <div
+          onClick={() => fileInput?.click()}
+          title="Click to change photo"
           style={{
             width: "48px",
             height: "48px",
@@ -174,14 +215,24 @@ function ReadView(props: {
             "align-items": "center",
             "justify-content": "center",
             overflow: "hidden",
-            background: "var(--accent, #fff676)",
+            background: props.profile.avatar ? "transparent" : "var(--accent, #fff676)",
             color: "var(--accent-ink, #111214)",
             "font-size": "16px",
             "font-weight": "700",
+            cursor: "pointer",
+            position: "relative",
           }}
         >
-          <Show when={props.initials} fallback={<IconV2 name="person" />}>
-            {props.initials}
+          <Show when={props.profile.avatar} fallback={
+            <Show when={props.initials} fallback={<IconV2 name="person" />}>
+              {props.initials}
+            </Show>
+          }>
+            <img
+              src={props.profile.avatar!}
+              style={{ width: "100%", height: "100%", "object-fit": "cover", "border-radius": "10px" }}
+              alt="Profile"
+            />
           </Show>
         </div>
         {/* Name + Role + Affiliation */}
@@ -216,14 +267,11 @@ function ReadView(props: {
               ✎
             </button>
           </div>
-          <Show when={props.profile.role}>
+          <Show when={props.profile.role || props.profile.affiliation}>
             <div style={{ "font-size": "12px", color: "var(--v2-text-text-muted)", "margin-top": "1px" }}>
-              {props.profile.role}
-            </div>
-          </Show>
-          <Show when={props.profile.affiliation}>
-            <div style={{ "font-size": "12px", color: "var(--v2-text-text-muted)", "margin-top": "1px" }}>
-              {props.profile.affiliation}
+              {props.profile.role && props.profile.affiliation
+                ? `${props.profile.role} @ ${props.profile.affiliation}`
+                : props.profile.role || props.profile.affiliation}
             </div>
           </Show>
         </div>
@@ -258,19 +306,19 @@ function ReadView(props: {
       {/* Link pills */}
       <div style={{ display: "flex", gap: "8px", "margin-top": "12px" }}>
         <LinkPill
-          icon="🎓"
+          icon={<ScholarIcon />}
           url={props.profile.scholar}
           tooltip="Google Scholar"
           onOpen={props.onOpenExternal}
         />
         <LinkPill
-          icon="GH"
+          icon={<GitHubIcon />}
           url={props.profile.github}
           tooltip="GitHub"
           onOpen={props.onOpenExternal}
         />
         <LinkPill
-          icon="🔗"
+          icon={<LinkIcon />}
           url={props.profile.custom_link?.url ?? null}
           tooltip={props.profile.custom_link?.label || "Custom link"}
           onOpen={props.onOpenExternal}
@@ -280,7 +328,7 @@ function ReadView(props: {
   )
 }
 
-function LinkPill(props: { icon: string; url: string | null; tooltip: string; onOpen: (url: string) => void }) {
+function LinkPill(props: { icon: JSX.Element; url: string | null; tooltip: string; onOpen: (url: string) => void }) {
   const filled = () => !!props.url
   return (
     <button
@@ -422,5 +470,53 @@ function EditForm(props: {
         </button>
       </div>
     </div>
+  )
+}
+
+function resizeImage(dataUrl: string, size: number): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement("canvas")
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext("2d")!
+      // Center-crop: use the smaller dimension as the source square
+      const src = Math.min(img.width, img.height)
+      const sx = (img.width - src) / 2
+      const sy = (img.height - src) / 2
+      ctx.drawImage(img, sx, sy, src, src, 0, 0, size, size)
+      resolve(canvas.toDataURL("image/png"))
+    }
+    img.onerror = () => resolve(dataUrl) // fallback: send as-is
+    img.src = dataUrl
+  })
+}
+
+function GitHubIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+      <path d="M10.0001 1.62549C14.6042 1.62549 18.3334 5.35465 18.3334 9.95882C18.333 11.7049 17.785 13.4068 16.7666 14.8251C15.7482 16.2434 14.3107 17.3066 12.6563 17.8651C12.2397 17.9484 12.0834 17.688 12.0834 17.4692C12.0834 17.188 12.0938 16.2922 12.0938 15.1776C12.0938 14.3963 11.8334 13.8963 11.5313 13.6359C13.3855 13.4276 15.3334 12.7192 15.3334 9.52132C15.3334 8.60465 15.0105 7.86507 14.4792 7.28174C14.5626 7.0734 14.8542 6.21924 14.3959 5.0734C14.3959 5.0734 13.698 4.84424 12.1042 5.92757C11.4376 5.74007 10.7292 5.64632 10.0209 5.64632C9.31258 5.64632 8.60425 5.74007 7.93758 5.92757C6.34383 4.85465 5.64592 5.0734 5.64592 5.0734C5.18758 6.21924 5.47925 7.0734 5.56258 7.28174C5.03133 7.86507 4.70842 8.61507 4.70842 9.52132C4.70842 12.7088 6.64592 13.4276 8.50008 13.6359C8.2605 13.8442 8.04175 14.2088 7.96883 14.7505C7.48967 14.9692 6.29175 15.3234 5.54175 14.063C5.3855 13.813 4.91675 13.1984 4.2605 13.2088C3.56258 13.2192 3.97925 13.6047 4.27092 13.7609C4.62508 13.9588 5.03133 14.6984 5.12508 14.938C5.29175 15.4067 5.83342 16.3026 7.92717 15.9172C7.92717 16.6151 7.93758 17.2713 7.93758 17.4692C7.93758 17.688 7.78133 17.938 7.36467 17.8651C5.70491 17.3126 4.26126 16.2515 3.23851 14.8324C2.21576 13.4133 1.66583 11.7081 1.66675 9.95882C1.66675 5.35465 5.39592 1.62549 10.0001 1.62549Z" fill="currentColor"/>
+    </svg>
+  )
+}
+
+function ScholarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M8 1L1 5L8 9L15 5L8 1Z" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M3 6.5V11.5C3 11.5 5 13.5 8 13.5C11 13.5 13 11.5 13 11.5V6.5" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M15 5V11" stroke="currentColor" stroke-linecap="round"/>
+    </svg>
+  )
+}
+
+function LinkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M6.5 9.5L9.5 6.5" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M7.5 11.5L6 13C4.89543 14.1046 3.10457 14.1046 2 13C0.89543 11.8954 0.89543 10.1046 2 9L3.5 7.5" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M8.5 4.5L10 3C11.1046 1.89543 12.8954 1.89543 14 3C15.1046 4.10457 15.1046 5.89543 14 7L12.5 8.5" stroke="currentColor" stroke-linecap="round"/>
+    </svg>
   )
 }

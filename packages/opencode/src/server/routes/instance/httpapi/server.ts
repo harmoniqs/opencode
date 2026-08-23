@@ -359,6 +359,7 @@ const amicodeProblemsRoute = HttpRouter.use((router) =>
           role: field("role"),
           description: field("description"),
           github: field("github"),
+          avatar: field("avatar"),
           custom_link_url: field("custom_link_url"),
           custom_link_label: field("custom_link_label"),
         })

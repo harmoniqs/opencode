@@ -266,6 +266,7 @@ export function saveProfile(fields: {
   role?: string
   description?: string
   github?: string
+  avatar?: string
   custom_link_url?: string
   custom_link_label?: string
 }): string {
@@ -279,7 +280,7 @@ export function saveProfile(fields: {
   // A JSON primitive ("x", 42) survives the ?? {} and current[key]= would
   // throw a 500 the client swallows — only an object merge makes sense.
   if (typeof current !== "object" || current === null || Array.isArray(current)) current = {}
-  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo", "role", "description", "github"] as const) {
+  for (const key of ["name", "affiliation", "focus", "scholar", "affiliation_logo", "role", "description", "github", "avatar"] as const) {
     const v = fields[key]
     if (typeof v === "string") {
       const t = v.trim()
