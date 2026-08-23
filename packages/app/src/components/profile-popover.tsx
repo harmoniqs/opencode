@@ -456,8 +456,8 @@ function EditForm(props: {
         placeholder="Short bio"
         value={props.draft().description}
         onInput={(e) => update("description", e.currentTarget.value)}
-        rows={2}
-        style={{ resize: "none" }}
+        rows={4}
+        style={{ resize: "vertical", "min-height": "60px" }}
       />
       <div style={{ display: "flex", gap: "6px", "margin-top": "4px" }}>
         <input
