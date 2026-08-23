@@ -74,7 +74,6 @@ import { bugDockController } from "@/pages/session/composer/bug-dock-controller"
 import { postBugReportPoke } from "@/utils/amicode-bug-report"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
-import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
 import { AmicodeFileRefBridge } from "@/components/amicode-file-ref-bridge"
 import { DevToolsReopenBridge } from "@/components/settings-dialog"
@@ -741,7 +740,7 @@ function Routes(props: { serverScoped?: JSX.Element }) {
         </Route>
       </Route>
       <Show when={settings.general.newLayoutDesigns()}>
-        <Route path="/" component={NewHome} />
+        <Route path="/" component={() => <Navigate href="/new-session" />} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>
