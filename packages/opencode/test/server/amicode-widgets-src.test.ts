@@ -1,12 +1,10 @@
 // Executable gate for the built-in widget sources: every widgetJs must PARSE
-// (tmp-file import — Bun throws BuildMessage on syntax errors; data: URLs do
-// not work, they resolve as asset paths) and MOUNT against a fake amico +
-// stub el without throwing. Widgets are written defensively (querySelector
-// may return null), so the stub returns null and mounts still succeed.
+// (evaluated as a module via blob: URL — Bun's dynamic import resolves temp
+// files unreliably when the solid transform plugin is active) and MOUNT against
+// a fake amico + stub el without throwing. Widgets are written defensively
+// (querySelector may return null), so the stub returns null and mounts still
+// succeed.
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import path from "node:path"
 import { parseManifest } from "../../src/server/amicode/widget-manifest"
 import * as meetAmico from "../../src/server/amicode/widgets-src/meet-amico"
 import * as showcase from "../../src/server/amicode/widgets-src/showcase"
@@ -75,8 +73,19 @@ function fakeAmico(context: Record<string, unknown> = {}) {
 
 const tick = () => new Promise((r) => setTimeout(r, 10))
 
+/** Import widget JS source as a module via blob: URL — avoids the bun test
+ *  runner's solid transform plugin intercepting temp .mjs files on disk. */
+async function importWidgetJs(source: string): Promise<{ default: { mount: (el: any, amico: any) => void } }> {
+  const blob = new Blob([source], { type: "text/javascript" })
+  const url = URL.createObjectURL(blob)
+  try {
+    return await import(url)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 describe("built-in widget sources", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "amc-widgets-"))
 
   for (const [id, src] of Object.entries(SOURCES)) {
     test(`${id}: manifest parses and id matches`, () => {
@@ -86,16 +95,12 @@ describe("built-in widget sources", () => {
     })
 
     test(`${id}: widgetJs parses and exports default.mount`, async () => {
-      const file = path.join(dir, `${id}.mjs`)
-      writeFileSync(file, src.widgetJs)
-      const mod = await import(file)
+      const mod = await importWidgetJs(src.widgetJs)
       expect(typeof mod.default?.mount).toBe("function")
     })
 
     test(`${id}: mounts against fake amico without throwing`, async () => {
-      const file = path.join(dir, `${id}-mount.mjs`)
-      writeFileSync(file, src.widgetJs)
-      const mod = await import(file)
+      const mod = await importWidgetJs(src.widgetJs)
       const { el } = stubEl()
       const context = {
         resume: { name: "x-gate-transmon", meta: "transmon · X" },
@@ -113,9 +118,7 @@ describe("built-in widget sources", () => {
       ["pulse-bank", {}],
     ]
     for (const [id, context] of cases) {
-      const file = path.join(dir, `${id}-content.mjs`)
-      writeFileSync(file, SOURCES[id].widgetJs)
-      const mod = await import(file)
+      const mod = await importWidgetJs(SOURCES[id].widgetJs)
       const { el, state } = stubEl()
       mod.default.mount(el, fakeAmico(context))
       await tick()
@@ -125,9 +128,7 @@ describe("built-in widget sources", () => {
 
   test("empty-state widgets render nothing without data", async () => {
     for (const id of ["jump-back-in", "now-solving"]) {
-      const file = path.join(dir, `${id}-empty.mjs`)
-      writeFileSync(file, SOURCES[id].widgetJs)
-      const mod = await import(file)
+      const mod = await importWidgetJs(SOURCES[id].widgetJs)
       const { el, state } = stubEl()
       mod.default.mount(el, fakeAmico({}))
       await tick()

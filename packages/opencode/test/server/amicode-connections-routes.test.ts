@@ -415,9 +415,10 @@ describe("pasqal over the route tree — REAL spawn against a staged stub valida
       // the child saw EXACTLY the minimal declared env — the real spawn spreads nothing
       const record = stub.record()
       // CPython injects LC_CTYPE into its own environ under PEP 538 C-locale
-      // coercion, so filter interpreter-owned locale vars. The point of the
-      // assertion is that the SPAWNER declared nothing beyond this set.
-      const declared = record.keys.filter((k) => !/^(LC_[A-Z_]+|LANG)$/.test(k))
+      // coercion, so filter interpreter-owned locale vars. macOS injects
+      // __CF_USER_TEXT_ENCODING unconditionally. The point of the assertion is
+      // that the SPAWNER declared nothing beyond this set.
+      const declared = record.keys.filter((k) => !/^(LC_[A-Z_]+|LANG|__CF_USER_TEXT_ENCODING)$/.test(k))
       expect(declared).toEqual(["PASQAL_PASSWORD", "PASQAL_PROJECT_ID", "PASQAL_USERNAME", "PATH"])
       expect(record.username).toBe(PASQAL.username)
       expect(record.password).toBe(PASQAL.password)
