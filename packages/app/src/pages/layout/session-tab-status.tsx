@@ -28,14 +28,16 @@ export function sessionTabStatus(input: {
   return "idle"
 }
 
-// These come from --status-* in design-polish.css, NOT from the state text
-// foregrounds. A dot needs 3:1, not 4.5:1; using the text tones over-darkened it
-// (attention was a near-brown at 7.74:1) and read as dull.
+// These come from --status-* in design-polish.css: a SEMANTIC scale, deliberately
+// outside the brand yellow system. A dot's job is to say what state a session is
+// in, and it needs 3:1 (graphical object), not the 4.5:1 body-text minimum that
+// made the earlier tones muddy. The values were chosen by colour-blindness
+// simulation — see the comment on --status-idle.
 const TONE: Record<SessionTabStatus, { color: string; label: string }> = {
   // quiet on purpose — it still holds the slot so the strip stays aligned
   idle: { color: "var(--status-idle)", label: "Idle" },
-  // the brand's live hue; it cannot reach 3:1 on white at any saturation, so for
-  // this one the ink edge is what makes it visible rather than just crisp
+  // blue, the conventional in-progress signal — NOT the brand yellow, which is
+  // 1.27:1 on white and cannot be made to work as a dot there
   running: { color: "var(--status-running)", label: "Working" },
   attention: { color: "var(--status-attention)", label: "Needs you" },
   error: { color: "var(--status-error)", label: "Error" },
@@ -62,13 +64,9 @@ export function StatusDot(props: { color: string; label: string; status?: string
       <span
         aria-hidden="true"
         class="block size-1.5 rounded-full"
-        style={{
-          background: props.color,
-          // Every dot takes the ink ring, the same edge every brand surface wears.
-          // box-shadow rather than border so the ring sits OUTSIDE the 6px core —
-          // the dot never shrinks and no strip shifts between states.
-          "box-shadow": "0 0 0 1px var(--status-ring)",
-        }}
+        // No ring. Each tone is picked to clear 3:1 against its own ground
+        // unaided, so an edge would only mute the hue that carries the meaning.
+        style={{ background: props.color }}
       />
     </span>
   )

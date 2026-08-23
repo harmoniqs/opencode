@@ -99,42 +99,43 @@
 }
 
 /* ── session status dots ──
-   A 6px dot is a GRAPHICAL OBJECT: it needs 3:1, not the 4.5:1 body-text
-   minimum. Borrowing the text foregrounds (state-fg-*) spent all the saturation
-   on contrast the dot never needed and left them muddy — attention was a
-   near-brown #6B4E00 at 7.74:1. These are picked for vividness at just past 3:1.
+   SEMANTIC, not brand: a status dot's job is to say what state a session is in,
+   so it is deliberately outside the yellow system. Brand yellow was tried for
+   "running" and is unusable here — 1.27:1 on white, invisible without a crutch.
 
-   Brand yellow is the exception: at 1.27:1 on white it cannot reach 3:1 at ANY
-   saturation, so the running dot keeps the fill and takes an INK ring — the same
-   rule every other yellow surface follows. */
+   Chosen by simulating deuteranopia, protanopia and tritanopia (Viénot 1999)
+   over a candidate search, maximising the WORST pairwise CIELAB separation while
+   holding every dot at >=3:1 against its own ground. Per-scheme, because forcing
+   one palette to clear 3:1 on BOTH white and near-black compresses everything
+   into a narrow mid-luminance band and costs ~half the separation.
+
+   Colour is never the only signal: each dot carries role="img" plus an
+   aria-label and title naming the state.
+
+   light: worst ΔE 15.9 (deuteranopia, attention/error), min contrast 3.19:1
+   dark:  worst ΔE 22.6 (tritanopia,   running/done),    min contrast 5.10:1 */
 :root,
 [data-color-scheme="light"] {
-  --status-idle: #767676;        /* 4.54:1 — quiet on purpose */
-  --status-running: var(--accent);
-  --status-attention: #d97706;   /* 3.19:1, 97% sat */
-  --status-error: #ef4444;       /* 3.76:1, vivid — an error must not be missed */
-  --status-done: #16a34a;        /* 3.30:1, 87% sat */
-  --status-ring: var(--accent-edge-ink);   /* ink — every dot takes the same edge */
+  --status-idle: #6b7280;        /* 4.83:1 — grey, quiet on purpose */
+  --status-running: #3b82f6;     /* 3.68:1 — blue reads as in-progress */
+  --status-attention: #d97706;   /* 3.19:1 — amber, needs you */
+  --status-error: #ef4444;       /* 3.76:1 */
+  --status-done: #047857;        /* 5.48:1 — deep green, pushed away from the red */
 }
 [data-color-scheme="dark"] {
-  --status-idle: #A9A88C;        /* 7.92:1 */
-  --status-running: var(--accent);
-  --status-attention: #f2cf76;   /* 12.76:1 */
-  --status-error: #f87171;       /* 6.94:1 */
+  --status-idle: #8a8a8a;        /*  5.56:1 */
+  --status-running: #3b82f6;     /*  5.22:1 */
+  --status-attention: #fbbf24;   /* 11.49:1 */
+  --status-error: #ef4444;       /*  5.10:1 */
   --status-done: #4ade80;        /* 11.01:1 */
-  /* Ink here too. On the dark ground it is nearly invisible, but it separates the
-     dot from the lighter raised surface of a hovered or active tab, and it keeps
-     the dots one family across both schemes. */
-  --status-ring: var(--accent-edge-ink);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
-    --status-idle: #A9A88C;
-    --status-running: var(--accent);
-    --status-attention: #f2cf76;
-    --status-error: #f87171;
+    --status-idle: #8a8a8a;
+    --status-running: #3b82f6;
+    --status-attention: #fbbf24;
+    --status-error: #ef4444;
     --status-done: #4ade80;
-    --status-ring: var(--accent-edge-ink);
   }
 }
 
