@@ -1268,6 +1268,7 @@ export function MessageTimeline(props: {
       const row = input.row()
       return row._tag === "AssistantPart" && row.previousAssistantPart
     }
+    const assistantPart = () => input.row()._tag === "AssistantPart"
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     const rail = () => {
@@ -1291,7 +1292,11 @@ export function MessageTimeline(props: {
       >
         <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
           <Show when={rail()}>{(r) => <ThoughtRail first={r().first} last={r().last} running={r().running} />}</Show>
-          <div classList={{ "min-w-0 w-full": true, [THOUGHT_RAIL_INSET]: !!rail() }}>{input.children}</div>
+          {/* The gutter is reserved for EVERY assistant part, not only the ones
+              that draw a rail. Gating it on rail() left a single-step turn's
+              content 16px to the left of a multi-step turn's, so the column
+              stepped in and out as turns changed length. */}
+          <div classList={{ "min-w-0 w-full": true, [THOUGHT_RAIL_INSET]: assistantPart() }}>{input.children}</div>
         </div>
       </div>
     )

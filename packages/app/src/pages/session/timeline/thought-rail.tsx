@@ -30,6 +30,15 @@
 const NODE = 7 // dot diameter, px — matches the site's Step
 const DOT_TOP = 7.5 // px from the row's top edge to the dot's top
 
+// The rail sits in a gutter carved out of the row's own left inset, NOT flush
+// against the row edge. Flush was wrong: below the md breakpoint the message
+// column has no horizontal padding, so the turn box begins at the scroll
+// viewport's edge and a dot at left:0 lands hard against it — with the live
+// node's ring clipped away entirely. GUTTER + NODE (15px) stays inside
+// THOUGHT_RAIL_INSET, so the rail never pushes content around.
+const GUTTER = 8
+const LINE_X = GUTTER + NODE / 2 - 0.5 // 1px line centred under the dot
+
 // TimelineRowFrame (message-timeline.tsx) puts `pt-3` on every step after the
 // first, and the rail's positioning ancestor — the inner `session-turn` div —
 // sits INSIDE that padding. So a segment anchored at top:0 begins 12px below
@@ -56,8 +65,10 @@ export function ThoughtRail(props: {
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
-        class="pointer-events-none absolute left-[3px] w-px bg-v2-border-border-strong"
-        style={
+        class="pointer-events-none absolute w-px bg-v2-border-border-strong"
+        style={{
+          left: `${LINE_X}px`,
+          ...(
           props.last
             ? // the tail: draw only down to the dot, never past it
               {
@@ -66,28 +77,37 @@ export function ThoughtRail(props: {
               }
             : // mid-run: span the row AND the gap above it — but start below the
               // dot on the very first step, where there is nothing to join to
-              { top: props.first ? `${DOT_TOP + NODE / 2}px` : NEG_STEP_GAP, bottom: "0px" }
-        }
+              { top: props.first ? `${DOT_TOP + NODE / 2}px` : NEG_STEP_GAP, bottom: "0px" }),
+        }}
       />
       <span
         aria-hidden="true"
         data-slot="thought-rail-dot"
         data-state={isRunning() ? "running" : "done"}
         classList={{
-          "pointer-events-none absolute left-0 rounded-full": true,
+          "pointer-events-none absolute rounded-full": true,
           // hollow + pulsing while in flight, solid once succeeded
           "thought-rail-dot--running": isRunning(),
         }}
         style={{
           top: `${DOT_TOP}px`,
+          left: `${GUTTER}px`,
           width: `${NODE}px`,
           height: `${NODE}px`,
-          // icon weight, not border weight. border-border-strong is white at 20%
-          // on the dark ground, which composites to #4C4C4C = 1.92:1 — under the
-          // 3:1 a UI mark needs, so the rail was effectively invisible there.
-          // icon-icon-muted is a real mark colour: 4.58:1 dark, 5.74:1 light.
-          border: "1px solid var(--v2-icon-icon-muted)",
-          background: isRunning() ? "var(--v2-background-bg-base)" : "var(--v2-icon-icon-muted)",
+          // LIVE is the brand yellow; DONE is icon weight, not border weight.
+          //
+          // --accent-edge is doing real work on the live node: it resolves to ink
+          // on light and to a yellow mix on dark, which is exactly the rule the
+          // accent system states — #FFE614 is ~1.2:1 on a light ground, so on
+          // light the dot is *defined* by its ink ring, never by the fill. On dark
+          // the fill carries it and the edge just tightens the shape.
+          //
+          // Done dots take icon-icon-muted rather than border-border-strong: the
+          // latter is white at 20% on the dark ground, compositing to #4C4C4C =
+          // 1.92:1, under the 3:1 a UI mark needs. icon-icon-muted measures
+          // 4.58:1 dark and 5.74:1 light.
+          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-icon-icon-muted)",
+          background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
         }}
       />
     </>

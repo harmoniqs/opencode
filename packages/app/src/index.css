@@ -392,11 +392,11 @@
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--v2-icon-icon-muted) 40%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
   }
   50% {
     transform: scale(1.25);
-    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--v2-icon-icon-muted) 0%, transparent);
+    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent) 0%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
