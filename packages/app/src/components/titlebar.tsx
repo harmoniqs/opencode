@@ -388,6 +388,13 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 </Show>
                 <TooltipV2
                   placement="bottom"
+                  value={language.t("profile.title") || "Profile"}
+                  class="shrink-0"
+                >
+                  <ProfilePopoverTrigger />
+                </TooltipV2>
+                <TooltipV2
+                  placement="bottom"
                   value={
                     <>
                       {language.t("command.settings.open")}
@@ -406,13 +413,6 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     onClick={showSettings}
                     aria-label={language.t("command.settings.open")}
                   />
-                </TooltipV2>
-                <TooltipV2
-                  placement="bottom"
-                  value={language.t("profile.title") || "Profile"}
-                  class="shrink-0"
-                >
-                  <ProfilePopoverTrigger />
                 </TooltipV2>
                 {/* Removed: sidebar-left toggle button (harmoniqs/amicode#265).
                     The button called layout.sidebar.toggle() but no component in
