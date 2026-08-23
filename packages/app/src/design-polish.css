@@ -100,41 +100,46 @@
 
 /* ── session status dots ──
    SEMANTIC, not brand: a status dot's job is to say what state a session is in,
-   so it is deliberately outside the yellow system. Brand yellow was tried for
-   "running" and is unusable here — 1.27:1 on white, invisible without a crutch.
+   so it sits outside the yellow system. Brand yellow was tried for "running" and
+   is unusable here — 1.27:1 on white, invisible without a crutch. No rings
+   either: each tone clears >=3:1 against its own ground unaided, and an edge
+   would only mute the hue that carries the meaning.
 
-   Chosen by simulating deuteranopia, protanopia and tritanopia (Viénot 1999)
-   over a candidate search, maximising the WORST pairwise CIELAB separation while
-   holding every dot at >=3:1 against its own ground. Per-scheme, because forcing
-   one palette to clear 3:1 on BOTH white and near-black compresses everything
-   into a narrow mid-luminance band and costs ~half the separation.
+   Chosen by simulating deuteranopia, protanopia and tritanopia (Vienot 1999)
+   over a candidate search. Two constraints beyond contrast:
+
+   1. worst pairwise CIELAB separation is maximised across all three CVD types;
+   2. idle and done must differ in LIGHTNESS, not just chroma. An earlier set had
+      them at L* 48 vs 44 — same lightness, separated only by saturation, which
+      is precisely what reads as "a slightly green grey". They now sit ~23 L*
+      apart in both schemes.
 
    Colour is never the only signal: each dot carries role="img" plus an
    aria-label and title naming the state.
 
-   light: worst ΔE 15.9 (deuteranopia, attention/error), min contrast 3.19:1
-   dark:  worst ΔE 22.6 (tritanopia,   running/done),    min contrast 5.10:1 */
+   light: worst CVD dE 13.7 · idle/done dE 73.9 (dL* 24) · min contrast 3.19:1
+   dark:  worst CVD dE 31.3 · idle/done dE 72.3 (dL* 22) · min contrast 3.71:1 */
 :root,
 [data-color-scheme="light"] {
-  --status-idle: #6b7280;        /* 4.83:1 — grey, quiet on purpose */
-  --status-running: #3b82f6;     /* 3.68:1 — blue reads as in-progress */
-  --status-attention: #d97706;   /* 3.19:1 — amber, needs you */
-  --status-error: #ef4444;       /* 3.76:1 */
-  --status-done: #047857;        /* 5.48:1 — deep green, pushed away from the red */
+  --status-idle: #52525b;        /* L* 35 · 7.73:1 — neutral, no hue, so it stays quiet */
+  --status-running: #1d4ed8;     /* L* 39 · 6.70:1 — blue reads as in-progress */
+  --status-attention: #d97706;   /* L* 60 · 3.19:1 — amber, needs you */
+  --status-error: #ef4444;       /* L* 55 · 3.76:1 */
+  --status-done: #16a34a;        /* L* 59 · 3.30:1 — vivid, and 24 L* clear of idle */
 }
 [data-color-scheme="dark"] {
-  --status-idle: #8a8a8a;        /*  5.56:1 */
-  --status-running: #3b82f6;     /*  5.22:1 */
-  --status-attention: #fbbf24;   /* 11.49:1 */
-  --status-error: #ef4444;       /*  5.10:1 */
-  --status-done: #4ade80;        /* 11.01:1 */
+  --status-idle: #8a8a8a;        /* L* 57 ·  5.56:1 */
+  --status-running: #2563eb;     /* L* 46 ·  3.71:1 */
+  --status-attention: #fbbf24;   /* L* 81 · 11.49:1 */
+  --status-error: #dc2626;       /* L* 48 ·  3.97:1 */
+  --status-done: #4ade80;        /* L* 79 · 11.01:1 */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
     --status-idle: #8a8a8a;
-    --status-running: #3b82f6;
+    --status-running: #2563eb;
     --status-attention: #fbbf24;
-    --status-error: #ef4444;
+    --status-error: #dc2626;
     --status-done: #4ade80;
   }
 }
