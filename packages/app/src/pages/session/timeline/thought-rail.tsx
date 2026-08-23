@@ -60,24 +60,30 @@ export function ThoughtRail(props: {
   // Only the tail of a still-running turn is hollow. Everything above it has,
   // by definition, been succeeded.
   const isRunning = () => props.last && props.running
+  // Cap the rail precisely at the dot centre so the first and last segments do
+  // not peek past the dot (the previous math left a 1–2px stub due to rounding
+  // and the 0.5px centring offset). Continuity is kept by letting each mid-
+  // segment reach through the 12px pt-3 gap (NEG_STEP_GAP) so adjacent rows
+  // meet without a dotted break.
+  const dotCentre = DOT_TOP + NODE / 2
   return (
     <>
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
-        class="pointer-events-none absolute w-px bg-v2-border-border-strong"
+        class="pointer-events-none absolute w-px"
         style={{
           left: `${LINE_X}px`,
+          background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
           ...(
           props.last
-            ? // the tail: draw only down to the dot, never past it
+            ? // tail: capped at the dot centre, never below
               {
                 top: props.first ? "0px" : NEG_STEP_GAP,
-                height: props.first ? "0px" : `calc(${STEP_GAP} + ${DOT_TOP + NODE / 2}px)`,
+                height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)`,
               }
-            : // mid-run: span the row AND the gap above it — but start below the
-              // dot on the very first step, where there is nothing to join to
-              { top: props.first ? `${DOT_TOP + NODE / 2}px` : NEG_STEP_GAP, bottom: "0px" }),
+            : // mid-run: from dot centre (first) or gap (others) down to row bottom
+              { top: props.first ? `${dotCentre}px` : NEG_STEP_GAP, bottom: "0px" }),
         }}
       />
       <span
