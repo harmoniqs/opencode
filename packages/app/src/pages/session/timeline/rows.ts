@@ -24,6 +24,8 @@ export type TimelineRowMap = {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    lastAssistantPart: boolean
+    turnRunning: boolean
   }
   Thinking: { userMessageID: string; reasoningHeading?: string }
   Retry: { userMessageID: string }
@@ -168,7 +170,16 @@ export namespace Timeline {
     }
 
     let assistantGroupIndex = 0
-    assistantItems.forEach((item) => {
+    // The thought rail fills a step when its SUCCESSOR appears — the same grammar
+    // the website animation uses. That deliberately sidesteps out-of-order tool
+    // completion: adjacency decides, not each tool's own lifecycle, so a filled
+    // dot can never appear above a hollow one.
+    const lastRenderableIndex = assistantItems.reduce(
+      (acc, item, index) => (item.type === "interrupted" ? acc : index),
+      -1,
+    )
+    const turnIsRunning = isActive && status === "busy" && !error
+    assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
           new TimelineRow.TurnDivider({
@@ -184,6 +195,8 @@ export namespace Timeline {
           userMessageID: userMessage.id,
           group: item.group,
           previousAssistantPart: assistantGroupIndex > 0,
+          lastAssistantPart: itemIndex === lastRenderableIndex,
+          turnRunning: turnIsRunning,
         }),
       )
       assistantGroupIndex += 1
