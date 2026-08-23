@@ -23,6 +23,10 @@ export namespace TimelineRow {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    /** no further assistant part follows in this turn — the rail's tail */
+    lastAssistantPart: boolean
+    /** the turn is still working, so the tail step is in flight rather than done */
+    turnRunning: boolean
   }> {}
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string

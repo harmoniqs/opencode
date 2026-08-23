@@ -376,3 +376,23 @@
   }
 }
 
+/* The thought rail's live node: hollow and breathing while the step is in
+   flight, matching the website's rail-dot. Honours reduced motion. */
+[data-slot="thought-rail-dot"].thought-rail-dot--running {
+  animation: thought-rail-pulse 1.8s ease-in-out infinite;
+}
+@keyframes thought-rail-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="thought-rail-dot"].thought-rail-dot--running {
+    animation: none;
+    opacity: 1;
+  }
+}
