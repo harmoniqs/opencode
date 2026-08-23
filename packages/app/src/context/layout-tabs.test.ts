@@ -79,4 +79,16 @@ describe("closeSessionTab", () => {
       ),
     ).toEqual(state(["file://a.ts", "file://c.ts"], "file://a.ts"))
   })
+
+  test("removes pulseInspector and selects an adjacent tab", () => {
+    expect(
+      closeSessionTab(state(["context", "pulseInspector", "file://a.ts"], "pulseInspector"), "pulseInspector"),
+    ).toEqual(state(["context", "file://a.ts"], "context"))
+  })
+
+  test("removes pulseInspector when it is the only tab", () => {
+    expect(closeSessionTab(state(["pulseInspector"], "pulseInspector"), "pulseInspector")).toEqual(
+      state([], undefined),
+    )
+  })
 })
