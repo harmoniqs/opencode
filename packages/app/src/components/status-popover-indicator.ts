@@ -23,7 +23,9 @@ export function serverStatusDotClass(input: {
 }) {
   if (input.serverHealth === false) return "bg-icon-critical-base"
   if (!input.ready || input.serverHealth === undefined) return "bg-border-weak-base"
-  if (input.attention) return "bg-v2-background-bg-accent"
+  // A bare yellow fill is 1.07:1 on the light ground, so the most urgent state
+  // was the only invisible one. The ink ring is what makes it readable.
+  if (input.attention) return "bg-v2-background-bg-accent ring-1 ring-[var(--accent-edge-ink)]"
   if (input.issue) return "bg-icon-warning-base"
   if (input.serverHealth === true) return "bg-icon-success-base"
   return "bg-border-weak-base"

@@ -39,11 +39,18 @@ export function useSessionTabAvatarState(
     return notification.ensureServerState(server())
   })
   const unread = createMemo(() => needsAttention() || (notificationState()?.session.unseenCount(sessionId()) ?? 0) > 0)
+  // Per-session error: notification.tsx indexes these as
+  // index.session.unseenHasError[notification.session] when a notification of
+  // type "error" arrives, so it IS session-scoped, not just project-scoped.
+  const hasError = createMemo(() => notificationState()?.session.unseenHasError(sessionId()) ?? false)
   const loading = createMemo(() => {
     const serverSync = sync()
     if (!serverSync) return false
     if (needsAttention()) return false
     return serverSync.session.data.session_working(sessionId())
   })
-  return { unread, loading }
+  // needsAttention is surfaced separately so the tab dot can distinguish
+  // "blocked, waiting on you" from "finished, unseen output" — folded together
+  // they were both just `unread`.
+  return { unread, loading, needsAttention, hasError }
 }

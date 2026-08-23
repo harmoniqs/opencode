@@ -668,7 +668,7 @@ function ProviderConnection(props: {
                 >
                   {(option) => (
                     <div class="w-full flex items-center gap-x-2">
-                      <div class="w-4 h-2 rounded-[1px] bg-input-base shadow-xs-border-base flex items-center justify-center">
+                      <div class="w-4 h-2 rounded-xs bg-input-base shadow-xs-border-base flex items-center justify-center">
                         <div class="w-2.5 h-0.5 ml-0 bg-icon-strong-base hidden" data-slot="list-item-extra-icon" />
                       </div>
                       <span>{option.label}</span>
@@ -743,7 +743,7 @@ function ProviderConnection(props: {
                     class="group flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] leading-5 tracking-[-0.04px] hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:outline-none"
                     onClick={() => void selectMethod(index())}
                   >
-                    <span class="flex h-2 w-4 shrink-0 items-center justify-center rounded-[1px] bg-v2-background-bg-base shadow-[var(--v2-elevation-button-neutral)]">
+                    <span class="flex h-2 w-4 shrink-0 items-center justify-center rounded-xs bg-v2-background-bg-base shadow-[var(--v2-elevation-button-neutral)]">
                       <span class="hidden h-0.5 w-2.5 bg-v2-icon-icon-base group-hover:block group-focus-visible:block" />
                     </span>
                     <span class="font-[530] text-v2-text-text-base">{details().label}</span>
@@ -778,7 +778,7 @@ function ProviderConnection(props: {
           >
             {(i) => (
               <div class="w-full flex items-center gap-x-2">
-                <div class="w-4 h-2 rounded-[1px] bg-input-base shadow-xs-border-base flex items-center justify-center">
+                <div class="w-4 h-2 rounded-xs bg-input-base shadow-xs-border-base flex items-center justify-center">
                   <div class="w-2.5 h-0.5 ml-0 bg-icon-strong-base hidden" data-slot="list-item-extra-icon" />
                 </div>
                 <span>{methodLabel(i)}</span>

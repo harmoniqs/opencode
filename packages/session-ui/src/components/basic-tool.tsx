@@ -4,7 +4,6 @@ import { useI18n } from "@opencode-ai/ui/context/i18n"
 import { createStore } from "solid-js/store"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import type { IconProps } from "@opencode-ai/ui/icon"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 
 export type TriggerTitle = {
   title: string
@@ -202,7 +201,7 @@ export function BasicTool(props: BasicToolProps) {
                         [title().titleClass ?? ""]: !!title().titleClass,
                       }}
                     >
-                      <TextShimmer text={title().title} active={pending()} />
+                      <span data-pending={pending() ? "true" : "false"}>{title().title}</span>
                     </span>
                     <Show when={!pending()}>
                       <Show when={title().subtitle}>

@@ -48,7 +48,7 @@ const pool = [
 const btn = (accent?: boolean) =>
   ({
     padding: "6px 14px",
-    "border-radius": "6px",
+    "border-radius": "var(--radius-sm)",
     border: "1px solid var(--color-divider, #333)",
     background: accent ? "var(--color-accent, #58f)" : "var(--color-fill-element, #222)",
     color: "var(--color-text, #eee)",
@@ -94,7 +94,7 @@ const css = `
   flex-direction: column;
   background: var(--background-base);
   border: 1px solid var(--border-weak-base);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 [data-component="todo-session-frame"] {
@@ -136,7 +136,7 @@ const css = `
 }
 
 [data-slot="todo-preview-msg"] {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-weak-base);
   background: var(--surface-base);
   color: var(--text-weak);

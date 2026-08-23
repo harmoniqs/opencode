@@ -16,7 +16,7 @@
 }
 
 [data-component="tooltip"] {
-  z-index: 1000;
+  z-index: var(--z-tooltip);
   max-width: 320px;
   border-radius: var(--radius-sm);
   background-color: var(--surface-float-base);

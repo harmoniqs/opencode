@@ -46,7 +46,7 @@ export const Basic = {
           style={{
             padding: "20px",
             border: "1px dashed var(--border-weak)",
-            "border-radius": "8px",
+            "border-radius": "var(--radius-md)",
             color: "var(--text-weak)",
           }}
         >
@@ -90,7 +90,7 @@ export const CheckboxRadio = {
           style={{
             padding: "20px",
             border: "1px dashed var(--border-weak)",
-            "border-radius": "8px",
+            "border-radius": "var(--radius-md)",
             color: "var(--text-weak)",
           }}
         >

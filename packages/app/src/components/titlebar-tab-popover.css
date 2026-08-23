@@ -14,7 +14,7 @@
   padding: 12px;
 
   background: var(--v2-background-bg-base);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--v2-elevation-floating);
 
   color: var(--v2-text-text-base);

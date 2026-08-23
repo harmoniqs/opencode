@@ -1,5 +1,5 @@
 .toast-v2-region {
-  z-index: 1000;
+  z-index: var(--z-toast);
   max-width: min(320px, calc(100vw - 64px));
   pointer-events: none;
   user-select: none;

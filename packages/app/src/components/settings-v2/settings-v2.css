@@ -84,7 +84,7 @@
 }
 
 [data-component="settings-v2-list"] {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--v2-background-bg-layer-01);
   padding-inline: 20px;
   box-shadow: inset 0 0 0 0.5px var(--v2-border-border-muted);
@@ -397,7 +397,7 @@
   height: 28px;
   padding: 4px 8px 4px 4px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--v2-text-text-base);
 }
@@ -504,7 +504,7 @@
   flex-direction: column;
   gap: 0;
   padding: 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .settings-v2-shortcuts [data-component="settings-v2-list"] > div {
@@ -538,7 +538,7 @@
   padding: 6px 8px;
   margin: -6px -8px;
   border: 0;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: transparent;
   cursor: pointer;
   font-style: normal;
@@ -565,7 +565,7 @@
 
 .settings-v2-keybind-button--active {
   color: var(--v2-text-text-faint);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background-color: var(--v2-background-bg-layer-02);
 }
 
@@ -612,7 +612,7 @@
   flex-direction: column;
   gap: 0;
   padding: 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .settings-v2-servers-row {
@@ -688,7 +688,7 @@
   width: 480px;
   max-width: calc(100vw - 32px);
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   align-items: stretch;
 }
 

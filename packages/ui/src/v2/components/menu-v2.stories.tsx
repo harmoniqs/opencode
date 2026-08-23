@@ -175,7 +175,7 @@ export const Context = {
             "justify-content": "center",
             width: "320px",
             height: "180px",
-            "border-radius": "8px",
+            "border-radius": "var(--radius-md)",
             border: "1px dashed rgba(0, 0, 0, 0.2)",
             color: "#5c5c5c",
             "font-size": "13px",

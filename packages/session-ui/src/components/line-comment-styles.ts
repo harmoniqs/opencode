@@ -66,7 +66,7 @@ export const lineCommentStyles = `
   min-width: 200px;
   max-width: none;
   box-sizing: border-box;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised-stronger-non-alpha);
   box-shadow: var(--shadow-xxs-border);
   padding: 12px;
@@ -95,7 +95,7 @@ export const lineCommentStyles = `
   width: 380px;
   max-width: none;
   padding: 8px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
 }
 
 [data-component="line-comment"][data-inline][data-variant="editor"] [data-slot="line-comment-popover"] {

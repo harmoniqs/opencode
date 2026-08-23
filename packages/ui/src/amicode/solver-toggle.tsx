@@ -134,7 +134,7 @@ export function AmicodeSolverToggle() {
               "letter-spacing": "0.06em",
               padding: "0 4px",
               "border-radius": "var(--radius-sm)",
-              background: "var(--accent, #fff676)",
+              background: "var(--accent, #FFE614)",
               color: "var(--accent-ink, #111214)",
             }}
           >

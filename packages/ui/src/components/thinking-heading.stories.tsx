@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { createEffect, on, onMount, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { TextShimmer } from "./text-shimmer"
 import { TextReveal } from "./text-reveal"
 
 export default {
@@ -479,7 +478,7 @@ function AnimatedHeading(props) {
 
 const btn = (accent) => ({
   padding: "6px 14px",
-  "border-radius": "6px",
+  "border-radius": "var(--radius-sm)",
   border: "1px solid var(--color-divider, #333)",
   background: accent ? "var(--color-danger-fill, #c33)" : "var(--color-fill-element, #222)",
   color: "var(--color-text, #eee)",
@@ -489,7 +488,7 @@ const btn = (accent) => ({
 
 const smallBtn = (active) => ({
   padding: "4px 12px",
-  "border-radius": "6px",
+  "border-radius": "var(--radius-sm)",
   border: active ? "1px solid var(--color-accent, #58f)" : "1px solid var(--color-divider, #333)",
   background: active ? "var(--color-accent, #58f)" : "var(--color-fill-element, #222)",
   color: "var(--color-text, #eee)",
@@ -541,7 +540,7 @@ const headingSlot = {
 
 const cardStyle = {
   padding: "16px 20px",
-  "border-radius": "10px",
+  "border-radius": "var(--radius-md)",
   border: "1px solid var(--color-divider, #333)",
   background: "var(--h-mask-bg, #1a1a1a)",
   display: "grid",
@@ -653,7 +652,7 @@ export const Playground = {
           <div style={cardStyle}>
             <span style={cardLabel}>TextReveal (production)</span>
             <span style={thinkingRow}>
-              <TextShimmer text="Thinking" active={active()} />
+              <span>Thinking</span>
               <span style={headingSlot}>
                 <TextReveal
                   text={heading()}
@@ -671,7 +670,7 @@ export const Playground = {
             <div style={cardStyle}>
               <span style={cardLabel}>{v.label}</span>
               <span style={thinkingRow}>
-                <TextShimmer text="Thinking" active={active()} />
+                <span>Thinking</span>
                 <span style={headingSlot}>
                   <AnimatedHeading
                     text={heading()}

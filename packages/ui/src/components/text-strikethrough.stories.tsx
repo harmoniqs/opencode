@@ -13,7 +13,7 @@ const TEXT_LONG =
 const btn = (active?: boolean) =>
   ({
     padding: "8px 18px",
-    "border-radius": "6px",
+    "border-radius": "var(--radius-sm)",
     border: "1px solid var(--color-divider, #444)",
     background: active ? "var(--color-accent, #58f)" : "var(--color-fill-element, #222)",
     color: "var(--color-text, #eee)",
@@ -33,7 +33,7 @@ const heading = {
 
 const card = {
   padding: "16px 20px",
-  "border-radius": "10px",
+  "border-radius": "var(--radius-md)",
   border: "1px solid var(--border-weak-base, #333)",
   background: "var(--surface-base, #1a1a1a)",
 }

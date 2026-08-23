@@ -20,7 +20,8 @@
     "random": "echo 'Random script'",
     "sso": "aws sso login --sso-session=opencode --no-browser",
     "translate:app": "bun run script/translate-app.ts",
-    "test": "echo 'do not run tests from root' && exit 1"
+    "test": "echo 'do not run tests from root' && exit 1",
+    "check:design": "node script/check-design-tokens.mjs"
   },
   "workspaces": {
     "packages": [

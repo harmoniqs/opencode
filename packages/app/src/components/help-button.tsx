@@ -22,13 +22,13 @@ export function TabsInfoPopup() {
     <Drawer open={drawerOpen()} onOpenChange={setDrawerOpen} side="right">
       <Show when={settings.general.shouldDisplayTabsToast()}>
         <div
-          class="fixed bottom-5 right-5 z-50 h-[240px] w-[192px] rounded-[8px] bg-v2-background-bg-base p-1 shadow-[var(--v2-elevation-floating)]"
+          class="fixed bottom-5 right-5 z-50 h-[240px] w-[192px] rounded-md bg-v2-background-bg-base p-1 shadow-[var(--v2-elevation-floating)]"
           aria-label="Introducing Tabs. Organize your work and active sessions with tabs"
         >
           <button
             type="button"
             aria-label="Dismiss Tabs information"
-            class="absolute top-3 right-3 z-10 size-5 flex items-center justify-center rounded-[4px] bg-[rgba(0,0,0,0.4)]"
+            class="absolute top-3 right-3 z-10 size-5 flex items-center justify-center rounded-sm bg-[rgba(0,0,0,0.4)]"
             onClick={settings.general.dismissTabsToast}
           >
             <svg
@@ -44,7 +44,7 @@ export function TabsInfoPopup() {
           </button>
           <button
             type="button"
-            class="relative block h-[232px] w-[184px] cursor-pointer overflow-hidden rounded-[4px] text-left"
+            class="relative block h-[232px] w-[184px] cursor-pointer overflow-hidden rounded-sm text-left"
             onClick={() => {
               settings.general.dismissTabsToast()
               setDrawerOpen(true)
@@ -61,10 +61,10 @@ export function TabsInfoPopup() {
               onContextMenu={(event) => event.preventDefault()}
             />
             <div class="absolute inset-x-0 bottom-0 flex w-full flex-col items-start gap-1.5 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,#000000_100%)] px-3 py-5">
-              <p class="w-full select-none text-[13px] font-[530] leading-none tracking-[-0.04px] text-[#FFFFFF]">
+              <p class="w-full select-none text-[13px] font-[530] leading-none tracking-[-0.04px] text-[var(--fg-on-dark)]">
                 Introducing Tabs
               </p>
-              <p class="w-full select-none text-[13px] font-[440] leading-[140%] tracking-[-0.04px] text-[#808080]">
+              <p class="w-full select-none text-[13px] font-[440] leading-[140%] tracking-[-0.04px] text-[var(--fg-on-dark-muted)]">
                 Organize your work and active sessions with tabs
               </p>
             </div>
@@ -121,7 +121,7 @@ export function TabsInfoPopup() {
           </p>
           <div class="flex w-full flex-1 flex-col gap-4 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-base">
             <p>OpenCode Desktop is now built around tabs.</p>
-            <img src={tabsImage} alt="" class="aspect-video w-full rounded-[6px] object-cover" />
+            <img src={tabsImage} alt="" class="aspect-video w-full rounded-sm object-cover" />
             <p>
               Start a new session in a tab, or open an existing session from any of your projects. Open a new tab when
               you're starting something new, and close it when you're done.
@@ -133,7 +133,7 @@ export function TabsInfoPopup() {
             <p>
               You'll find all your sessions and projects on the new Home screen. Selecting a session opens it in a tab.
             </p>
-            <img src={homeImage} alt="" class="aspect-video w-full rounded-[6px] object-cover" />
+            <img src={homeImage} alt="" class="aspect-video w-full rounded-sm object-cover" />
             <p>When you reopen the app, your tabs are still open.</p>
             <p>
               The new design does not support Git Worktrees yet, it's coming soon. So if you'd prefer to continue using

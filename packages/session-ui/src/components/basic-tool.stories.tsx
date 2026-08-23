@@ -13,7 +13,7 @@ Use structured triggers for consistent layout; custom triggers allowed.
 - Optional: \`status\`, \`defaultOpen\`, \`forceOpen\`, \`defer\`, \`locked\`.
 
 ### Variants and states
-- Pending/running status animates the title via TextShimmer.
+- Pending/running status is exposed on the title via data-pending (the shimmer animation was removed).
 
 ### Behavior
 - Uses Collapsible; can defer content rendering until open.

@@ -12,7 +12,9 @@ describe("serverStatusDotClass", () => {
 
   test("uses the session attention token when a service needs attention", () => {
     expect(serverStatusDotClass({ ready: true, serverHealth: true, attention: true, issue: true })).toBe(
-      "bg-v2-background-bg-accent",
+      // a bare yellow fill is 1.07:1 on the light ground, so the ink ring is what
+      // makes the highest-urgency state visible at all
+      "bg-v2-background-bg-accent ring-1 ring-[var(--accent-edge-ink)]",
     )
   })
 

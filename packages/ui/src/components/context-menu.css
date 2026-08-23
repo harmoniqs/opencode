@@ -8,7 +8,7 @@
   background-clip: padding-box;
   background-color: var(--surface-raised-stronger-non-alpha);
   padding: 4px;
-  z-index: 100;
+  z-index: var(--z-overlay);
   transform-origin: var(--kb-menu-content-transform-origin);
 
   &:focus-within,

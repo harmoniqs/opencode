@@ -301,7 +301,7 @@
     }
 
     [data-slot="terminal-tab-title"] {
-      font-family: Inter, sans-serif;
+      font-family: var(--font-family-text, "DM Sans", sans-serif);
       font-style: normal;
       font-weight: 440;
       font-size: 13px;
@@ -737,7 +737,7 @@ body[data-new-layout] #review-panel [data-component="tabs"][data-variant="normal
   }
 
   [data-slot="tabs-trigger"] {
-    font-family: Inter, sans-serif;
+    font-family: var(--font-family-text, "DM Sans", sans-serif);
     font-style: normal;
     font-weight: 440;
     font-size: 13px;

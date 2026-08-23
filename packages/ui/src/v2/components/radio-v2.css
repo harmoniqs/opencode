@@ -119,6 +119,10 @@
   &:where([data-checked]) [data-slot="radio-v2-item-control"] {
     background:
       linear-gradient(180deg, var(--v2-alpha-light-20) 0%, var(--v2-alpha-light-0) 100%), var(--v2-background-bg-accent);
+    /* The checked fill is brand yellow, which is 1.07:1 against a cream ground —
+       without an ink edge the selected radio was indistinguishable from the
+       unselected ones. The edge is what carries "checked" on light. */
+    border-color: var(--accent-edge-ink, #000);
   }
 
   &:where([data-checked]):where(:hover):where(:not([data-disabled], [data-readonly]))
