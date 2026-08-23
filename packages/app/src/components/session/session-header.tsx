@@ -268,6 +268,7 @@ export function SessionHeader() {
   const v2ActionsState = createMemo<SessionHeaderV2ActionsState>(() => ({
     statusDotVisible: statusVis().healthDot,
     statusLabel: language.t("status.popover.trigger"),
+    currentSessionID: params.id,
     reviewLabel: language.t("command.review.toggle"),
     reviewKeybind: reviewTooltipKeybind(command),
     reviewVisible: isDesktop(),
@@ -568,6 +569,7 @@ type SessionHeaderV2ActionsState = {
    *  show-status setting only drives this health-dot flag. */
   statusDotVisible: boolean
   statusLabel: string
+  currentSessionID?: string
   reviewLabel: string
   reviewKeybind: string[]
   reviewVisible: boolean
@@ -583,7 +585,7 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
     <div class="flex items-center gap-2">
 
       {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
-      <SessionChatsDropdown />
+      <SessionChatsDropdown currentSessionID={props.state.currentSessionID} />
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
@@ -626,14 +628,13 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
 const SESSION_DROPDOWN_ROW =
   "flex min-w-0 w-full shrink-0 cursor-default items-center rounded-sm bg-transparent text-left transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out focus-visible:outline-none h-7 gap-2 px-1.5 [font-weight:440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base"
 
-function SessionChatsDropdown() {
+export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) {
   const tabs = useTabs()
   const server = useServer()
   const serverSync = useServerSync()
   const globalCtx = useGlobal()
   const language = useLanguage()
   const navigate = useNavigate()
-  const { params } = useSessionLayout()
 
   const [open, setOpen] = createSignal(false)
   const [flyoutTab, setFlyoutTab] = createSignal<"active" | "archived">("active")
@@ -646,7 +647,7 @@ function SessionChatsDropdown() {
 
   let flyoutRoot: HTMLDivElement | undefined
 
-  const currentSessionID = createMemo(() => params.id)
+  const currentSessionID = createMemo(() => props.currentSessionID)
 
   // Active sessions — only computed when the flyout is open to avoid
   // triggering reactive subscriptions (serverSync().child pins the directory
