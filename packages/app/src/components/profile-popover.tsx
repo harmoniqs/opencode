@@ -1,8 +1,9 @@
 import { batch, createEffect, createSignal, Show } from "solid-js"
 import { Popover } from "@opencode-ai/ui/popover"
-import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
+import { useServer } from "@/context/server"
+import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 
 interface ProfileData {
   name: string
@@ -31,6 +32,7 @@ export function ProfilePopoverTrigger() {
     custom_link_url: "",
     custom_link_label: "",
   })
+  const server = useServer()
 
   const setShown = (next: boolean) => {
     batch(() => {
@@ -46,8 +48,7 @@ export function ProfilePopoverTrigger() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch("/amicode/profile")
-      const data = await res.json()
+      const data = await amicodeGet(server.current, "/amicode/profile") as any
       if (data.ok && data.you) setProfile(data.you)
     } catch {
       /* silent */
@@ -55,7 +56,7 @@ export function ProfilePopoverTrigger() {
   }
 
   createEffect(() => {
-    if (shown() && !profile()) void fetchProfile()
+    if (shown()) void fetchProfile()
   })
 
   const beginEdit = () => {
@@ -79,8 +80,7 @@ export function ProfilePopoverTrigger() {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(d)) params.set(k, v)
     try {
-      const res = await fetch(`/amicode/profile?${params.toString()}`, { method: "POST" })
-      const data = await res.json()
+      const data = await amicodePost(server.current, `/amicode/profile?${params.toString()}`) as any
       if (data.ok && data.you) setProfile(data.you)
       setEditing(false)
     } catch {
@@ -96,7 +96,12 @@ export function ProfilePopoverTrigger() {
     return parts[0][0]?.toUpperCase() ?? ""
   }
 
-  const isEmpty = () => !profile() || (!profile()!.name || profile()!.name === "Practitioner")
+  const isEmpty = () => {
+    const p = profile()
+    if (!p) return true
+    // Show edit mode only when there's truly nothing set (no name beyond default, no role, no affiliation)
+    return (!p.name || p.name === "Practitioner") && !p.role && !p.affiliation && !p.focus
+  }
 
   const openExternal = (url: string) => {
     window.open(url, "_blank", "noreferrer")
@@ -142,7 +147,7 @@ export function ProfilePopoverTrigger() {
         >
           <Show
             when={!editing() && !isEmpty()}
-            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} isEmpty={isEmpty()} beginEdit={beginEdit} />}
+            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} isEmpty={isEmpty()} />}
           >
             <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} />
           </Show>
@@ -316,13 +321,7 @@ function EditForm(props: {
   onSave: () => void
   onCancel: () => void
   isEmpty: boolean
-  beginEdit: () => void
 }) {
-  // Auto-enter edit mode for empty state
-  if (props.isEmpty) {
-    props.beginEdit()
-  }
-
   const update = (key: string, value: string) => props.setDraft({ ...props.draft(), [key]: value })
 
   return (
