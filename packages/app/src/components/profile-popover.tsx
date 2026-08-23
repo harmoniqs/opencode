@@ -123,6 +123,17 @@ export function ProfilePopoverTrigger() {
     }
   }
 
+  const removeAvatar = async () => {
+    const params = new URLSearchParams()
+    params.set("avatar", "")
+    try {
+      const data = await amicodePost(server.current, `/amicode/profile?${params.toString()}`) as any
+      if (data.ok && data.you) setProfile(data.you)
+    } catch {
+      /* silent */
+    }
+  }
+
   return (
     <Popover
       open={shown()}
@@ -156,7 +167,7 @@ export function ProfilePopoverTrigger() {
         >
           <Show
             when={!editing() && !isEmpty()}
-            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} onAvatarChange={saveAvatar} currentAvatar={profile()?.avatar ?? null} isEmpty={isEmpty()} />}
+            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} onAvatarChange={saveAvatar} onAvatarRemove={removeAvatar} currentAvatar={profile()?.avatar ?? null} isEmpty={isEmpty()} />}
           >
             <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} />
           </Show>
@@ -343,6 +354,7 @@ function EditForm(props: {
   onSave: () => void
   onCancel: () => void
   onAvatarChange: (dataUrl: string) => void
+  onAvatarRemove: () => void
   currentAvatar: string | null
   isEmpty: boolean
 }) {
@@ -381,36 +393,64 @@ function EditForm(props: {
         onChange={handleFileSelect}
       />
       {/* Clickable avatar tile */}
-      <div
-        onClick={() => fileInput?.click()}
-        title="Click to change photo"
-        style={{
-          width: "48px",
-          height: "48px",
-          "border-radius": "10px",
-          display: "flex",
-          "align-items": "center",
-          "justify-content": "center",
-          overflow: "hidden",
-          background: props.currentAvatar ? "transparent" : "var(--accent, #fff676)",
-          color: "var(--accent-ink, #111214)",
-          "font-size": "16px",
-          "font-weight": "700",
-          cursor: "pointer",
-          "align-self": "center",
-          border: "1px dashed var(--v2-border-border-base)",
-        }}
-      >
-        <Show when={props.currentAvatar} fallback={
-          <Show when={avatarInitials()} fallback={<IconV2 name="person" />}>
-            {avatarInitials()}
+      <div style={{ position: "relative", "align-self": "center", width: "48px", height: "48px" }}>
+        <div
+          onClick={() => fileInput?.click()}
+          title="Click to change photo"
+          style={{
+            width: "48px",
+            height: "48px",
+            "border-radius": "10px",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            overflow: "hidden",
+            background: props.currentAvatar ? "transparent" : "var(--accent, #fff676)",
+            color: "var(--accent-ink, #111214)",
+            "font-size": "16px",
+            "font-weight": "700",
+            cursor: "pointer",
+            border: "1px dashed var(--v2-border-border-base)",
+          }}
+        >
+          <Show when={props.currentAvatar} fallback={
+            <Show when={avatarInitials()} fallback={<IconV2 name="person" />}>
+              {avatarInitials()}
+            </Show>
+          }>
+            <img
+              src={props.currentAvatar!}
+              style={{ width: "100%", height: "100%", "object-fit": "cover", "border-radius": "10px" }}
+              alt="Profile"
+            />
           </Show>
-        }>
-          <img
-            src={props.currentAvatar!}
-            style={{ width: "100%", height: "100%", "object-fit": "cover", "border-radius": "10px" }}
-            alt="Profile"
-          />
+        </div>
+        <Show when={props.currentAvatar}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); props.onAvatarRemove() }}
+            title="Remove photo"
+            style={{
+              position: "absolute",
+              top: "-4px",
+              right: "-4px",
+              width: "16px",
+              height: "16px",
+              "border-radius": "50%",
+              border: "1px solid var(--v2-border-border-base)",
+              background: "var(--v2-background-bg-base)",
+              color: "var(--v2-text-text-muted)",
+              "font-size": "10px",
+              "line-height": "1",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
+              cursor: "pointer",
+              padding: "0",
+            }}
+          >
+            ✕
+          </button>
         </Show>
       </div>
       <input
