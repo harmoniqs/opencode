@@ -112,6 +112,7 @@
   --status-idle: #767676;        /* 4.54:1 — quiet on purpose */
   --status-running: var(--accent);
   --status-attention: #d97706;   /* 3.19:1, 97% sat */
+  --status-error: #ef4444;       /* 3.76:1, vivid — an error must not be missed */
   --status-done: #16a34a;        /* 3.30:1, 87% sat */
   --status-ring: var(--accent-edge-ink);   /* ink — every dot takes the same edge */
 }
@@ -119,6 +120,7 @@
   --status-idle: #A9A88C;        /* 7.92:1 */
   --status-running: var(--accent);
   --status-attention: #f2cf76;   /* 12.76:1 */
+  --status-error: #f87171;       /* 6.94:1 */
   --status-done: #4ade80;        /* 11.01:1 */
   /* Ink here too. On the dark ground it is nearly invisible, but it separates the
      dot from the lighter raised surface of a hovered or active tab, and it keeps
@@ -130,6 +132,7 @@
     --status-idle: #A9A88C;
     --status-running: var(--accent);
     --status-attention: #f2cf76;
+    --status-error: #f87171;
     --status-done: #4ade80;
     --status-ring: var(--accent-edge-ink);
   }

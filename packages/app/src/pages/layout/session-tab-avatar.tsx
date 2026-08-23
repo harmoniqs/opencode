@@ -23,6 +23,7 @@ export function SessionTabAvatar(props: {
       unread={state.unread()}
       loading={state.loading()}
       needsAttention={state.needsAttention()}
+      hasError={state.hasError()}
     />
   )
 }
@@ -34,6 +35,7 @@ export function SessionTabAvatarView(props: {
   unread: boolean
   loading: boolean
   needsAttention?: boolean
+  hasError?: boolean
 }) {
   // The Amico mark used to sit here on every tab — identical on all of them, so
   // it occupied the slot without saying anything. A status dot uses the same
@@ -43,6 +45,7 @@ export function SessionTabAvatarView(props: {
       status={sessionTabStatus({
         loading: props.loading,
         needsAttention: props.needsAttention ?? false,
+        hasError: props.hasError ?? false,
         unread: props.unread,
       })}
     />

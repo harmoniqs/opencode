@@ -91,7 +91,8 @@ import { parseProblemResponse } from "@opencode-ai/ui/amicode-entity-view"
 import { Mark } from "@opencode-ai/ui/logo"
 import { AmicodeFooter } from "@opencode-ai/ui/amicode-footer"
 import { useTheme } from "@opencode-ai/ui/theme/context"
-import { StatusDot } from "@/pages/layout/session-tab-status"
+import { SessionTabStatusDot, sessionTabStatus } from "@/pages/layout/session-tab-status"
+import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -2074,6 +2075,14 @@ function HomeSessionRow(props: {
   const language = useLanguage()
   const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
   const showLabel = () => !props.hideLabel && !!props.record.projectName
+  // Same hook the tab strip and the sessions dropdown use, so one session reads
+  // identically wherever it appears. Previously this dot only meant "open tab"
+  // and was therefore always the same green.
+  const status = useSessionTabAvatarState(
+    () => props.server,
+    () => props.record.session.directory,
+    () => props.record.session.id,
+  )
 
   return (
     <div class="group/session relative flex h-7 min-w-0 items-center rounded-sm">
@@ -2083,12 +2092,14 @@ function HomeSessionRow(props: {
         class={HOME_SESSION_ROW}
         onClick={() => props.openSession(props.record.session)}
       >
-        <Show when={props.isOpenTab}>
-          {/* same mark as the tab strip and the sessions dropdown */}
-          <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
-            <StatusDot color="var(--status-done)" label="Open" status="open" />
-          </TooltipV2>
-        </Show>
+        <SessionTabStatusDot
+          status={sessionTabStatus({
+            loading: status.loading(),
+            needsAttention: status.needsAttention(),
+            hasError: status.hasError(),
+            unread: status.unread(),
+          })}
+        />
         <span
           class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${showLabel() ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
         >

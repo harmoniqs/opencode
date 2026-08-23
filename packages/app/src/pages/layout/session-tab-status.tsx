@@ -9,17 +9,21 @@
 // "error" tone is deliberately absent rather than added as a dot that never
 // lights. When a per-session failure signal exists, add it here as `danger`.
 
-export type SessionTabStatus = "idle" | "running" | "attention" | "done"
+export type SessionTabStatus = "idle" | "running" | "attention" | "error" | "done"
 
 export function sessionTabStatus(input: {
   loading: boolean
   needsAttention: boolean
   unread: boolean
+  hasError?: boolean
 }): SessionTabStatus {
   // Blocked beats busy: a permission or question needs the user before anything
-  // else can happen, so it must not be masked by a spinner.
+  // else can happen, so it must not be masked by a spinner. An error outranks
+  // plain unread, which would otherwise swallow it — both come from the same
+  // unseen-notification index.
   if (input.needsAttention) return "attention"
   if (input.loading) return "running"
+  if (input.hasError) return "error"
   if (input.unread) return "done"
   return "idle"
 }
@@ -34,6 +38,7 @@ const TONE: Record<SessionTabStatus, { color: string; label: string }> = {
   // this one the ink edge is what makes it visible rather than just crisp
   running: { color: "var(--status-running)", label: "Working" },
   attention: { color: "var(--status-attention)", label: "Needs you" },
+  error: { color: "var(--status-error)", label: "Error" },
   done: { color: "var(--status-done)", label: "Finished — unread" },
 }
 

@@ -22,7 +22,8 @@ import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useServer, ServerConnection } from "@/context/server"
 import { useSettings } from "@/context/settings"
-import { StatusDot } from "@/pages/layout/session-tab-status"
+import { SessionTabStatusDot, sessionTabStatus } from "@/pages/layout/session-tab-status"
+import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { useSync } from "@/context/sync"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useTerminal } from "@/context/terminal"
@@ -1076,6 +1077,15 @@ function SessionDropdownRow(props: {
 }) {
   const language = useLanguage()
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+  // The dot used to mean "this session is an open tab" and was therefore always
+  // the same green. It now reports the SAME status the tab strip shows, computed
+  // from the same hook, so a session reads identically in both places.
+  const rowServer = useServer()
+  const status = useSessionTabAvatarState(
+    () => rowServer.key,
+    () => props.session.directory,
+    () => props.session.id,
+  )
 
   return (
     <div class="group/session relative flex h-7 min-w-0 items-center rounded-sm">
@@ -1085,13 +1095,14 @@ function SessionDropdownRow(props: {
         class={SESSION_DROPDOWN_ROW}
         onClick={() => props.onOpen(props.session)}
       >
-        <Show when={props.isOpenTab}>
-          {/* the same mark the tab strip uses — it was its own green with a glow
-              instead of the ink ring, so the two surfaces disagreed */}
-          <TooltipV2 placement="top" value="Open" class="flex shrink-0 items-center">
-            <StatusDot color="var(--status-done)" label="Open" status="open" />
-          </TooltipV2>
-        </Show>
+        <SessionTabStatusDot
+          status={sessionTabStatus({
+            loading: status.loading(),
+            needsAttention: status.needsAttention(),
+            hasError: status.hasError(),
+            unread: status.unread(),
+          })}
+        />
         <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
           {title()}
         </span>
