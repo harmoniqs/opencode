@@ -156,9 +156,9 @@ export function ProfilePopoverTrigger() {
         >
           <Show
             when={!editing() && !isEmpty()}
-            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} isEmpty={isEmpty()} />}
+            fallback={<EditForm draft={draft} setDraft={setDraft} onSave={save} onCancel={() => setEditing(false)} onAvatarChange={saveAvatar} currentAvatar={profile()?.avatar ?? null} isEmpty={isEmpty()} />}
           >
-            <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} onAvatarChange={saveAvatar} />
+            <ReadView profile={profile()!} initials={initials()} onEdit={beginEdit} onOpenExternal={openExternal} />
           </Show>
         </div>
       </Show>
@@ -171,41 +171,16 @@ function ReadView(props: {
   initials: string
   onEdit: () => void
   onOpenExternal: (url: string) => void
-  onAvatarChange: (dataUrl: string) => void
 }) {
   const [logoBroken, setLogoBroken] = createSignal(false)
-  let fileInput: HTMLInputElement | undefined
-
-  const handleFileSelect = (e: Event) => {
-    const input = e.currentTarget as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith("image/")) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      props.onAvatarChange(result)
-    }
-    reader.readAsDataURL(file)
-    input.value = ""
-  }
+  const [bioExpanded, setBioExpanded] = createSignal(false)
 
   return (
     <div>
-      {/* Hidden file input for avatar upload */}
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleFileSelect}
-      />
       {/* Header: avatar + name/role/affiliation */}
       <div style={{ display: "flex", gap: "12px", "align-items": "flex-start" }}>
-        {/* Avatar — clickable to change photo */}
+        {/* Avatar */}
         <div
-          onClick={() => fileInput?.click()}
-          title="Click to change photo"
           style={{
             width: "48px",
             height: "48px",
@@ -219,8 +194,6 @@ function ReadView(props: {
             color: "var(--accent-ink, #111214)",
             "font-size": "16px",
             "font-weight": "700",
-            cursor: "pointer",
-            position: "relative",
           }}
         >
           <Show when={props.profile.avatar} fallback={
@@ -287,14 +260,18 @@ function ReadView(props: {
           </Show>
           <Show when={props.profile.description}>
             <div
+              onClick={() => setBioExpanded(!bioExpanded())}
               style={{
                 "font-size": "12px",
                 color: "var(--v2-text-text-muted)",
                 "margin-top": "4px",
-                display: "-webkit-box",
-                "-webkit-line-clamp": "2",
-                "-webkit-box-orient": "vertical",
-                overflow: "hidden",
+                cursor: "pointer",
+                ...(bioExpanded() ? {} : {
+                  display: "-webkit-box",
+                  "-webkit-line-clamp": "2",
+                  "-webkit-box-orient": "vertical",
+                  overflow: "hidden",
+                }),
               }}
             >
               {props.profile.description}
@@ -362,12 +339,77 @@ function EditForm(props: {
   setDraft: (d: Record<string, string>) => void
   onSave: () => void
   onCancel: () => void
+  onAvatarChange: (dataUrl: string) => void
+  currentAvatar: string | null
   isEmpty: boolean
 }) {
   const update = (key: string, value: string) => props.setDraft({ ...props.draft(), [key]: value })
+  let fileInput: HTMLInputElement | undefined
+
+  const handleFileSelect = (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      props.onAvatarChange(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+    input.value = ""
+  }
+
+  const avatarInitials = () => {
+    const name = props.draft().name
+    if (!name) return ""
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    return parts[0][0]?.toUpperCase() ?? ""
+  }
 
   return (
     <div style={{ display: "flex", "flex-direction": "column", gap: "8px" }}>
+      {/* Hidden file input */}
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleFileSelect}
+      />
+      {/* Clickable avatar tile */}
+      <div
+        onClick={() => fileInput?.click()}
+        title="Click to change photo"
+        style={{
+          width: "48px",
+          height: "48px",
+          "border-radius": "10px",
+          display: "flex",
+          "align-items": "center",
+          "justify-content": "center",
+          overflow: "hidden",
+          background: props.currentAvatar ? "transparent" : "var(--accent, #fff676)",
+          color: "var(--accent-ink, #111214)",
+          "font-size": "16px",
+          "font-weight": "700",
+          cursor: "pointer",
+          "align-self": "center",
+          border: "1px dashed var(--v2-border-border-base)",
+        }}
+      >
+        <Show when={props.currentAvatar} fallback={
+          <Show when={avatarInitials()} fallback={<IconV2 name="person" />}>
+            {avatarInitials()}
+          </Show>
+        }>
+          <img
+            src={props.currentAvatar!}
+            style={{ width: "100%", height: "100%", "object-fit": "cover", "border-radius": "10px" }}
+            alt="Profile"
+          />
+        </Show>
+      </div>
       <input
         class="amc-input amc-input--compact"
         placeholder="Your name"
