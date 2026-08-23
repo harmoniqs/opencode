@@ -1,6 +1,7 @@
-import { batch, createEffect, createSignal, Show } from "solid-js"
+import { batch, createEffect, createSignal, Show, type ComponentProps } from "solid-js"
 import { Popover } from "@opencode-ai/ui/popover"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { announceChromeDropdown, chromeDropdownOpenId, clearChromeDropdown } from "@/utils/chrome-dropdown"
 import { useServer } from "@/context/server"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
@@ -112,24 +113,17 @@ export function ProfilePopoverTrigger() {
       open={shown()}
       onOpenChange={setShown}
       triggerAs="button"
-      triggerProps={{
-        type: "button",
-        "aria-label": "Profile",
-        class: "shrink-0",
-        style: {
-          display: "inline-flex",
-          "align-items": "center",
-          "justify-content": "center",
-          width: "36px",
-          height: "36px",
-          border: "none",
-          "border-radius": "8px",
-          background: shown() ? "var(--v2-background-bg-layer-02)" : "transparent",
-          cursor: "pointer",
-          padding: "0",
-          color: "var(--v2-text-text-muted)",
-        },
-      }}
+      triggerProps={
+        {
+          type: "button",
+          "aria-label": "Profile",
+          "data-component": "icon-button-v2",
+          "data-variant": "ghost-muted",
+          "data-size": "large",
+          class: "!w-9 shrink-0",
+          style: { border: "none" },
+        } as ComponentProps<"button">
+      }
       trigger={<IconV2 name="person" />}
       class="[&_[data-slot=popover-body]]:p-0 w-[320px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-lg"
       gutter={8}
