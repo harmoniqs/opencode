@@ -278,18 +278,6 @@ function ReadView(props: {
               >
                 {props.profile.description}
               </div>
-              <span
-                style={{
-                  display: "inline-block",
-                  "font-size": "10px",
-                  color: "var(--v2-text-text-faint)",
-                  "margin-top": "2px",
-                  transition: "transform 0.15s ease",
-                  transform: bioExpanded() ? "rotate(180deg)" : "rotate(0deg)",
-                }}
-              >
-                ▾
-              </span>
             </div>
           </Show>
         </div>
