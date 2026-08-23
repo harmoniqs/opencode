@@ -22,8 +22,6 @@ import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useServer, ServerConnection } from "@/context/server"
 import { useSettings } from "@/context/settings"
-import { SessionTabStatusDot, sessionTabStatus } from "@/pages/layout/session-tab-status"
-import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { useSync } from "@/context/sync"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { useTerminal } from "@/context/terminal"
@@ -34,6 +32,8 @@ import { decode64 } from "@/utils/base64"
 import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
 import { sessionTitle } from "@/utils/session-title"
+import { SessionTabStatusDot, sessionTabStatus } from "@/pages/layout/session-tab-status"
+import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 import { statusTriggerVisibility } from "../status-popover-model"
 import { useServerSync } from "@/context/server-sync"
@@ -1078,14 +1078,19 @@ function SessionDropdownRow(props: {
 }) {
   const language = useLanguage()
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
-  // The dot used to mean "this session is an open tab" and was therefore always
-  // the same green. It now reports the SAME status the tab strip shows, computed
-  // from the same hook, so a session reads identically in both places.
   const rowServer = useServer()
   const status = useSessionTabAvatarState(
     () => rowServer.key,
     () => props.session.directory,
     () => props.session.id,
+  )
+  const dotStatus = createMemo(() =>
+    sessionTabStatus({
+      loading: status.loading(),
+      needsAttention: status.needsAttention(),
+      hasError: status.hasError(),
+      unread: status.unread(),
+    }),
   )
 
   return (
@@ -1096,14 +1101,9 @@ function SessionDropdownRow(props: {
         class={SESSION_DROPDOWN_ROW}
         onClick={() => props.onOpen(props.session)}
       >
-        <SessionTabStatusDot
-          status={sessionTabStatus({
-            loading: status.loading(),
-            needsAttention: status.needsAttention(),
-            hasError: status.hasError(),
-            unread: status.unread(),
-          })}
-        />
+        <Show when={props.isOpenTab}>
+          <SessionTabStatusDot status={dotStatus()} />
+        </Show>
         <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
           {title()}
         </span>
