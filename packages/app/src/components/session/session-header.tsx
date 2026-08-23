@@ -1101,7 +1101,7 @@ function SessionDropdownRow(props: {
         class={SESSION_DROPDOWN_ROW}
         onClick={() => props.onOpen(props.session)}
       >
-        <Show when={props.isOpenTab}>
+        <Show when={props.isOpenTab || dotStatus() !== "idle"}>
           <SessionTabStatusDot status={dotStatus()} />
         </Show>
         <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap">
