@@ -178,10 +178,11 @@ export namespace Timeline {
     // position, preserving order for everything else. This is aesthetic, not
     // correctness — it reduces dots without losing the shell content.
     const isShellItem = (item: (typeof assistantItems)[number]): boolean => {
-      if (item.type !== "part") return false
-      if (item.group.type === "shell") return true
-      if (item.group.type === "part") {
-        const ref = item.group.ref
+      if (item.type === "interrupted") return false
+      const group = (item as Extract<(typeof assistantItems)[number], { type: "part" }>).group
+      if (group.type === "shell") return true
+      if (group.type === "part") {
+        const ref = group.ref
         const part = assistantPartRefs.find(
           (r) => r.messageID === ref.messageID && r.part.id === ref.partID,
         )?.part
@@ -194,11 +195,16 @@ export namespace Timeline {
     const coalescedAssistantItems: typeof assistantItems = []
     for (const item of assistantItems) {
       if (isShellItem(item)) {
-        const refs =
-          item.group.type === "shell"
-            ? item.group.refs
-            : [{ messageID: item.group.ref.messageID, partID: item.group.ref.partID }]
-        if (firstShellKey === undefined) firstShellKey = item.group.key
+        const partItem = item as Extract<typeof item, { type: "part" }>
+        let refs: { messageID: string; partID: string }[]
+        if (partItem.group.type === "shell") {
+          refs = partItem.group.refs
+        } else if (partItem.group.type === "part") {
+          refs = [{ messageID: partItem.group.ref.messageID, partID: partItem.group.ref.partID }]
+        } else {
+          refs = []
+        }
+        if (firstShellKey === undefined) firstShellKey = partItem.group.key
         shellRefs.push(...refs)
         continue
       }
