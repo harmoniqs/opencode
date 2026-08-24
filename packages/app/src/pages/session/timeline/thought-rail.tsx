@@ -20,12 +20,16 @@
 //    Fix is `top: calc(var(--space-3) * -1)` (NEG_STEP_GAP). Most "rounding"
 //    reports are this gap, not rounding.
 //
-// 3. Caps land on the dot centre. dotCentre = DOT_TOP + NODE/2 (7.5 + 3.5
-//    = 11px). First segment starts there, last stops there: the tail is
-//    `height = STEP_GAP + dotCentre` from NEG_STEP_GAP (so its bottom is
-//    dotCentre), and the first mid segment is `top: dotCentre`. PR #242
-//    fixed the 1–2px stub that peeked past the dot from the old
-//    `DOT_TOP + NODE/2` inline math plus the 0.5px centring in
+// 3. Caps land on the dot centre. dotCentre defaults to 11px (the centre of
+//    a 22px first text line starting at the row's top — what prose and
+//    rail-label rows produce) and is MEASURED per row by TimelineRowFrame
+//    for content that opens with a card, so the dot always sits on the
+//    text it coincides with. First segment starts there, last stops there:
+//    the tail is `height = STEP_GAP + dotCentre` from NEG_STEP_GAP (so its
+//    bottom is dotCentre), and the first mid segment is `top: dotCentre`.
+//    Segments and dot share the one value, so alignment can never detach
+//    the spine from its dots. PR #242 fixed the 1–2px stub that peeked past
+//    the dot from the old inline math plus the 0.5px centring in
 //    LINE_X = GUTTER + NODE/2 - 0.5. Lone first+last is zero-height by
 //    intent — see shouldRenderRail.
 //
@@ -77,7 +81,17 @@
 
 
 const NODE = 7 // dot diameter, px — matches the site's Step
-const DOT_TOP = 7.5 // px from the row's top edge to the dot's top
+
+/** Where a row's dot centre sits when nothing measures it: 11px — the centre
+ *  of a 22px first text line starting at the row's top, which is what prose
+ *  and rail-label rows produce. Rows whose content opens with a CARD (a tool
+ *  chip, a group header, a widget preview) start their first text line lower
+ *  — measured 16px for a chip row, 26.5px for a widget preview — so
+ *  TimelineRowFrame measures the actual first line and passes `dotCentre`
+ *  (Kate 2026-08-24: dots must line up with the text they coincide with).
+ *  Segment caps derive from the same value, so alignment can never detach
+ *  the spine from its dots. */
+export const DEFAULT_DOT_CENTRE = 11
 
 // The rail sits in a gutter carved out of the row's own left inset, NOT flush
 // against the row edge. Flush was wrong: below the md breakpoint the message
@@ -105,12 +119,16 @@ export function ThoughtRail(props: {
   last: boolean
   /** the turn is still working, so this tail step is in flight */
   running: boolean
+  /** measured centre of the row's first text line (px from the row's top);
+   *  defaults to DEFAULT_DOT_CENTRE for unmeasured/prose rows */
+  dotCentre?: number
 }) {
   // Only the tail of a still-running turn is hollow. Everything above it has,
   // by definition, been succeeded. (Rule 4 — adjacency.)
   const isRunning = () => props.last && props.running
   // Rule 3 — cap at dot centre; Rule 2 — NEG_STEP_GAP bridges the pt-3 gap.
-  const dotCentre = DOT_TOP + NODE / 2
+  const dotCentre = () => props.dotCentre ?? DEFAULT_DOT_CENTRE
+  const dotTop = () => dotCentre() - NODE / 2
   // A lone running step is a single dot with no spine — every line must end
   // AT a dot at both ends, like Claude Code. A lone dot has no line, so a
   // one-step completion is just "dot fills" with no dangling half-spine
@@ -138,10 +156,10 @@ export function ThoughtRail(props: {
               ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
                 {
                   top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px + 1px)`,
+                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
                 }
               : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
-                { top: props.first ? `${dotCentre}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
+                { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
       <span
@@ -154,7 +172,7 @@ export function ThoughtRail(props: {
           "thought-rail-dot--running": isRunning(),
         }}
         style={{
-          top: `${DOT_TOP}px`,
+          top: `${dotTop()}px`,
           left: `${GUTTER}px`,
           width: `${NODE}px`,
           height: `${NODE}px`,

@@ -19,7 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
+import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -1339,6 +1339,44 @@ export function MessageTimeline(props: {
       return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
     }
 
+    // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
+    // (Kate 2026-08-24: dots must line up with the text they coincide with).
+    // Prose and rail-label rows put it at the default 11px; rows that open
+    // with a card (a tool chip, a group header, a widget preview) start their
+    // first line lower by that card's own padding — measured, not tabulated,
+    // because the set of card species is open-ended. The ResizeObserver
+    // re-measures when async card content mounts (deferToolContent) or
+    // streaming reflows the row; observers exist only on rendered rows, so
+    // the count is bounded by the virtualizer's window.
+    let turnEl: HTMLDivElement | undefined
+    const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
+    const measureDotCentre = () => {
+      if (!turnEl || !rail()) return
+      const hostTop = turnEl.getBoundingClientRect().top
+      const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
+      let node: Node | null
+      while ((node = walker.nextNode())) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const rect = range.getClientRects()[0]
+        if (!rect || rect.height === 0) continue
+        const centre = rect.top + rect.height / 2 - hostTop
+        // Half-px grid; never above the default (a dot poking into the
+        // inter-row gap would detach from its own tail cap), and a sanity
+        // ceiling against mid-virtualisation nonsense measurements.
+        if (centre > 0 && centre < 80) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        return
+      }
+    }
+    onMount(() => {
+      if (!rail()) return
+      measureDotCentre()
+      const observer = new ResizeObserver(() => measureDotCentre())
+      if (turnEl) observer.observe(turnEl)
+      onCleanup(() => observer.disconnect())
+    })
+
     return (
       <div
         id={anchor() ? props.anchor(input.row().userMessageID) : undefined}
@@ -1351,8 +1389,17 @@ export function MessageTimeline(props: {
           "pt-3": previousAssistantPart(),
         }}
       >
-        <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
-          <Show when={rail()}>{(r) => <ThoughtRail first={r().first} last={r().last} running={r().running} />}</Show>
+        <div
+          ref={turnEl}
+          data-component="session-turn"
+          class="min-w-0 w-full relative"
+          style={{ height: "auto" }}
+        >
+          <Show when={rail()}>
+            {(r) => (
+              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} />
+            )}
+          </Show>
           {/* The gutter is reserved for EVERY assistant part, not only the ones
               that draw a rail. Gating it on rail() left a single-step turn's
               content 16px to the left of a multi-step turn's, so the column
