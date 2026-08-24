@@ -5,6 +5,7 @@ import { render } from "solid-js/web"
 import { AppBaseProviders, AppInterface } from "@/app"
 import { adoptHiddenProject } from "@/utils/amicode-hidden-project"
 import { adoptBugReportFlag } from "@/utils/amicode-bug-report"
+import { adoptDeveloperFlag } from "@/utils/amicode-developer"
 import { type Platform, PlatformProvider } from "@/context/platform"
 import { createBrowserDraftStore } from "@/utils/draft-store"
 import { dict as en } from "@/i18n/en"
@@ -170,9 +171,10 @@ const getDefaultUrl = () => {
 
 const clearAuthToken = () => {
   const params = new URLSearchParams(location.search)
-  if (!params.has("auth_token") && !params.has("amicode_hide_project")) return
+  if (!params.has("auth_token") && !params.has("amicode_hide_project") && !params.has("amicode_developer")) return
   params.delete("auth_token")
   params.delete("amicode_hide_project")
+  params.delete("amicode_developer")
   history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash)
 }
 
@@ -219,6 +221,7 @@ if (root instanceof HTMLElement) {
   installWebviewContextMenu()
   adoptHiddenProject(location.search) // amicode#203: hide the extension's scaffold project
   adoptBugReportFlag(location.search) // opencode#116: gate the composer's report-a-bug button
+  adoptDeveloperFlag(location.search) // amicode devtools: persist developer mode across port rotations
   const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
   clearAuthToken()
   const server: ServerConnection.Http = {

@@ -3,6 +3,7 @@ import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { persisted } from "@/utils/persist"
 import { usePlatform } from "@/context/platform"
+import { developerBootFlag } from "@/utils/amicode-developer"
 
 export interface NotificationSettings {
   agent: boolean
@@ -562,7 +563,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         },
       },
       developer: {
-        enabled: withFallback(() => store.developer?.enabled, defaultSettings.developer.enabled),
+        enabled: withFallback(() => store.developer?.enabled || developerBootFlag(), defaultSettings.developer.enabled || developerBootFlag()),
         setEnabled(value: boolean) {
           setStore("developer", "enabled", value)
         },
