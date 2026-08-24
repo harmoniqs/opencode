@@ -47,12 +47,14 @@
 //      begins at the viewport edge.
 //    - Contrast is the spec. Done dots use icon-muted (4.58:1 dark,
 //      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
-//      fails the 3:1 a UI mark needs). Live uses the brand yellow
+//      fails the 3:1 a UI mark needs). Live dots use the brand yellow
 //      (--accent / --accent-edge, ink-ring defines the dot on light where
-//      #FFE614 is ~1.2:1). Line colour is uniform per turn — accent while
-//      running, icon-muted when done — not border-strong, so a running
-//      spine never reads half-yellow/half-grey; segments within a turn
-//      share one token.
+//      #FFE614 is ~1.2:1). The LINE is always icon-muted, running or not
+//      (Kate 2026-08-24): yellow marks only the active process — its node —
+//      and an accent line was invisible on light (#FFE614 ≈ 1.3:1 on white),
+//      which read as disconnected dots. One token for every segment also
+//      means a spine can never read half-and-half. The site agrees: its rail
+//      line is ink at 25%, never yellow (parts.jsx `Step`).
 //
 // 6. shouldRenderRail is polish: a lone COMPLETED step renders nothing (one
 //    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
@@ -109,11 +111,13 @@ export function ThoughtRail(props: {
   const isRunning = () => props.last && props.running
   // Rule 3 — cap at dot centre; Rule 2 — NEG_STEP_GAP bridges the pt-3 gap.
   const dotCentre = DOT_TOP + NODE / 2
-  // Lone running (Thinking before the first assistant part) is a single dot
-  // with no spine — every line must end AT a dot at both ends, like Claude
-  // Code. A lone dot has no line, so a one-step completion is just "dot
-  // fills" with no dangling half-spine above or below. The widget lab
-  // showed both dangles (dot→bottom, 0→dot) still leave one open end.
+  // A lone running step is a single dot with no spine — every line must end
+  // AT a dot at both ends, like Claude Code. A lone dot has no line, so a
+  // one-step completion is just "dot fills" with no dangling half-spine
+  // above or below. The widget lab showed both dangles (dot→bottom, 0→dot)
+  // still leave one open end. (The Thinking row no longer rails at all —
+  // its squiggle is the working signal — so this is only ever a turn's
+  // first assistant part still in flight.)
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
@@ -123,9 +127,10 @@ export function ThoughtRail(props: {
         class="pointer-events-none absolute w-px"
         style={{
           left: `${LINE_X}px`,
-          background: props.running ? "var(--accent)" : "var(--v2-icon-icon-muted)",
+          // Always neutral — yellow belongs to the active node only (Rule 5).
+          background: "var(--v2-icon-icon-muted)",
           ...(isLoneRunning()
-            ? // lone thinking — no line, just the blinking dot (0px, like PR 242)
+            ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
             : props.last
               ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
