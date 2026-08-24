@@ -58,9 +58,10 @@
 //    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
 //    its dot is the turn's only "working" signal (card sig / Livedot are
 //    gone) and first steps are often the longest, so waiting for step two
-//    left the opening with no status. The lone live dot itself carries no
-//    line (first && last → 0px) so completion is just "dot fills" with no
-//    retraction.
+//    left the opening with no status. The lone live dot draws no line
+//    (0px) — every spine must end at a dot, so a single dot has no dangling
+//    half-spine above or below. A one-step completion still reads as "dot
+//    fills".
 //
 // Other implementation: the harness StepFrame rail on PR #216 slices by SDK
 // step-start/step-finish markers instead of assistant-part turns — different
@@ -108,6 +109,12 @@ export function ThoughtRail(props: {
   const isRunning = () => props.last && props.running
   // Rule 3 — cap at dot centre; Rule 2 — NEG_STEP_GAP bridges the pt-3 gap.
   const dotCentre = DOT_TOP + NODE / 2
+  // Lone running (Thinking before the first assistant part) is a single dot
+  // with no spine — every line must end AT a dot at both ends, like Claude
+  // Code. A lone dot has no line, so a one-step completion is just "dot
+  // fills" with no dangling half-spine above or below. The widget lab
+  // showed both dangles (dot→bottom, 0→dot) still leave one open end.
+  const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
       <span
@@ -117,15 +124,17 @@ export function ThoughtRail(props: {
         style={{
           left: `${LINE_X}px`,
           background: props.running ? "var(--accent)" : "var(--v2-icon-icon-muted)",
-          ...(
-          props.last
-            ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
-              {
-                top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px + 1px)`,
-              }
-            : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
-              { top: props.first ? `${dotCentre}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
+          ...(isLoneRunning()
+            ? // lone thinking — no line, just the blinking dot (0px, like PR 242)
+              { top: "0px", height: "0px" }
+            : props.last
+              ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
+                {
+                  top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
+                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px + 1px)`,
+                }
+              : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
+                { top: props.first ? `${dotCentre}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
       <span
@@ -190,9 +199,9 @@ export const THOUGHT_RAIL_INSET = "pl-6"
  * RUNNING turn rails from its very first step, though — the live dot is the
  * timeline's only "working" mark (the card's pulsing sig and Livedot are
  * gone), and a turn's first step is often its longest, so waiting for step
- * two meant the whole opening had no status signal. The lone live dot
- * carries no line (first && last draws zero-height segments), so nothing
- * retracts visibly when a one-step turn completes: the dot simply fills.
+ * two meant the whole opening had no status signal. The lone live dot draws
+ * no line — every line must end at a dot at both ends, so a single dot has
+ * no dangling half — and a one-step completion still reads as "dot fills".
  */
 export function shouldRenderRail(input: {
   previousAssistantPart: boolean
