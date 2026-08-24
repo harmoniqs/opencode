@@ -2,29 +2,73 @@
 // ported from the website's /amicode animation (harmoniqs-ai
 // app/components/demo/parts.jsx, `Step`).
 //
-// TWO THINGS THAT LOOK LIKE MISTAKES AND ARE NOT:
+// Six geometry rules — keep them together, they are the whole rail. A
+// standalone, framework-agnostic snippet is at the bottom of this header.
 //
-// 1. The rail is drawn as a PER-ROW SEGMENT, not as a border-left on a shared
-//    container. It has to be. The timeline is virtualised (@tanstack/solid-virtual):
-//    every row is an absolutely-positioned box and consecutive rows share no
-//    ancestor except the total-height spacer, so a container spine is structurally
-//    impossible here. The site independently arrived at the same per-row approach,
-//    which is why the port is cheap. Segments meet because each one reaches UP
-//    through the 12px `pt-3` the frame puts above its row — see STEP_GAP below.
-//    Anchoring at top:0 alone leaves a 12px break in the line, because the rail's
-//    positioning ancestor sits inside that padding rather than around it.
+// 1. Per-row segments, not a container border. Forced by virtualization:
+//    @tanstack/solid-virtual renders every row as an absolutely-positioned
+//    box; consecutive rows share no ancestor except the height spacer, so
+//    border-left on a wrapper is structurally impossible. Each row draws
+//    its own 1px span and they meet. The site arrived at the same per-row
+//    approach independently, which is why the port is cheap.
 //
-// 2. "done" is decided by ADJACENCY — a step is finished once a successor exists —
-//    not by that step's own tool lifecycle. Tools can complete out of order or run
-//    in parallel, so asking each row "are you finished?" would let a filled dot sit
-//    above a hollow one and destroy the rail's grammar. Adjacency makes the
-//    sequence monotonic by construction. It is also exactly what the website does:
-//    a step flips filled no later than the moment the next one appears.
+// 2. Segments reach up through the gap above them. TimelineRowFrame
+//    (message-timeline.tsx) puts `pt-3` on every step after the first, and
+//    the rail's positioning ancestor — the inner `session-turn` div — sits
+//    INSIDE that padding. A segment anchored at `top: 0` therefore starts
+//    12px below where the previous one ended and you get a dashed column.
+//    Fix is `top: calc(var(--space-3) * -1)` (NEG_STEP_GAP). Most "rounding"
+//    reports are this gap, not rounding.
 //
-// Hollow therefore means RUNNING (the tail of a turn still in flight), never
-// "planned". The website does not preview future steps either — its scenes gate
-// every entry on `t >= from`, so an unstarted step is never in the DOM. Showing
-// the path ahead needs a real plan source (score stages), which is a later step.
+// 3. Caps land on the dot centre. dotCentre = DOT_TOP + NODE/2 (7.5 + 3.5
+//    = 11px). First segment starts there, last stops there: the tail is
+//    `height = STEP_GAP + dotCentre` from NEG_STEP_GAP (so its bottom is
+//    dotCentre), and the first mid segment is `top: dotCentre`. PR #242
+//    fixed the 1–2px stub that peeked past the dot from the old
+//    `DOT_TOP + NODE/2` inline math plus the 0.5px centring in
+//    LINE_X = GUTTER + NODE/2 - 0.5. Lone first+last is zero-height by
+//    intent — see shouldRenderRail.
+//
+// 4. "Done" is adjacency, not lifecycle. A step is finished once a
+//    successor exists. Tools complete out of order and run in parallel, so
+//    asking each row "am I done?" lets a filled dot sit above a hollow one
+//    and destroys the rail's grammar. Adjacency makes the sequence monotonic
+//    by construction — exactly what the website does (a step flips no later
+//    than when the next one appears). Hollow therefore means RUNNING — the
+//    tail of a turn still in flight — never "planned". The site never
+//    previews future steps either (gated on `t >= from`); a plan source
+//    would be score stages, a later step.
+//
+// 5. Two details worth keeping:
+//    - Gutter, not flush. GUTTER=8, NODE=7, content clears at pl-6 (24px).
+//      GUTTER+NODE=15px stays inside the inset and leaves ~9px dot-to-content
+//      breath (pl-4 left a 1px glue). Flush at left:0 clips the live ring
+//      below the md breakpoint where the message column has no padding and
+//      begins at the viewport edge.
+//    - Contrast is the spec. Done dots use icon-muted (4.58:1 dark,
+//      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
+//      fails the 3:1 a UI mark needs). Live uses the brand yellow
+//      (--accent / --accent-edge, ink-ring defines the dot on light where
+//      #FFE614 is ~1.2:1). Line colour tracks dot state — accent for the
+//      live tail, icon-muted for done — not border-strong.
+//
+// 6. shouldRenderRail is polish: a lone COMPLETED step renders nothing (one
+//    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
+//    its dot is the turn's only "working" signal (card sig / Livedot are
+//    gone) and first steps are often the longest, so waiting for step two
+//    left the opening with no status. The lone live dot itself carries no
+//    line (first && last → 0px) so completion is just "dot fills" with no
+//    retraction.
+//
+// Other implementation: the harness StepFrame rail on PR #216 slices by SDK
+// step-start/step-finish markers instead of assistant-part turns — different
+// segmentation model, same geometry problem. Portable math if you need it:
+//
+//   const NODE = 7, DOT_TOP = 7.5, GUTTER = 8, LINE_X = GUTTER + NODE/2 - 0.5
+//   const STEP_GAP = "var(--space-3)", NEG = `calc(${STEP_GAP} * -1)`
+//   const dotCentre = DOT_TOP + NODE/2
+//   // mid:  { top: first ? dotCentre : NEG, bottom: 0 }
+//   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
 
 
 const NODE = 7 // dot diameter, px — matches the site's Step
@@ -58,13 +102,9 @@ export function ThoughtRail(props: {
   running: boolean
 }) {
   // Only the tail of a still-running turn is hollow. Everything above it has,
-  // by definition, been succeeded.
+  // by definition, been succeeded. (Rule 4 — adjacency.)
   const isRunning = () => props.last && props.running
-  // Cap the rail precisely at the dot centre so the first and last segments do
-  // not peek past the dot (the previous math left a 1–2px stub due to rounding
-  // and the 0.5px centring offset). Continuity is kept by letting each mid-
-  // segment reach through the 12px pt-3 gap (NEG_STEP_GAP) so adjacent rows
-  // meet without a dotted break.
+  // Rule 3 — cap at dot centre; Rule 2 — NEG_STEP_GAP bridges the pt-3 gap.
   const dotCentre = DOT_TOP + NODE / 2
   return (
     <>
@@ -77,7 +117,7 @@ export function ThoughtRail(props: {
           background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
           ...(
           props.last
-            ? // tail: capped at the dot centre, never below
+            ? // tail: capped at the dot centre, never below (Rule 3)
               {
                 top: props.first ? "0px" : NEG_STEP_GAP,
                 height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)`,
@@ -111,7 +151,7 @@ export function ThoughtRail(props: {
           // Done dots take icon-icon-muted rather than border-border-strong: the
           // latter is white at 20% on the dark ground, compositing to #4C4C4C =
           // 1.92:1, under the 3:1 a UI mark needs. icon-icon-muted measures
-          // 4.58:1 dark and 5.74:1 light.
+          // 4.58:1 dark and 5.74:1 light. (Rule 5)
           border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-icon-icon-muted)",
           background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
         }}
@@ -140,18 +180,17 @@ export function ThoughtRailLabel(props: { label: string }) {
 
 /** The gutter a rail occupies, so content clears it. GUTTER + NODE ends at
  *  15px; pl-6 (24px) leaves the same ~9px dot-to-content breath the website's
- *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. */
+ *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. (Rule 5) */
 export const THOUGHT_RAIL_INSET = "pl-6"
 
 /**
- * A lone COMPLETED step is not a sequence: one dot on its own reads as
- * decoration, so a finished single-part turn gets nothing. A RUNNING turn rails
- * from its very first step, though — the live dot is the timeline's only
- * "working" mark (the card's pulsing sig and Livedot are gone), and a turn's
- * first step is often its longest, so waiting for step two meant the turn's
- * whole opening had no status signal at all. The lone live dot carries no line
- * (first && last draws zero-height segments), so nothing retracts visibly when
- * a one-step turn completes: the dot simply fills, then yields the row.
+ * Rule 6 — lone COMPLETED steps render nothing (one dot is decoration). A
+ * RUNNING turn rails from its very first step, though — the live dot is the
+ * timeline's only "working" mark (the card's pulsing sig and Livedot are
+ * gone), and a turn's first step is often its longest, so waiting for step
+ * two meant the whole opening had no status signal. The lone live dot
+ * carries no line (first && last draws zero-height segments), so nothing
+ * retracts visibly when a one-step turn completes: the dot simply fills.
  */
 export function shouldRenderRail(input: {
   previousAssistantPart: boolean
