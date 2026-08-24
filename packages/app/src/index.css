@@ -376,33 +376,34 @@
   }
 }
 
-/* The thought rail's live node: hollow and breathing while the step is in
-   flight, matching the website's rail-dot. Honours reduced motion.
+/* The thought rail's live node: breathing while the step is in flight,
+   matching the website's rail-dot. Honours reduced motion.
 
-   It breathes by SCALE plus an expanding ring — never by its own opacity. Fading
-   it was the first approach here and it was wrong: at the old 0.45 floor the mark
-   composited to #3E3E3E on the dark ground = 1.87:1, well under the 3:1 a UI mark
-   needs. The one element telling you a step is in flight went sub-threshold for a
-   chunk of every cycle. Scale carries the motion instead, so the ink never moves
-   and the dot holds 4.58:1 dark / 5.74:1 light right through the loop. */
+   It breathes by an expanding RING — never by its own opacity, and never by
+   scale. Fading was the first approach and was wrong: at the old 0.45 floor
+   the mark composited to #3E3E3E on the dark ground = 1.87:1, under the 3:1
+   a UI mark needs. Scale was the second and was ALSO wrong, found in PR #246's
+   testing: VirtualTimelineRow paints under `overflow: clip` with a 0.5px
+   clip margin, so scale(1.25) (and the ring) were clipped away and the dot
+   never visibly breathed. Ring-only motion keeps the ink still (contrast
+   holds through the whole loop) and fits inside the 4px overflow-clip-margin
+   the row now reserves — change that margin in message-timeline.tsx
+   alongside any ring-size change here. */
 [data-slot="thought-rail-dot"].thought-rail-dot--running {
   animation: thought-rail-breathe 1.8s ease-in-out infinite;
 }
 @keyframes thought-rail-breathe {
   0%,
   100% {
-    transform: scale(1);
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
   }
   50% {
-    transform: scale(1.25);
-    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent) 0%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-slot="thought-rail-dot"].thought-rail-dot--running {
     animation: none;
-    transform: none;
     box-shadow: none;
   }
 }

@@ -1575,7 +1575,11 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "0.5px",
+          // 4px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // (index.css thought-rail-breathe) and the old margin clipped the
+          // whole animation away — found in PR #246's testing. Keep in step
+          // with the ring size there.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "4px",
         }}
       >
         <div
