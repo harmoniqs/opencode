@@ -1417,6 +1417,14 @@ export function MessageTimeline(props: {
       }
       case "AssistantPart": {
         const assistantPartRow = row as Accessor<TimelineRowByTag<"AssistantPart">>
+        // When the turn is still thinking and we collapsed to a single opening dot
+        // (shell coalesce), show the Spinning wave beside that same rail — not as
+        // a second dot on top of it. This keeps "one dot while thinking" and puts
+        // the wave beside the rail, not under a disconnected 0px spine.
+        const showWaveBeside = () =>
+          workingTurn(assistantPartRow().userMessageID) &&
+          assistantPartRow().lastAssistantPart &&
+          assistantPartRow().turnRunning
         return (
           <TimelineRowFrame row={assistantPartRow}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
@@ -1426,6 +1434,15 @@ export function MessageTimeline(props: {
               >
                 {renderAssistantPartGroup(assistantPartRow, onSizeChange)}
               </div>
+              <Show when={showWaveBeside()}>
+                <div data-slot="session-turn-thinking-beside" style={{ "margin-top": "8px" }}>
+                  <TimelineThinkingRow
+                    reasoningHeading={undefined}
+                    showReasoningSummaries={settings.general.showReasoningSummaries()}
+                    tokens={assistantTokensForTurn(assistantPartRow().userMessageID) || undefined}
+                  />
+                </div>
+              </Show>
             </div>
           </TimelineRowFrame>
         )

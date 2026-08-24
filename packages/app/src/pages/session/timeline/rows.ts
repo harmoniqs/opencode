@@ -230,14 +230,20 @@ export namespace Timeline {
       coalescedAssistantItems.length > 0 ? coalescedAssistantItems : assistantItems
     const turnIsRunning = isActive && status === "busy" && !error
     // While the turn is still thinking (busy), don't rail every shell read as
-    // its own dot — show a single Thinking dot with the wave beside the rail.
-    // Shell content stays, but the rail collapses to one opening dot until the
-    // turn completes, matching Claude's single-dot opening and fixing the
-    // "two dots at the beginning when thinking is still there" report.
+    // its own dot — show a single dot with the wave beside the rail.
+    // Shell content is visible, but the rail collapses to one opening dot until
+    // the turn completes, matching Claude's single-dot opening and fixing the
+    // "two dots at the beginning when thinking is still there" report. The
+    // single dot is the coalesced shell (or first group) and will carry the
+    // Spinning wave beside it in message-timeline (see Thinking wave injection).
     if (turnIsRunning && assistantItemsForRail.length > 0) {
-      // Keep the shell refs for when the turn goes idle, but don't rail them now.
-      // The lone Thinking dot (dot-only 0px) will be the single opening dot.
-      assistantItemsForRail = []
+      // Keep one dot for the opening — the first coalesced shell if present,
+      // otherwise the first group. Other dots appear only after the turn goes
+      // idle, so the opening never shows Explored + Spinning as two separate
+      // dots with a disconnected 0px spine.
+      const firstShell = assistantItemsForRail.find(isShellItem)
+      const opening = firstShell ?? assistantItemsForRail[0]!
+      assistantItemsForRail = [opening]
     }
     // The thought rail fills a step when its SUCCESSOR appears — the same grammar
     // the website animation uses. That deliberately sidesteps out-of-order tool
