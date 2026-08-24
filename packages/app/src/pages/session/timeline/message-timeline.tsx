@@ -32,10 +32,12 @@ import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
   ContextToolGroup,
+  EditToolGroup,
   Message,
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  ShellToolGroup,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -1210,6 +1212,50 @@ export function MessageTimeline(props: {
           parts={parts()}
           open={open()}
           onOpenChange={(value) => setToolOpen(contextOpenKey(), value)}
+          busy={
+            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
+          }
+          onSizeChange={onSizeChange}
+        />
+      )
+    }
+
+    // Shell and edit groups (≥2 consecutive bash / file-mutation calls,
+    // message-part-groups.ts). These MUST render: rows.ts makes every group a
+    // rail node and lets it claim lastAssistantPart, so a group that fell
+    // through to the part branch below rendered nothing — a phantom node.
+    // The step before it then drew a MID segment down its full height (the
+    // "line extends past the last dot" report), and the turn's spine ended in
+    // thin air where the contentless row sat (the "missing node" report).
+    if (row().group.type === "shell") {
+      const parts = createMemo(() => {
+        const group = row().group
+        if (group.type !== "shell") return emptyTools
+        return group.refs
+          .map((ref) => getMsgPart(ref.messageID, ref.partID))
+          .filter((part): part is ToolPart => part?.type === "tool")
+      })
+      return (
+        <ShellToolGroup
+          parts={parts()}
+          busy={
+            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
+          }
+          onSizeChange={onSizeChange}
+        />
+      )
+    }
+    if (row().group.type === "edit") {
+      const parts = createMemo(() => {
+        const group = row().group
+        if (group.type !== "edit") return emptyTools
+        return group.refs
+          .map((ref) => getMsgPart(ref.messageID, ref.partID))
+          .filter((part): part is ToolPart => part?.type === "tool")
+      })
+      return (
+        <EditToolGroup
+          parts={parts()}
           busy={
             workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
           }
