@@ -1946,9 +1946,16 @@ const layer = Layer.effect(
 
     const defaultModel = Effect.fn("Provider.defaultModel")(function* () {
       const cfg = yield* config.get()
-      if (cfg.model) return parseModel(cfg.model)
-
       const s = yield* InstanceState.get(state)
+
+      if (cfg.model) {
+        const parsed = parseModel(cfg.model)
+        // Only return the configured model when its provider is actually
+        // available (has credentials/is connected). A disconnected provider
+        // would fail downstream in getModel() as an unhandled defect (500).
+        if (s.providers[parsed.providerID]) return parsed
+      }
+
       const recent = yield* fs.readJson(path.join(Global.Path.state, "model.json")).pipe(
         Effect.map((x): { providerID: ProviderV2.ID; modelID: ModelV2.ID }[] => {
           if (!isRecord(x) || !Array.isArray(x.recent)) return []
