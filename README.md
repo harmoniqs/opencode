@@ -127,3 +127,7 @@ If you are working on a project that's related to OpenCode and is using "opencod
 ---
 
 **Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+
+---
+
+<sub>Fork notice: This is a fork of <a href="https://github.com/anomalyco/opencode">anomalyco/opencode</a> (formerly sst/opencode) maintained by Harmoniqs for Amicode. It is not affiliated with, endorsed by, or maintained by the OpenCode team. Upstream MIT license and attribution preserved in <a href="./LICENSE">LICENSE</a>.</sub>
