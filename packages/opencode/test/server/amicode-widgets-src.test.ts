@@ -9,7 +9,6 @@ import { parseManifest } from "../../src/server/amicode/widget-manifest"
 import * as meetAmico from "../../src/server/amicode/widgets-src/meet-amico"
 import * as showcase from "../../src/server/amicode/widgets-src/showcase"
 import * as jumpBackIn from "../../src/server/amicode/widgets-src/jump-back-in"
-import * as pulseBank from "../../src/server/amicode/widgets-src/pulse-bank"
 import * as aboutYou from "../../src/server/amicode/widgets-src/about-you"
 import * as nowSolving from "../../src/server/amicode/widgets-src/now-solving"
 import * as library from "../../src/server/amicode/widgets-src/library"
@@ -18,7 +17,6 @@ const SOURCES: Record<string, { manifestToml: string; widgetJs: string }> = {
   "meet-amico": meetAmico,
   showcase,
   "jump-back-in": jumpBackIn,
-  "pulse-bank": pulseBank,
   "about-you": aboutYou,
   "now-solving": nowSolving,
   library,
@@ -115,7 +113,6 @@ describe("built-in widget sources", () => {
   test("data-driven widgets render content when data is present", async () => {
     const cases: [string, Record<string, unknown>][] = [
       ["jump-back-in", { resume: { name: "x-gate-transmon", meta: "transmon · X" } }],
-      ["pulse-bank", {}],
     ]
     for (const [id, context] of cases) {
       const mod = await importWidgetJs(SOURCES[id].widgetJs)

@@ -11,14 +11,14 @@ const ok = (src: string): Record<string, unknown> => {
 describe("parseTomlLite", () => {
   test("scalars: strings, ints, floats, bools", () => {
     const v = ok(`
-id = "pulse-bank"
+id = "showcase"
 name = 'Pulse bank'
 height = 96
 opacity = 0.55
 builtin = true
 hidden = false
 `)
-    expect(v.id).toBe("pulse-bank")
+    expect(v.id).toBe("showcase")
     expect(v.name).toBe("Pulse bank")
     expect(v.height).toBe(96)
     expect(v.opacity).toBe(0.55)

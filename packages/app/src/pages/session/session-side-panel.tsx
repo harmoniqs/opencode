@@ -336,6 +336,7 @@ export function SessionSidePanel(props: {
       icon: "pulse",
       available: () => true,
       active: () => activeTab() === "pulseInspector",
+      group: "Quantum",
     },
     {
       id: SESSION_PREVIEW_TAB,

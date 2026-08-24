@@ -19,7 +19,7 @@ You supply the widget body as an ES module in `js`. Exact contract:
 
 The `amico` client passed to mount:
   amico.fetch(path) -> Promise<data>   ONLY these routes are allowed (anything else rejects):
-    /amicode/profile          {ok, you:{name, stats:{problems,runs,banked}, ...}}
+    /amicode/profile          {ok, you:{name, stats:{problems,runs}, ...}}
     /amicode/problems         {ok, active, problems:[{slug,name,status,score,recorded,entity_kinds}]}
     /amicode/problem?slug=..  one problem's detail
     /amicode/run-status?slug=..  {ok, runs:[{run_id, status, fidelity, iteration}]}
