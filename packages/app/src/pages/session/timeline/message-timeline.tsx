@@ -19,7 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
+import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -32,10 +32,12 @@ import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
   ContextToolGroup,
+  EditToolGroup,
   Message,
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  ShellToolGroup,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -1218,6 +1220,50 @@ export function MessageTimeline(props: {
       )
     }
 
+    // Shell and edit groups (≥2 consecutive bash / file-mutation calls,
+    // message-part-groups.ts). These MUST render: rows.ts makes every group a
+    // rail node and lets it claim lastAssistantPart, so a group that fell
+    // through to the part branch below rendered nothing — a phantom node.
+    // The step before it then drew a MID segment down its full height (the
+    // "line extends past the last dot" report), and the turn's spine ended in
+    // thin air where the contentless row sat (the "missing node" report).
+    if (row().group.type === "shell") {
+      const parts = createMemo(() => {
+        const group = row().group
+        if (group.type !== "shell") return emptyTools
+        return group.refs
+          .map((ref) => getMsgPart(ref.messageID, ref.partID))
+          .filter((part): part is ToolPart => part?.type === "tool")
+      })
+      return (
+        <ShellToolGroup
+          parts={parts()}
+          busy={
+            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
+          }
+          onSizeChange={onSizeChange}
+        />
+      )
+    }
+    if (row().group.type === "edit") {
+      const parts = createMemo(() => {
+        const group = row().group
+        if (group.type !== "edit") return emptyTools
+        return group.refs
+          .map((ref) => getMsgPart(ref.messageID, ref.partID))
+          .filter((part): part is ToolPart => part?.type === "tool")
+      })
+      return (
+        <EditToolGroup
+          parts={parts()}
+          busy={
+            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
+          }
+          onSizeChange={onSizeChange}
+        />
+      )
+    }
+
     const message = createMemo(() => {
       const group = row().group
       if (group.type !== "part") return
@@ -1278,21 +1324,58 @@ export function MessageTimeline(props: {
     }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
-    // Thinking is the lone running step before the first assistant part arrives
-    // — it gets a breathing dot so the turn never shows a line with no dot.
+    //
+    // The Thinking row is NOT a rail node (Kate 2026-08-24): its squiggle is
+    // already the working signal, so a dot beside it did no work — and worse,
+    // it broke the rail's invariant. Thinking railed as {first, last} no
+    // matter what stood above it, so a turn with assistant parts showed the
+    // tail part's dot AND a second lone dot below with no segment between
+    // them: n dots, fewer than n-1 lines. Nodes are assistant parts only;
+    // their adjacency math guarantees every consecutive pair is connected.
     const rail = () => {
       const row = input.row()
-      if (row._tag === "Thinking") {
-        // Thinking only exists while the turn is busy (rows.ts), so a dot
-        // here is always the live tail. Lone + running => zero-height line,
-        // just the breathing dot (Rule 6).
-        if (!workingTurn(row.userMessageID)) return undefined
-        return { first: true, last: true, running: true }
-      }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
     }
+
+    // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
+    // (Kate 2026-08-24: dots must line up with the text they coincide with).
+    // Prose and rail-label rows put it at the default 11px; rows that open
+    // with a card (a tool chip, a group header, a widget preview) start their
+    // first line lower by that card's own padding — measured, not tabulated,
+    // because the set of card species is open-ended. The ResizeObserver
+    // re-measures when async card content mounts (deferToolContent) or
+    // streaming reflows the row; observers exist only on rendered rows, so
+    // the count is bounded by the virtualizer's window.
+    let turnEl: HTMLDivElement | undefined
+    const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
+    const measureDotCentre = () => {
+      if (!turnEl || !rail()) return
+      const hostTop = turnEl.getBoundingClientRect().top
+      const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
+      let node: Node | null
+      while ((node = walker.nextNode())) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const rect = range.getClientRects()[0]
+        if (!rect || rect.height === 0) continue
+        const centre = rect.top + rect.height / 2 - hostTop
+        // Half-px grid; never above the default (a dot poking into the
+        // inter-row gap would detach from its own tail cap), and a sanity
+        // ceiling against mid-virtualisation nonsense measurements.
+        if (centre > 0 && centre < 80) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        return
+      }
+    }
+    onMount(() => {
+      if (!rail()) return
+      measureDotCentre()
+      const observer = new ResizeObserver(() => measureDotCentre())
+      if (turnEl) observer.observe(turnEl)
+      onCleanup(() => observer.disconnect())
+    })
 
     return (
       <div
@@ -1306,8 +1389,17 @@ export function MessageTimeline(props: {
           "pt-3": previousAssistantPart(),
         }}
       >
-        <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
-          <Show when={rail()}>{(r) => <ThoughtRail first={r().first} last={r().last} running={r().running} />}</Show>
+        <div
+          ref={turnEl}
+          data-component="session-turn"
+          class="min-w-0 w-full relative"
+          style={{ height: "auto" }}
+        >
+          <Show when={rail()}>
+            {(r) => (
+              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} />
+            )}
+          </Show>
           {/* The gutter is reserved for EVERY assistant part, not only the ones
               that draw a rail. Gating it on rail() left a single-step turn's
               content 16px to the left of a multi-step turn's, so the column
@@ -1530,7 +1622,11 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "0.5px",
+          // 4px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // (index.css thought-rail-breathe) and the old margin clipped the
+          // whole animation away — found in PR #246's testing. Keep in step
+          // with the ring size there.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "4px",
         }}
       >
         <div
@@ -2190,8 +2286,11 @@ export function MessageTimeline(props: {
                     type="button"
                     class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                     style={{
-                      background: "color-mix(in srgb, var(--v2-background-bg-layer-02) 90%, transparent)",
-                      color: "var(--v2-text-text-muted)",
+                      // the ghost of the prompt bubble keeps the bubble's own
+                      // inverse ground, translucent — one grammar for the
+                      // user's words on every surface
+                      background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
+                      color: "var(--v2-text-text-inverse)",
                       "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                     }}
                     onClick={scrollToBubbleMessage}
@@ -2219,8 +2318,11 @@ export function MessageTimeline(props: {
                   type="button"
                   class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                   style={{
-                    background: "color-mix(in srgb, var(--v2-background-bg-layer-02) 90%, transparent)",
-                    color: "var(--v2-text-text-muted)",
+                    // the ghost of the prompt bubble keeps the bubble's own
+                    // inverse ground, translucent — one grammar for the
+                    // user's words on every surface
+                    background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
+                    color: "var(--v2-text-text-inverse)",
                     "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                   }}
                   onClick={scrollToBubbleMessage}

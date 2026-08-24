@@ -203,17 +203,34 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
   border-color: var(--v2-border-border-strong);
 }
 
-/* send: a control button in the brand accent, near-black ink (yellow-button
-   ink is ALWAYS near-black). Radius = --radius-md, matching the other footer
-   controls (+, pickers) — NOT a circle (Kate 2026-07-23: follow the radius scale). */
+/* send: the website's composer arrow, both states (harmoniqs-ai
+   demo/parts.jsx `Composer`). ARMED (something to send) it is the brand chip:
+   yellow fill, near-black glyph, and the ink edge every yellow fill takes.
+   IDLE it is the site's outline button — transparent, full-strength ink
+   border and glyph — NOT a dimmed ghost of the yellow one, so the arming
+   moment reads as the site's neutral→yellow flip. Radius = --radius-md,
+   matching the other footer controls (+, pickers) — NOT a circle
+   (Kate 2026-07-23: follow the radius scale). */
 [data-action="prompt-submit"] {
   border-radius: var(--radius-md) !important;
   background: var(--accent) !important;
   color: var(--accent-ink) !important;
+  border: var(--border-width) solid var(--accent-edge-ink) !important;
+  box-shadow: none !important;
   transition: transform 0.16s ease, filter 0.16s ease;
 }
 [data-action="prompt-submit"] svg { color: var(--accent-ink) !important; }
 [data-action="prompt-submit"]:hover { filter: brightness(1.06); transform: translateY(-1px); }
+[data-action="prompt-submit"]:disabled {
+  background: transparent !important;
+  border-color: var(--v2-text-text-base) !important;
+  color: var(--v2-text-text-base) !important;
+  /* the component's disabled:opacity-50 would grey the outline the site
+     draws at full strength */
+  opacity: 1 !important;
+}
+[data-action="prompt-submit"]:disabled svg { color: var(--v2-text-text-base) !important; }
+[data-action="prompt-submit"]:disabled:hover { filter: none; transform: none; }
 
 /* accent tag (badge-v2 `variant="accent"`): the shared primitive paints
    --v2-text-text-contrast over bg-accent, which on dark is LIGHT text on
