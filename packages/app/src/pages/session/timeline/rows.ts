@@ -171,11 +171,67 @@ export namespace Timeline {
     }
 
     let assistantGroupIndex = 0
+    // Shell coalesce: a turn with many shell reads (read, bash, etc. interleaved
+    // with reasoning/text) would rail every read as its own dot — noisy and
+    // unlike Claude which batches tool reads under one step. Coalesce all shell
+    // groups in a turn into a single "Worked in shell" dot at the first shell's
+    // position, preserving order for everything else. This is aesthetic, not
+    // correctness — it reduces dots without losing the shell content.
+    const isShellItem = (item: (typeof assistantItems)[number]): boolean => {
+      if (item.type !== "part") return false
+      if (item.group.type === "shell") return true
+      if (item.group.type === "part") {
+        const ref = item.group.ref
+        const part = assistantPartRefs.find(
+          (r) => r.messageID === ref.messageID && r.part.id === ref.partID,
+        )?.part
+        return part?.type === "tool" && part.tool === "bash"
+      }
+      return false
+    }
+    const shellRefs: { messageID: string; partID: string }[] = []
+    let firstShellKey: string | undefined
+    const coalescedAssistantItems: typeof assistantItems = []
+    for (const item of assistantItems) {
+      if (isShellItem(item)) {
+        const refs =
+          item.group.type === "shell"
+            ? item.group.refs
+            : [{ messageID: item.group.ref.messageID, partID: item.group.ref.partID }]
+        if (firstShellKey === undefined) firstShellKey = item.group.key
+        shellRefs.push(...refs)
+        continue
+      }
+      if (shellRefs.length > 0) {
+        coalescedAssistantItems.push({
+          type: "part" as const,
+          group: {
+            key: `shell:${firstShellKey}`,
+            type: "shell" as const,
+            refs: [...shellRefs],
+          },
+        })
+        shellRefs.length = 0
+        firstShellKey = undefined
+      }
+      coalescedAssistantItems.push(item)
+    }
+    if (shellRefs.length > 0 && firstShellKey !== undefined) {
+      coalescedAssistantItems.push({
+        type: "part" as const,
+        group: {
+          key: `shell:${firstShellKey}`,
+          type: "shell" as const,
+          refs: [...shellRefs],
+        },
+      })
+    }
+    const assistantItemsForRail = coalescedAssistantItems.length > 0 ? coalescedAssistantItems : assistantItems
     // The thought rail fills a step when its SUCCESSOR appears — the same grammar
     // the website animation uses. That deliberately sidesteps out-of-order tool
     // completion: adjacency decides, not each tool's own lifecycle, so a filled
     // dot can never appear above a hollow one.
-    const lastRenderableIndex = assistantItems.reduce(
+    const lastRenderableIndex = assistantItemsForRail.reduce(
       (acc, item, index) => (item.type === "interrupted" ? acc : index),
       -1,
     )
@@ -193,7 +249,7 @@ export namespace Timeline {
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }
-    assistantItems.forEach((item, itemIndex) => {
+    assistantItemsForRail.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
           new TimelineRow.TurnDivider({

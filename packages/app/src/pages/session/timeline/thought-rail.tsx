@@ -76,7 +76,7 @@
 
 
 const NODE = 7 // dot diameter, px — matches the site's Step
-const DOT_TOP = 7.5 // px from the row's top edge to the dot's top
+const DOT_TOP = 10 // px from the row's top edge to the dot's top — was 7.5, but Thinking's Reasoning label is 22px line-height and the dot read as floating above the text; 10 aligns dot centre (13.5) with the label's cap-height
 
 // The rail sits in a gutter carved out of the row's own left inset, NOT flush
 // against the row edge. Flush was wrong: below the md breakpoint the message
