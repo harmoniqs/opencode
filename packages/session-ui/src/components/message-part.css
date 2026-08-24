@@ -148,16 +148,19 @@
 
   /* The prompt bubble, from the website's /amicode chat (harmoniqs-ai
      app/components/demo/parts.jsx, `Turn`): the user's words are the INVERSE
-     of the ground — bg-deep/text-bg there. bg-inverse/text-inverse is that
-     same pair in both schemes: an ink bubble on light, a near-white bubble on
-     dark. Padding is the site's px-4 py-2.5. */
+     of the ground — bg-deep/text-bg there. The app tokens
+     (--prompt-bubble-*, design-polish.css) realise that per scheme: the
+     site's ink bubble verbatim on light; on dark the inverse is seated at
+     ~85% luminance so a large light bubble doesn't glare on a dark field.
+     Fallback = raw inverse, for consumers without the app skin.
+     Padding is the site's px-4 py-2.5. */
   [data-slot="user-message-text"] {
     display: inline-block;
     white-space: pre-wrap;
     word-break: break-word;
     overflow: hidden;
-    background: var(--v2-background-bg-inverse);
-    color: var(--v2-text-text-inverse);
+    background: var(--prompt-bubble-bg, var(--v2-background-bg-inverse));
+    color: var(--prompt-bubble-ink, var(--v2-text-text-inverse));
     border: none;
     padding: 10px 16px;
     border-radius: var(--radius-lg);
@@ -172,7 +175,7 @@
       font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
       font-size: 0.85em;
       color: inherit;
-      background: color-mix(in srgb, var(--v2-text-text-inverse) 14%, transparent);
+      background: color-mix(in srgb, var(--prompt-bubble-ink, var(--v2-text-text-inverse)) 14%, transparent);
       border-radius: var(--radius-sm);
       padding: 0.08em 0.35em;
     }

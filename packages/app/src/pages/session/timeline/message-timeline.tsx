@@ -2287,10 +2287,11 @@ export function MessageTimeline(props: {
                     class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                     style={{
                       // the ghost of the prompt bubble keeps the bubble's own
-                      // inverse ground, translucent — one grammar for the
-                      // user's words on every surface
-                      background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
-                      color: "var(--v2-text-text-inverse)",
+                      // ground, translucent — one grammar for the user's
+                      // words on every surface (--prompt-bubble-*: the
+                      // inverse, seated per scheme in design-polish.css)
+                      background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
+                      color: "var(--prompt-bubble-ink)",
                       "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                     }}
                     onClick={scrollToBubbleMessage}
@@ -2319,10 +2320,11 @@ export function MessageTimeline(props: {
                   class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                   style={{
                     // the ghost of the prompt bubble keeps the bubble's own
-                    // inverse ground, translucent — one grammar for the
-                    // user's words on every surface
-                    background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
-                    color: "var(--v2-text-text-inverse)",
+                    // ground, translucent — one grammar for the user's
+                    // words on every surface (--prompt-bubble-*: the
+                    // inverse, seated per scheme in design-polish.css)
+                    background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
+                    color: "var(--prompt-bubble-ink)",
                     "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                   }}
                   onClick={scrollToBubbleMessage}

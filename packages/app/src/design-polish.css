@@ -150,6 +150,30 @@
   }
 }
 
+/* ── prompt bubble ground — per-scheme LUMINANCE, same grammar ──
+   The user's words are the INVERSE of the ground (the website's chat
+   grammar). On light that is the site's ink bubble, verbatim — dark ink on a
+   light ground doesn't emit. On dark, full bg-inverse is pure grey-50: the
+   only 100%-luminance surface in the UI, at up to 85% column width — a lamp,
+   not a bubble. Mixing 15% of the page ground back in seats it at ~85%
+   luminance: still unmistakably the light thing (≈13:1 on the ground,
+   ≈11:1 under its own ink), no longer a glare source. */
+:root,
+[data-color-scheme="light"] {
+  --prompt-bubble-bg: var(--v2-background-bg-inverse);
+  --prompt-bubble-ink: var(--v2-text-text-inverse);
+}
+[data-color-scheme="dark"] {
+  --prompt-bubble-bg: color-mix(in srgb, var(--v2-background-bg-inverse) 85%, var(--v2-background-bg-base));
+  --prompt-bubble-ink: var(--v2-text-text-inverse);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --prompt-bubble-bg: color-mix(in srgb, var(--v2-background-bg-inverse) 85%, var(--v2-background-bg-base));
+    --prompt-bubble-ink: var(--v2-text-text-inverse);
+  }
+}
+
 /* ── inline code: readable in both schemes ── */
 :not(pre) > code {
   color: #3d4451;
