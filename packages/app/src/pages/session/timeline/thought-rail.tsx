@@ -40,19 +40,20 @@
 //    would be score stages, a later step.
 //
 // 5. Two details worth keeping:
-//    - Gutter, not flush. GUTTER=8, NODE=7, content clears at pl-6 (24px).
-//      GUTTER+NODE=15px stays inside the inset and leaves ~9px dot-to-content
-//      breath (pl-4 left a 1px glue). Flush at left:0 clips the live ring
-//      below the md breakpoint where the message column has no padding and
-//      begins at the viewport edge.
-//    - Contrast is the spec. Done dots use icon-muted (4.58:1 dark,
-//      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
-//      fails the 3:1 a UI mark needs). Live uses the brand yellow
-//      (--accent / --accent-edge, ink-ring defines the dot on light where
-//      #FFE614 is ~1.2:1). Line colour is uniform per turn — accent while
-//      running, icon-muted when done — not border-strong, so a running
-//      spine never reads half-yellow/half-grey; segments within a turn
-//      share one token.
+ //    - Gutter, not flush. GUTTER=8, NODE=7, content clears at pl-6 (24px).
+ //      GUTTER+NODE=15px stays inside the inset and leaves ~9px dot-to-content
+ //      breath (pl-4 left a 1px glue). Flush at left:0 clips the live ring
+ //      below the md breakpoint where the message column has no padding and
+ //      begins at the viewport edge.
+ //    - Contrast is the spec. Done dots use icon-muted (4.58:1 dark,
+ //      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
+ //      fails the 3:1 a UI mark needs). Live uses the brand yellow
+ //      (--accent / --accent-edge, ink-ring defines the dot on light where
+ //      #FFE614 is ~1.2:1). Defect 1 fix: line and dot agree on "running":
+ //      both key off props.running (whole-turn, Fix B). A running turn's
+ //      entire spine is yellow; dots stay yellow throughout, with hollow vs
+ //      solid distinguishing succeeded vs in-flight (tail filled + pulsing,
+ //      earlier hollow), so no yellow line ever sits above grey dots.
 //
 // 6. shouldRenderRail is polish: a lone COMPLETED step renders nothing (one
 //    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
@@ -104,16 +105,20 @@ export function ThoughtRail(props: {
   /** the turn is still working, so this tail step is in flight */
   running: boolean
 }) {
-  // Only the tail of a still-running turn is hollow. Everything above it has,
-  // by definition, been succeeded. (Rule 4 — adjacency.)
-  const isRunning = () => props.last && props.running
+  // Only the tail of a still-running turn is hollow/pulsing. Everything above
+  // it has, by definition, been succeeded (Rule 4 — adjacency).
+  const isTailRunning = () => props.last && props.running
+  const isTurnRunning = () => props.running
   // Rule 3 — cap at dot centre; Rule 2 — NEG_STEP_GAP bridges the pt-3 gap.
   const dotCentre = DOT_TOP + NODE / 2
-  // Lone running (Thinking before the first assistant part) is a single dot
-  // with no spine — every line must end AT a dot at both ends, like Claude
-  // Code. A lone dot has no line, so a one-step completion is just "dot
-  // fills" with no dangling half-spine above or below. The widget lab
-  // showed both dangles (dot→bottom, 0→dot) still leave one open end.
+  // Defect 2 ruling — lone Thinking (first && last && running): dot-only.
+  // Every line must end at a dot at both ends; a single dot has no dangling
+  // half-spine above or below. Alternatives were a cap 0→dotCentre and a
+  // tail dotCentre→bottom — both leave one open end (no dot at the far
+  // side) and were rejected in the widget lab as "line with no end". A
+  // lone dot has no line, so a one-step completion is just "dot fills" with
+  // no retraction. If you want the opening's longest phase to show a spine,
+  // you need a score-stage plan source, not a speculative tail.
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
@@ -123,7 +128,7 @@ export function ThoughtRail(props: {
         class="pointer-events-none absolute w-px"
         style={{
           left: `${LINE_X}px`,
-          background: props.running ? "var(--accent)" : "var(--v2-icon-icon-muted)",
+          background: isTurnRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
           ...(isLoneRunning()
             ? // lone thinking — no line, just the blinking dot (0px, like PR 242)
               { top: "0px", height: "0px" }
@@ -140,11 +145,13 @@ export function ThoughtRail(props: {
       <span
         aria-hidden="true"
         data-slot="thought-rail-dot"
-        data-state={isRunning() ? "running" : "done"}
+        data-state={isTailRunning() ? "running" : "done"}
         classList={{
           "pointer-events-none absolute rounded-full": true,
-          // hollow + pulsing while in flight, solid once succeeded
-          "thought-rail-dot--running": isRunning(),
+          // Defect 1 Fix B: whole-turn yellow. Tail filled + pulsing, earlier
+          // succeeded steps hollow yellow (border accent, transparent fill) so
+          // hue never mismatches line; done turns muted.
+          "thought-rail-dot--running": isTailRunning(),
         }}
         style={{
           top: `${DOT_TOP}px`,
@@ -153,18 +160,27 @@ export function ThoughtRail(props: {
           height: `${NODE}px`,
           // LIVE is the brand yellow; DONE is icon weight, not border weight.
           //
-          // --accent-edge is doing real work on the live node: it resolves to ink
-          // on light and to a yellow mix on dark, which is exactly the rule the
-          // accent system states — #FFE614 is ~1.2:1 on a light ground, so on
-          // light the dot is *defined* by its ink ring, never by the fill. On dark
-          // the fill carries it and the edge just tightens the shape.
+          // --accent-edge is doing real work on the live tail: it resolves to
+          // ink on light and to a yellow mix on dark, which is exactly the rule
+          // the accent system states — #FFE614 is ~1.2:1 on a light ground, so
+          // on light the dot is *defined* by its ink ring, never by the fill.
+          // On dark the fill carries it and the edge just tightens the shape.
           //
-          // Done dots take icon-icon-muted rather than border-border-strong: the
-          // latter is white at 20% on the dark ground, compositing to #4C4C4C =
-          // 1.92:1, under the 3:1 a UI mark needs. icon-icon-muted measures
-          // 4.58:1 dark and 5.74:1 light. (Rule 5)
-          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-icon-icon-muted)",
-          background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
+          // Defect 1 Fix B: for a running turn every dot is yellow. Tail is
+          // filled + pulsing; earlier steps are hollow (accent border, bg-base)
+          // so fill distinguishes succeeded vs in-flight instead of hue.
+          // Done dots remain icon-muted (4.58:1 dark, 5.74:1 light) not
+          // border-strong (≈1.92:1, fails 3:1).
+          border: isTailRunning()
+            ? "1px solid var(--accent-edge)"
+            : isTurnRunning()
+              ? "1px solid var(--accent)"
+              : "1px solid var(--v2-icon-icon-muted)",
+          background: isTailRunning()
+            ? "var(--accent)"
+            : isTurnRunning()
+              ? "var(--v2-background-bg-base)"
+              : "var(--v2-icon-icon-muted)",
         }}
       />
     </>
