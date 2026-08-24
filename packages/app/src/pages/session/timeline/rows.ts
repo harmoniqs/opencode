@@ -273,7 +273,15 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
+    // Thinking is the live tail before any assistant part arrives — it should not
+    // duplicate as a second dot when Explored/shell groups already exist.
+    // showReasoning controls whether reasoning counts as "part", but the rail
+    // should only show Thinking when there are no assistant rail rows yet,
+    // otherwise the turn starts with two dots (Explored + Spinning) and the
+    // wave ends up with a disconnected spine. Coalesced check keeps the
+    // aesthetic "one dot for the opening" while thinking.
+    const hasAssistantRailRows = assistantItemsForRail.length > 0
+    if (isActive && status === "busy" && !error && !hasAssistantRailRows) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
