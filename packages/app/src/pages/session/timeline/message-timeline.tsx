@@ -1547,7 +1547,9 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "0.5px",
+          // 4px to let the live dot's 4px ring breathe — 0.5px clipped the
+          // scale(1.25) and now the ring-only 0→4px. See index.css:392.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "4px",
         }}
       >
         <div

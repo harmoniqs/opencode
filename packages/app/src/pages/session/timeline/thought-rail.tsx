@@ -20,14 +20,15 @@
 //    Fix is `top: calc(var(--space-3) * -1)` (NEG_STEP_GAP). Most "rounding"
 //    reports are this gap, not rounding.
 //
-// 3. Caps land on the dot centre. dotCentre = DOT_TOP + NODE/2 (7.5 + 3.5
-//    = 11px). First segment starts there, last stops there: the tail is
+// 3. Caps land on the dot centre. dotCentre = DOT_TOP + NODE/2 (10 + 3.5
+//    = 13.5px). First segment starts there; last stops there: the tail is
 //    `height = STEP_GAP + dotCentre` from NEG_STEP_GAP (so its bottom is
 //    dotCentre), and the first mid segment is `top: dotCentre`. PR #242
 //    fixed the 1–2px stub that peeked past the dot from the old
 //    `DOT_TOP + NODE/2` inline math plus the 0.5px centring in
 //    LINE_X = GUTTER + NODE/2 - 0.5. Lone first+last is zero-height by
-//    intent — see shouldRenderRail.
+//    intent — see shouldRenderRail. Updated DOT_TOP 7.5→10 to align with
+//    Reasoning 22px cap-height; dotCentre moved 11→13.5 accordingly.
 //
 // 4. "Done" is adjacency, not lifecycle. A step is finished once a
 //    successor exists. Tools complete out of order and run in parallel, so
@@ -68,11 +69,12 @@
 // step-start/step-finish markers instead of assistant-part turns — different
 // segmentation model, same geometry problem. Portable math if you need it:
 //
-//   const NODE = 7, DOT_TOP = 7.5, GUTTER = 8, LINE_X = GUTTER + NODE/2 - 0.5
+//   const NODE = 7, DOT_TOP = 10, GUTTER = 8, LINE_X = GUTTER + NODE/2 - 0.5
 //   const STEP_GAP = "var(--space-3)", NEG = `calc(${STEP_GAP} * -1)`
-//   const dotCentre = DOT_TOP + NODE/2
+//   const dotCentre = DOT_TOP + NODE/2 // 13.5
 //   // mid:  { top: first ? dotCentre : NEG, bottom: 0 }
 //   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
+//   // lone: { top: "0px", height: "0px" } — dot-only, no line (Defect 2)
 
 
 const NODE = 7 // dot diameter, px — matches the site's Step
@@ -174,7 +176,7 @@ export function ThoughtRail(props: {
           border: isTailRunning()
             ? "1px solid var(--accent-edge)"
             : isTurnRunning()
-              ? "1px solid var(--accent)"
+              ? "1px solid var(--accent-edge)"
               : "1px solid var(--v2-icon-icon-muted)",
           background: isTailRunning()
             ? "var(--accent)"
