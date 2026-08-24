@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { parseManifest, sanitizeConfig, type WidgetManifest } from "../../src/server/amicode/widget-manifest"
 
 const GOOD = `
-id = "pulse-bank"
+id = "showcase"
 name = "Pulse bank"
 version = "1.0.0"
 description = "Banked pulses at a glance"
@@ -24,7 +24,7 @@ options = ["pulse", "objective"]
 default = "pulse"
 `
 
-const parsed = (src: string, dir = "pulse-bank") => {
+const parsed = (src: string, dir = "showcase") => {
   const r = parseManifest(src, dir)
   expect(r.ok).toBe(true)
   if (!r.ok) throw new Error(r.error)
@@ -34,7 +34,7 @@ const parsed = (src: string, dir = "pulse-bank") => {
 describe("parseManifest", () => {
   test("happy path with config schema", () => {
     const m = parsed(GOOD)
-    expect(m.id).toBe("pulse-bank")
+    expect(m.id).toBe("showcase")
     expect(m.name).toBe("Pulse bank")
     expect(m.size).toBe("tile")
     expect(m.bridge).toBe(1) // defaults

@@ -21,14 +21,14 @@ const REGISTRY: RegistryWidget[] = [
     ),
     builtin: true,
   },
-  { manifest: manifest("pulse-bank"), builtin: true },
+  { manifest: manifest("showcase"), builtin: true },
 ]
 
 describe("mergeDashboard", () => {
   test("null state → registry order, visible, default config, deterministic keys", () => {
     const out = mergeDashboard(null, REGISTRY)
     expect(out.version).toBe(1)
-    expect(out.widget.map((w) => w.id)).toEqual(["meet-amico", "about-you", "pulse-bank"])
+    expect(out.widget.map((w) => w.id)).toEqual(["meet-amico", "about-you", "showcase"])
     expect(out.widget.every((w) => w.hidden === false)).toBe(true)
     expect(out.widget[1].config).toEqual({ stats: ["problems", "runs", "banked"] })
     expect(out.widget[0].key).toBe(entryKey("meet-amico"))
@@ -39,13 +39,13 @@ describe("mergeDashboard", () => {
     const stored = {
       version: 1,
       widget: [
-        { key: "w-1", id: "pulse-bank", hidden: true, config: {} },
+        { key: "w-1", id: "showcase", hidden: true, config: {} },
         { key: "w-2", id: "ghost-widget", hidden: false, config: { a: 1 } },
         { key: "w-3", id: "meet-amico", hidden: false, config: {} },
       ],
     }
     const out = mergeDashboard(stored, REGISTRY)
-    expect(out.widget.map((w) => w.id)).toEqual(["pulse-bank", "ghost-widget", "meet-amico", "about-you"])
+    expect(out.widget.map((w) => w.id)).toEqual(["showcase", "ghost-widget", "meet-amico", "about-you"])
     expect(out.widget[0].hidden).toBe(true)
     expect(out.widget[1].missing).toBe(true)
     expect(out.widget[3].id).toBe("about-you") // appended visible
@@ -82,10 +82,10 @@ describe("reserved-key pass-through (spec T3.6)", () => {
   test("unrecognized entry keys survive the merge", () => {
     const stored = {
       version: 1,
-      widget: [{ key: "w-1", id: "pulse-bank", hidden: false, config: {}, group: "lab", view: "home" }],
+      widget: [{ key: "w-1", id: "showcase", hidden: false, config: {}, group: "lab", view: "home" }],
     }
     const out = mergeDashboard(stored, REGISTRY)
-    const bank = out.widget.find((w) => w.id === "pulse-bank") as Record<string, unknown>
+    const bank = out.widget.find((w) => w.id === "showcase") as Record<string, unknown>
     expect(bank.group).toBe("lab")
     expect(bank.view).toBe("home")
   })
@@ -95,7 +95,7 @@ describe("reserved-key pass-through (spec T3.6)", () => {
       version: 1,
       views: [{ id: "lab", name: "Lab" }],
       scope: "home",
-      widget: [{ key: "w-1", id: "pulse-bank", hidden: true, config: {} }],
+      widget: [{ key: "w-1", id: "showcase", hidden: true, config: {} }],
     }
     const out = mergeDashboard(stored, REGISTRY) as Record<string, unknown>
     expect(out.views).toEqual([{ id: "lab", name: "Lab" }])
@@ -109,11 +109,11 @@ describe("reserved-key pass-through (spec T3.6)", () => {
   test("core keys still win over passthrough collisions", () => {
     const stored = {
       version: 99, // not a reserved key — core version stays 1
-      widget: [{ key: "w-1", id: "pulse-bank", hidden: "maybe", config: {}, missing: true }],
+      widget: [{ key: "w-1", id: "showcase", hidden: "maybe", config: {}, missing: true }],
     }
     const out = mergeDashboard(stored, REGISTRY)
     expect(out.version).toBe(1)
-    const bank = out.widget.find((w) => w.id === "pulse-bank")!
+    const bank = out.widget.find((w) => w.id === "showcase")!
     expect(bank.hidden).toBe(false) // sanitized, not passthrough
     expect(bank.missing).toBeUndefined() // computed, not passthrough
   })
@@ -122,12 +122,12 @@ describe("reserved-key pass-through (spec T3.6)", () => {
 describe("applySave", () => {
   test("structurally valid body → sanitized merged state", () => {
     const r = applySave(
-      JSON.stringify({ version: 1, widget: [{ id: "pulse-bank", hidden: true }] }),
+      JSON.stringify({ version: 1, widget: [{ id: "showcase", hidden: true }] }),
       REGISTRY,
     )
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.state.widget[0].id).toBe("pulse-bank")
+    expect(r.state.widget[0].id).toBe("showcase")
     expect(r.state.widget[0].hidden).toBe(true)
     expect(r.state.widget.map((w) => w.id)).toContain("about-you")
   })
