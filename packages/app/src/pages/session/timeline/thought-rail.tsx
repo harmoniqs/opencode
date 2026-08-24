@@ -45,16 +45,16 @@
 //      breath (pl-4 left a 1px glue). Flush at left:0 clips the live ring
 //      below the md breakpoint where the message column has no padding and
 //      begins at the viewport edge.
-//    - Contrast is the spec. Done dots use icon-muted (4.58:1 dark,
-//      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
-//      fails the 3:1 a UI mark needs). Live dots use the brand yellow
-//      (--accent / --accent-edge, ink-ring defines the dot on light where
-//      #FFE614 is ~1.2:1). The LINE is always icon-muted, running or not
-//      (Kate 2026-08-24): yellow marks only the active process — its node —
-//      and an accent line was invisible on light (#FFE614 ≈ 1.3:1 on white),
-//      which read as disconnected dots. One token for every segment also
-//      means a spine can never read half-and-half. The site agrees: its rail
-//      line is ink at 25%, never yellow (parts.jsx `Step`).
+//    - The rail is one INK stroke (Kate 2026-08-24). Line and done dots both
+//      take text-base — the fg, literal black on light, near-white on dark —
+//      the way the site's Step draws its dots (border-fg + bg-fg). Muted
+//      grey read as washed out; an accent line was invisible on light
+//      (#FFE614 ≈ 1.3:1 on white) and made a running spine read as
+//      disconnected floating dots. Yellow marks ONLY the active node
+//      (--accent / --accent-edge — the ink ring defines it on light, where
+//      the fill alone is ~1.2:1). Never border-border-strong for any of it:
+//      white@20% on the dark ground composites to #4C4C4C = 1.92:1, under
+//      the 3:1 a UI mark needs.
 //
 // 6. shouldRenderRail is polish: a lone COMPLETED step renders nothing (one
 //    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
@@ -127,8 +127,10 @@ export function ThoughtRail(props: {
         class="pointer-events-none absolute w-px"
         style={{
           left: `${LINE_X}px`,
-          // Always neutral — yellow belongs to the active node only (Rule 5).
-          background: "var(--v2-icon-icon-muted)",
+          // Always INK, full strength — yellow belongs to the active node
+          // only, and the muted grey read as washed out (Kate 2026-08-24).
+          // text-base is the fg: literal black on light, near-white on dark.
+          background: "var(--v2-text-text-base)",
           ...(isLoneRunning()
             ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
@@ -165,11 +167,13 @@ export function ThoughtRail(props: {
           // the fill carries it and the edge just tightens the shape.
           //
           // Done dots take icon-icon-muted rather than border-border-strong: the
-          // latter is white at 20% on the dark ground, compositing to #4C4C4C =
-          // 1.92:1, under the 3:1 a UI mark needs. icon-icon-muted measures
-          // 4.58:1 dark and 5.74:1 light. (Rule 5)
-          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-icon-icon-muted)",
-          background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
+          // Done dots take text-base — the fg, full strength — matching the
+          // line so the rail is one ink stroke, the way the site's Step draws
+          // its dots (border-fg + bg-fg). Never border-border-strong: that is
+          // white at 20% on the dark ground, compositing to #4C4C4C = 1.92:1,
+          // under the 3:1 a UI mark needs. (Rule 5)
+          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-text-text-base)",
+          background: isRunning() ? "var(--accent)" : "var(--v2-text-text-base)",
         }}
       />
     </>
