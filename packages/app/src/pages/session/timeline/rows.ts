@@ -226,7 +226,19 @@ export namespace Timeline {
         },
       })
     }
-    const assistantItemsForRail = coalescedAssistantItems.length > 0 ? coalescedAssistantItems : assistantItems
+    let assistantItemsForRail: typeof coalescedAssistantItems | typeof assistantItems =
+      coalescedAssistantItems.length > 0 ? coalescedAssistantItems : assistantItems
+    const turnIsRunning = isActive && status === "busy" && !error
+    // While the turn is still thinking (busy), don't rail every shell read as
+    // its own dot — show a single Thinking dot with the wave beside the rail.
+    // Shell content stays, but the rail collapses to one opening dot until the
+    // turn completes, matching Claude's single-dot opening and fixing the
+    // "two dots at the beginning when thinking is still there" report.
+    if (turnIsRunning && assistantItemsForRail.length > 0) {
+      // Keep the shell refs for when the turn goes idle, but don't rail them now.
+      // The lone Thinking dot (dot-only 0px) will be the single opening dot.
+      assistantItemsForRail = []
+    }
     // The thought rail fills a step when its SUCCESSOR appears — the same grammar
     // the website animation uses. That deliberately sidesteps out-of-order tool
     // completion: adjacency decides, not each tool's own lifecycle, so a filled
@@ -235,7 +247,6 @@ export namespace Timeline {
       (acc, item, index) => (item.type === "interrupted" ? acc : index),
       -1,
     )
-    const turnIsRunning = isActive && status === "busy" && !error
     // The rail label names steps whose content doesn't already open with its
     // own title. Group rows announce themselves ("Explored", "Worked in
     // shell", "Edited files") and tool cards wear their chips, so only bare
