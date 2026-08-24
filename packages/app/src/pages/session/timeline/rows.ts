@@ -182,14 +182,14 @@ export namespace Timeline {
     const turnIsRunning = isActive && status === "busy" && !error
     // The rail label names steps whose content doesn't already open with its
     // own title. Group rows announce themselves ("Explored", "Worked in
-    // shell", "Edited files") and tool cards wear their chips, so only bare
-    // prose and reasoning steps need a name here.
+    // shell", "Edited files") and tool cards wear their chips. Prose needs no
+    // caption either — the words ARE the step, and "Update" said nothing they
+    // don't (Kate 2026-08-24) — so only reasoning steps get a name here.
     const railLabel = (group: PartGroup): string | undefined => {
       if (group.type !== "part") return undefined
       const part = assistantPartRefs.find(
         (ref) => ref.messageID === group.ref.messageID && ref.part.id === group.ref.partID,
       )?.part
-      if (part?.type === "text") return "Update"
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }

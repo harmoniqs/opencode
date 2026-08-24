@@ -28,9 +28,9 @@ export namespace TimelineRow {
     /** the turn is still working, so the tail step is in flight rather than done */
     turnRunning: boolean
     /** eyebrow naming the action for steps whose content doesn't already open
-     *  with its own title — assistant prose ("Update") and reasoning
-     *  ("Reasoning"). Tool cards and the Explored / Worked-in-shell / Edited
-     *  group headers announce themselves, so they carry no label here. */
+     *  with its own title — reasoning ("Reasoning") only. Prose carries no
+     *  caption (the words are the step), and tool cards and the Explored /
+     *  Worked-in-shell / Edited group headers announce themselves. */
     railLabel?: string
   }> {}
   export class Thinking extends Data.TaggedClass("Thinking")<{
