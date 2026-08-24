@@ -119,13 +119,13 @@ export function ThoughtRail(props: {
           background: props.running ? "var(--accent)" : "var(--v2-icon-icon-muted)",
           ...(
           props.last
-            ? // tail: capped at the dot centre, never below (Rule 3)
+            ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
               {
-                top: props.first ? "0px" : NEG_STEP_GAP,
-                height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)`,
+                top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
+                height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px + 1px)`,
               }
-            : // mid-run: from dot centre (first) or gap (others) down to row bottom
-              { top: props.first ? `${dotCentre}px` : NEG_STEP_GAP, bottom: "0px" }),
+            : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
+              { top: props.first ? `${dotCentre}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
       <span
