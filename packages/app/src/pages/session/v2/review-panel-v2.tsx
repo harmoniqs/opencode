@@ -151,6 +151,8 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
                   diffStyle={props.diffStyle}
                   expandMode={props.state.expandMode()}
                   readFile={readFile}
+                  files={filteredFiles()}
+                  onSelectFile={props.onSelectFile}
                   onLineComment={props.onLineComment}
                   onLineCommentUpdate={props.onLineCommentUpdate}
                   onLineCommentDelete={props.onLineCommentDelete}
