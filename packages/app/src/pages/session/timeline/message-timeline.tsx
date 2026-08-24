@@ -1268,15 +1268,27 @@ export function MessageTimeline(props: {
       const row = input.row()
       return row._tag === "AssistantPart" && row.previousAssistantPart
     }
-    const assistantPart = () => input.row()._tag === "AssistantPart"
+    const assistantPart = () => {
+      const tag = input.row()._tag
+      return tag === "AssistantPart" || tag === "Thinking"
+    }
     const railLabel = () => {
       const row = input.row()
       return row._tag === "AssistantPart" ? row.railLabel : undefined
     }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
+    // Thinking is the lone running step before the first assistant part arrives
+    // — it gets a breathing dot so the turn never shows a line with no dot.
     const rail = () => {
       const row = input.row()
+      if (row._tag === "Thinking") {
+        // Thinking only exists while the turn is busy (rows.ts), so a dot
+        // here is always the live tail. Lone + running => zero-height line,
+        // just the breathing dot (Rule 6).
+        if (!workingTurn(row.userMessageID)) return undefined
+        return { first: true, last: true, running: true }
+      }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
