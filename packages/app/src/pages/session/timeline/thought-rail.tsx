@@ -49,8 +49,10 @@
 //      5.74:1 light) not border-strong (≈ white@20% → #4C4C4C = 1.92:1,
 //      fails the 3:1 a UI mark needs). Live uses the brand yellow
 //      (--accent / --accent-edge, ink-ring defines the dot on light where
-//      #FFE614 is ~1.2:1). Line colour tracks dot state — accent for the
-//      live tail, icon-muted for done — not border-strong.
+//      #FFE614 is ~1.2:1). Line colour is uniform per turn — accent while
+//      running, icon-muted when done — not border-strong, so a running
+//      spine never reads half-yellow/half-grey; segments within a turn
+//      share one token.
 //
 // 6. shouldRenderRail is polish: a lone COMPLETED step renders nothing (one
 //    dot is decoration, not a sequence). A lone RUNNING step DOES rail —
@@ -114,7 +116,7 @@ export function ThoughtRail(props: {
         class="pointer-events-none absolute w-px"
         style={{
           left: `${LINE_X}px`,
-          background: isRunning() ? "var(--accent)" : "var(--v2-icon-icon-muted)",
+          background: props.running ? "var(--accent)" : "var(--v2-icon-icon-muted)",
           ...(
           props.last
             ? // tail: capped at the dot centre, never below (Rule 3)
