@@ -182,21 +182,31 @@
    virtualizer owns row position and measured height, so entrance motion must
    never touch layout. Reduced motion keeps the fade, drops the rise. */
 :root {
-  /* 8px/0.22s measured as painted-but-imperceptible in real use: easeOutCubic
-     front-loads ~90% of the change into ~100ms, and the send-time autoscroll
-     snaps are 3-18x the rise. 0.32s keeps the crisp attack but leaves enough
-     tail for the eye to register the entrance through the scroll. */
-  --motion-enter-duration: 0.32s;
+  /* IDENTICAL to the website's chat grammar (harmoniqs-ai demo/parts.jsx,
+     verified against the production chunk): enter from below and slightly
+     blurred — HIDDEN {opacity:0, y:8, blur(8px)} → SHOWN over 0.3s on
+     [.2,0,.2,1] (soft attack, soft landing); leave UPWARD and re-blurred
+     over 0.2s on [.4,0,1,1] (exits shorter than entrances — the direction
+     says "arriving" vs "being cleared"). */
+  --motion-enter-duration: 0.3s;
   --motion-enter-rise: 8px;
-  --motion-enter-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --motion-enter-blur: 8px;
+  --motion-enter-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --motion-exit-duration: 0.2s;
+  --motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
 }
+/* fill BACKWARDS, not both: backwards still covers the cascade's delay phase
+   (rows hold at the hidden frame until their turn), while after the animation
+   the element returns to its natural styles — `both` left a permanent
+   filter:blur(0) on every entered row, a forced stacking context + raster
+   layer for the rest of the session. */
 [data-timeline-enter] {
-  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) both;
+  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
 }
-/* The open cascade holds at frame 0 (opacity 0, risen) until the timeline has
-   settled at the bottom — released by removing [data-entrance-pending]
-   (message-timeline.tsx entranceReady). Also keeps the draft handoff's
-   entrance from playing its opening frames behind the cold-mount veil. */
+/* The open cascade holds at frame 0 (opacity 0, risen, blurred) until the
+   timeline has settled at the bottom — released by removing
+   [data-entrance-pending] (message-timeline.tsx entranceReady). Also keeps
+   the draft handoff's entrance from playing behind the cold-mount veil. */
 [data-entrance-pending] [data-timeline-enter] {
   animation-play-state: paused;
 }
@@ -204,15 +214,32 @@
   from {
     opacity: 0;
     transform: translateY(var(--motion-enter-rise));
+    filter: blur(var(--motion-enter-blur));
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+/* The exit ghost: a positioned clone of a row leaving the projection (the
+   Thinking row's every-turn removal), swept up and out of focus like the
+   site's GONE state. Applied by message-timeline.tsx's ghost-exit hook. */
+[data-timeline-exit] {
+  pointer-events: none;
+  animation: timeline-exit var(--motion-exit-duration) var(--motion-exit-ease) forwards;
+}
+@keyframes timeline-exit {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(var(--motion-enter-blur));
   }
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-enter-rise: 0px;
+    --motion-enter-blur: 0px;
   }
 }
 

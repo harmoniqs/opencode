@@ -1666,6 +1666,35 @@ export function MessageTimeline(props: {
 
     onCleanup(() => {
       if (contentMeasureFrame !== undefined) cancelAnimationFrame(contentMeasureFrame)
+      // The site's exit grammar (parts.jsx GONE): elements leave upward and
+      // re-blurred. The Thinking row is the one removal a user watches every
+      // turn — the settled block replaces it — but the timeline is
+      // virtualized, so the row cannot linger to play its own exit. Instead a
+      // positioned clone sweeps up and out of focus ([data-timeline-exit]).
+      // Only a row that genuinely LEFT the projection exits; rows disposed
+      // because the whole timeline is unmounting (session switch) still map
+      // to a projection entry and spawn nothing.
+      if (initialRow._tag !== "Thinking") return
+      if (timelineRowByKey().get(props.rowKey)) return
+      if (!element || !element.isConnected) return
+      const rect = element.getBoundingClientRect()
+      if (rect.height === 0 || rect.width === 0) return
+      const ghost = element.cloneNode(true)
+      if (!(ghost instanceof HTMLElement)) return
+      ghost.removeAttribute("data-timeline-enter")
+      ghost.setAttribute("data-timeline-exit", "")
+      Object.assign(ghost.style, {
+        position: "fixed",
+        top: `${rect.top}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        margin: "0",
+        "z-index": "10",
+      })
+      document.body.appendChild(ghost)
+      const drop = () => ghost.remove()
+      ghost.addEventListener("animationend", drop, { once: true })
+      setTimeout(drop, 600)
     })
 
     return (
@@ -1679,11 +1708,12 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          // 12px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // 24px, not 0.5px: the live rail dot breathes by a 0→4px ring
           // (index.css thought-rail-breathe; found clipped in PR #246's
-          // testing), and an entering row rides the 8px --motion-enter-rise
-          // translate on top of it — the margin must cover ring + rise.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "12px",
+          // testing), an entering row rides the 8px --motion-enter-rise
+          // translate, and the entrance's blur(8px) paints a halo well past
+          // the border box — the margin must cover ring + rise + halo.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "24px",
         }}
       >
         <div
