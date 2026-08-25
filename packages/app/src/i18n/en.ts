@@ -54,7 +54,7 @@ export const dict = {
   "command.input.focus": "Focus input",
   "command.terminal.toggle": "Toggle terminal",
   "command.fileTree.toggle": "Toggle file tree",
-  "command.review.toggle": "Toggle Review",
+  "command.review.toggle": "Side Panel",
   "command.terminal.new": "New terminal",
   "command.terminal.new.description": "Create a new terminal tab",
   "command.steps.toggle": "Toggle steps",
