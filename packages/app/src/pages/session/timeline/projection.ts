@@ -14,6 +14,9 @@ export function createTimelineProjection(input: {
   status: Accessor<SessionStatus>
   showReasoningSummaries: Accessor<boolean>
   inlineComments: Accessor<boolean>
+  /** the streaming prose tail has at least one settled chunk — computed by the
+   *  timeline from the delta-accumulated text, which rows cannot see */
+  tailProseSettled?: Accessor<boolean>
 }) {
   const messageByID = createMemo(() => new Map(input.messages().map((message) => [message.id, message] as const)))
   const assistantMessagesByParent = createMemo(() => {
@@ -38,6 +41,7 @@ export function createTimelineProjection(input: {
       input.status().type,
       input.inlineComments(),
       input.userMessages(),
+      input.tailProseSettled?.() ?? false,
     ),
   )
   const activeMessageID = createMemo(() => projection().activeMessageID)

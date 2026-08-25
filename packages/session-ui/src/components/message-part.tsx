@@ -16,6 +16,7 @@ import {
   Switch,
   onCleanup,
   Index,
+  untrack,
   type JSX,
   type ComponentProps,
 } from "solid-js"
@@ -72,7 +73,7 @@ import { ToolStatusTitle } from "./tool-status-title"
 import { patchFiles } from "./apply-patch-file"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
-import { readPartText } from "./message-part-text"
+import { readPartText, splitSettledChunks } from "./message-part-text"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 
 const reducedMotion = () =>
@@ -340,6 +341,43 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
   })
 
   return value
+}
+
+// Streaming prose lands in whole CHUNKS (Kate 2026-08-25): each settled chunk
+// (message-part-text.ts boundaries — blank lines outside fences, never inside
+// a list) mounts once and plays the entrance the host skins onto
+// [data-part-enter]; the still-composing tail stays withheld — the working
+// indicator is the signal while it grows. On completion the remainder lands
+// as the final chunk, with its entrance.
+//
+// The once-only ledger is PART-scoped, not component-scoped: the part
+// component can remount mid-stream or at completion (observed live — a
+// remount at time.end reset a component-local count and swallowed the final
+// chunk's entrance), so the revealed count survives in a module map. A chunk
+// animates only when its index is past what this part had already revealed
+// at mount; scroll-back remounts of finished parts reveal nothing new.
+const revealedChunks = new Map<string, number>()
+
+function ChunkedStreamMarkdown(props: { text: string; done: boolean; cacheKey: string }) {
+  const parts = createMemo(() => {
+    const { chunks, tail } = splitSettledChunks(props.text)
+    if (props.done && tail.trim() !== "") return [...chunks, tail]
+    return chunks
+  })
+  const already = revealedChunks.get(props.cacheKey) ?? 0
+  createEffect(() => {
+    const count = parts().length
+    if (count > (revealedChunks.get(props.cacheKey) ?? 0)) revealedChunks.set(props.cacheKey, count)
+  })
+  return (
+    <For each={parts()}>
+      {(chunk, index) => (
+        <div data-part-enter={index() >= already ? "" : undefined}>
+          <Markdown text={chunk} cacheKey={`${props.cacheKey}:${index()}`} streaming={false} />
+        </div>
+      )}
+    </For>
+  )
 }
 
 function PacedMarkdown(props: { text: string; cacheKey: string; streaming: boolean }) {
@@ -2136,8 +2174,18 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
         <div data-slot="text-part-body">
-          <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
-            <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+          {/* Streaming prose lands in whole CHUNKS (Kate 2026-08-25: no
+              typing reveal, but no waiting for the entire reply either).
+              Decided once at mount: streaming now, or already chunk-revealed
+              (the component can remount at completion — the ledger keeps the
+              part in chunk mode so the final tail still animates in). A part
+              that was never streamed renders as one plain document — history
+              never re-chunks or re-animates. */}
+          <Show
+            when={untrack(() => streaming() || revealedChunks.has(part().id))}
+            fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}
+          >
+            <ChunkedStreamMarkdown text={text()} done={!streaming()} cacheKey={part().id} />
           </Show>
         </div>
         <Show when={showCopy()}>

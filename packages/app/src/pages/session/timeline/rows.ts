@@ -43,6 +43,9 @@ export namespace Timeline {
     status: SessionStatus["type"],
     inlineComments: boolean,
     projectedUserMessages: UserMessage[],
+    // the streaming prose tail has at least one settled chunk (computed by the
+    // timeline from the delta-accumulated text, which rows cannot see)
+    tailProseSettled = false,
   ) {
     const turns: { user: UserMessage; assistants: AssistantMessage[] }[] = []
     const turnByUserID = new Map<string, (typeof turns)[number]>()
@@ -95,6 +98,7 @@ export namespace Timeline {
           status,
           turn.user.id === activeMessageID,
           inlineComments,
+          tailProseSettled,
         ),
       ),
     }
@@ -110,6 +114,7 @@ export namespace Timeline {
     isActive: boolean,
     // v2 renders comments inside the user message attachments row instead of a strip row
     inlineComments: boolean,
+    tailProseSettled = false,
   ) {
     const rows: TimelineRow.TimelineRow[] = []
 
@@ -128,12 +133,15 @@ export namespace Timeline {
         .map((part) => ({ messageID: message.id, messageIndex, part })),
     )
     // Steps land as FULL blocks (Kate 2026-08-24: no typing reveal — the site
-    // demo's grammar, each step appears complete). A text/reasoning part that
-    // is still streaming — the tail of the last assistant message with no
-    // time.end yet — is withheld from the timeline; the Thinking row is the
-    // working signal while it composes, and the finished block enters whole.
-    // A part with a successor is complete by definition, so only the tail can
-    // ever be withheld, and a done turn (status not busy) withholds nothing.
+    // demo's grammar). A streaming prose tail reveals in CHUNKS (Kate
+    // 2026-08-25: no waiting for the whole reply either): its row joins the
+    // timeline as soon as the FIRST chunk settles (tailProseSettled, computed
+    // by the timeline from the delta-accumulated text) and the renderer shows
+    // settled chunks only. Before that first chunk — and for streaming
+    // reasoning, which keeps whole-block withholding — the row is withheld
+    // and Thinking is the working signal. A part with a successor is complete
+    // by definition, so only the tail can ever be withheld, and a done turn
+    // (status not busy) withholds nothing.
     const tail = assistantPartRefs.at(-1)
     const tailStreaming =
       isActive &&
@@ -143,7 +151,9 @@ export namespace Timeline {
       tail.messageIndex === assistantMessages.length - 1 &&
       (tail.part.type === "text" || tail.part.type === "reasoning") &&
       !tail.part.time?.end
-    const settledPartRefs = tailStreaming ? assistantPartRefs.slice(0, -1) : assistantPartRefs
+    const tailWithheld =
+      tailStreaming && tail !== undefined && (tail.part.type === "reasoning" || !tailProseSettled)
+    const settledPartRefs = tailWithheld ? assistantPartRefs.slice(0, -1) : assistantPartRefs
     const assistantItems =
       interrupted && !compaction
         ? [

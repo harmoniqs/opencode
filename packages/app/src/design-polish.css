@@ -203,6 +203,12 @@
 [data-timeline-enter] {
   animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
 }
+/* chunk entrances inside a streaming prose row — the same grammar, skinned
+   onto the attribute session-ui's ChunkedStreamMarkdown sets per settled
+   chunk (Kate 2026-08-25: replies land in chunks, not one final block). */
+[data-part-enter] {
+  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
+}
 /* The open cascade holds at frame 0 (opacity 0, risen, blurred) until the
    timeline has settled at the bottom — released by removing
    [data-entrance-pending] (message-timeline.tsx entranceReady). Also keeps
@@ -273,7 +279,8 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
      the rise is already zeroed via --motion-enter-rise above, and without the
      fade a withheld block would pop in with no signal at all. The global
      0.01ms reset would otherwise annihilate it. */
-  [data-timeline-enter] {
+  [data-timeline-enter],
+  [data-part-enter] {
     animation-duration: var(--motion-enter-duration) !important;
   }
 }

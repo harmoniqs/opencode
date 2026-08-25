@@ -37,9 +37,11 @@ import {
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  renderable,
   ShellToolGroup,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
+import { readPartText, settledChunkBoundary } from "@opencode-ai/session-ui/message-part-text"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -445,6 +447,24 @@ export function MessageTimeline(props: {
     return language.t("command.session.new")
   })
   const showHeader = createMemo(() => !!(titleValue() || parentID()))
+  // The chunk gate for a streaming prose tail (Kate 2026-08-25: replies land
+  // in chunks). rows.ts withholds the tail only until its FIRST chunk settles
+  // — but the freshest streamed text lives in part_text_accum_delta (part.text
+  // lags during delta streaming), which the pure row construction cannot see.
+  // Computed here as a boolean memo so the per-token recomputation stops at an
+  // unchanged value instead of rebuilding the whole row projection per delta.
+  const tailProseSettled = createMemo(() => {
+    const last = sessionMessages().findLast(
+      (message): message is AssistantMessage => message.role === "assistant",
+    )
+    if (!last || typeof last.time.completed === "number") return false
+    const tail = getMsgParts(last.id)
+      .filter((part) => renderable(part, settings.general.showReasoningSummaries()))
+      .at(-1)
+    if (!tail || tail.type !== "text" || tail.time?.end) return false
+    const text = readPartText(sync().data.part_text_accum_delta, tail)
+    return settledChunkBoundary(text) > 0
+  })
   const projection = createTimelineProjection({
     messages: sessionMessages,
     userMessages: () => props.userMessages,
@@ -453,6 +473,7 @@ export function MessageTimeline(props: {
     status: sessionStatus,
     showReasoningSummaries: settings.general.showReasoningSummaries,
     inlineComments: settings.general.newLayoutDesigns,
+    tailProseSettled,
   })
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
