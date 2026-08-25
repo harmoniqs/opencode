@@ -228,20 +228,11 @@
     filter: blur(0px);
   }
 }
-/* The exit ghost: a positioned clone of a row leaving the projection (the
-   Thinking row's every-turn removal), swept up and out of focus like the
-   site's GONE state. Applied by message-timeline.tsx's ghost-exit hook. */
-[data-timeline-exit] {
-  pointer-events: none;
-  animation: timeline-exit var(--motion-exit-duration) var(--motion-exit-ease) forwards;
-}
-@keyframes timeline-exit {
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-    filter: blur(var(--motion-enter-blur));
-  }
-}
+/* No exit animation. The site's GONE grammar (up + re-blur) was tried as a
+   positioned ghost clone and misfired — a body-appended clone escapes the
+   theme scope and the virtualizer relayouts under the captured rect. The
+   --motion-exit-* tokens above stay as the documented grammar should a real
+   FLIP-based exit ever be built. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-enter-rise: 0px;

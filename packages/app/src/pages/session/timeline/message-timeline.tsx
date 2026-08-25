@@ -1687,35 +1687,15 @@ export function MessageTimeline(props: {
 
     onCleanup(() => {
       if (contentMeasureFrame !== undefined) cancelAnimationFrame(contentMeasureFrame)
-      // The site's exit grammar (parts.jsx GONE): elements leave upward and
-      // re-blurred. The Thinking row is the one removal a user watches every
-      // turn — the settled block replaces it — but the timeline is
-      // virtualized, so the row cannot linger to play its own exit. Instead a
-      // positioned clone sweeps up and out of focus ([data-timeline-exit]).
-      // Only a row that genuinely LEFT the projection exits; rows disposed
-      // because the whole timeline is unmounting (session switch) still map
-      // to a projection entry and spawn nothing.
-      if (initialRow._tag !== "Thinking") return
-      if (timelineRowByKey().get(props.rowKey)) return
-      if (!element || !element.isConnected) return
-      const rect = element.getBoundingClientRect()
-      if (rect.height === 0 || rect.width === 0) return
-      const ghost = element.cloneNode(true)
-      if (!(ghost instanceof HTMLElement)) return
-      ghost.removeAttribute("data-timeline-enter")
-      ghost.setAttribute("data-timeline-exit", "")
-      Object.assign(ghost.style, {
-        position: "fixed",
-        top: `${rect.top}px`,
-        left: `${rect.left}px`,
-        width: `${rect.width}px`,
-        margin: "0",
-        "z-index": "10",
-      })
-      document.body.appendChild(ghost)
-      const drop = () => ghost.remove()
-      ghost.addEventListener("animationend", drop, { once: true })
-      setTimeout(drop, 600)
+      // NO exit ghost. The site's exit grammar (GONE: up + re-blur) was tried
+      // here as a positioned clone of the departing Thinking row and misfired
+      // in real use: a body-appended clone escapes the app's theme scope (its
+      // color var fell back to the dark-scheme yellow inside a light webview)
+      // and the rect captured at cleanup lags the virtualizer's relayout —
+      // a wrong-colored flash in the wrong place (Kate 2026-08-25). Removed
+      // rows are replaced instantly; the replacing block's entrance carries
+      // the transition. Exits in a virtualized timeline need real FLIP
+      // machinery or nothing — this is nothing, on purpose.
     })
 
     return (
