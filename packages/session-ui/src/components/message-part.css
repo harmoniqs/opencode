@@ -151,7 +151,7 @@
      of the ground — bg-deep/text-bg there. The app tokens
      (--prompt-bubble-*, design-polish.css) realise that per scheme: the
      site's ink bubble verbatim on light; on dark the inverse is seated at
-     ~85% luminance so a large light bubble doesn't glare on a dark field.
+     ~70% luminance so a large light bubble doesn't glare on a dark field.
      Fallback = raw inverse, for consumers without the app skin.
      Padding is the site's px-4 py-2.5. */
   [data-slot="user-message-text"] {
