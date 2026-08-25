@@ -462,10 +462,16 @@ export function MessageTimeline(props: {
   // A row animates only when it JOINS the projection after the session's first
   // paint, and only once — virtual rows unmount and remount on every
   // scroll-back, so mount alone must never trigger the entrance. The first
-  // mounted row after a session switch seeds the set with the whole history
+  // mounted row after a session switch seeds the set with the settled history
   // (synchronously, so no render of stale rows can slip in between); a key
   // never seen before animates and is recorded. Rows that join off-window
   // animate on their first scroll into view — still exactly once.
+  //
+  // The ACTIVE, still-running turn is live content, not history — it is
+  // exempt from seeding. The draft→new-session handoff mounts the timeline
+  // with the just-sent turn already in the projection; without the exemption
+  // that whole first turn would be swallowed as "history" and nothing would
+  // animate (found by Kate in the webview, 2026-08-25).
   let enteredFor: string | undefined
   const enteredKeys = new Set<string>()
   const shouldAnimateEnter = (rowKey: string) => {
@@ -473,8 +479,11 @@ export function MessageTimeline(props: {
     if (enteredFor !== sid) {
       enteredFor = sid
       enteredKeys.clear()
-      for (const row of timelineRows()) enteredKeys.add(TimelineRow.key(row))
-      return false
+      const active = sessionStatus().type === "busy" ? activeMessageID() : undefined
+      for (const row of timelineRows()) {
+        if (active !== undefined && row.userMessageID === active) continue
+        enteredKeys.add(TimelineRow.key(row))
+      }
     }
     if (enteredKeys.has(rowKey)) return false
     enteredKeys.add(rowKey)
