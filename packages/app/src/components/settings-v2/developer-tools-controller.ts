@@ -210,9 +210,13 @@ export function createDeveloperToolsController() {
     setAmicodePath: (value: string) => {
       settings.developer.setAmicodePath(value)
     },
-    /** Trigger validation + apply on blur */
-    commitOpencodePath: () => sendUpdate(),
-    commitAmicodePath: () => sendUpdate(),
+    /** Trigger validation + apply on blur — only in developer mode (not devcontainer-only mode) */
+    commitOpencodePath: () => {
+      if (settings.developer.enabled()) sendUpdate()
+    },
+    commitAmicodePath: () => {
+      if (settings.developer.enabled()) sendUpdate()
+    },
     /** Trigger a full rebuild (local = from disk, remote = git pull first) */
     rebuild,
     status,
