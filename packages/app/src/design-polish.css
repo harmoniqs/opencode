@@ -175,6 +175,36 @@
   }
 }
 
+/* ── entrance motion — timeline blocks land whole ──
+   New timeline rows (Kate 2026-08-24) enter as complete blocks: a small rise
+   and fade, fast and crisp, decided per row-key exactly once (the timeline
+   guards against virtual-row remount replays). Opacity+transform only — the
+   virtualizer owns row position and measured height, so entrance motion must
+   never touch layout. Reduced motion keeps the fade, drops the rise. */
+:root {
+  --motion-enter-duration: 0.18s;
+  --motion-enter-rise: 4px;
+  --motion-enter-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+[data-timeline-enter] {
+  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) both;
+}
+@keyframes timeline-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-enter-rise));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-enter-rise: 0px;
+  }
+}
+
 /* ── inline code: readable in both schemes ── */
 :not(pre) > code {
   color: #3d4451;

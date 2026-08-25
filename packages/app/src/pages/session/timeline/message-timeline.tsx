@@ -458,6 +458,29 @@ export function MessageTimeline(props: {
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
 
+  // Entrance bookkeeping (Kate 2026-08-24: blocks animate in whole, crisply).
+  // A row animates only when it JOINS the projection after the session's first
+  // paint, and only once — virtual rows unmount and remount on every
+  // scroll-back, so mount alone must never trigger the entrance. The first
+  // mounted row after a session switch seeds the set with the whole history
+  // (synchronously, so no render of stale rows can slip in between); a key
+  // never seen before animates and is recorded. Rows that join off-window
+  // animate on their first scroll into view — still exactly once.
+  let enteredFor: string | undefined
+  const enteredKeys = new Set<string>()
+  const shouldAnimateEnter = (rowKey: string) => {
+    const sid = sessionID()
+    if (enteredFor !== sid) {
+      enteredFor = sid
+      enteredKeys.clear()
+      for (const row of timelineRows()) enteredKeys.add(TimelineRow.key(row))
+      return false
+    }
+    if (enteredKeys.has(rowKey)) return false
+    enteredKeys.add(rowKey)
+    return true
+  }
+
   let prependAnchor: { key: string; offset: number } | undefined
   let prependAnchorFrame: number | undefined
   let prependLoading = false
@@ -1583,6 +1606,8 @@ export function MessageTimeline(props: {
     let element: HTMLDivElement
     const initialItem = virtualItemByKey().get(props.rowKey)!
     const initialRow = timelineRowByKey().get(props.rowKey)!
+    // Decided once at creation — remounts of an already-entered row get false.
+    const animateEnter = shouldAnimateEnter(props.rowKey)
     const item = createMemo(() => virtualItemByKey().get(props.rowKey) ?? initialItem)
     const row = createMemo(() => timelineRowByKey().get(props.rowKey) ?? initialRow)
     const tool = () => {
@@ -1622,11 +1647,11 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          // 4px, not 0.5px: the live rail dot breathes by a 0→4px ring
-          // (index.css thought-rail-breathe) and the old margin clipped the
-          // whole animation away — found in PR #246's testing. Keep in step
-          // with the ring size there.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "4px",
+          // 8px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // (index.css thought-rail-breathe; found clipped in PR #246's
+          // testing), and an entering row rides a --motion-enter-rise
+          // translate on top of it — the margin must cover ring + rise.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "8px",
         }}
       >
         <div
@@ -1634,6 +1659,7 @@ export function MessageTimeline(props: {
             element = value
           }}
           data-index={item().index}
+          data-timeline-enter={animateEnter ? "" : undefined}
           style={{ "min-height": ready() ? undefined : `${initialItem.size}px` }}
         >
           <TimelineRowView
