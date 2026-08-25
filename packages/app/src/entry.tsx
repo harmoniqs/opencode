@@ -13,6 +13,7 @@ import { dict as zh } from "@/i18n/zh"
 import { installGlobalClipboardFallback } from "@/utils/global-clipboard"
 import { installWebviewContextMenu } from "@/utils/webview-context-menu"
 import { webZoom } from "@/utils/web-zoom"
+import { inAmicode } from "@/utils/amicode-bridge"
 import { authFromToken } from "@/utils/server"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
@@ -185,7 +186,7 @@ const platform: Platform = {
   openExternal,
   restart,
   notify,
-  webviewZoom: webZoom,
+  webviewZoom: inAmicode() ? () => 1 : webZoom,
   getDefaultServer: async () => {
     const stored = readDefaultServerUrl()
     return stored ? ServerConnection.Key.make(stored) : null

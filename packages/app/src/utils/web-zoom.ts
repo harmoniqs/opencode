@@ -15,6 +15,7 @@
 // panel focused, the zoomed content is the webview; with an editor tab
 // focused, the workbench's own native window zoom applies, unchanged.
 import { createSignal } from "solid-js"
+import { inAmicode } from "@/utils/amicode-bridge"
 
 const KEY = "amicode-zoom"
 const MIN = 0.5
@@ -47,12 +48,15 @@ function apply(zoom: number) {
   }
 }
 
-// Apply zoom immediately and also after a small delay to ensure DOM is ready
-apply(webZoom())
-if (typeof document !== "undefined") {
-  document.addEventListener("DOMContentLoaded", () => apply(webZoom()), { once: true })
-  // Fallback: also try after a short timeout in case DOMContentLoaded already fired
-  setTimeout(() => apply(webZoom()), 0)
+// Apply zoom immediately and also after a small delay to ensure DOM is ready.
+// In amicode context, the workbench owns zoom — never apply CSS zoom.
+if (!inAmicode()) {
+  apply(webZoom())
+  if (typeof document !== "undefined") {
+    document.addEventListener("DOMContentLoaded", () => apply(webZoom()), { once: true })
+    // Fallback: also try after a short timeout in case DOMContentLoaded already fired
+    setTimeout(() => apply(webZoom()), 0)
+  }
 }
 
 export function setWebZoom(next: number) {
