@@ -374,6 +374,11 @@ export function MessageTimeline(props: {
   // Hide the scroll container for the first frame on cold-bottom-mount to prevent
   // a flash of content at the top before scrollToEnd fires.
   const [scrollReady, setScrollReady] = createSignal(!coldBottomMount)
+  // The open cascade holds until the virtualizer has settled at the bottom —
+  // entering rows sit paused at opacity 0 (see [data-entrance-pending] in
+  // design-polish.css) so the entrance never plays behind the opacity veil or
+  // during the initial scroll jump. Flipped one frame after the mount scroll.
+  const [entranceReady, setEntranceReady] = createSignal(false)
   const platform = usePlatform()
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>()
@@ -458,43 +463,50 @@ export function MessageTimeline(props: {
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
 
-  // Entrance bookkeeping (Kate 2026-08-24: blocks animate in whole, crisply).
-  // A row animates only when it JOINS the projection after the session's first
-  // paint, and only once — virtual rows unmount and remount on every
-  // scroll-back, so mount alone must never trigger the entrance. The first
-  // mounted row after a session switch seeds the set with the settled history
-  // (synchronously, so no render of stale rows can slip in between); a key
-  // never seen before animates and is recorded. Rows that join off-window
-  // animate on their first scroll into view — still exactly once.
+  // Entrance bookkeeping (Kate 2026-08-24/25: "all the elements fade in from
+  // the bottom", blocks land whole, crisply). Two moments animate, nothing
+  // else ever does:
   //
-  // The ACTIVE, UNSETTLED turn is live content, not history — it is exempt
-  // from seeding. The draft→new-session handoff mounts the timeline with the
-  // just-sent turn already in the projection; without the exemption that
-  // whole first turn would be swallowed as "history" and nothing would
-  // animate (found by Kate in the webview, 2026-08-25). Settledness is
-  // judged from the DATA, not the busy flag — in the handoff the first row
-  // can mount before the server's busy status has synced back, so a turn is
-  // live until one of its assistant messages has completed.
+  // 1. THE OPEN CASCADE — every session open / switch / reload cascades the
+  //    initially rendered rows in, staggered top-to-bottom. Rows arming
+  //    inside the first CASCADE_WINDOW_MS after the per-session reset are the
+  //    initial batch; each takes an animation-delay step. The cascade holds
+  //    paused behind [data-entrance-pending] until the virtualizer settles at
+  //    the bottom, which also removes the old unanimated flash-jump (history
+  //    used to paint one frame at the top, then teleport to the bottom).
+  //
+  // 2. THE LIVE TURN — after the open, only rows of the ACTIVE turn enter
+  //    (the just-sent bubble, Thinking, the settled reply blocks). Settled
+  //    history joining later — scroll-back remounts, pagination prepends,
+  //    far jumps — lands silently by rule, which closes the whole class of
+  //    replay/burn bugs the per-key ledger alone could not (an audit found
+  //    prepends animating a full page, and off-screen mounts burning their
+  //    once-only entrance invisibly).
+  //
+  // Each key still animates at most once (virtual rows remount on every
+  // scroll-back, so mount alone must never trigger the entrance).
+  const CASCADE_WINDOW_MS = 600
+  const CASCADE_STEP_MS = 40
+  const CASCADE_MAX_STEPS = 12
   let enteredFor: string | undefined
+  let enteredAt = 0
+  let cascadeStep = 0
   const enteredKeys = new Set<string>()
-  const shouldAnimateEnter = (rowKey: string) => {
+  const shouldAnimateEnter = (rowKey: string, row: TimelineRow.TimelineRow): number | false => {
     const sid = sessionID()
     if (enteredFor !== sid) {
       enteredFor = sid
       enteredKeys.clear()
-      const active = activeMessageID()
-      const activeAssistants = active !== undefined ? (assistantMessagesByParent().get(active) ?? []) : []
-      const activeTurnLive =
-        active !== undefined &&
-        (sessionStatus().type === "busy" || activeAssistants.every((message) => !message.time.completed))
-      for (const row of timelineRows()) {
-        if (activeTurnLive && row.userMessageID === active) continue
-        enteredKeys.add(TimelineRow.key(row))
-      }
+      enteredAt = performance.now()
+      cascadeStep = 0
     }
     if (enteredKeys.has(rowKey)) return false
     enteredKeys.add(rowKey)
-    return true
+    if (performance.now() - enteredAt < CASCADE_WINDOW_MS) {
+      return Math.min(cascadeStep++, CASCADE_MAX_STEPS) * CASCADE_STEP_MS
+    }
+    if (row.userMessageID === activeMessageID()) return 0
+    return false
   }
 
   let prependAnchor: { key: string; offset: number } | undefined
@@ -734,6 +746,9 @@ export function MessageTimeline(props: {
       if (renderOverscan() < 20) setRenderOverscan(20)
       if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
       if (!scrollReady()) setScrollReady(true)
+      // one more frame so measurement-driven scroll corrections land before
+      // the cascade is released
+      requestAnimationFrame(() => setEntranceReady(true))
     })
   })
 
@@ -1623,7 +1638,8 @@ export function MessageTimeline(props: {
     const initialItem = virtualItemByKey().get(props.rowKey)!
     const initialRow = timelineRowByKey().get(props.rowKey)!
     // Decided once at creation — remounts of an already-entered row get false.
-    const animateEnter = shouldAnimateEnter(props.rowKey)
+    // A number is the cascade's per-row animation-delay in ms (0 for live rows).
+    const enterDelay = shouldAnimateEnter(props.rowKey, initialRow)
     const item = createMemo(() => virtualItemByKey().get(props.rowKey) ?? initialItem)
     const row = createMemo(() => timelineRowByKey().get(props.rowKey) ?? initialRow)
     const tool = () => {
@@ -1675,8 +1691,11 @@ export function MessageTimeline(props: {
             element = value
           }}
           data-index={item().index}
-          data-timeline-enter={animateEnter ? "" : undefined}
-          style={{ "min-height": ready() ? undefined : `${initialItem.size}px` }}
+          data-timeline-enter={enterDelay !== false ? "" : undefined}
+          style={{
+            "min-height": ready() ? undefined : `${initialItem.size}px`,
+            "animation-delay": enterDelay !== false && enterDelay > 0 ? `${enterDelay}ms` : undefined,
+          }}
         >
           <TimelineRowView
             row={row()}
@@ -1758,6 +1777,7 @@ export function MessageTimeline(props: {
         onScroll={handleListScroll}
         onClick={props.onAutoScrollInteraction}
         class="relative min-w-0 w-full h-full"
+        data-entrance-pending={entranceReady() ? undefined : ""}
         style={{
           "--sticky-accordion-top": showHeader() ? "48px" : "0px",
           opacity: scrollReady() ? undefined : "0",

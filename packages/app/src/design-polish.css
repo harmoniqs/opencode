@@ -182,14 +182,23 @@
    virtualizer owns row position and measured height, so entrance motion must
    never touch layout. Reduced motion keeps the fade, drops the rise. */
 :root {
-  /* 4px/0.18s read as a pop, not an entrance, in real use (Kate 2026-08-25:
-     "not seamless") — 8px/0.22s is still crisp but visibly a rise. */
-  --motion-enter-duration: 0.22s;
+  /* 8px/0.22s measured as painted-but-imperceptible in real use: easeOutCubic
+     front-loads ~90% of the change into ~100ms, and the send-time autoscroll
+     snaps are 3-18x the rise. 0.32s keeps the crisp attack but leaves enough
+     tail for the eye to register the entrance through the scroll. */
+  --motion-enter-duration: 0.32s;
   --motion-enter-rise: 8px;
   --motion-enter-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 [data-timeline-enter] {
   animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) both;
+}
+/* The open cascade holds at frame 0 (opacity 0, risen) until the timeline has
+   settled at the bottom — released by removing [data-entrance-pending]
+   (message-timeline.tsx entranceReady). Also keeps the draft handoff's
+   entrance from playing its opening frames behind the cold-mount veil. */
+[data-entrance-pending] [data-timeline-enter] {
+  animation-play-state: paused;
 }
 @keyframes timeline-enter {
   from {
@@ -232,6 +241,13 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+  /* The timeline entrance deliberately KEEPS its fade under reduced motion —
+     the rise is already zeroed via --motion-enter-rise above, and without the
+     fade a withheld block would pop in with no signal at all. The global
+     0.01ms reset would otherwise annihilate it. */
+  [data-timeline-enter] {
+    animation-duration: var(--motion-enter-duration) !important;
   }
 }
 
