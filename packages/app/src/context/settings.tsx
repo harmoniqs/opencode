@@ -55,6 +55,8 @@ export interface Settings {
     enabled: boolean
     opencodePath: string
     amicodePath: string
+    devcontainerMode: boolean
+    vsixOutputPath: string
   }
   keybinds: Record<string, string>
   permissions: {
@@ -220,6 +222,8 @@ const defaultSettings: Settings = {
     enabled: false,
     opencodePath: "",
     amicodePath: "",
+    devcontainerMode: false,
+    vsixOutputPath: "/workspaces/artifacts/",
   },
   keybinds: {},
   permissions: {
@@ -574,6 +578,14 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         amicodePath: withFallback(() => store.developer?.amicodePath, defaultSettings.developer.amicodePath),
         setAmicodePath(value: string) {
           setStore("developer", "amicodePath", value)
+        },
+        devcontainerMode: withFallback(() => store.developer?.devcontainerMode, defaultSettings.developer.devcontainerMode),
+        setDevcontainerMode(value: boolean) {
+          setStore("developer", "devcontainerMode", value)
+        },
+        vsixOutputPath: withFallback(() => store.developer?.vsixOutputPath, defaultSettings.developer.vsixOutputPath),
+        setVsixOutputPath(value: string) {
+          setStore("developer", "vsixOutputPath", value)
         },
       },
     }
