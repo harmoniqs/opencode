@@ -228,6 +228,37 @@
     filter: blur(0px);
   }
 }
+/* ── the reply segment ── each of Amico's replies reads as ONE bordered
+   container (Kate 2026-08-25; the site's Panel grammar — a 1px hairline,
+   brand radius). Virtual rows are siblings, so the container is synthesized
+   per row like the rail: every assistant-side row carries the side edges,
+   the first row the top cap, the last the bottom cap; contiguous rows tile
+   so the edges join into one outline. Rows after the first enter without
+   the rise (see below) so the border extends instead of tearing. */
+[data-segment] {
+  border-left: var(--border-width) solid var(--v2-border-border-base);
+  border-right: var(--border-width) solid var(--v2-border-border-base);
+  padding-inline: 14px;
+}
+[data-segment-first] {
+  border-top: var(--border-width) solid var(--v2-border-border-base);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding-top: 4px;
+}
+[data-segment-last] {
+  border-bottom: var(--border-width) solid var(--v2-border-border-base);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+  padding-bottom: 12px;
+}
+/* inside the container the rise would detach a row's border slice from the
+   row above for the duration of the entrance — members after the first fade
+   and sharpen in place, and the container visually GROWS downward */
+[data-segment][data-timeline-enter]:not([data-segment-first]) {
+  --motion-enter-rise: 0px;
+}
+
 /* No exit animation. The site's GONE grammar (up + re-blur) was tried as a
    positioned ghost clone and misfired — a body-appended clone escapes the
    theme scope and the virtualizer relayouts under the captured rect. The
