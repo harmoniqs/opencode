@@ -141,61 +141,6 @@
   color: var(--v2-icon-icon-accent);
 }
 
-/* ── the working indicator (amico-pulse.tsx) ──
- * One hollow dot, rail-node sized, emitting a crisp expanding ripple — the
- * website's .rail-dot working signal verbatim (spread-only shadow, 1.6s
- * ease-out; Kate tried a blurred edge and cut it). Color and grid placement
- * come from .amc-wave above, which the component also carries. */
-.amc-pulse {
-  width: 7px;
-  height: 7px;
-  box-sizing: border-box;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  margin: 2.5px 0;
-  animation: amc-pulse-emit 1.6s ease-out infinite;
-}
-@keyframes amc-pulse-emit {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .amc-pulse {
-    animation: none;
-  }
-}
-
-/* ── the circular working indicator (amico-harmonics.tsx) — PARKED ──
- * Hydrogen's first three radial harmonics as concentric shells around a
- * filled nucleus; each shell takes its turn brightening and swelling,
- * climbing n=1→2→3 the way the wave climbed its modes. Kin to the rail
- * nodes: circles in the same ink (the color comes from .amc-wave above,
- * which the component also carries for the thinking grid's placement).
- * The period comes from the component inline (one turn per shell). */
-.amc-harmonics-shell {
-  opacity: 0.22;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: amc-harmonics-breathe var(--amc-harmonics-period) cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-@keyframes amc-harmonics-breathe {
-  0%, 33%, 100% { opacity: 0.22; transform: scale(1); }
-  16% { opacity: 1; transform: scale(1.07); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .amc-harmonics-shell {
-    animation: none;
-    opacity: 0.5;
-  }
-}
-
 /* .amc-wave-ln / .amc-wave-mode are component-private — only amico-wave.tsx ever sets the
  * custom properties these animation shorthands read. Both shorthands carry a var(), which
  * makes the whole shorthand a pending-substitution value: if any referenced custom property
