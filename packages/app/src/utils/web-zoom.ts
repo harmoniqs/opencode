@@ -15,7 +15,7 @@
 // panel focused, the zoomed content is the webview; with an editor tab
 // focused, the workbench's own native window zoom applies, unchanged.
 import { createSignal } from "solid-js"
-import { inAmicode } from "@/utils/amicode-bridge"
+import { inAmicode, postAmicode } from "@/utils/amicode-bridge"
 
 const KEY = "amicode-zoom"
 const MIN = 0.5
@@ -96,12 +96,20 @@ if (typeof document !== "undefined") {
     (event) => {
       if (!event.metaKey && !event.ctrlKey) return
       const key = event.key
-      if (ZOOM_IN_KEYS.has(key)) setWebZoom(webZoom() + STEP)
-      else if (ZOOM_OUT_KEYS.has(key)) setWebZoom(webZoom() - STEP)
-      else if (ZOOM_RESET_KEYS.has(key)) setWebZoom(1)
-      else return
+      let action: string | undefined
+      if (ZOOM_IN_KEYS.has(key)) action = "workbench.action.zoomIn"
+      else if (ZOOM_OUT_KEYS.has(key)) action = "workbench.action.zoomOut"
+      else if (ZOOM_RESET_KEYS.has(key)) action = "workbench.action.zoomReset"
+      if (!action) return
       event.preventDefault()
       event.stopPropagation()
+      if (inAmicode()) {
+        postAmicode(action)
+      } else {
+        if (action === "workbench.action.zoomIn") setWebZoom(webZoom() + STEP)
+        else if (action === "workbench.action.zoomOut") setWebZoom(webZoom() - STEP)
+        else setWebZoom(1)
+      }
     },
     { capture: true },
   )
