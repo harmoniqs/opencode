@@ -141,6 +141,30 @@
   color: var(--v2-icon-icon-accent);
 }
 
+/* ── the circular working indicator (amico-harmonics.tsx) ──
+ * Hydrogen's first three radial harmonics as concentric shells around a
+ * filled nucleus; each shell takes its turn brightening and swelling,
+ * climbing n=1→2→3 the way the wave climbed its modes. Kin to the rail
+ * nodes: circles in the same ink (the color comes from .amc-wave above,
+ * which the component also carries for the thinking grid's placement).
+ * The period comes from the component inline (one turn per shell). */
+.amc-harmonics-shell {
+  opacity: 0.22;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: amc-harmonics-breathe var(--amc-harmonics-period) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes amc-harmonics-breathe {
+  0%, 33%, 100% { opacity: 0.22; transform: scale(1); }
+  16% { opacity: 1; transform: scale(1.07); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .amc-harmonics-shell {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
 /* .amc-wave-ln / .amc-wave-mode are component-private — only amico-wave.tsx ever sets the
  * custom properties these animation shorthands read. Both shorthands carry a var(), which
  * makes the whole shorthand a pending-substitution value: if any referenced custom property
