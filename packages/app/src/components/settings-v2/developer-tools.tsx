@@ -92,7 +92,7 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
         <Show when={props.controller.vsixBuildState() === "rebuilt"}>
           <div class="devtools-rebuild-status devtools-rebuild-status--done">
             <span class="devtools-status-dot devtools-status-dot--green" />
-            <span>VSIX built: {props.controller.vsixPath()}</span>
+            <span>VSIX built: {props.controller.vsixPath() ?? ""}</span>
           </div>
         </Show>
         <Show when={props.controller.vsixBuildState() === "failed"}>
