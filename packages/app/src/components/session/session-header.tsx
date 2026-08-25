@@ -8,8 +8,7 @@ import { Keybind } from "@opencode-ai/ui/keybind"
 import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { showToast } from "@/utils/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
+
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { batch, createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
@@ -789,32 +788,22 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
     }
   }
 
-  // amicode#310: permanently delete an archived session with confirmation dialog.
-  const dialog = useDialog()
-  function deleteArchivedSession(session: Session) {
-    dialog.show(() => (
-      <DialogDeleteArchivedSession
-        session={session}
-        onConfirm={async () => {
-          const ctx = getServerCtx()
-          if (!ctx) return
-          try {
-            await (ctx.sdk.client.session.delete as Function)({
-              sessionID: session.id,
-              directory: session.directory,
-            })
-            setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
-          } catch (cause) {
-            showToast({
-              title: language.t("session.delete.failed.title"),
-              description: String(cause),
-            })
-          }
-          dialog.close()
-        }}
-        onCancel={() => dialog.close()}
-      />
-    ))
+  // amicode#255: permanently delete an archived session (inline confirm in row).
+  async function deleteArchivedSession(session: Session) {
+    const ctx = getServerCtx()
+    if (!ctx) return
+    try {
+      await (ctx.sdk.client.session.delete as Function)({
+        sessionID: session.id,
+        directory: session.directory,
+      })
+      setArchivedSessions((prev) => prev.filter((s) => s.id !== session.id))
+    } catch (cause) {
+      showToast({
+        title: language.t("session.delete.failed.title"),
+        description: String(cause),
+      })
+    }
   }
 
   async function openSession(session: Session) {
@@ -1135,6 +1124,31 @@ function ArchivedSessionDropdownRow(props: {
   onDelete: (session: Session) => void
 }) {
   const title = createMemo(() => sessionTitle(props.session.title) || props.session.id)
+  const [armed, setArmed] = createSignal(false)
+  let resetTimer: ReturnType<typeof setTimeout> | undefined
+
+  function arm(event: MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    setArmed(true)
+    clearTimeout(resetTimer)
+    resetTimer = setTimeout(() => setArmed(false), 3000)
+  }
+
+  function confirmDelete(event: MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    clearTimeout(resetTimer)
+    setArmed(false)
+    void props.onDelete(props.session)
+  }
+
+  function disarm() {
+    clearTimeout(resetTimer)
+    setArmed(false)
+  }
+
+  onCleanup(() => clearTimeout(resetTimer))
 
   return (
     <div class="group/archived relative flex h-7 min-w-0 items-center rounded-sm">
@@ -1164,50 +1178,37 @@ function ArchivedSessionDropdownRow(props: {
             }}
           />
         </TooltipV2>
-        <TooltipV2 placement="top" value="Delete permanently">
-          <IconButtonV2
-            data-action="session-dropdown-delete"
-            variant="ghost-muted"
-            size="large"
-            icon={<Icon name="trash" size="small" />}
-            aria-label="Delete permanently"
-            onClick={(event: MouseEvent) => {
-              event.preventDefault()
-              event.stopPropagation()
-              void props.onDelete(props.session)
-            }}
-          />
-        </TooltipV2>
+        <Show
+          when={armed()}
+          fallback={
+            <TooltipV2 placement="top" value="Delete permanently">
+              <IconButtonV2
+                data-action="session-dropdown-delete"
+                variant="ghost-muted"
+                size="large"
+                icon={<Icon name="trash" size="small" />}
+                aria-label="Delete permanently"
+                onClick={arm}
+              />
+            </TooltipV2>
+          }
+        >
+          <ButtonV2
+            data-action="session-dropdown-delete-confirm"
+            variant="danger"
+            size="small"
+            aria-label="Confirm delete"
+            aria-live="polite"
+            onClick={confirmDelete}
+            onBlur={disarm}
+            onKeyDown={(e: KeyboardEvent) => e.key === "Escape" && disarm()}
+          >
+            Delete
+          </ButtonV2>
+        </Show>
       </div>
     </div>
   )
 }
 
-// amicode#310: confirmation dialog for permanently deleting an archived session.
-function DialogDeleteArchivedSession(props: {
-  session: Session
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  const language = useLanguage()
-  const name = createMemo(() => sessionTitle(props.session.title) || props.session.id)
 
-  return (
-    <DialogV2 fit>
-      <DialogHeader hideClose>
-        <DialogTitleGroup
-          title={language.t("session.delete.title")}
-          description={language.t("session.delete.confirm", { name: name() })}
-        />
-      </DialogHeader>
-      <DialogFooter>
-        <ButtonV2 variant="ghost" onClick={props.onCancel}>
-          {language.t("common.cancel")}
-        </ButtonV2>
-        <ButtonV2 variant="danger" onClick={props.onConfirm}>
-          {language.t("session.delete.button")}
-        </ButtonV2>
-      </DialogFooter>
-    </DialogV2>
-  )
-}
