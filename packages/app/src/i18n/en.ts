@@ -45,7 +45,7 @@ export const dict = {
   "command.language.cycle": "Cycle language",
   "command.language.set": "Use language: {{language}}",
 
-  "command.session.new": "New session",
+  "command.session.new": "New Session",
   "command.file.open": "Open file",
   "command.tab.close": "Close tab",
   "command.tab.reopenClosed": "Reopen closed tab",
