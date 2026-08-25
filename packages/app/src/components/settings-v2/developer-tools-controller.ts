@@ -25,6 +25,9 @@ export function createDeveloperToolsController() {
   const [pending, setPending] = createSignal(false)
   const [rebuildState, setRebuildState] = createSignal<RebuildState>("idle")
   const [rebuildError, setRebuildError] = createSignal<string | undefined>(undefined)
+  const [vsixBuildState, setVsixBuildState] = createSignal<RebuildState>("idle")
+  const [vsixBuildError, setVsixBuildError] = createSignal<string | undefined>(undefined)
+  const [vsixPath, setVsixPath] = createSignal<string | undefined>(undefined)
 
   // On mount, check if we just came back from a rebuild (successful or in-progress).
   // The "rebuilding" flag survives iframe reloads caused by file-watcher churn
@@ -100,6 +103,21 @@ export function createDeveloperToolsController() {
       } else if (d.state === "done") {
         try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
         // The window reload follows shortly — "rebuilt" flag is read on next mount
+      }
+    }
+
+    // Devcontainer VSIX build status messages
+    if (d && d.source === "amicode" && d.kind === "dev-tools-build-vsix-status") {
+      if (d.state === "building") {
+        setVsixBuildState("rebuilding")
+        setVsixBuildError(undefined)
+        setVsixPath(undefined)
+      } else if (d.state === "failed") {
+        setVsixBuildState("failed")
+        setVsixBuildError(d.error ?? "Unknown error")
+      } else if (d.state === "done") {
+        setVsixBuildState("rebuilt")
+        setVsixPath(d.vsixPath)
       }
     }
   }
@@ -201,6 +219,32 @@ export function createDeveloperToolsController() {
     pending,
     rebuildState,
     rebuildError,
+    // Devcontainer VSIX build
+    devcontainerMode: settings.developer.devcontainerMode,
+    setDevcontainerMode: (value: boolean) => {
+      settings.developer.setDevcontainerMode(value)
+    },
+    vsixOutputPath: settings.developer.vsixOutputPath,
+    setVsixOutputPath: (value: string) => {
+      settings.developer.setVsixOutputPath(value)
+    },
+    buildVsix: () => {
+      if (!inAmicode()) return
+      if (vsixBuildState() === "rebuilding") return
+      setVsixBuildState("rebuilding")
+      setVsixBuildError(undefined)
+      setVsixPath(undefined)
+      window.parent.postMessage({
+        source: "amicode",
+        kind: "dev-tools-build-vsix",
+        opencodePath: settings.developer.opencodePath(),
+        amicodePath: settings.developer.amicodePath(),
+        outputPath: settings.developer.vsixOutputPath(),
+      }, "*")
+    },
+    vsixBuildState,
+    vsixBuildError,
+    vsixPath,
   }
 }
 

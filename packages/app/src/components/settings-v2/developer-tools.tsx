@@ -160,6 +160,65 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
           />
         </div>
       </SettingsRowV2>
+
+      {/* Devcontainer VSIX build (experimental) */}
+      <Show when={props.controller.enabled()}>
+        <SettingsRowV2
+          title="Devcontainer mode (experimental)"
+          description="Build a .vsix for manual installation instead of hot-reloading"
+        >
+          <ToggleSwitch
+            checked={props.controller.devcontainerMode()}
+            onChange={(checked) => props.controller.setDevcontainerMode(checked)}
+          />
+        </SettingsRowV2>
+
+        <Show when={props.controller.devcontainerMode()}>
+          <SettingsRowV2
+            title="VSIX output path"
+            description="Directory where the built .vsix is emitted"
+          >
+            <div class="w-full sm:w-[280px]">
+              <TextInputV2
+                type="text"
+                appearance="base"
+                value={props.controller.vsixOutputPath()}
+                onInput={(e) => props.controller.setVsixOutputPath(e.currentTarget.value)}
+                placeholder="/workspaces/artifacts/"
+                spellcheck={false}
+                autocorrect="off"
+                autocomplete="off"
+                autocapitalize="off"
+                aria-label="VSIX output path"
+              />
+            </div>
+          </SettingsRowV2>
+
+          <div class="devtools-rebuild-row">
+            <ButtonV2
+              size="small"
+              variant="neutral"
+              onClick={() => props.controller.buildVsix()}
+              disabled={props.controller.vsixBuildState() === "rebuilding"}
+            >
+              {props.controller.vsixBuildState() === "rebuilding" ? "Building VSIX..." : "Build VSIX"}
+            </ButtonV2>
+          </div>
+
+          <Show when={props.controller.vsixBuildState() === "rebuilt"}>
+            <div class="devtools-rebuild-status devtools-rebuild-status--done">
+              <span class="devtools-status-dot devtools-status-dot--green" />
+              <span>VSIX built: {props.controller.vsixPath()}</span>
+            </div>
+          </Show>
+          <Show when={props.controller.vsixBuildState() === "failed"}>
+            <div class="devtools-rebuild-status devtools-rebuild-status--failed">
+              <span class="devtools-status-dot devtools-status-dot--red" />
+              <span>{props.controller.vsixBuildError()}</span>
+            </div>
+          </Show>
+        </Show>
+      </Show>
     </SettingsListV2>
   )
 }
