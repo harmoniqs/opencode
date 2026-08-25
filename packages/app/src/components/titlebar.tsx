@@ -401,7 +401,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   placement="bottom"
                   value={
                     <>
-                      {"Settings"}
+                      {language.t("command.settings.open")}
                       <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
                     </>
                   }
