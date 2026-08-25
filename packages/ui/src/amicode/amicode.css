@@ -141,7 +141,38 @@
   color: var(--v2-icon-icon-accent);
 }
 
-/* ── the circular working indicator (amico-harmonics.tsx) ──
+/* ── the working indicator (amico-pulse.tsx) ──
+ * One hollow dot, rail-node sized, emitting a soft glowing pulse — the
+ * website's .rail-dot ripple (1.6s ease-out) with a blurred edge so it
+ * glows rather than rings. Color and grid placement come from .amc-wave
+ * above, which the component also carries. */
+.amc-pulse {
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  margin: 2.5px 0;
+  animation: amc-pulse-emit 1.6s ease-out infinite;
+}
+@keyframes amc-pulse-emit {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 6px 5px color-mix(in srgb, currentColor 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .amc-pulse {
+    animation: none;
+  }
+}
+
+/* ── the circular working indicator (amico-harmonics.tsx) — PARKED ──
  * Hydrogen's first three radial harmonics as concentric shells around a
  * filled nucleus; each shell takes its turn brightening and swelling,
  * climbing n=1→2→3 the way the wave climbed its modes. Kin to the rail

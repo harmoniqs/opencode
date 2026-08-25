@@ -1,11 +1,12 @@
 import { createSignal, onCleanup, onMount, Show, type ComponentProps } from "solid-js"
 import { shuffledWordAt, SHUFFLED_WORDS, formatElapsed, formatTokens } from "./thinking"
-import { AmicoHarmonics } from "./amico-harmonics"
+import { AmicoPulse } from "./amico-pulse"
 
 // AMICODE: the "thinking" working indicator — a two-row block shown while a
 // reply streams (app TimelineThinkingRow; session-ui lane in message-part.tsx).
-// Row 1: the hydrogen harmonics (amico-harmonics.tsx — circular, kin to the
-// rail nodes; replaced the wave, Kate 2026-08-25) + the cycling gerund.
+// Row 1: the pulse dot (amico-pulse.tsx — the site's rail-dot ripple with a
+// glowing edge; replaced the harmonics, which replaced the wave, both parked,
+// Kate 2026-08-25) + the cycling gerund.
 // Row 2: the live meta line (elapsed · tokens · esc), starting under it.
 // Pure bits (word rotation, label formatting) live in ./thinking for testing.
 //
@@ -81,7 +82,7 @@ export function ThinkingLine(props: {
       <span class="amc-thinking-word" aria-hidden="true">
         {word()}…
       </span>
-      <AmicoHarmonics />
+      <AmicoPulse />
       <span class="amc-thinking-meta" aria-hidden="true">
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
         <Show when={props.tokens != null}>
