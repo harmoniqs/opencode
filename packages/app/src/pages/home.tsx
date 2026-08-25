@@ -2250,7 +2250,6 @@ function ArchivedSessionRow(props: {
             data-action="home-session-delete-confirm"
             variant="danger"
             size="small"
-            icon="trash"
             aria-label="Confirm delete"
             aria-live="polite"
             onClick={confirmDelete}

@@ -1197,7 +1197,6 @@ function ArchivedSessionDropdownRow(props: {
             data-action="session-dropdown-delete-confirm"
             variant="danger"
             size="small"
-            icon="trash"
             aria-label="Confirm delete"
             aria-live="polite"
             onClick={confirmDelete}
