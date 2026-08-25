@@ -116,8 +116,13 @@ export function createDeveloperToolsController() {
         setVsixBuildState("failed")
         setVsixBuildError(d.error ?? "Unknown error")
       } else if (d.state === "done") {
-        setVsixBuildState("rebuilt")
-        setVsixPath(d.vsixPath)
+        if (typeof d.vsixPath === "string" && d.vsixPath.trim() !== "") {
+          setVsixBuildState("rebuilt")
+          setVsixPath(d.vsixPath)
+        } else {
+          setVsixBuildState("failed")
+          setVsixBuildError("Build completed but no output path was reported")
+        }
       }
     }
   }
