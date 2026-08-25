@@ -142,10 +142,10 @@
 }
 
 /* ── the working indicator (amico-pulse.tsx) ──
- * One hollow dot, rail-node sized, emitting a soft glowing pulse — the
- * website's .rail-dot ripple (1.6s ease-out) with a blurred edge so it
- * glows rather than rings. Color and grid placement come from .amc-wave
- * above, which the component also carries. */
+ * One hollow dot, rail-node sized, emitting a crisp expanding ripple — the
+ * website's .rail-dot working signal verbatim (spread-only shadow, 1.6s
+ * ease-out; Kate tried a blurred edge and cut it). Color and grid placement
+ * come from .amc-wave above, which the component also carries. */
 .amc-pulse {
   width: 7px;
   height: 7px;
@@ -160,7 +160,7 @@
     box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
   }
   70% {
-    box-shadow: 0 0 6px 5px color-mix(in srgb, currentColor 0%, transparent);
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
   }
   100% {
     box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);

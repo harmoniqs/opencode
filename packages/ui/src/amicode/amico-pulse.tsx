@@ -1,8 +1,8 @@
-// AMICODE: the working indicator — a single hollow dot emitting a soft
-// glowing pulse. This is the website's own working signal (globals.css
-// .rail-dot: a box-shadow ripple, 1.6s ease-out) brought home, with a blurred
-// edge so the ripple glows instead of ringing. Clean and conceptless
-// (Kate 2026-08-25): circular like the rail nodes, one quiet breath at a time.
+// AMICODE: the working indicator — a single hollow dot emitting a crisp
+// expanding ripple. This is the website's own working signal (globals.css
+// .rail-dot: a spread-only box-shadow ripple, 1.6s ease-out) brought home
+// verbatim — a blurred edge was tried and cut (Kate 2026-08-25). Clean and
+// conceptless: circular like the rail nodes, one quiet breath at a time.
 //
 // Replaces AmicoHarmonics (parked alongside AmicoWave). Carries the
 // `amc-wave` class ONLY for the thinking grid's placement + icon-accent ink
