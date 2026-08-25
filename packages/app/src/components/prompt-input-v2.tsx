@@ -29,7 +29,7 @@ import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
 import { bugReportEnabled } from "@/utils/amicode-bug-report"
-import { setClipboardImageHandler } from "@/utils/global-clipboard"
+import { clearClipboardImageHandler, setClipboardImageHandler } from "@/utils/global-clipboard"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -424,8 +424,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   // Framed webview: the window-level fallback (global-clipboard.ts) is the
   // sole ⌘V owner. When the clipboard carries no text it offers the media to
   // this slot, landing it in the composer's attachment pipeline.
-  setClipboardImageHandler((file) => controller.addAttachments([file]))
-  onCleanup(() => setClipboardImageHandler(undefined))
+  const imageHandler = (file: File) => controller.addAttachments([file])
+  setClipboardImageHandler(imageHandler)
+  onCleanup(() => clearClipboardImageHandler(imageHandler))
 
   command.register("prompt-input", () => [
     {
