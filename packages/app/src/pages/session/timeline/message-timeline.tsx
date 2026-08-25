@@ -467,11 +467,14 @@ export function MessageTimeline(props: {
   // never seen before animates and is recorded. Rows that join off-window
   // animate on their first scroll into view — still exactly once.
   //
-  // The ACTIVE, still-running turn is live content, not history — it is
-  // exempt from seeding. The draft→new-session handoff mounts the timeline
-  // with the just-sent turn already in the projection; without the exemption
-  // that whole first turn would be swallowed as "history" and nothing would
-  // animate (found by Kate in the webview, 2026-08-25).
+  // The ACTIVE, UNSETTLED turn is live content, not history — it is exempt
+  // from seeding. The draft→new-session handoff mounts the timeline with the
+  // just-sent turn already in the projection; without the exemption that
+  // whole first turn would be swallowed as "history" and nothing would
+  // animate (found by Kate in the webview, 2026-08-25). Settledness is
+  // judged from the DATA, not the busy flag — in the handoff the first row
+  // can mount before the server's busy status has synced back, so a turn is
+  // live until one of its assistant messages has completed.
   let enteredFor: string | undefined
   const enteredKeys = new Set<string>()
   const shouldAnimateEnter = (rowKey: string) => {
@@ -479,9 +482,13 @@ export function MessageTimeline(props: {
     if (enteredFor !== sid) {
       enteredFor = sid
       enteredKeys.clear()
-      const active = sessionStatus().type === "busy" ? activeMessageID() : undefined
+      const active = activeMessageID()
+      const activeAssistants = active !== undefined ? (assistantMessagesByParent().get(active) ?? []) : []
+      const activeTurnLive =
+        active !== undefined &&
+        (sessionStatus().type === "busy" || activeAssistants.every((message) => !message.time.completed))
       for (const row of timelineRows()) {
-        if (active !== undefined && row.userMessageID === active) continue
+        if (activeTurnLive && row.userMessageID === active) continue
         enteredKeys.add(TimelineRow.key(row))
       }
     }
@@ -1656,11 +1663,11 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          // 8px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // 12px, not 0.5px: the live rail dot breathes by a 0→4px ring
           // (index.css thought-rail-breathe; found clipped in PR #246's
-          // testing), and an entering row rides a --motion-enter-rise
+          // testing), and an entering row rides the 8px --motion-enter-rise
           // translate on top of it — the margin must cover ring + rise.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "8px",
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "12px",
         }}
       >
         <div

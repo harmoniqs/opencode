@@ -182,8 +182,10 @@
    virtualizer owns row position and measured height, so entrance motion must
    never touch layout. Reduced motion keeps the fade, drops the rise. */
 :root {
-  --motion-enter-duration: 0.18s;
-  --motion-enter-rise: 4px;
+  /* 4px/0.18s read as a pop, not an entrance, in real use (Kate 2026-08-25:
+     "not seamless") — 8px/0.22s is still crisp but visibly a rise. */
+  --motion-enter-duration: 0.22s;
+  --motion-enter-rise: 8px;
   --motion-enter-ease: cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 [data-timeline-enter] {
