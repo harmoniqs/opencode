@@ -127,24 +127,41 @@ export namespace Timeline {
         .filter((part) => renderable(part, showReasoning))
         .map((part) => ({ messageID: message.id, messageIndex, part })),
     )
+    // Steps land as FULL blocks (Kate 2026-08-24: no typing reveal — the site
+    // demo's grammar, each step appears complete). A text/reasoning part that
+    // is still streaming — the tail of the last assistant message with no
+    // time.end yet — is withheld from the timeline; the Thinking row is the
+    // working signal while it composes, and the finished block enters whole.
+    // A part with a successor is complete by definition, so only the tail can
+    // ever be withheld, and a done turn (status not busy) withholds nothing.
+    const tail = assistantPartRefs.at(-1)
+    const tailStreaming =
+      isActive &&
+      status === "busy" &&
+      !error &&
+      tail !== undefined &&
+      tail.messageIndex === assistantMessages.length - 1 &&
+      (tail.part.type === "text" || tail.part.type === "reasoning") &&
+      !tail.part.time?.end
+    const settledPartRefs = tailStreaming ? assistantPartRefs.slice(0, -1) : assistantPartRefs
     const assistantItems =
       interrupted && !compaction
         ? [
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex)).map(
+            ...groupParts(settledPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex)).map(
               (group) => ({
                 type: "part" as const,
                 group,
               }),
             ),
             { type: "interrupted" as const },
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex)).map(
+            ...groupParts(settledPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex)).map(
               (group) => ({
                 type: "part" as const,
                 group,
               }),
             ),
           ]
-        : groupParts(assistantPartRefs).map((group) => ({ type: "part" as const, group }))
+        : groupParts(settledPartRefs).map((group) => ({ type: "part" as const, group }))
     if (previousUserMessage) rows.push(new TimelineRow.TurnGap({ userMessageID: userMessage.id }))
 
     if (comments.length > 0 && !inlineComments)
@@ -217,7 +234,10 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
+    // In showReasoning mode the reasoning rows themselves carry the working
+    // signal — except while the tail is withheld (streaming), when Thinking
+    // must stand in for it or the turn would show nothing at all.
+    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
