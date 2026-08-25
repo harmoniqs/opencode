@@ -150,8 +150,8 @@
      app/components/demo/parts.jsx, `Turn`): the user's words are the INVERSE
      of the ground — bg-deep/text-bg there. The app tokens
      (--prompt-bubble-*, design-polish.css) realise that per scheme: the
-     site's ink bubble verbatim on light; on dark the inverse is seated at
-     ~70% luminance so a large light bubble doesn't glare on a dark field.
+     site's ink bubble verbatim on light; on dark a quiet elevated layer
+     under base ink — any light bubble glared at chat scale on a dark field.
      Fallback = raw inverse, for consumers without the app skin.
      Padding is the site's px-4 py-2.5. */
   [data-slot="user-message-text"] {

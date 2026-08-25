@@ -150,28 +150,28 @@
   }
 }
 
-/* ── prompt bubble ground — per-scheme LUMINANCE, same grammar ──
-   The user's words are the INVERSE of the ground (the website's chat
-   grammar). On light that is the site's ink bubble, verbatim — dark ink on a
-   light ground doesn't emit. On dark, full bg-inverse is pure grey-50: the
-   only 100%-luminance surface in the UI, at up to 85% column width — a lamp,
-   not a bubble. Mixing 30% of the page ground back in seats it near ~70%
-   luminance (Kate 2026-08-24: the first seat at 85% still read too bright):
-   still unmistakably the light thing (≈9:1 on the ground, ≈8:1 under its
-   own ink), no longer a glare source. */
+/* ── prompt bubble ground — per-scheme REALISATION ──
+   On LIGHT the user's words are the INVERSE of the ground — the website's
+   ink bubble, verbatim (the site is light-only, so the inverse grammar is a
+   light-mode truth). On DARK any light bubble read harsh at chat scale:
+   Kate walked the inverse down 100%→85%→70% luminance (7b1ff4e, 1ef7c41)
+   and it still glared — dark wants LOW contrast, not an inverse. The dark
+   bubble is therefore the theme's own quiet elevation: layer-02 on the
+   ground (≈1.5:1, a whisper of lift — stock #2e2e2e on #161616) under full
+   base ink (≈12:1, unchanged readability). */
 :root,
 [data-color-scheme="light"] {
   --prompt-bubble-bg: var(--v2-background-bg-inverse);
   --prompt-bubble-ink: var(--v2-text-text-inverse);
 }
 [data-color-scheme="dark"] {
-  --prompt-bubble-bg: color-mix(in srgb, var(--v2-background-bg-inverse) 70%, var(--v2-background-bg-base));
-  --prompt-bubble-ink: var(--v2-text-text-inverse);
+  --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+  --prompt-bubble-ink: var(--v2-text-text-base);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
-    --prompt-bubble-bg: color-mix(in srgb, var(--v2-background-bg-inverse) 70%, var(--v2-background-bg-base));
-    --prompt-bubble-ink: var(--v2-text-text-inverse);
+    --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+    --prompt-bubble-ink: var(--v2-text-text-base);
   }
 }
 
