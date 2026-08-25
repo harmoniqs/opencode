@@ -109,10 +109,12 @@ export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; v
       {(mount) => (
         <Portal mount={mount}>
           <div class="flex items-center gap-2">
-            <SessionChatsDropdown />
-            <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
+            <TooltipV2 placement="bottom" value="Sessions" class="shrink-0">
+              <SessionChatsDropdown />
+            </TooltipV2>
+            <TooltipV2 placement="bottom" value={language.t("status.popover.trigger")} class="shrink-0">
               <StatusPopoverV2 />
-            </Tooltip>
+            </TooltipV2>
           </div>
         </Portal>
       )}
