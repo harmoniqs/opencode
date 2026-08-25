@@ -25,6 +25,7 @@ import { createMediaQuery } from "@solid-primitives/media"
 import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
 import { ProfilePopoverTrigger } from "@/components/profile-popover"
 import { useGlobal } from "@/context/global"
+import { resolveLandingDirectory } from "@/pages/new-session-landing"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
@@ -315,13 +316,16 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 return
               }
 
+              // Same fallback as NewSessionLanding: a server running outside any
+              // registered project must not leave "+" as a silent no-op.
               const fallback = global.servers.list().flatMap((conn) => {
-                const project = global.ensureServerCtx(conn).projects.list()[0]
-                return project ? [{ server: ServerConnection.key(conn), project }] : []
+                const ctx = global.ensureServerCtx(conn)
+                const directory = resolveLandingDirectory(ctx.projects.list(), ctx.sync.data.project[0]?.worktree)
+                return directory ? [{ server: ServerConnection.key(conn), directory }] : []
               })[0]
               if (!fallback) return
 
-              tabs.newDraft({ server: fallback.server, directory: fallback.project.worktree }, "")
+              tabs.newDraft({ server: fallback.server, directory: fallback.directory }, "")
             }
             const dialog = useDialog()
             const [settingsOpen, setSettingsOpen] = createSignal(false)

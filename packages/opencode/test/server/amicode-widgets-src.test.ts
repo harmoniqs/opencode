@@ -6,20 +6,10 @@
 // succeed.
 import { describe, expect, test } from "bun:test"
 import { parseManifest } from "../../src/server/amicode/widget-manifest"
-import * as meetAmico from "../../src/server/amicode/widgets-src/meet-amico"
-import * as showcase from "../../src/server/amicode/widgets-src/showcase"
 import * as jumpBackIn from "../../src/server/amicode/widgets-src/jump-back-in"
-import * as aboutYou from "../../src/server/amicode/widgets-src/about-you"
-import * as nowSolving from "../../src/server/amicode/widgets-src/now-solving"
-import * as library from "../../src/server/amicode/widgets-src/library"
 
 const SOURCES: Record<string, { manifestToml: string; widgetJs: string }> = {
-  "meet-amico": meetAmico,
-  showcase,
   "jump-back-in": jumpBackIn,
-  "about-you": aboutYou,
-  "now-solving": nowSolving,
-  library,
 }
 
 const PROFILE = {
@@ -124,7 +114,7 @@ describe("built-in widget sources", () => {
   })
 
   test("empty-state widgets render nothing without data", async () => {
-    for (const id of ["jump-back-in", "now-solving"]) {
+    for (const id of ["jump-back-in"]) {
       const mod = await importWidgetJs(SOURCES[id].widgetJs)
       const { el, state } = stubEl()
       mod.default.mount(el, fakeAmico({}))

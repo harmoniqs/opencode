@@ -61,6 +61,7 @@ import { ServerConnection, ServerProvider, serverName, useServer } from "@/conte
 import { SettingsProvider, useSettings } from "@/context/settings"
 import { TabsProvider, tabHref, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
+import { resolveLandingDirectory } from "@/pages/new-session-landing"
 import { WslServersProvider } from "@/wsl/context"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import LegacyLayout from "@/pages/layout"
@@ -765,15 +766,20 @@ function NewSessionLanding() {
       return
     }
 
-    // Otherwise create a new draft — find a server + project to use
+    // Otherwise create a new draft — find a server + directory to use
     const connections = global.servers.list()
     const conn = connections[0]
     if (!conn) return // no server connected yet — will re-render when one connects
 
-    const project = global.ensureServerCtx(conn).projects.list()[0]
-    if (!project) return // no project yet
+    // projects.list() is the client-side store of OPENED projects, which is empty
+    // on a fresh profile and for servers running outside any registered project
+    // (the amicode chat server spawns in an internal scaffold dir). Falling back
+    // to a server-known worktree keeps this route from rendering nothing at all.
+    const ctx = global.ensureServerCtx(conn)
+    const directory = resolveLandingDirectory(ctx.projects.list(), ctx.sync.data.project[0]?.worktree)
+    if (!directory) return // nothing to land on yet — re-renders when sync arrives
 
-    tabs.newDraft({ server: ServerConnection.key(conn), directory: project.worktree }, "")
+    tabs.newDraft({ server: ServerConnection.key(conn), directory }, "")
   }
 
   return (

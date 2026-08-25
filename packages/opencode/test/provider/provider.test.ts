@@ -379,6 +379,20 @@ it.instance(
 )
 
 it.instance(
+  "defaultModel falls through when config model points to an unavailable provider",
+  Effect.gen(function* () {
+    yield* setProcessEnv("OPENAI_API_KEY", "test-api-key")
+    const model = yield* Provider.use.defaultModel()
+    // Config says anthropic but no ANTHROPIC_API_KEY → falls through to
+    // the first available provider (openai, via the env key above).
+    expect(String(model.providerID)).not.toBe("anthropic")
+    expect(model.providerID).toBeDefined()
+    expect(model.modelID).toBeDefined()
+  }),
+  { config: { model: "anthropic/claude-sonnet-4-20250514" } },
+)
+
+it.instance(
   "defaultModel returns a typed error when config excludes every provider",
   Effect.gen(function* () {
     const error = yield* Provider.use.defaultModel().pipe(Effect.flip)
