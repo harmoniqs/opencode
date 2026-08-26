@@ -43,6 +43,9 @@ export namespace Timeline {
     status: SessionStatus["type"],
     inlineComments: boolean,
     projectedUserMessages: UserMessage[],
+    // the streaming prose tail has at least one settled chunk (computed by the
+    // timeline from the delta-accumulated text, which rows cannot see)
+    tailProseSettled = false,
   ) {
     const turns: { user: UserMessage; assistants: AssistantMessage[] }[] = []
     const turnByUserID = new Map<string, (typeof turns)[number]>()
@@ -95,6 +98,7 @@ export namespace Timeline {
           status,
           turn.user.id === activeMessageID,
           inlineComments,
+          tailProseSettled,
         ),
       ),
     }
@@ -110,6 +114,7 @@ export namespace Timeline {
     isActive: boolean,
     // v2 renders comments inside the user message attachments row instead of a strip row
     inlineComments: boolean,
+    tailProseSettled = false,
   ) {
     const rows: TimelineRow.TimelineRow[] = []
 
@@ -127,24 +132,46 @@ export namespace Timeline {
         .filter((part) => renderable(part, showReasoning))
         .map((part) => ({ messageID: message.id, messageIndex, part })),
     )
+    // Steps land as FULL blocks (Kate 2026-08-24: no typing reveal — the site
+    // demo's grammar). A streaming prose tail reveals in CHUNKS (Kate
+    // 2026-08-25: no waiting for the whole reply either): its row joins the
+    // timeline as soon as the FIRST chunk settles (tailProseSettled, computed
+    // by the timeline from the delta-accumulated text) and the renderer shows
+    // settled chunks only. Before that first chunk — and for streaming
+    // reasoning, which keeps whole-block withholding — the row is withheld
+    // and Thinking is the working signal. A part with a successor is complete
+    // by definition, so only the tail can ever be withheld, and a done turn
+    // (status not busy) withholds nothing.
+    const tail = assistantPartRefs.at(-1)
+    const tailStreaming =
+      isActive &&
+      status === "busy" &&
+      !error &&
+      tail !== undefined &&
+      tail.messageIndex === assistantMessages.length - 1 &&
+      (tail.part.type === "text" || tail.part.type === "reasoning") &&
+      !tail.part.time?.end
+    const tailWithheld =
+      tailStreaming && tail !== undefined && (tail.part.type === "reasoning" || !tailProseSettled)
+    const settledPartRefs = tailWithheld ? assistantPartRefs.slice(0, -1) : assistantPartRefs
     const assistantItems =
       interrupted && !compaction
         ? [
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex)).map(
+            ...groupParts(settledPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex)).map(
               (group) => ({
                 type: "part" as const,
                 group,
               }),
             ),
             { type: "interrupted" as const },
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex)).map(
+            ...groupParts(settledPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex)).map(
               (group) => ({
                 type: "part" as const,
                 group,
               }),
             ),
           ]
-        : groupParts(assistantPartRefs).map((group) => ({ type: "part" as const, group }))
+        : groupParts(settledPartRefs).map((group) => ({ type: "part" as const, group }))
     if (previousUserMessage) rows.push(new TimelineRow.TurnGap({ userMessageID: userMessage.id }))
 
     if (comments.length > 0 && !inlineComments)
@@ -182,14 +209,14 @@ export namespace Timeline {
     const turnIsRunning = isActive && status === "busy" && !error
     // The rail label names steps whose content doesn't already open with its
     // own title. Group rows announce themselves ("Explored", "Worked in
-    // shell", "Edited files") and tool cards wear their chips, so only bare
-    // prose and reasoning steps need a name here.
+    // shell", "Edited files") and tool cards wear their chips. Prose needs no
+    // caption either — the words ARE the step, and "Update" said nothing they
+    // don't (Kate 2026-08-24) — so only reasoning steps get a name here.
     const railLabel = (group: PartGroup): string | undefined => {
       if (group.type !== "part") return undefined
       const part = assistantPartRefs.find(
         (ref) => ref.messageID === group.ref.messageID && ref.part.id === group.ref.partID,
       )?.part
-      if (part?.type === "text") return "Update"
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }
@@ -217,7 +244,10 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
+    // In showReasoning mode the reasoning rows themselves carry the working
+    // signal — except while the tail is withheld (streaming), when Thinking
+    // must stand in for it or the turn would show nothing at all.
+    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))

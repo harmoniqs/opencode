@@ -150,6 +150,120 @@
   }
 }
 
+/* ── prompt bubble ground — per-scheme REALISATION ──
+   On LIGHT the user's words are the INVERSE of the ground — the website's
+   ink bubble, verbatim (the site is light-only, so the inverse grammar is a
+   light-mode truth). On DARK any light bubble read harsh at chat scale:
+   Kate walked the inverse down 100%→85%→70% luminance (7b1ff4e, 1ef7c41)
+   and it still glared — dark wants LOW contrast, not an inverse. The dark
+   bubble is therefore the theme's own quiet elevation: layer-02 on the
+   ground (≈1.5:1, a whisper of lift — stock #2e2e2e on #161616) under full
+   base ink (≈12:1, unchanged readability). */
+:root,
+[data-color-scheme="light"] {
+  --prompt-bubble-bg: var(--v2-background-bg-inverse);
+  --prompt-bubble-ink: var(--v2-text-text-inverse);
+}
+[data-color-scheme="dark"] {
+  --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+  --prompt-bubble-ink: var(--v2-text-text-base);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+    --prompt-bubble-ink: var(--v2-text-text-base);
+  }
+}
+
+/* ── entrance motion — timeline blocks land whole ──
+   New timeline rows (Kate 2026-08-24) enter as complete blocks: a small rise
+   and fade, fast and crisp, decided per row-key exactly once (the timeline
+   guards against virtual-row remount replays). Opacity+transform only — the
+   virtualizer owns row position and measured height, so entrance motion must
+   never touch layout. Reduced motion keeps the fade, drops the rise. */
+:root {
+  /* IDENTICAL to the website's chat grammar (harmoniqs-ai demo/parts.jsx,
+     verified against the production chunk): enter from below and slightly
+     blurred — HIDDEN {opacity:0, y:8, blur(8px)} → SHOWN over 0.3s on
+     [.2,0,.2,1] (soft attack, soft landing); leave UPWARD and re-blurred
+     over 0.2s on [.4,0,1,1] (exits shorter than entrances — the direction
+     says "arriving" vs "being cleared"). */
+  --motion-enter-duration: 0.3s;
+  --motion-enter-rise: 8px;
+  --motion-enter-blur: 8px;
+  --motion-enter-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --motion-exit-duration: 0.2s;
+  --motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
+}
+/* fill BACKWARDS, not both: backwards still covers the cascade's delay phase
+   (rows hold at the hidden frame until their turn), while after the animation
+   the element returns to its natural styles — `both` left a permanent
+   filter:blur(0) on every entered row, a forced stacking context + raster
+   layer for the rest of the session. */
+[data-timeline-enter] {
+  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
+}
+/* chunk entrances inside a streaming prose row — the same grammar, skinned
+   onto the attribute session-ui's ChunkedStreamMarkdown sets per settled
+   chunk (Kate 2026-08-25: replies land in chunks, not one final block). */
+[data-part-enter] {
+  animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
+}
+/* The open cascade holds at frame 0 (opacity 0, risen, blurred) until the
+   timeline has settled at the bottom — released by removing
+   [data-entrance-pending] (message-timeline.tsx entranceReady). Also keeps
+   the draft handoff's entrance from playing behind the cold-mount veil. */
+[data-entrance-pending] [data-timeline-enter] {
+  animation-play-state: paused;
+}
+@keyframes timeline-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-enter-rise));
+    filter: blur(var(--motion-enter-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+/* ── prose fragment cards ── every fragment Amico relays is its OWN bordered
+   card, a message within the chat (Kate 2026-08-25; supersedes the
+   one-container-per-reply segment). Each chunk of a streamed reply arrives
+   as its own card with its own entrance; history splits identically so the
+   cards persist. Chips/receipts keep their borderless chip grammar. The
+   hairline is the theme's default border, the radius the brand 4px. */
+[data-slot="text-part-body"]:has([data-prose-fragment]) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+[data-prose-fragment] {
+  border: var(--border-width) solid var(--v2-border-border-base);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+}
+/* markdown's own block margins would pad the card's top and bottom twice */
+[data-prose-fragment] :first-child {
+  margin-top: 0;
+}
+[data-prose-fragment] :last-child {
+  margin-bottom: 0;
+}
+
+/* No exit animation. The site's GONE grammar (up + re-blur) was tried as a
+   positioned ghost clone and misfired — a body-appended clone escapes the
+   theme scope and the virtualizer relayouts under the captured rect. The
+   --motion-exit-* tokens above stay as the documented grammar should a real
+   FLIP-based exit ever be built. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-enter-rise: 0px;
+    --motion-enter-blur: 0px;
+  }
+}
+
 /* ── inline code: readable in both schemes ── */
 :not(pre) > code {
   color: #3d4451;
@@ -175,6 +289,14 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+  /* The timeline entrance deliberately KEEPS its fade under reduced motion —
+     the rise is already zeroed via --motion-enter-rise above, and without the
+     fade a withheld block would pop in with no signal at all. The global
+     0.01ms reset would otherwise annihilate it. */
+  [data-timeline-enter],
+  [data-part-enter] {
+    animation-duration: var(--motion-enter-duration) !important;
   }
 }
 

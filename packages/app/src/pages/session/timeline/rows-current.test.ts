@@ -50,12 +50,15 @@ describe("current session timeline rows", () => {
     )
 
     expect(result.activeMessageID).toBe("msg_3")
+    // msg_4's reasoning is the busy turn's streaming tail (no time.end) — it
+    // is withheld until it completes (blocks land whole), so Thinking stands
+    // in as the working signal.
     expect(result.rows.map(TimelineRow.key)).toEqual([
       "user-message:msg_1",
       "assistant-part:msg_1:msg_2:text:0",
       "turn-gap:msg_3",
       "user-message:msg_3",
-      "assistant-part:msg_3:msg_4:reasoning:0",
+      "thinking:msg_3",
     ])
   })
 
@@ -202,6 +205,9 @@ describe("current session timeline rows", () => {
       normalized.messages.filter((message) => message.role === "user"),
     )
 
-    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart"])
+    // The stale error row must not appear once the turn resumes. The resumed
+    // text is the streaming tail (no time.end) so it is withheld until it
+    // completes — Thinking, not the half-streamed part, is what renders.
+    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking"])
   })
 })

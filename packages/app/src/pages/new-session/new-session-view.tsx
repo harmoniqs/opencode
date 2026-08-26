@@ -41,7 +41,13 @@ export function NewSessionView(props: {
         data-component="session-new-design"
         class="relative flex-1 min-h-0 overflow-hidden rounded-md bg-v2-background-bg-deep"
       >
-        <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
+        {/* amicode: centre the mark+composer group optically — flex centring
+            with the same pb-lift the start screen uses (session-new-view),
+            so the group tracks the panel's height. Upstream's fixed
+            top-[25.375%] anchor was tuned for a wide desktop window; in the
+            tall Amicode webview it beached the group in the upper third with
+            a hold of empty space below. */}
+        <div class="absolute inset-0 flex items-center justify-center px-6 pb-24">
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             {/* amicode: brand mark + wordmark (recovered composition — the
                 H-robot over the AMICODE wordmark, Kate's Kimi-clean ordering;

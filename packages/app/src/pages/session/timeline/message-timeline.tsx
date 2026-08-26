@@ -37,9 +37,11 @@ import {
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  renderable,
   ShellToolGroup,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
+import { readPartText, settledChunkBoundary } from "@opencode-ai/session-ui/message-part-text"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -374,6 +376,11 @@ export function MessageTimeline(props: {
   // Hide the scroll container for the first frame on cold-bottom-mount to prevent
   // a flash of content at the top before scrollToEnd fires.
   const [scrollReady, setScrollReady] = createSignal(!coldBottomMount)
+  // The open cascade holds until the virtualizer has settled at the bottom —
+  // entering rows sit paused at opacity 0 (see [data-entrance-pending] in
+  // design-polish.css) so the entrance never plays behind the opacity veil or
+  // during the initial scroll jump. Flipped one frame after the mount scroll.
+  const [entranceReady, setEntranceReady] = createSignal(false)
   const platform = usePlatform()
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>()
@@ -440,6 +447,24 @@ export function MessageTimeline(props: {
     return language.t("command.session.new")
   })
   const showHeader = createMemo(() => !!(titleValue() || parentID()))
+  // The chunk gate for a streaming prose tail (Kate 2026-08-25: replies land
+  // in chunks). rows.ts withholds the tail only until its FIRST chunk settles
+  // — but the freshest streamed text lives in part_text_accum_delta (part.text
+  // lags during delta streaming), which the pure row construction cannot see.
+  // Computed here as a boolean memo so the per-token recomputation stops at an
+  // unchanged value instead of rebuilding the whole row projection per delta.
+  const tailProseSettled = createMemo(() => {
+    const last = sessionMessages().findLast(
+      (message): message is AssistantMessage => message.role === "assistant",
+    )
+    if (!last || typeof last.time.completed === "number") return false
+    const tail = getMsgParts(last.id)
+      .filter((part) => renderable(part, settings.general.showReasoningSummaries()))
+      .at(-1)
+    if (!tail || tail.type !== "text" || tail.time?.end) return false
+    const text = readPartText(sync().data.part_text_accum_delta, tail)
+    return settledChunkBoundary(text) > 0
+  })
   const projection = createTimelineProjection({
     messages: sessionMessages,
     userMessages: () => props.userMessages,
@@ -448,6 +473,7 @@ export function MessageTimeline(props: {
     status: sessionStatus,
     showReasoningSummaries: settings.general.showReasoningSummaries,
     inlineComments: settings.general.newLayoutDesigns,
+    tailProseSettled,
   })
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
@@ -457,6 +483,52 @@ export function MessageTimeline(props: {
   const messageRowIndex = projection.messageRowIndex
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
+
+  // Entrance bookkeeping (Kate 2026-08-24/25: "all the elements fade in from
+  // the bottom", blocks land whole, crisply). Two moments animate, nothing
+  // else ever does:
+  //
+  // 1. THE OPEN CASCADE — every session open / switch / reload cascades the
+  //    initially rendered rows in, staggered top-to-bottom. Rows arming
+  //    inside the first CASCADE_WINDOW_MS after the per-session reset are the
+  //    initial batch; each takes an animation-delay step. The cascade holds
+  //    paused behind [data-entrance-pending] until the virtualizer settles at
+  //    the bottom, which also removes the old unanimated flash-jump (history
+  //    used to paint one frame at the top, then teleport to the bottom).
+  //
+  // 2. THE LIVE TURN — after the open, only rows of the ACTIVE turn enter
+  //    (the just-sent bubble, Thinking, the settled reply blocks). Settled
+  //    history joining later — scroll-back remounts, pagination prepends,
+  //    far jumps — lands silently by rule, which closes the whole class of
+  //    replay/burn bugs the per-key ledger alone could not (an audit found
+  //    prepends animating a full page, and off-screen mounts burning their
+  //    once-only entrance invisibly).
+  //
+  // Each key still animates at most once (virtual rows remount on every
+  // scroll-back, so mount alone must never trigger the entrance).
+  const CASCADE_WINDOW_MS = 600
+  const CASCADE_STEP_MS = 40
+  const CASCADE_MAX_STEPS = 12
+  let enteredFor: string | undefined
+  let enteredAt = 0
+  let cascadeStep = 0
+  const enteredKeys = new Set<string>()
+  const shouldAnimateEnter = (rowKey: string, row: TimelineRow.TimelineRow): number | false => {
+    const sid = sessionID()
+    if (enteredFor !== sid) {
+      enteredFor = sid
+      enteredKeys.clear()
+      enteredAt = performance.now()
+      cascadeStep = 0
+    }
+    if (enteredKeys.has(rowKey)) return false
+    enteredKeys.add(rowKey)
+    if (performance.now() - enteredAt < CASCADE_WINDOW_MS) {
+      return Math.min(cascadeStep++, CASCADE_MAX_STEPS) * CASCADE_STEP_MS
+    }
+    if (row.userMessageID === activeMessageID()) return 0
+    return false
+  }
 
   let prependAnchor: { key: string; offset: number } | undefined
   let prependAnchorFrame: number | undefined
@@ -695,6 +767,9 @@ export function MessageTimeline(props: {
       if (renderOverscan() < 20) setRenderOverscan(20)
       if (props.shouldAnchorBottom()) virtualizer.scrollToEnd()
       if (!scrollReady()) setScrollReady(true)
+      // one more frame so measurement-driven scroll corrections land before
+      // the cascade is released
+      requestAnimationFrame(() => setEntranceReady(true))
     })
   })
 
@@ -1583,6 +1658,9 @@ export function MessageTimeline(props: {
     let element: HTMLDivElement
     const initialItem = virtualItemByKey().get(props.rowKey)!
     const initialRow = timelineRowByKey().get(props.rowKey)!
+    // Decided once at creation — remounts of an already-entered row get false.
+    // A number is the cascade's per-row animation-delay in ms (0 for live rows).
+    const enterDelay = shouldAnimateEnter(props.rowKey, initialRow)
     const item = createMemo(() => virtualItemByKey().get(props.rowKey) ?? initialItem)
     const row = createMemo(() => timelineRowByKey().get(props.rowKey) ?? initialRow)
     const tool = () => {
@@ -1609,6 +1687,15 @@ export function MessageTimeline(props: {
 
     onCleanup(() => {
       if (contentMeasureFrame !== undefined) cancelAnimationFrame(contentMeasureFrame)
+      // NO exit ghost. The site's exit grammar (GONE: up + re-blur) was tried
+      // here as a positioned clone of the departing Thinking row and misfired
+      // in real use: a body-appended clone escapes the app's theme scope (its
+      // color var fell back to the dark-scheme yellow inside a light webview)
+      // and the rect captured at cleanup lags the virtualizer's relayout —
+      // a wrong-colored flash in the wrong place (Kate 2026-08-25). Removed
+      // rows are replaced instantly; the replacing block's entrance carries
+      // the transition. Exits in a virtualized timeline need real FLIP
+      // machinery or nothing — this is nothing, on purpose.
     })
 
     return (
@@ -1622,11 +1709,12 @@ export function MessageTimeline(props: {
           height: `${item().size}px`,
           overflow: "clip",
           // Rounded virtual measurements can otherwise clip a framed row's outer paint.
-          // 4px, not 0.5px: the live rail dot breathes by a 0→4px ring
-          // (index.css thought-rail-breathe) and the old margin clipped the
-          // whole animation away — found in PR #246's testing. Keep in step
-          // with the ring size there.
-          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "4px",
+          // 24px, not 0.5px: the live rail dot breathes by a 0→4px ring
+          // (index.css thought-rail-breathe; found clipped in PR #246's
+          // testing), an entering row rides the 8px --motion-enter-rise
+          // translate, and the entrance's blur(8px) paints a halo well past
+          // the border box — the margin must cover ring + rise + halo.
+          "overflow-clip-margin": row()._tag === "TurnGap" ? undefined : "24px",
         }}
       >
         <div
@@ -1634,7 +1722,11 @@ export function MessageTimeline(props: {
             element = value
           }}
           data-index={item().index}
-          style={{ "min-height": ready() ? undefined : `${initialItem.size}px` }}
+          data-timeline-enter={enterDelay !== false ? "" : undefined}
+          style={{
+            "min-height": ready() ? undefined : `${initialItem.size}px`,
+            "animation-delay": enterDelay !== false && enterDelay > 0 ? `${enterDelay}ms` : undefined,
+          }}
         >
           <TimelineRowView
             row={row()}
@@ -1716,6 +1808,7 @@ export function MessageTimeline(props: {
         onScroll={handleListScroll}
         onClick={props.onAutoScrollInteraction}
         class="relative min-w-0 w-full h-full"
+        data-entrance-pending={entranceReady() ? undefined : ""}
         style={{
           "--sticky-accordion-top": showHeader() ? "48px" : "0px",
           opacity: scrollReady() ? undefined : "0",
@@ -2287,10 +2380,11 @@ export function MessageTimeline(props: {
                     class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                     style={{
                       // the ghost of the prompt bubble keeps the bubble's own
-                      // inverse ground, translucent — one grammar for the
-                      // user's words on every surface
-                      background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
-                      color: "var(--v2-text-text-inverse)",
+                      // ground, translucent — one grammar for the user's
+                      // words on every surface (--prompt-bubble-*: the
+                      // inverse, seated per scheme in design-polish.css)
+                      background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
+                      color: "var(--prompt-bubble-ink)",
                       "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                     }}
                     onClick={scrollToBubbleMessage}
@@ -2319,10 +2413,11 @@ export function MessageTimeline(props: {
                   class="ml-auto block w-fit max-w-[min(75%,56ch)] text-left cursor-pointer border-none rounded-lg px-3 py-1.5 text-[13px] leading-[18px] font-normal truncate backdrop-blur-[2px]"
                   style={{
                     // the ghost of the prompt bubble keeps the bubble's own
-                    // inverse ground, translucent — one grammar for the
-                    // user's words on every surface
-                    background: "color-mix(in srgb, var(--v2-background-bg-inverse) 90%, transparent)",
-                    color: "var(--v2-text-text-inverse)",
+                    // ground, translucent — one grammar for the user's
+                    // words on every surface (--prompt-bubble-*: the
+                    // inverse, seated per scheme in design-polish.css)
+                    background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
+                    color: "var(--prompt-bubble-ink)",
                     "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
                   }}
                   onClick={scrollToBubbleMessage}
