@@ -364,7 +364,10 @@ function ChunkedStreamMarkdown(props: { text: string; done: boolean; cacheKey: s
     if (props.done && tail.trim() !== "") return [...chunks, tail]
     return chunks
   })
-  const already = revealedChunks.get(props.cacheKey) ?? 0
+  // A part that mounts already done with no ledger entry is HISTORY — every
+  // chunk counts as revealed, nothing animates. Only parts observed streaming
+  // (ledgered) animate their later chunks.
+  const already = revealedChunks.get(props.cacheKey) ?? (untrack(() => props.done) ? Number.MAX_SAFE_INTEGER : 0)
   createEffect(() => {
     const count = parts().length
     if (count > (revealedChunks.get(props.cacheKey) ?? 0)) revealedChunks.set(props.cacheKey, count)
@@ -372,7 +375,7 @@ function ChunkedStreamMarkdown(props: { text: string; done: boolean; cacheKey: s
   return (
     <For each={parts()}>
       {(chunk, index) => (
-        <div data-part-enter={index() >= already ? "" : undefined}>
+        <div data-prose-fragment data-part-enter={index() >= already ? "" : undefined}>
           <Markdown text={chunk} cacheKey={`${props.cacheKey}:${index()}`} streaming={false} />
         </div>
       )}
@@ -2174,19 +2177,14 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
         <div data-slot="text-part-body">
-          {/* Streaming prose lands in whole CHUNKS (Kate 2026-08-25: no
-              typing reveal, but no waiting for the entire reply either).
-              Decided once at mount: streaming now, or already chunk-revealed
-              (the component can remount at completion — the ledger keeps the
-              part in chunk mode so the final tail still animates in). A part
-              that was never streamed renders as one plain document — history
-              never re-chunks or re-animates. */}
-          <Show
-            when={untrack(() => streaming() || revealedChunks.has(part().id))}
-            fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}
-          >
-            <ChunkedStreamMarkdown text={text()} done={!streaming()} cacheKey={part().id} />
-          </Show>
+          {/* Prose ALWAYS renders as chunks — each fragment Amico relays is
+              its own bordered card, a message within the chat (Kate
+              2026-08-25), and history must split identically so the cards
+              are consistent across reloads. While streaming, only settled
+              chunks show (no typing reveal, no waiting for the whole reply);
+              each new chunk mounts once with its entrance, ledgered per part
+              so remounts never re-animate. */}
+          <ChunkedStreamMarkdown text={text()} done={!streaming()} cacheKey={part().id} />
         </div>
         <Show when={showCopy()}>
           <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>

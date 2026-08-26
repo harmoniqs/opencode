@@ -484,32 +484,6 @@ export function MessageTimeline(props: {
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
 
-  // The reply SEGMENT (Kate 2026-08-25: a 1px border around what Amico sends,
-  // each reply reading as one container). Virtualized rows are absolutely
-  // positioned siblings, so the container cannot be a real wrapper element —
-  // it is synthesized per row, the same way the rail draws per-row segments:
-  // every assistant-side row carries the left/right edges, the run's first
-  // row the top cap, its last the bottom cap. Membership and edges are
-  // reactive: when a new row lands, the previous last row hands the bottom
-  // cap forward and the border visually extends.
-  const segmentEdges = createMemo(() => {
-    const rows = timelineRows()
-    const inSegment = (row: TimelineRow.TimelineRow | undefined) =>
-      !!row && row._tag !== "TurnGap" && row._tag !== "CommentStrip" && row._tag !== "UserMessage"
-    const edges = new Map<string, { first: boolean; last: boolean }>()
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]
-      if (!inSegment(row)) continue
-      const prev = rows[i - 1]
-      const next = rows[i + 1]
-      edges.set(TimelineRow.key(row), {
-        first: !inSegment(prev) || prev.userMessageID !== row.userMessageID,
-        last: !inSegment(next) || next.userMessageID !== row.userMessageID,
-      })
-    }
-    return edges
-  })
-
   // Entrance bookkeeping (Kate 2026-08-24/25: "all the elements fade in from
   // the bottom", blocks land whole, crisply). Two moments animate, nothing
   // else ever does:
@@ -1749,9 +1723,6 @@ export function MessageTimeline(props: {
           }}
           data-index={item().index}
           data-timeline-enter={enterDelay !== false ? "" : undefined}
-          data-segment={segmentEdges().get(props.rowKey) ? "" : undefined}
-          data-segment-first={segmentEdges().get(props.rowKey)?.first ? "" : undefined}
-          data-segment-last={segmentEdges().get(props.rowKey)?.last ? "" : undefined}
           style={{
             "min-height": ready() ? undefined : `${initialItem.size}px`,
             "animation-delay": enterDelay !== false && enterDelay > 0 ? `${enterDelay}ms` : undefined,
