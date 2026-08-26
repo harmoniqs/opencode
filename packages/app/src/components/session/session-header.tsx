@@ -583,11 +583,15 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
     <div class="flex items-center gap-2">
 
       {/* amicode#274: Session Chats Dropdown — chat navigation from within a session */}
-      <SessionChatsDropdown currentSessionID={props.state.currentSessionID} />
+      <span class="flex shrink-0" data-tour-target="sessions">
+        <SessionChatsDropdown currentSessionID={props.state.currentSessionID} />
+      </span>
       <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
-        <TooltipV2 placement="bottom" value={props.state.statusLabel} class="shrink-0">
-          <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
-        </TooltipV2>
+        <span class="flex shrink-0" data-tour-target="status">
+          <TooltipV2 placement="bottom" value={props.state.statusLabel} class="shrink-0">
+            <StatusPopoverV2 healthDot={props.state.statusDotVisible} />
+          </TooltipV2>
+        </span>
       </Show>
       <Show when={props.state.reviewVisible}>
         <TooltipV2
@@ -602,17 +606,19 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
             </>
           }
         >
-          <IconButtonV2
-            type="button"
-            variant="ghost-muted"
-            size="large"
-            class="!w-9 shrink-0"
-            state={props.state.reviewOpened ? "pressed" : undefined}
-            onClick={props.state.onReviewToggle}
-            aria-label={props.state.reviewLabel}
-            aria-controls="review-panel"
-            icon={<IconV2 name="sidebar-right" />}
-          />
+          <span class="flex shrink-0" data-tour-target="side-panel">
+            <IconButtonV2
+              type="button"
+              variant="ghost-muted"
+              size="large"
+              class="!w-9 shrink-0"
+              state={props.state.reviewOpened ? "pressed" : undefined}
+              onClick={props.state.onReviewToggle}
+              aria-label={props.state.reviewLabel}
+              aria-controls="review-panel"
+              icon={<IconV2 name="sidebar-right" />}
+            />
+          </span>
         </TooltipV2>
       </Show>
     </div>

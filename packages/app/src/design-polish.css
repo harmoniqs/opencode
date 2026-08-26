@@ -420,3 +420,85 @@ span[data-component="tag"][data-variant="accent"] {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
 }
+
+/* ── Onboarding walkthrough spotlight (session-tour.tsx) ───────────────────
+   A ring traced on the chrome element the current "Tour · X" stop names. The
+   ring is the whole marker — there is no label, because the stop's own text
+   already names the surface. Decorative only (aria-hidden, pointer-events
+   none); sits above the shell but below dialogs (10000+). */
+[data-component="amc-tour-spotlight"] {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  pointer-events: none;
+}
+/* The scrim: everything except the stop's element and the walkthrough card is
+   softened, so the eye has one place to go. Blur is deliberately shallow (3px)
+   and paired with only a light dim — enough to push the rest of the window back
+   without hiding what the reader is being taught to recognise. The holes are
+   punched with an even-odd clip-path, recomputed as the ring moves. */
+[data-component="amc-tour-spotlight"] .amc-tour-scrim {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  background: color-mix(in srgb, var(--v2-background-bg-base) 22%, transparent);
+  transition: opacity 0.2s ease;
+}
+[data-component="amc-tour-spotlight"] .amc-tour-ring {
+  position: absolute;
+  /* No glow — nothing else in this UI uses one, and the scrim already says
+     "look here". Just the accent edge, the way state is marked everywhere else.
+     No fill either: this sits ON TOP of a live control, and a wash would tint
+     the very thing the reader is being taught to recognise. */
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  /* Eases between elements rather than teleporting. */
+  transition: top 0.22s cubic-bezier(0.2, 0, 0, 1), left 0.22s cubic-bezier(0.2, 0, 0, 1),
+    width 0.22s cubic-bezier(0.2, 0, 0, 1), height 0.22s cubic-bezier(0.2, 0, 0, 1);
+  /* Fades in once as the highlight lands. Keyed on the stop, so it plays per
+     stop and not on the measure tick. */
+  animation: amc-tour-arrive 0.25s ease-out both;
+}
+@keyframes amc-tour-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-component="amc-tour-spotlight"] .amc-tour-ring {
+    animation: none;
+  }
+}
+
+/* ── composer ⇄ dock card morph ──
+   The question / walkthrough card and the composer swap places in the same
+   dock. Without a transition the swap is an instant pop; these ease the card
+   in and out so the region reads as one surface changing shape rather than
+   two components replacing each other. Motion-reduced users get the swap with
+   no movement, which is the honest fallback for a positional animation. */
+[data-component="session-prompt-dock"] [data-component="session-question-dock"] {
+  animation: amc-dock-morph-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes amc-dock-morph-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+[data-component="session-prompt-dock"] [data-component="prompt-input-v2"] {
+  animation: amc-dock-morph-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-prompt-dock"] [data-component="session-question-dock"],
+  [data-component="session-prompt-dock"] [data-component="prompt-input-v2"] {
+    animation: none;
+  }
+}

@@ -327,18 +327,6 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
 
               tabs.newDraft({ server: fallback.server, directory: fallback.directory }, "")
             }
-            const dialog = useDialog()
-            const [settingsOpen, setSettingsOpen] = createSignal(false)
-            const showSettings = () => {
-              const sessionID = params.id
-              void import("@/components/settings-v2").then((module) => {
-                setSettingsOpen(true)
-                void dialog.show(
-                  () => <module.DialogSettings sessionID={sessionID} />,
-                  () => setSettingsOpen(false),
-                )
-              })
-            }
 
             command.register("titlebar-home", () => [])
 
@@ -390,34 +378,9 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
-                <TooltipV2
-                  placement="bottom"
-                  value={language.t("profile.title") || "Profile"}
-                  class="shrink-0"
-                >
-                  <ProfilePopoverTrigger />
-                </TooltipV2>
-                <TooltipV2
-                  placement="bottom"
-                  value={
-                    <>
-                      {language.t("command.settings.open")}
-                      <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
-                    </>
-                  }
-                  class="shrink-0"
-                >
-                  <IconButtonV2
-                    type="button"
-                    variant="ghost-muted"
-                    size="large"
-                    class="!w-9 shrink-0"
-                    icon={<IconV2 name="settings-gear" />}
-                    state={settingsOpen() ? "pressed" : undefined}
-                    onClick={showSettings}
-                    aria-label={language.t("command.settings.open")}
-                  />
-                </TooltipV2>
+                {/* Profile and Settings live at the trailing edge with the
+                    other account/status controls (Sessions, Status, Side
+                    Panel) — see TitlebarV2Right. */}
                 {/* Removed: sidebar-left toggle button (harmoniqs/amicode#265).
                     The button called layout.sidebar.toggle() but no component in
                     NewLayout observes that signal — WorkbenchPanel only mounts in
@@ -437,26 +400,28 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   onOverflowChange={setTabsAreOverflowing}
                 />
                 <Show when={!(creating() && params.dir)}>
-                  <TooltipV2
-                    placement="bottom"
-                    value={
-                      <>
-                        {language.t("command.session.new")}
-                        <KeybindV2 keys={command.keybindParts("session.new")} variant="neutral" />
-                      </>
-                    }
-                    class="shrink-0"
-                  >
-                    <IconButtonV2
-                      type="button"
-                      variant="ghost-muted"
-                      size="large"
+                  <span class="flex shrink-0" data-tour-target="new-chat">
+                    <TooltipV2
+                      placement="bottom"
+                      value={
+                        <>
+                          {language.t("command.session.new")}
+                          <KeybindV2 keys={command.keybindParts("session.new")} variant="neutral" />
+                        </>
+                      }
                       class="shrink-0"
-                      icon={<IconV2 name="plus" />}
-                      onClick={openNewTab}
-                      aria-label={language.t("command.session.new")}
-                    />
-                  </TooltipV2>
+                    >
+                      <IconButtonV2
+                        type="button"
+                        variant="ghost-muted"
+                        size="large"
+                        class="shrink-0"
+                        icon={<IconV2 name="plus" />}
+                        onClick={openNewTab}
+                        aria-label={language.t("command.session.new")}
+                      />
+                    </TooltipV2>
+                  </span>
                 </Show>
                 <div class="flex-1" />
                 <TitlebarV2Right state={v2RightState()} />
@@ -614,12 +579,56 @@ type TitlebarV2RightState = {
 }
 
 function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
+  const language = useLanguage()
+  const command = useCommand()
+  const dialog = useDialog()
+  const params = useParams()
+  const [settingsOpen, setSettingsOpen] = createSignal(false)
+  const showSettings = () => {
+    const sessionID = params.id
+    void import("@/components/settings-v2").then((module) => {
+      setSettingsOpen(true)
+      void dialog.show(
+        () => <module.DialogSettings sessionID={sessionID} />,
+        () => setSettingsOpen(false),
+      )
+    })
+  }
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
       <Show when={props.state.update.visible}>
         <TitlebarUpdateIconButton state={props.state.update} />
       </Show>
+      {/* Session-scoped controls (Sessions / Status / Side Panel) portal in here. */}
       <div id="opencode-titlebar-right" class="flex shrink-0 items-center justify-end gap-0" />
+      <span class="flex shrink-0" data-tour-target="profile">
+        <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
+          <ProfilePopoverTrigger />
+        </TooltipV2>
+      </span>
+      <span class="flex shrink-0" data-tour-target="settings">
+        <TooltipV2
+          placement="bottom"
+          value={
+            <>
+              {language.t("command.settings.open")}
+              <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
+            </>
+          }
+          class="shrink-0"
+        >
+          <IconButtonV2
+            type="button"
+            variant="ghost-muted"
+            size="large"
+            class="!w-9 shrink-0"
+            icon={<IconV2 name="settings-gear" />}
+            state={settingsOpen() ? "pressed" : undefined}
+            onClick={showSettings}
+            aria-label={language.t("command.settings.open")}
+          />
+        </TooltipV2>
+      </span>
     </div>
   )
 }
