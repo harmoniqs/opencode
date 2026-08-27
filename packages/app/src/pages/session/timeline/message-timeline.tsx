@@ -152,20 +152,15 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; hasOutput?: boolean }) {
+  if (props.hasOutput) return null
   return (
     <div data-slot="session-turn-thinking">
-      {props.hasOutput ? (
-        // Once output is streaming, just show timer + tokens as compact metadata
-        <ThinkingLine tokens={props.tokens} />
-      ) : (
-        // Before any output, show "Thinking" label like a tool group header
-        <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
-          <span class="shrink-0">Thinking</span>
-          <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
-            <ThinkingLine tokens={props.tokens} />
-          </span>
+      <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
+        <span class="shrink-0">Thinking</span>
+        <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
+          <ThinkingLine tokens={props.tokens} />
         </span>
-      )}
+      </span>
     </div>
   )
 }
@@ -1419,13 +1414,14 @@ export function MessageTimeline(props: {
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
     // The Thinking row is a lone running rail step (first + last + running)
-    // ONLY before any assistant parts exist: harmonic dot in the gutter with
-    // "Thinking..." label. Once the first AssistantPart arrives, the Thinking
-    // row drops its rail and the AssistantPart rows take over.
+    // ONLY before visible output tokens exist. The harmonic dot stays in the
+    // gutter with "Thinking" label until the model has actually produced output.
+    // Once tokens arrive, the Thinking row hides and AssistantPart rows render
+    // with their own rail.
     const rail = () => {
       const row = input.row()
       if (row._tag === "Thinking") {
-        if (!hasAssistantParts(row.userMessageID)) {
+        if (!assistantTokensForTurn(row.userMessageID)) {
           return { first: true, last: true, running: true }
         }
         return undefined
@@ -1630,7 +1626,7 @@ export function MessageTimeline(props: {
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
                 tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
-                hasOutput={hasAssistantParts(thinkingRow().userMessageID)}
+                hasOutput={!!assistantTokensForTurn(thinkingRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
