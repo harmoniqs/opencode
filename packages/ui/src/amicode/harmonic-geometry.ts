@@ -128,23 +128,24 @@ export function harmonicPath(mode: number, rotationDeg: number = 0, samples: num
 
 /**
  * The pulse sequence: which mode + orientation appears in each pulse.
- * 10 pulses using 5 shapes (modes 2–6) at 45°-increment rotations.
- * No dumbbell (mode 1). No adjacent pulses share the same shape.
+ * 10 pulses using 6 shapes (modes 1–6) at 45°-increment rotations.
+ * No adjacent pulses share the same shape.
  *
- * Shapes: clover(3), rosette(4), pinched(2), trefoil(5), star(6)
- * Angles: 0°, 45°, 90°, 135° — spread across the sequence.
+ * CONSTRAINT: modes 1 (dumbbell) and 2 (pinched) — the elongated/skinny
+ * shapes — are NEVER rendered at 0° (vertical). Only 45°, 90°, or 135°.
+ * This avoids the phallic silhouette on the vertical axis.
  */
 export const PULSE_SEQUENCE: ReadonlyArray<{ mode: number; rotation: number }> = [
   { mode: 3, rotation: 0 },    // clover, lobes at axes
+  { mode: 1, rotation: 90 },   // dumbbell, horizontal
   { mode: 4, rotation: 45 },   // rosette-6, rotated
-  { mode: 2, rotation: 90 },   // pinched, horizontal
   { mode: 5, rotation: 0 },    // trefoil, upright
+  { mode: 2, rotation: 135 },  // pinched, diagonal
   { mode: 6, rotation: 45 },   // star-8, rotated
   { mode: 3, rotation: 45 },   // clover, lobes at diagonals
+  { mode: 1, rotation: 45 },   // dumbbell, diagonal
   { mode: 4, rotation: 0 },    // rosette-6, axis-aligned
-  { mode: 2, rotation: 135 },  // pinched, diagonal
   { mode: 5, rotation: 45 },   // trefoil, rotated
-  { mode: 6, rotation: 0 },    // star-8, axis-aligned
 ]
 
 /** Pre-computed circle path (the "home" shape). */

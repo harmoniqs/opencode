@@ -199,10 +199,18 @@ describe("pulse sequence", () => {
     expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
   })
 
-  test("uses modes 2–6 only (never circle or dumbbell)", () => {
+  test("uses modes 1–6 only (never circle as a pulse shape)", () => {
     for (const { mode } of PULSE_SEQUENCE) {
-      expect(mode).toBeGreaterThanOrEqual(2)
+      expect(mode).toBeGreaterThanOrEqual(1)
       expect(mode).toBeLessThan(MODE_COUNT)
+    }
+  })
+
+  test("skinny shapes (modes 1, 2) are never at 0° — avoids vertical elongation", () => {
+    for (const { mode, rotation } of PULSE_SEQUENCE) {
+      if (mode === 1 || mode === 2) {
+        expect(rotation).not.toBe(0)
+      }
     }
   })
 
