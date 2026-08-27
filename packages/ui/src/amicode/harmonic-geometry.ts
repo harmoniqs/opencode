@@ -190,58 +190,61 @@ export function randomPulseSequence(): ReadonlyArray<{ mode: number; rotation: n
 /** Pre-computed circle path (the "home" shape). */
 export const CIRCLE_PATH = harmonicPath(0)
 
+/** Inner disc radius that creates the ring hole (px in viewBox units). */
+export const INNER_R = 3.5
+
 /**
  * Build SMIL keyframe attributes for a given pulse sequence.
  */
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
-  /** Inner-disc opacity: 1 during sphere (ring), 0 during harmonic (solid). */
-  innerOpacity: string
+  /** Inner-disc radius: INNER_R during sphere (ring), 0 during harmonic (solid). */
+  innerRadius: string
   dur: string
 } {
   const pulsePaths = sequence.map(({ mode, rotation }) => harmonicPath(mode, rotation))
   const values: string[] = []
-  const opacities: number[] = []
+  const radii: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
   let t = 0
   for (let i = 0; i < sequence.length; i++) {
-    // Sphere hold start — inner disc visible (ring)
+    // Sphere hold start — inner disc at full radius (ring)
     values.push(CIRCLE_PATH)
-    opacities.push(1)
+    radii.push(INNER_R)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
-    // Sphere hold end — morph-out begins, disc starts fading
+    // Sphere hold end — morph-out begins, disc starts shrinking
     values.push(CIRCLE_PATH)
-    opacities.push(1)
+    radii.push(INNER_R)
     times.push(t / total)
     t += MORPH_MS
 
-    // Shape arrived — inner disc hidden (solid harmonic)
+    // Shape arrived — inner disc shrunk to 0 (solid harmonic)
     values.push(pulsePaths[i])
-    opacities.push(0)
+    radii.push(0)
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
-    // Shape hold end — morph-back begins, disc starts returning
+    // Shape hold end — morph-back begins, disc starts growing
     values.push(pulsePaths[i])
-    opacities.push(0)
+    radii.push(0)
     times.push(t / total)
     t += MORPH_MS
   }
 
-  // Final: back to circle, disc visible (ring)
+  // Final: back to circle, disc at full radius (ring)
   values.push(CIRCLE_PATH)
-  opacities.push(1)
+  radii.push(INNER_R)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
-    innerOpacity: opacities.join(";"),
+    innerRadius: radii.join(";"),
     dur: `${total}ms`,
   }
 }

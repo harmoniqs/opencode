@@ -8,8 +8,9 @@
 // creates a thick ring without using SVG stroke (which gets fuzzy at 13px).
 // The background disc also masks the rail line that runs behind the dot.
 //
-// During harmonic phases the inner disc fades out (opacity 0) so the shape
-// reads as a solid fill; it fades back in when returning to sphere (ring).
+// During harmonic phases the inner disc shrinks radially to 0 (solid shape);
+// it grows back from the centre when returning to sphere (ring). The radial
+// grow/shrink is synced to the outer shape morph for a cohesive animation.
 //
 // RANDOMIZED: each mount picks fresh random rotation angles.
 // Under prefers-reduced-motion the SMIL animates are hidden — static ring.
@@ -17,13 +18,11 @@
 import { type ComponentProps } from "solid-js"
 import {
   HARMONIC_SIZE,
+  INNER_R,
   CIRCLE_PATH,
   randomPulseSequence,
   buildSmil,
 } from "./harmonic-geometry"
-
-/** Inner disc radius — controls ring thickness. maxR is 6, so 6 - 3.5 = 2.5px ring. */
-const INNER_R = 3.5
 
 export function HarmonicDot(props: {
   class?: string
@@ -58,7 +57,8 @@ export function HarmonicDot(props: {
           calcMode="linear"
         />
       </path>
-      {/* Inner disc — punches the hole (ring) during sphere, fades out during harmonics */}
+      {/* Inner disc — grows/shrinks radially in sync with outer morph.
+          Full radius during sphere (ring), shrinks to 0 during harmonics (solid). */}
       <circle
         cx={HARMONIC_SIZE / 2}
         cy={HARMONIC_SIZE / 2}
@@ -66,8 +66,8 @@ export function HarmonicDot(props: {
         fill="var(--v2-background-bg-base)"
       >
         <animate
-          attributeName="opacity"
-          values={smil.innerOpacity}
+          attributeName="r"
+          values={smil.innerRadius}
           keyTimes={smil.keyTimes}
           dur={smil.dur}
           repeatCount="indefinite"
