@@ -151,9 +151,14 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
+function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; showLabel?: boolean }) {
   return (
     <div data-slot="session-turn-thinking">
+      {props.showLabel && (
+        <span class="block text-xs font-medium leading-[22px] text-v2-text-text-faint select-none">
+          Thinking...
+        </span>
+      )}
       <ThinkingLine tokens={props.tokens} />
     </div>
   )
@@ -428,6 +433,13 @@ export function MessageTimeline(props: {
     const start = msgs.findIndex((m) => m.id === userMessageID)
     if (start === -1) return 0
     return turnTokens(msgs.slice(start + 1).filter((m) => m.role === "assistant"))
+  }
+  /** True when at least one assistant message with parts exists for this turn. */
+  const hasAssistantParts = (userMessageID: string) => {
+    const msgs = sessionMessages()
+    const start = msgs.findIndex((m) => m.id === userMessageID)
+    if (start === -1) return false
+    return msgs.slice(start + 1).some((m) => m.role === "assistant" && getMsgParts(m.id).length > 0)
   }
   const getMsgPart = (messageID: string, partID: string) => getMsgParts(messageID).find((part) => part.id === partID)
   const childTaskDescription = createMemo(() => {
@@ -1395,20 +1407,19 @@ export function MessageTimeline(props: {
     const railLabel = () => {
       const row = input.row()
       if (row._tag === "AssistantPart") return row.railLabel
-      if (row._tag === "Thinking" && !assistantTokensForTurn(row.userMessageID)) return "Thinking..."
       return undefined
     }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
     // The Thinking row is a lone running rail step (first + last + running)
-    // ONLY before any assistant output exists: harmonic dot in the gutter with
+    // ONLY before any assistant parts exist: harmonic dot in the gutter with
     // "Thinking..." label. Once the first AssistantPart arrives, the Thinking
     // row drops its rail and the AssistantPart rows take over.
     const rail = () => {
       const row = input.row()
       if (row._tag === "Thinking") {
-        if (!assistantTokensForTurn(row.userMessageID)) {
+        if (!hasAssistantParts(row.userMessageID)) {
           return { first: true, last: true, running: true }
         }
         return undefined
@@ -1613,6 +1624,7 @@ export function MessageTimeline(props: {
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
                 tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
+                showLabel={!hasAssistantParts(thinkingRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
