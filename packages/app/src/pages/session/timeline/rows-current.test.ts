@@ -220,4 +220,93 @@ describe("current session timeline rows", () => {
     // completes — Thinking, not the half-streamed part, is what renders.
     expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking", "ThinkingMeta"])
   })
+
+  test("harmonic dot travels: on Thinking when no output, on last AssistantPart once output lands", () => {
+    // Phase 1: turn is busy, no settled output yet — dot should be on Thinking
+    const sourceNoOutput = [
+      { id: "msg_u", type: "user", text: "go", time: { created: 1 } },
+      {
+        id: "msg_a",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "reasoning", text: "hmm" }],
+        time: { created: 2 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const norm1 = normalizeSessionMessages("ses_1", sourceNoOutput)
+    const msgs1 = new Map(norm1.messages.map((m) => [m.id, m]))
+    const r1 = Timeline.constructSessionMessageRows(
+      sourceNoOutput,
+      (id) => msgs1.get(id),
+      (id) => norm1.parts.get(id) ?? [],
+      true,
+      "busy",
+      true,
+      norm1.messages.filter((m) => m.role === "user"),
+    )
+    const thinking1 = r1.rows.find((r) => r._tag === "Thinking")!
+    expect(thinking1._tag).toBe("Thinking")
+    expect((thinking1 as any).turnRunning).toBe(true)
+    // No AssistantPart rows (reasoning withheld while streaming)
+    expect(r1.rows.filter((r) => r._tag === "AssistantPart").length).toBe(0)
+
+    // Phase 2: turn is busy, output HAS landed — dot should be on last AssistantPart
+    const sourceWithOutput = [
+      { id: "msg_u", type: "user", text: "go", time: { created: 1 } },
+      {
+        id: "msg_a",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "first answer" }],
+        time: { created: 2, completed: 3 },
+      },
+      {
+        id: "msg_b",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "still going" }],
+        time: { created: 4 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const norm2 = normalizeSessionMessages("ses_1", sourceWithOutput)
+    const msgs2 = new Map(norm2.messages.map((m) => [m.id, m]))
+    const r2 = Timeline.constructSessionMessageRows(
+      sourceWithOutput,
+      (id) => msgs2.get(id),
+      (id) => norm2.parts.get(id) ?? [],
+      true,
+      "busy",
+      true,
+      norm2.messages.filter((m) => m.role === "user"),
+    )
+    const thinking2 = r2.rows.find((r) => r._tag === "Thinking")!
+    // Thinking still says turnRunning (turn IS running) but output exists,
+    // so the rail function knows the dot moves away from Thinking
+    expect((thinking2 as any).turnRunning).toBe(true)
+    const assistantParts = r2.rows.filter((r) => r._tag === "AssistantPart")
+    expect(assistantParts.length).toBeGreaterThan(0)
+    const lastPart = assistantParts[assistantParts.length - 1]!
+    expect((lastPart as any).lastAssistantPart).toBe(true)
+    expect((lastPart as any).turnRunning).toBe(true)
+
+    // Phase 3: turn is complete — no running anywhere
+    const r3 = Timeline.constructSessionMessageRows(
+      sourceWithOutput.slice(0, 2), // only the completed message
+      (id) => msgs2.get(id),
+      (id) => norm2.parts.get(id) ?? [],
+      true,
+      "idle",
+      true,
+      norm2.messages.filter((m) => m.role === "user"),
+    )
+    const thinking3 = r3.rows.find((r) => r._tag === "Thinking")!
+    expect((thinking3 as any).turnRunning).toBe(false)
+    const parts3 = r3.rows.filter((r) => r._tag === "AssistantPart")
+    for (const p of parts3) {
+      expect((p as any).turnRunning).toBe(false)
+    }
+  })
 })

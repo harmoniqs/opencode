@@ -1435,19 +1435,22 @@ export function MessageTimeline(props: {
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The harmonic dot lives on the Thinking row (first step). While the turn
-    // is running the dot animates there; when done it becomes a static dot.
-    // AssistantParts are always "done" dots — they represent completed output.
+    // The harmonic dot TRAVELS down the rail:
+    //   - No output yet: dot on Thinking (model is thinking, nothing to show)
+    //   - Output has landed: dot moves to the LAST AssistantPart (current step)
+    //   - Turn complete: all dots are static done dots
     // ThinkingMeta does NOT participate in the rail (no dot).
     const rail = () => {
       const row = input.row()
       if (row._tag === "Thinking") {
         const hasOutput = hasAssistantParts(row.userMessageID)
-        return { first: true, last: !hasOutput, running: row.turnRunning }
+        // Dot stays on Thinking only while no output exists
+        return { first: true, last: !hasOutput, running: row.turnRunning && !hasOutput }
       }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
-      return { first: false, last: row.lastAssistantPart, running: false }
+      // Last AssistantPart gets the dot when the turn is still running
+      return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart }
     }
 
     // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
