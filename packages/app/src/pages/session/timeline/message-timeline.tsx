@@ -151,14 +151,9 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; showLabel?: boolean }) {
+function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
   return (
     <div data-slot="session-turn-thinking">
-      {props.showLabel && (
-        <span class="block text-xs font-medium leading-[22px] text-v2-text-text-faint select-none">
-          Thinking...
-        </span>
-      )}
       <ThinkingLine tokens={props.tokens} />
     </div>
   )
@@ -1407,6 +1402,7 @@ export function MessageTimeline(props: {
     const railLabel = () => {
       const row = input.row()
       if (row._tag === "AssistantPart") return row.railLabel
+      if (row._tag === "Thinking" && !hasAssistantParts(row.userMessageID)) return "Thinking"
       return undefined
     }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
@@ -1624,7 +1620,6 @@ export function MessageTimeline(props: {
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
                 tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
-                showLabel={!hasAssistantParts(thinkingRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
