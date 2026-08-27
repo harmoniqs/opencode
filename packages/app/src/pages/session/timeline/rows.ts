@@ -220,6 +220,23 @@ export namespace Timeline {
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }
+
+    // Thinking row renders FIRST — it's the top of the rail, like Shell/Edit.
+    // Shows "Thinking" + timer/tokens. Only present while the turn is active.
+    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
+      const heading = assistantMessages
+        .flatMap((message) => getMessageParts(message.id))
+        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
+        .find((value): value is string => !!value)
+
+      rows.push(
+        new TimelineRow.Thinking({
+          userMessageID: userMessage.id,
+          reasoningHeading: heading,
+        }),
+      )
+    }
+
     assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
@@ -243,23 +260,6 @@ export namespace Timeline {
       )
       assistantGroupIndex += 1
     })
-
-    // In showReasoning mode the reasoning rows themselves carry the working
-    // signal — except while the tail is withheld (streaming), when Thinking
-    // must stand in for it or the turn would show nothing at all.
-    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
-      const heading = assistantMessages
-        .flatMap((message) => getMessageParts(message.id))
-        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
-        .find((value): value is string => !!value)
-
-      rows.push(
-        new TimelineRow.Thinking({
-          userMessageID: userMessage.id,
-          reasoningHeading: heading,
-        }),
-      )
-    }
 
     if (isActive && status === "retry") rows.push(new TimelineRow.Retry({ userMessageID: userMessage.id }))
 

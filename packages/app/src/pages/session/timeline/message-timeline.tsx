@@ -1398,12 +1398,10 @@ export function MessageTimeline(props: {
     }
     const previousAssistantPart = () => {
       const row = input.row()
-      if (row._tag === "AssistantPart") {
-        // Gap above if there's a previous assistant part OR if the turn is
-        // running (Thinking row sits above as the first rail step)
-        return row.previousAssistantPart || row.turnRunning
-      }
-      return false
+      if (row._tag !== "AssistantPart") return false
+      // Gap above if there's a previous assistant part, OR if the turn is
+      // running (Thinking row sits above as the first rail step)
+      return row.previousAssistantPart || row.turnRunning
     }
     const assistantPart = () => {
       const tag = input.row()._tag
