@@ -151,18 +151,16 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; hasOutput?: boolean }) {
+function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
   return (
-    <Show when={!props.hasOutput}>
-      <div data-slot="session-turn-thinking">
-        <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
-          <span class="shrink-0">Thinking</span>
-          <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
-            <ThinkingLine tokens={props.tokens} />
-          </span>
+    <div data-slot="session-turn-thinking">
+      <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
+        <span class="shrink-0">Thinking</span>
+        <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
+          <ThinkingLine tokens={props.tokens} />
         </span>
-      </div>
-    </Show>
+      </span>
+    </div>
   )
 }
 
@@ -1400,7 +1398,12 @@ export function MessageTimeline(props: {
     }
     const previousAssistantPart = () => {
       const row = input.row()
-      return row._tag === "AssistantPart" && row.previousAssistantPart
+      if (row._tag === "AssistantPart") {
+        // Gap above if there's a previous assistant part OR if the turn is
+        // running (Thinking row sits above as the first rail step)
+        return row.previousAssistantPart || row.turnRunning
+      }
+      return false
     }
     const assistantPart = () => {
       const tag = input.row()._tag
@@ -1414,22 +1417,22 @@ export function MessageTimeline(props: {
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The Thinking row is a lone running rail step (first + last + running)
-    // ONLY before visible output tokens exist. The harmonic dot stays in the
-    // gutter with "Thinking" label until the model has actually produced output.
-    // Once tokens arrive, the Thinking row hides and AssistantPart rows render
-    // with their own rail.
+    // The Thinking row is ALWAYS a rail step — it never disappears (just like
+    // Shell or Edit rows). It's the first step of every turn:
+    //   - Before output: first=true, last=true, running=true (lone harmonic dot)
+    //   - After output:  first=true, last=false, running=false (done dot, line continues)
     const rail = () => {
       const row = input.row()
       if (row._tag === "Thinking") {
-        if (!assistantTokensForTurn(row.userMessageID)) {
-          return { first: true, last: true, running: true }
-        }
-        return undefined
+        const hasOutput = hasAssistantParts(row.userMessageID)
+        return { first: true, last: !hasOutput, running: !hasOutput }
       }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
-      return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
+      // When the turn is running, the Thinking row sits above as the first
+      // rail step — so the first AssistantPart is not actually first.
+      const isFirst = !row.previousAssistantPart && !row.turnRunning
+      return { first: isFirst, last: row.lastAssistantPart, running: row.turnRunning }
     }
 
     // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
@@ -1627,7 +1630,6 @@ export function MessageTimeline(props: {
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
                 tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
-                hasOutput={!!assistantTokensForTurn(thinkingRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
