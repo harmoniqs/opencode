@@ -30,7 +30,7 @@ export const SHAPE_HOLD_MS = 500
 export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
 
 /** Number of pulses in one full cycle. */
-export const PULSE_COUNT = 11
+export const PULSE_COUNT = 10
 
 /** Total cycle duration (ms). */
 export const CYCLE_MS = PULSE_MS * PULSE_COUNT
@@ -141,17 +141,16 @@ export function harmonicPath(mode: number, rotationDeg: number = 0, samples: num
  * 10 pulses using 6 shapes (modes 1–6), no adjacent repeats.
  */
 export const PULSE_MODES: readonly number[] = [
+  3, // clover (4 lobes, Y_2^2)
+  1, // dumbbell (2 lobes, Y_1^0)
+  4, // rosette-6 (6 lobes, Y_3^3)
+  7, // double pinch (4 axial, P_4^0)
+  2, // pinched (2+equator, P_2^0)
+  6, // star-8 (8 lobes, Y_4^4)
   3, // clover
   1, // dumbbell
   4, // rosette-6
-  5, // trefoil
-  2, // pinched
   6, // star-8
-  7, // double pinch
-  3, // clover
-  1, // dumbbell
-  4, // rosette-6
-  5, // trefoil
 ]
 
 /**

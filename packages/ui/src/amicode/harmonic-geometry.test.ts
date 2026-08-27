@@ -45,9 +45,9 @@ describe("pulse timing", () => {
     expect(PULSE_MS).toBe(1200)
   })
 
-  test("full cycle is 11 pulses = 13.2s", () => {
+  test("full cycle is 10 pulses = 12s", () => {
     expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
-    expect(CYCLE_MS).toBe(13200)
+    expect(CYCLE_MS).toBe(12000)
   })
 
   test("timing breakdown: 350 + 175 + 500 + 175 = 1200", () => {
@@ -107,18 +107,6 @@ describe("harmonicRadius", () => {
     expect(r0).toBeGreaterThan(node)
   })
 
-  test("mode 5 (trefoil) has three-fold symmetry", () => {
-    // (1 + cos(3θ))/2 has 3 lobes at 0, 120°, 240°
-    const r0 = harmonicRadius(5, 0)
-    const r120 = harmonicRadius(5, 2 * Math.PI / 3)
-    const r240 = harmonicRadius(5, 4 * Math.PI / 3)
-    expect(r0).toBeCloseTo(r120, 4)
-    expect(r120).toBeCloseTo(r240, 4)
-    // Minima at 60°, 180°, 300°
-    const rMin = harmonicRadius(5, Math.PI / 3)
-    expect(r0).toBeGreaterThan(rMin)
-  })
-
   test("mode 6 (star-8) has eight-fold symmetry", () => {
     // |cos(4θ)| has 8 lobes at 0, 45°, 90°, 135°, etc.
     const r0 = harmonicRadius(6, 0)
@@ -136,12 +124,9 @@ describe("harmonicRadius", () => {
     const r0 = harmonicRadius(7, 0)
     const rPi = harmonicRadius(7, Math.PI)
     const r90 = harmonicRadius(7, Math.PI / 2)
-    // Symmetric: r(0) = r(π)
     expect(r0).toBeCloseTo(rPi, 4)
-    // Has a lobe at the equator (r(π/2) > 0) — distinguishes from simple dumbbell
     expect(r90).toBeGreaterThan(0.2)
-    // Has nodes (pinch points) between 0 and π/2
-    const rNode = harmonicRadius(7, Math.PI * 30.6 / 180) // near first zero of P_4^0
+    const rNode = harmonicRadius(7, Math.PI * 30.6 / 180)
     expect(r0).toBeGreaterThan(rNode)
     expect(r90).toBeGreaterThan(rNode)
   })
