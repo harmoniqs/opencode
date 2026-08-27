@@ -231,8 +231,9 @@ export function randomPulseSequence(): ReadonlyArray<{ mode: number; rotation: n
   return result
 }
 
-/** Inner disc radius that creates the ring hole (px in viewBox units). */
-export const INNER_R = 3.5
+/** Inner disc radius that creates the ring hole (px in viewBox units).
+ *  maxR is 6, so ring thickness = 6 - INNER_R ≈ 1.5px. */
+export const INNER_R = 4.5
 
 /** Pre-computed circle path (the "home" shape). */
 export const CIRCLE_PATH = harmonicPath(0)
