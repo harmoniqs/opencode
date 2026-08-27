@@ -151,15 +151,21 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
+function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; hasOutput?: boolean }) {
   return (
     <div data-slot="session-turn-thinking">
-      <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
-        <span class="shrink-0">Thinking</span>
-        <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
-          <ThinkingLine tokens={props.tokens} />
+      {props.hasOutput ? (
+        // Once output is streaming, just show timer + tokens as compact metadata
+        <ThinkingLine tokens={props.tokens} />
+      ) : (
+        // Before any output, show "Thinking" label like a tool group header
+        <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
+          <span class="shrink-0">Thinking</span>
+          <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
+            <ThinkingLine tokens={props.tokens} />
+          </span>
         </span>
-      </span>
+      )}
     </div>
   )
 }
@@ -1624,6 +1630,7 @@ export function MessageTimeline(props: {
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
                 tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
+                hasOutput={hasAssistantParts(thinkingRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
