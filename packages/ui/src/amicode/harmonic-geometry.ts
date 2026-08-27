@@ -196,38 +196,52 @@ export const CIRCLE_PATH = harmonicPath(0)
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
+  /** Inner-disc opacity: 1 during sphere (ring), 0 during harmonic (solid). */
+  innerOpacity: string
   dur: string
 } {
   const pulsePaths = sequence.map(({ mode, rotation }) => harmonicPath(mode, rotation))
   const values: string[] = []
+  const opacities: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
   let t = 0
   for (let i = 0; i < sequence.length; i++) {
+    // Sphere hold start — inner disc visible (ring)
     values.push(CIRCLE_PATH)
+    opacities.push(1)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
+    // Sphere hold end — morph-out begins, disc starts fading
     values.push(CIRCLE_PATH)
+    opacities.push(1)
     times.push(t / total)
     t += MORPH_MS
 
+    // Shape arrived — inner disc hidden (solid harmonic)
     values.push(pulsePaths[i])
+    opacities.push(0)
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
+    // Shape hold end — morph-back begins, disc starts returning
     values.push(pulsePaths[i])
+    opacities.push(0)
     times.push(t / total)
     t += MORPH_MS
   }
 
+  // Final: back to circle, disc visible (ring)
   values.push(CIRCLE_PATH)
+  opacities.push(1)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
+    innerOpacity: opacities.join(";"),
     dur: `${total}ms`,
   }
 }

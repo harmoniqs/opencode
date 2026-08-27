@@ -8,6 +8,9 @@
 // creates a thick ring without using SVG stroke (which gets fuzzy at 13px).
 // The background disc also masks the rail line that runs behind the dot.
 //
+// During harmonic phases the inner disc fades out (opacity 0) so the shape
+// reads as a solid fill; it fades back in when returning to sphere (ring).
+//
 // RANDOMIZED: each mount picks fresh random rotation angles.
 // Under prefers-reduced-motion the SMIL animates are hidden — static ring.
 
@@ -40,11 +43,11 @@ export function HarmonicDot(props: {
       aria-hidden="true"
       style={props.style}
     >
-      {/* Solid shape — the outer fill that forms the ring's outer edge */}
+      {/* Solid shape — bright yellow fill */}
       <path
         class="harmonic-dot-shape"
         d={CIRCLE_PATH}
-        fill="var(--accent-edge)"
+        fill="var(--accent)"
       >
         <animate
           attributeName="d"
@@ -55,13 +58,22 @@ export function HarmonicDot(props: {
           calcMode="linear"
         />
       </path>
-      {/* Inner disc — punches the hole, masks the rail line */}
+      {/* Inner disc — punches the hole (ring) during sphere, fades out during harmonics */}
       <circle
         cx={HARMONIC_SIZE / 2}
         cy={HARMONIC_SIZE / 2}
         r={INNER_R}
         fill="var(--v2-background-bg-base)"
-      />
+      >
+        <animate
+          attributeName="opacity"
+          values={smil.innerOpacity}
+          keyTimes={smil.keyTimes}
+          dur={smil.dur}
+          repeatCount="indefinite"
+          calcMode="linear"
+        />
+      </circle>
     </svg>
   )
 }

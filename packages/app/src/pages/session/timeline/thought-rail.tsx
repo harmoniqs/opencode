@@ -142,29 +142,6 @@ export function ThoughtRail(props: {
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
-      <span
-        aria-hidden="true"
-        data-slot="thought-rail-line"
-        class="pointer-events-none absolute w-px"
-        style={{
-          left: `${LINE_X}px`,
-          // Always INK, full strength — yellow belongs to the active node
-          // only, and the muted grey read as washed out (Kate 2026-08-24).
-          // text-base is the fg: literal black on light, near-white on dark.
-          background: "var(--v2-text-text-base)",
-          ...(isLoneRunning()
-            ? // lone running step — no line, just the breathing dot (0px, like PR 242)
-              { top: "0px", height: "0px" }
-            : props.last
-              ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
-                {
-                  top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
-                }
-              : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
-                { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
-        }}
-      />
       {isRunning() ? (
         // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
         // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
@@ -197,6 +174,32 @@ export function ThoughtRail(props: {
           }}
         />
       )}
+      {/* Rail line rendered AFTER the dot so it paints on top — the line
+          shows through the harmonic ring's hollow interior (the background
+          disc no longer masks it). For done dots the solid fill covers it. */}
+      <span
+        aria-hidden="true"
+        data-slot="thought-rail-line"
+        class="pointer-events-none absolute w-px"
+        style={{
+          left: `${LINE_X}px`,
+          // Always INK, full strength — yellow belongs to the active node
+          // only, and the muted grey read as washed out (Kate 2026-08-24).
+          // text-base is the fg: literal black on light, near-white on dark.
+          background: "var(--v2-text-text-base)",
+          ...(isLoneRunning()
+            ? // lone running step — no line, just the breathing dot (0px, like PR 242)
+              { top: "0px", height: "0px" }
+            : props.last
+              ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
+                {
+                  top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
+                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
+                }
+              : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
+                { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
+        }}
+      />
     </>
   )
 }
