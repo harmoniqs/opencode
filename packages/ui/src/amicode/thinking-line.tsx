@@ -3,11 +3,9 @@ import { formatElapsed, formatTokens } from "./thinking"
 import { HarmonicDot } from "./harmonic-dot"
 
 // AMICODE: the "thinking" meta line — shown while a reply streams.
-// Contains the harmonic dot (inline, next to the timer) during the initial
-// thinking phase (before tokens flow). Once content arrives and the rail dot
-// takes over, the inline dot departs with a smooth translate animation toward
-// the rail gutter, creating the illusion of a single dot migrating from
-// timer → rail.
+// Contains the harmonic dot positioned in the rail gutter (same x as rail dots)
+// during the initial thinking phase. Once content arrives and the real rail dot
+// takes over, the inline dot simply disappears.
 
 const TICK_MS = 1000
 
@@ -29,8 +27,8 @@ export function ThinkingLine(props: {
     onCleanup(() => clearInterval(clock))
   })
 
-  // The dot departs once tokens start flowing (rail dot takes over)
-  const departing = () => props.tokens != null
+  // Hide dot once tokens flow (rail dot takes over)
+  const hasContent = () => props.tokens != null
 
   return (
     <span
@@ -41,15 +39,12 @@ export function ThinkingLine(props: {
       <span class="sr-only" role="status">
         Amico is working…
       </span>
-      <span class="amc-thinking-meta" aria-hidden="true">
-        <span
-          classList={{
-            "amc-thinking-dot": true,
-            "amc-thinking-dot--departing": departing(),
-          }}
-        >
+      <Show when={!hasContent()}>
+        <span class="amc-thinking-dot" aria-hidden="true">
           <HarmonicDot />
         </span>
+      </Show>
+      <span class="amc-thinking-meta" aria-hidden="true">
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
         <Show when={props.tokens != null}>
           <span class="amc-thinking-sep">·</span>

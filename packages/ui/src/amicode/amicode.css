@@ -49,12 +49,12 @@
 }
 
 /* ---- thinking block (meta line while a reply streams) -------------------- */
-/* Single-row inline block (thinking-line.tsx): the harmonic dot + live meta
- * (elapsed · tokens · esc). The dot appears inline during initial thinking,
- * then departs (translates toward the rail) once tokens start flowing.
- * nowrap + ellipsis for absurdly narrow panes. */
+/* The harmonic dot appears in the rail gutter during initial thinking (before
+ * content arrives). Once the rail dot takes over, the inline dot unmounts.
+ * The meta line (elapsed · tokens · esc) sits to the right as always. */
 .amc-thinking {
-  display: inline-block;
+  display: block;
+  position: relative;
   min-width: 0;
   max-width: 100%;
   font-size: 11px;
@@ -64,6 +64,7 @@
 .amc-thinking-meta {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -71,26 +72,16 @@
   color: var(--v2-text-text-faint);
   font-variant-numeric: tabular-nums;
 }
-.amc-thinking-meta > * + * { margin-left: 6px; }
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
 
-/* The inline harmonic dot — sits to the left of the timer text */
+/* The dot sits in the rail gutter — same position as thought-rail dots (left: 4.5px).
+ * Vertically centred with the timer text line. */
 .amc-thinking-dot {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  transition: transform 300ms ease-in, opacity 300ms ease-in;
-}
-/* Depart animation: translate up-left toward the rail gutter, shrink + fade */
-.amc-thinking-dot--departing {
-  transform: translate(-16px, -14px) scale(0.538);
-  opacity: 0;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .amc-thinking-dot { transition: none; }
-  .amc-thinking-dot--departing { transform: none; opacity: 0; }
+  position: absolute;
+  left: -20px; /* aligns with LINE_X - HARMONIC_SIZE/2 relative to content inset */
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
