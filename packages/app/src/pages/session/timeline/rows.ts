@@ -222,8 +222,8 @@ export namespace Timeline {
     }
 
     // Thinking row renders FIRST — it's the top of the rail, like Shell/Edit.
-    // Shows "Thinking" + timer/tokens. Only present while the turn is active.
-    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
+    // Shows just "Thinking" label. Always present once a turn has assistant content.
+    if (assistantPartRefs.length > 0 || turnIsRunning) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
@@ -233,6 +233,7 @@ export namespace Timeline {
         new TimelineRow.Thinking({
           userMessageID: userMessage.id,
           reasoningHeading: heading,
+          turnRunning: turnIsRunning,
         }),
       )
     }
@@ -260,6 +261,18 @@ export namespace Timeline {
       )
       assistantGroupIndex += 1
     })
+
+    // ThinkingMeta row renders LAST — timer + tokens always visible at the
+    // bottom of the turn. This is where the harmonic dot lives while running.
+    if (assistantPartRefs.length > 0 || turnIsRunning) {
+      rows.push(
+        new TimelineRow.ThinkingMeta({
+          userMessageID: userMessage.id,
+          turnRunning: turnIsRunning,
+          turnDurationMs: turnIsRunning ? undefined : computeTurnDuration(userMessage, assistantMessages),
+        }),
+      )
+    }
 
     if (isActive && status === "retry") rows.push(new TimelineRow.Retry({ userMessageID: userMessage.id }))
 
@@ -400,4 +413,16 @@ export namespace MessageComment {
         : undefined,
     }
   }
+}
+
+function computeTurnDuration(userMessage: UserMessage, assistantMessages: AssistantMessage[]): number | undefined {
+  const end = assistantMessages.reduce<number | undefined>((max, msg) => {
+    const completed = msg.time.completed
+    if (typeof completed !== "number") return max
+    if (max === undefined) return completed
+    return Math.max(max, completed)
+  }, undefined)
+  if (typeof end !== "number") return
+  if (end < userMessage.time.created) return
+  return end - userMessage.time.created
 }

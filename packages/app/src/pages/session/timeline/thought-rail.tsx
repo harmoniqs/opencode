@@ -236,11 +236,12 @@ export const THOUGHT_RAIL_INSET = "pl-6"
  * no line — every line must end at a dot at both ends, so a single dot has
  * no dangling half — and a one-step completion still reads as "dot fills".
  */
-export function shouldRenderRail(input: {
+export function shouldRenderRail(_input: {
   previousAssistantPart: boolean
   lastAssistantPart: boolean
   turnRunning: boolean
 }) {
-  const isOnlyStep = !input.previousAssistantPart && input.lastAssistantPart
-  return !isOnlyStep || input.turnRunning
+  // The Thinking row is always the first rail node, so every AssistantPart
+  // always has at least one other node above it — the rail always renders.
+  return true
 }

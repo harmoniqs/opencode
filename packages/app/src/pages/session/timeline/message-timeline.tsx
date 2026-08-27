@@ -20,7 +20,7 @@ import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualIt
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
 import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
-import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
+import { formatElapsed, formatTokens, ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -151,14 +151,33 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
+function TimelineThinkingRow(_props: { reasoningHeading?: string; showReasoningSummaries: boolean }) {
   return (
     <div data-slot="session-turn-thinking">
       <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
         <span class="shrink-0">Thinking</span>
-        <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
+      </span>
+    </div>
+  )
+}
+
+function TimelineThinkingMetaRow(props: { turnRunning: boolean; turnDurationMs?: number; tokens?: number }) {
+  return (
+    <div data-slot="session-turn-thinking-meta">
+      <span class="min-w-0 flex items-center gap-2 text-13 text-text-dimmed leading-[20px]">
+        <Show when={props.turnRunning} fallback={
+          <Show when={props.turnDurationMs != null}>
+            <span class="amc-thinking-meta" aria-hidden="true">
+              <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
+              <Show when={props.tokens != null}>
+                <span class="amc-thinking-sep">·</span>
+                <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
+              </Show>
+            </span>
+          </Show>
+        }>
           <ThinkingLine tokens={props.tokens} />
-        </span>
+        </Show>
       </span>
     </div>
   )
@@ -1398,14 +1417,15 @@ export function MessageTimeline(props: {
     }
     const previousAssistantPart = () => {
       const row = input.row()
+      if (row._tag === "ThinkingMeta") return true
       if (row._tag !== "AssistantPart") return false
-      // Gap above if there's a previous assistant part, OR if the turn is
-      // running (Thinking row sits above as the first rail step)
-      return row.previousAssistantPart || row.turnRunning
+      // Gap above if there's a previous assistant part, OR if Thinking row
+      // sits above (always true since Thinking is always first)
+      return true
     }
     const assistantPart = () => {
       const tag = input.row()._tag
-      return tag === "AssistantPart" || tag === "Thinking"
+      return tag === "AssistantPart" || tag === "Thinking" || tag === "ThinkingMeta"
     }
     const railLabel = () => {
       const row = input.row()
@@ -1415,22 +1435,19 @@ export function MessageTimeline(props: {
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The Thinking row is ALWAYS a rail step — it never disappears (just like
-    // Shell or Edit rows). It's the first step of every turn:
-    //   - Before output: first=true, last=true, running=true (lone harmonic dot)
-    //   - After output:  first=true, last=false, running=false (done dot, line continues)
+    // The harmonic dot lives on the Thinking row (first step). While the turn
+    // is running the dot animates there; when done it becomes a static dot.
+    // AssistantParts are always "done" dots — they represent completed output.
+    // ThinkingMeta does NOT participate in the rail (no dot).
     const rail = () => {
       const row = input.row()
       if (row._tag === "Thinking") {
         const hasOutput = hasAssistantParts(row.userMessageID)
-        return { first: true, last: !hasOutput, running: !hasOutput }
+        return { first: true, last: !hasOutput, running: row.turnRunning }
       }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
-      // When the turn is running, the Thinking row sits above as the first
-      // rail step — so the first AssistantPart is not actually first.
-      const isFirst = !row.previousAssistantPart && !row.turnRunning
-      return { first: isFirst, last: row.lastAssistantPart, running: row.turnRunning }
+      return { first: false, last: row.lastAssistantPart, running: false }
     }
 
     // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
@@ -1627,7 +1644,23 @@ export function MessageTimeline(props: {
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
-                tokens={assistantTokensForTurn(thinkingRow().userMessageID) || undefined}
+              />
+            </div>
+          </TimelineRowFrame>
+        )
+      }
+      case "ThinkingMeta": {
+        const metaRow = row as Accessor<TimelineRowByTag<"ThinkingMeta">>
+        return (
+          <TimelineRowFrame row={metaRow}>
+            <div
+              data-slot="session-turn-message-container"
+              class="w-full px-4 md:px-5 relative"
+            >
+              <TimelineThinkingMetaRow
+                turnRunning={metaRow().turnRunning}
+                turnDurationMs={metaRow().turnDurationMs}
+                tokens={assistantTokensForTurn(metaRow().userMessageID) || undefined}
               />
             </div>
           </TimelineRowFrame>

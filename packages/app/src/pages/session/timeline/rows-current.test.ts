@@ -55,10 +55,13 @@ describe("current session timeline rows", () => {
     // in as the working signal.
     expect(result.rows.map(TimelineRow.key)).toEqual([
       "user-message:msg_1",
+      "thinking:msg_1",
       "assistant-part:msg_1:msg_2:text:0",
+      "thinking-meta:msg_1",
       "turn-gap:msg_3",
       "user-message:msg_3",
       "thinking:msg_3",
+      "thinking-meta:msg_3",
     ])
   })
 
@@ -91,7 +94,9 @@ describe("current session timeline rows", () => {
     expect(result.activeMessageID).toBe("msg_shell")
     expect(result.rows.map(TimelineRow.key)).toEqual([
       "user-message:msg_shell",
+      "thinking:msg_shell",
       "assistant-part:msg_shell:msg_shell:tool",
+      "thinking-meta:msg_shell",
     ])
   })
 
@@ -131,10 +136,14 @@ describe("current session timeline rows", () => {
 
     expect(result.rows.map(TimelineRow.key)).toEqual([
       "user-message:msg_user_1",
+      "thinking:msg_user_1",
       "assistant-part:msg_user_1:msg_assistant_1:text:0",
+      "thinking-meta:msg_user_1",
       "turn-gap:msg_user_2",
       "user-message:msg_user_2",
+      "thinking:msg_user_2",
       "assistant-part:msg_user_2:msg_assistant_2:text:0",
+      "thinking-meta:msg_user_2",
     ])
   })
 
@@ -168,6 +177,7 @@ describe("current session timeline rows", () => {
       "turn-gap:msg_2",
       "user-message:msg_2",
       "thinking:msg_2",
+      "thinking-meta:msg_2",
     ])
   })
 
@@ -208,6 +218,6 @@ describe("current session timeline rows", () => {
     // The stale error row must not appear once the turn resumes. The resumed
     // text is the streaming tail (no time.end) so it is withheld until it
     // completes — Thinking, not the half-streamed part, is what renders.
-    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking"])
+    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking", "ThinkingMeta"])
   })
 })
