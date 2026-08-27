@@ -19,7 +19,6 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
 import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
@@ -1400,16 +1399,19 @@ export function MessageTimeline(props: {
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The Thinking row is NOT a rail node: it only shows metadata (elapsed +
-    // tokens), and adding a dot broke the rail's invariant. Thinking railed
-    // as {first, last} no matter what stood above it, so a turn with
-    // assistant parts showed the tail part's dot AND a second lone dot below
-    // with no segment between them: n dots, fewer than n-1 lines. Nodes are
-    // assistant parts only; their adjacency math guarantees every consecutive
-    // pair is connected. The running dot (spherical-harmonic morph) on the
-    // LAST assistant part is the sole working signal.
+    // The Thinking row renders a lone running rail (dot only, no spine) when no
+    // assistant parts exist yet — the dot sits in the gutter as the turn's
+    // initial working signal. Once assistant parts arrive, the rail transfers
+    // to those rows and the Thinking row's rail disappears.
     const rail = () => {
       const row = input.row()
+      if (row._tag === "Thinking") {
+        // Show rail on Thinking row only before any assistant output
+        if (!assistantTokensForTurn(row.userMessageID)) {
+          return { first: true, last: true, running: true }
+        }
+        return undefined
+      }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
@@ -1600,22 +1602,12 @@ export function MessageTimeline(props: {
       }
       case "Thinking": {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
-        const showDot = () => !assistantTokensForTurn(thinkingRow().userMessageID)
         return (
           <TimelineRowFrame row={thinkingRow}>
             <div
               data-slot="session-turn-message-container"
               class="w-full px-4 md:px-5 relative"
             >
-              <Show when={showDot()}>
-                <HarmonicDot
-                  class="pointer-events-none absolute thought-rail-dot--harmonic"
-                  style={{
-                    top: `${DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2}px`,
-                    left: `0px`,
-                  }}
-                />
-              </Show>
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
