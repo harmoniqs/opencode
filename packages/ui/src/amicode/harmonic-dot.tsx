@@ -3,12 +3,12 @@
 // (running) node. Cycles through Y_l^m silhouettes with a pulse rhythm:
 // sphere → shape → sphere → shape → ... (the sphere is home base).
 //
-// RANDOMIZED: each mount picks fresh random rotation angles for the shapes,
-// so no two streaming turns look identical. The mode ORDER is fixed (for
-// visual contrast), but the angles are drawn from the allowed 45°-increment
-// sets per mode.
+// The sphere rests as a HOLLOW RING (fill-opacity 0, stroke only). When a harmonic
+// shape pulses in, fill-opacity transitions to 1 (solid). This creates the visual
+// of a ring "filling up" with each excitation and draining back to hollow.
 //
-// Under prefers-reduced-motion the SMIL animate is hidden and the path is a static circle.
+// RANDOMIZED: each mount picks fresh random rotation angles.
+// Under prefers-reduced-motion the SMIL animates are hidden — static hollow ring.
 
 import { type ComponentProps } from "solid-js"
 import {
@@ -22,7 +22,6 @@ export function HarmonicDot(props: {
   class?: string
   style?: ComponentProps<"svg">["style"]
 }) {
-  // Computed once per mount — each streaming turn gets a unique sequence
   const sequence = randomPulseSequence()
   const smil = buildSmil(sequence)
 
@@ -41,12 +40,21 @@ export function HarmonicDot(props: {
         class="harmonic-dot-shape"
         d={CIRCLE_PATH}
         fill="var(--accent)"
+        fill-opacity="0"
         stroke="var(--accent-edge)"
         stroke-width="1"
       >
         <animate
           attributeName="d"
           values={smil.values}
+          keyTimes={smil.keyTimes}
+          dur={smil.dur}
+          repeatCount="indefinite"
+          calcMode="linear"
+        />
+        <animate
+          attributeName="fill-opacity"
+          values={smil.fillOpacity}
           keyTimes={smil.keyTimes}
           dur={smil.dur}
           repeatCount="indefinite"

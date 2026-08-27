@@ -196,38 +196,51 @@ export const CIRCLE_PATH = harmonicPath(0)
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
+  fillOpacity: string
   dur: string
 } {
   const pulsePaths = sequence.map(({ mode, rotation }) => harmonicPath(mode, rotation))
   const values: string[] = []
+  const opacities: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
   let t = 0
   for (let i = 0; i < sequence.length; i++) {
+    // Sphere hold start — hollow (opacity 0)
     values.push(CIRCLE_PATH)
+    opacities.push(0)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
+    // Sphere hold end — still hollow, morph-out begins
     values.push(CIRCLE_PATH)
+    opacities.push(0)
     times.push(t / total)
     t += MORPH_MS
 
+    // Shape arrived — solid (opacity 1)
     values.push(pulsePaths[i])
+    opacities.push(1)
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
+    // Shape hold end — still solid, morph-back begins
     values.push(pulsePaths[i])
+    opacities.push(1)
     times.push(t / total)
     t += MORPH_MS
   }
 
+  // Final: back to circle, hollow
   values.push(CIRCLE_PATH)
+  opacities.push(0)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
+    fillOpacity: opacities.join(";"),
     dur: `${total}ms`,
   }
 }
