@@ -220,6 +220,24 @@ export namespace Timeline {
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }
+
+    // Thinking row renders FIRST — it's the top of the rail, like Shell/Edit.
+    // Shows just "Thinking" label. Always present once a turn has assistant content.
+    if (assistantPartRefs.length > 0 || turnIsRunning) {
+      const heading = assistantMessages
+        .flatMap((message) => getMessageParts(message.id))
+        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
+        .find((value): value is string => !!value)
+
+      rows.push(
+        new TimelineRow.Thinking({
+          userMessageID: userMessage.id,
+          reasoningHeading: heading,
+          turnRunning: turnIsRunning,
+        }),
+      )
+    }
+
     assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
@@ -244,19 +262,14 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    // In showReasoning mode the reasoning rows themselves carry the working
-    // signal — except while the tail is withheld (streaming), when Thinking
-    // must stand in for it or the turn would show nothing at all.
-    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
-      const heading = assistantMessages
-        .flatMap((message) => getMessageParts(message.id))
-        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
-        .find((value): value is string => !!value)
-
+    // ThinkingMeta row renders LAST — timer + tokens always visible at the
+    // bottom of the turn. This is where the harmonic dot lives while running.
+    if (assistantPartRefs.length > 0 || turnIsRunning) {
       rows.push(
-        new TimelineRow.Thinking({
+        new TimelineRow.ThinkingMeta({
           userMessageID: userMessage.id,
-          reasoningHeading: heading,
+          turnRunning: turnIsRunning,
+          turnDurationMs: turnIsRunning ? undefined : computeTurnDuration(userMessage, assistantMessages),
         }),
       )
     }
@@ -400,4 +413,16 @@ export namespace MessageComment {
         : undefined,
     }
   }
+}
+
+function computeTurnDuration(userMessage: UserMessage, assistantMessages: AssistantMessage[]): number | undefined {
+  const end = assistantMessages.reduce<number | undefined>((max, msg) => {
+    const completed = msg.time.completed
+    if (typeof completed !== "number") return max
+    if (max === undefined) return completed
+    return Math.max(max, completed)
+  }, undefined)
+  if (typeof end !== "number") return
+  if (end < userMessage.time.created) return
+  return end - userMessage.time.created
 }

@@ -2,6 +2,10 @@
 // ported from the website's /amicode animation (harmoniqs-ai
 // app/components/demo/parts.jsx, `Step`).
 //
+// The active (running) dot is a spherical-harmonic morphing indicator
+// (HarmonicDot) that replaces the old breathing box-shadow ring. It grows
+// from 7px (done size) to 13px when in flight, centered on LINE_X.
+//
 // Six geometry rules — keep them together, they are the whole rail. A
 // standalone, framework-agnostic snippet is at the bottom of this header.
 //
@@ -80,6 +84,8 @@
 //   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
 
 
+import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
+
 const NODE = 7 // dot diameter, px — matches the site's Step
 
 /** Where a row's dot centre sits when nothing measures it: 11px — the centre
@@ -130,15 +136,15 @@ export function ThoughtRail(props: {
   const dotCentre = () => props.dotCentre ?? DEFAULT_DOT_CENTRE
   const dotTop = () => dotCentre() - NODE / 2
   // A lone running step is a single dot with no spine — every line must end
-  // AT a dot at both ends, like Claude Code. A lone dot has no line, so a
-  // one-step completion is just "dot fills" with no dangling half-spine
-  // above or below. The widget lab showed both dangles (dot→bottom, 0→dot)
-  // still leave one open end. (The Thinking row no longer rails at all —
-  // its squiggle is the working signal — so this is only ever a turn's
-  // first assistant part still in flight.)
+  // AT a dot at both ends. A lone dot has no line, so a one-step completion
+  // is just "dot fills" with no dangling half-spine above or below. The
+  // morphing harmonic dot is the turn's only "working" signal.
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
+      {/* Rail line BEHIND the dot — the SVG's internal background circle
+          masks the line within the ring's interior. The line reaches dotCentre
+          geometrically to connect with harmonic shapes that extend inward. */}
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
@@ -162,38 +168,38 @@ export function ThoughtRail(props: {
                 { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
-      <span
-        aria-hidden="true"
-        data-slot="thought-rail-dot"
-        data-state={isRunning() ? "running" : "done"}
-        classList={{
-          "pointer-events-none absolute rounded-full": true,
-          // hollow + pulsing while in flight, solid once succeeded
-          "thought-rail-dot--running": isRunning(),
-        }}
-        style={{
-          top: `${dotTop()}px`,
-          left: `${GUTTER}px`,
-          width: `${NODE}px`,
-          height: `${NODE}px`,
-          // LIVE is the brand yellow; DONE is icon weight, not border weight.
-          //
-          // --accent-edge is doing real work on the live node: it resolves to ink
-          // on light and to a yellow mix on dark, which is exactly the rule the
-          // accent system states — #FFE614 is ~1.2:1 on a light ground, so on
-          // light the dot is *defined* by its ink ring, never by the fill. On dark
-          // the fill carries it and the edge just tightens the shape.
-          //
-          // Done dots take icon-icon-muted rather than border-border-strong: the
-          // Done dots take text-base — the fg, full strength — matching the
-          // line so the rail is one ink stroke, the way the site's Step draws
-          // its dots (border-fg + bg-fg). Never border-border-strong: that is
-          // white at 20% on the dark ground, compositing to #4C4C4C = 1.92:1,
-          // under the 3:1 a UI mark needs. (Rule 5)
-          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-text-text-base)",
-          background: isRunning() ? "var(--accent)" : "var(--v2-text-text-base)",
-        }}
-      />
+      {isRunning() ? (
+        // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
+        // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
+        // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
+        <HarmonicDot
+          class="pointer-events-none absolute thought-rail-dot--harmonic"
+          style={{
+            top: `${dotCentre() - HARMONIC_SIZE / 2}px`,
+            left: `${LINE_X - HARMONIC_SIZE / 2}px`,
+          }}
+        />
+      ) : (
+        // DONE: 7px ink circle — the rail is one ink stroke (Rule 5).
+        // text-base is the fg: literal black on light, near-white on dark,
+        // matching the line so dot + spine read as a single mark.
+        // Never border-border-strong: white@20% on dark composites to
+        // #4C4C4C = 1.92:1, under the 3:1 a UI mark needs.
+        <span
+          aria-hidden="true"
+          data-slot="thought-rail-dot"
+          data-state="done"
+          class="pointer-events-none absolute rounded-full"
+          style={{
+            top: `${dotTop()}px`,
+            left: `${GUTTER}px`,
+            width: `${NODE}px`,
+            height: `${NODE}px`,
+            border: "1px solid var(--v2-text-text-base)",
+            background: "var(--v2-text-text-base)",
+          }}
+        />
+      )}
     </>
   )
 }
@@ -230,11 +236,12 @@ export const THOUGHT_RAIL_INSET = "pl-6"
  * no line — every line must end at a dot at both ends, so a single dot has
  * no dangling half — and a one-step completion still reads as "dot fills".
  */
-export function shouldRenderRail(input: {
+export function shouldRenderRail(_input: {
   previousAssistantPart: boolean
   lastAssistantPart: boolean
   turnRunning: boolean
 }) {
-  const isOnlyStep = !input.previousAssistantPart && input.lastAssistantPart
-  return !isOnlyStep || input.turnRunning
+  // The Thinking row is always the first rail node, so every AssistantPart
+  // always has at least one other node above it — the rail always renders.
+  return true
 }

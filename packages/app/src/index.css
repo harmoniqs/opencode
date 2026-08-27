@@ -376,34 +376,28 @@
   }
 }
 
-/* The thought rail's live node: breathing while the step is in flight,
-   matching the website's rail-dot. Honours reduced motion.
-
-   It breathes by an expanding RING — never by its own opacity, and never by
-   scale. Fading was the first approach and was wrong: at the old 0.45 floor
-   the mark composited to #3E3E3E on the dark ground = 1.87:1, under the 3:1
-   a UI mark needs. Scale was the second and was ALSO wrong, found in PR #246's
-   testing: VirtualTimelineRow paints under `overflow: clip` with a 0.5px
-   clip margin, so scale(1.25) (and the ring) were clipped away and the dot
-   never visibly breathed. Ring-only motion keeps the ink still (contrast
-   holds through the whole loop) and fits inside the 4px overflow-clip-margin
-   the row now reserves — change that margin in message-timeline.tsx
-   alongside any ring-size change here. */
-[data-slot="thought-rail-dot"].thought-rail-dot--running {
-  animation: thought-rail-breathe 1.8s ease-in-out infinite;
+/* The thought rail's live node: a spherical-harmonic morphing dot that pulses
+   through Y_l^m silhouettes via SMIL path animation (sphere → shape → sphere).
+   The grow animation fires on mount (7→13px). Honours reduced motion. */
+.thought-rail-dot--harmonic {
+  animation: thought-rail-grow 150ms ease-out both;
 }
-@keyframes thought-rail-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+@keyframes thought-rail-grow {
+  from {
+    transform: scale(0.538); /* 7/13 — starts at done-dot size */
+    opacity: 0.7;
   }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
+  to {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-slot="thought-rail-dot"].thought-rail-dot--running {
+  .thought-rail-dot--harmonic {
     animation: none;
-    box-shadow: none;
+  }
+  .thought-rail-dot--harmonic .harmonic-dot-shape animate {
+    /* SMIL respects this; browsers also pause SMIL under reduced-motion */
+    display: none;
   }
 }
