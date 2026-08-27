@@ -153,21 +153,8 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
-  // The harmonic dot appears in the rail gutter during initial thinking
-  // (before tokens flow). Once content arrives, the rail dot on the first
-  // AssistantPart takes over and this one unmounts.
-  const showDot = () => props.tokens == null
   return (
     <div data-slot="session-turn-thinking">
-      <Show when={showDot()}>
-        <HarmonicDot
-          class="pointer-events-none absolute"
-          style={{
-            top: `${DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2}px`,
-            left: `${11 - HARMONIC_SIZE / 2}px`,
-          }}
-        />
-      </Show>
       <ThinkingLine tokens={props.tokens} />
     </div>
   )
@@ -1613,13 +1600,22 @@ export function MessageTimeline(props: {
       }
       case "Thinking": {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
+        const showDot = () => !assistantTokensForTurn(thinkingRow().userMessageID)
         return (
           <TimelineRowFrame row={thinkingRow}>
-            <div 
-              data-slot="session-turn-message-container" 
-              class="w-full px-4 md:px-5"
-              style={{ position: "relative" }}
+            <div
+              data-slot="session-turn-message-container"
+              class="w-full px-4 md:px-5 relative"
             >
+              <Show when={showDot()}>
+                <HarmonicDot
+                  class="pointer-events-none absolute thought-rail-dot--harmonic"
+                  style={{
+                    top: `${DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2}px`,
+                    left: `0px`,
+                  }}
+                />
+              </Show>
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
