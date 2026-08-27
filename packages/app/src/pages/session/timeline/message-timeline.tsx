@@ -453,12 +453,13 @@ export function MessageTimeline(props: {
     if (start === -1) return 0
     return turnTokens(msgs.slice(start + 1).filter((m) => m.role === "assistant"))
   }
-  /** True when at least one assistant message with parts exists for this turn. */
+  /** True when at least one AssistantPart ROW exists in the projected timeline
+   *  for this turn — meaning renderable, settled output is visible. Reasoning
+   *  parts withheld while streaming do NOT count (they produce no row until
+   *  they settle), which prevents the harmonic dot from leaving the Thinking
+   *  row prematurely. */
   const hasAssistantParts = (userMessageID: string) => {
-    const msgs = sessionMessages()
-    const start = msgs.findIndex((m) => m.id === userMessageID)
-    if (start === -1) return false
-    return msgs.slice(start + 1).some((m) => m.role === "assistant" && getMsgParts(m.id).length > 0)
+    return timelineRows().some((row) => row._tag === "AssistantPart" && row.userMessageID === userMessageID)
   }
   const getMsgPart = (messageID: string, partID: string) => getMsgParts(messageID).find((part) => part.id === partID)
   const childTaskDescription = createMemo(() => {
