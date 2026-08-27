@@ -14,9 +14,12 @@ import {
   CIRCLE_PATH,
   PULSE_PATHS,
   PULSE_SEQUENCE,
+  PULSE_MODES,
   SMIL,
   harmonicRadius,
   harmonicPath,
+  randomPulseSequence,
+  buildSmil,
 } from "./harmonic-geometry"
 
 describe("constants", () => {
@@ -206,10 +209,11 @@ describe("pulse sequence", () => {
     }
   })
 
-  test("skinny shapes (modes 1, 2) are never at 0° — avoids vertical elongation", () => {
+  test("skinny shapes (modes 1, 2) are never at 90° or 270° — avoids vertical elongation", () => {
     for (const { mode, rotation } of PULSE_SEQUENCE) {
       if (mode === 1 || mode === 2) {
-        expect(rotation).not.toBe(0)
+        expect(rotation).not.toBe(90)
+        expect(rotation).not.toBe(270)
       }
     }
   })
@@ -295,6 +299,66 @@ describe("SMIL keyframes", () => {
     const structure = vals[0].replace(/[-\d.,\s]/g, "")
     for (const v of vals) {
       expect(v.replace(/[-\d.,\s]/g, "")).toBe(structure)
+    }
+  })
+})
+
+describe("randomPulseSequence + buildSmil", () => {
+  test("randomPulseSequence returns PULSE_COUNT entries matching PULSE_MODES", () => {
+    const seq = randomPulseSequence()
+    expect(seq).toHaveLength(PULSE_MODES.length)
+    for (let i = 0; i < seq.length; i++) {
+      expect(seq[i].mode).toBe(PULSE_MODES[i])
+    }
+  })
+
+  test("skinny modes (1, 2) never get 90° or 270° in random sequences", () => {
+    // Run 50 random sequences to test the constraint probabilistically
+    for (let run = 0; run < 50; run++) {
+      const seq = randomPulseSequence()
+      for (const { mode, rotation } of seq) {
+        if (mode === 1 || mode === 2) {
+          expect(rotation).not.toBe(90)
+          expect(rotation).not.toBe(270)
+        }
+      }
+    }
+  })
+
+  test("random sequences produce different angles across runs", () => {
+    const seqs = Array.from({ length: 20 }, () => randomPulseSequence())
+    const signatures = seqs.map((s) => s.map((p) => p.rotation).join(","))
+    // With 6–8 angle choices per slot, getting 20 identical signatures is ~impossible
+    const unique = new Set(signatures)
+    expect(unique.size).toBeGreaterThan(1)
+  })
+
+  test("buildSmil produces valid SMIL for a random sequence", () => {
+    const seq = randomPulseSequence()
+    const smil = buildSmil(seq)
+    const vals = smil.values.split(";")
+    const times = smil.keyTimes.split(";").map(Number)
+    // Correct count
+    expect(vals.length).toBe(seq.length * 4 + 1)
+    expect(times.length).toBe(vals.length)
+    // Bounds
+    expect(times[0]).toBe(0)
+    expect(times[times.length - 1]).toBe(1)
+    // Monotonic
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeGreaterThanOrEqual(times[i - 1])
+    }
+    // First and last are circle
+    expect(vals[0]).toBe(CIRCLE_PATH)
+    expect(vals[vals.length - 1]).toBe(CIRCLE_PATH)
+  })
+
+  test("all angles are from 45° increment set", () => {
+    const valid = new Set([0, 45, 90, 135, 180, 225, 270, 315])
+    for (let run = 0; run < 20; run++) {
+      for (const { rotation } of randomPulseSequence()) {
+        expect(valid.has(rotation)).toBe(true)
+      }
     }
   })
 })

@@ -3,26 +3,29 @@
 // (running) node. Cycles through Y_l^m silhouettes with a pulse rhythm:
 // sphere → shape → sphere → shape → ... (the sphere is home base).
 //
-// Architecture mirrors amico-wave.tsx: geometry comes from ./harmonic-geometry (pure,
-// tested), this file is markup only. NO <defs>, NO ids (multiple running dots can mount
-// simultaneously in a virtualised timeline — SVG ids are document-global).
+// RANDOMIZED: each mount picks fresh random rotation angles for the shapes,
+// so no two streaming turns look identical. The mode ORDER is fixed (for
+// visual contrast), but the angles are drawn from the allowed 45°-increment
+// sets per mode.
 //
-// Motion: the <path> morphs via SMIL <animate attributeName="d"> with explicit holds
-// (duplicate keyframe values) and short morph intervals. No CSS rotation — the per-pulse
-// orientation changes provide enough visual variety.
 // Under prefers-reduced-motion the SMIL animate is hidden and the path is a static circle.
 
 import { type ComponentProps } from "solid-js"
 import {
   HARMONIC_SIZE,
   CIRCLE_PATH,
-  SMIL,
+  randomPulseSequence,
+  buildSmil,
 } from "./harmonic-geometry"
 
 export function HarmonicDot(props: {
   class?: string
   style?: ComponentProps<"svg">["style"]
 }) {
+  // Computed once per mount — each streaming turn gets a unique sequence
+  const sequence = randomPulseSequence()
+  const smil = buildSmil(sequence)
+
   return (
     <svg
       data-component="harmonic-dot"
@@ -43,9 +46,9 @@ export function HarmonicDot(props: {
       >
         <animate
           attributeName="d"
-          values={SMIL.values}
-          keyTimes={SMIL.keyTimes}
-          dur={SMIL.dur}
+          values={smil.values}
+          keyTimes={smil.keyTimes}
+          dur={smil.dur}
           repeatCount="indefinite"
           calcMode="linear"
         />
