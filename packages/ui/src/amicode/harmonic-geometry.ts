@@ -9,8 +9,11 @@
 // All paths share the same command structure (64 points, M + 63 L + Z) so SVG
 // SMIL <animate attributeName="d"> can interpolate natively between them.
 
-/** Diameter of the morphing dot when in the running state (px). */
+/** CSS size of the morphing dot when in the running state (px). */
 export const HARMONIC_SIZE = 13
+
+/** Internal SVG resolution — 2x CSS size for crisp rendering on all displays. */
+export const HARMONIC_VIEWBOX = 26
 
 /** Number of angular samples per shape — shared across all modes for SMIL compat. */
 export const HARMONIC_SAMPLES = 64
@@ -114,10 +117,10 @@ export function harmonicRadius(mode: number, theta: number): number {
  * @param samples — number of angular samples (must be consistent for SMIL)
  */
 export function harmonicPath(mode: number, rotationDeg: number = 0, samples: number = HARMONIC_SAMPLES): string {
-  const cx = HARMONIC_SIZE / 2
-  const cy = HARMONIC_SIZE / 2
-  // Leave 0.5px margin for anti-aliasing / border
-  const maxR = (HARMONIC_SIZE - 1) / 2
+  const cx = HARMONIC_VIEWBOX / 2
+  const cy = HARMONIC_VIEWBOX / 2
+  // Leave 1px margin in viewBox units for anti-aliasing / stroke overshoot
+  const maxR = (HARMONIC_VIEWBOX - 2) / 2
   const rotationRad = (rotationDeg * Math.PI) / 180
 
   const round = (n: number) => Math.round(n * 100) / 100

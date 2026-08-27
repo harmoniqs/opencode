@@ -13,6 +13,7 @@
 import { type ComponentProps } from "solid-js"
 import {
   HARMONIC_SIZE,
+  HARMONIC_VIEWBOX,
   CIRCLE_PATH,
   randomPulseSequence,
   buildSmil,
@@ -31,18 +32,24 @@ export function HarmonicDot(props: {
       class={`harmonic-dot${props.class ? " " + props.class : ""}`}
       width={HARMONIC_SIZE}
       height={HARMONIC_SIZE}
-      viewBox={`0 0 ${HARMONIC_SIZE} ${HARMONIC_SIZE}`}
-      shape-rendering="geometricPrecision"
+      viewBox={`0 0 ${HARMONIC_VIEWBOX} ${HARMONIC_VIEWBOX}`}
       aria-hidden="true"
       style={props.style}
     >
+      {/* Background disc — masks the rail line behind the hollow ring */}
+      <circle
+        cx={HARMONIC_VIEWBOX / 2}
+        cy={HARMONIC_VIEWBOX / 2}
+        r={(HARMONIC_VIEWBOX - 2) / 2}
+        fill="var(--v2-background-bg-base)"
+      />
       <path
         class="harmonic-dot-shape"
         d={CIRCLE_PATH}
         fill="var(--accent)"
         fill-opacity="0"
         stroke="var(--accent-edge)"
-        stroke-width="2"
+        stroke-width="4"
       >
         <animate
           attributeName="d"
