@@ -136,6 +136,50 @@ export function harmonicPath(mode: number, rotationDeg: number = 0, samples: num
 }
 
 /**
+ * Generate a donut SVG path: outer harmonic shape (CW) + inner circle (CCW).
+ * Used with fill-rule="evenodd" to punch a hole — a single filled path that
+ * renders as a ring, no stroke needed.
+ *
+ * When innerR=0, the inner sub-path collapses to a point at centre (solid shape).
+ * SMIL interpolates between donut paths point-by-point, so the ring smoothly
+ * closes/opens as the outer shape morphs.
+ *
+ * @param mode — which harmonic shape for the outer contour
+ * @param rotationDeg — rotation for the outer contour
+ * @param innerR — radius of the inner hole (0 = no hole = solid)
+ */
+export function harmonicDonutPath(mode: number, rotationDeg: number = 0, innerR: number = INNER_R, samples: number = HARMONIC_SAMPLES): string {
+  const cx = HARMONIC_SIZE / 2
+  const cy = HARMONIC_SIZE / 2
+  const maxR = (HARMONIC_SIZE - 1) / 2
+  const rotationRad = (rotationDeg * Math.PI) / 180
+  const round = (n: number) => Math.round(n * 100) / 100
+
+  // Outer contour — clockwise
+  const parts: string[] = []
+  for (let i = 0; i < samples; i++) {
+    const theta = (i / samples) * 2 * Math.PI
+    const r = harmonicRadius(mode, theta - rotationRad) * maxR
+    const x = round(cx + r * Math.cos(theta))
+    const y = round(cy + r * Math.sin(theta))
+    parts.push(i === 0 ? `M${x},${y}` : `L${x},${y}`)
+  }
+  parts.push("Z")
+
+  // Inner contour — counter-clockwise (punches the hole via evenodd)
+  // When innerR=0, all points collapse to centre = no visible hole.
+  for (let i = 0; i < samples; i++) {
+    const theta = ((samples - i) / samples) * 2 * Math.PI // reversed direction
+    const x = round(cx + innerR * Math.cos(theta))
+    const y = round(cy + innerR * Math.sin(theta))
+    parts.push(i === 0 ? `M${x},${y}` : `L${x},${y}`)
+  }
+  parts.push("Z")
+
+  return parts.join("")
+}
+
+/**
  * The pulse mode sequence: which harmonic shape appears in each pulse.
  * Order is fixed for visual contrast; ANGLES are randomized per mount.
  * 10 pulses using 6 shapes (modes 1–6), no adjacent repeats.
@@ -187,64 +231,64 @@ export function randomPulseSequence(): ReadonlyArray<{ mode: number; rotation: n
   return result
 }
 
-/** Pre-computed circle path (the "home" shape). */
-export const CIRCLE_PATH = harmonicPath(0)
-
 /** Inner disc radius that creates the ring hole (px in viewBox units). */
 export const INNER_R = 3.5
 
+/** Pre-computed circle path (the "home" shape). */
+export const CIRCLE_PATH = harmonicPath(0)
+
+/** Pre-computed donut circle path (the ring — sphere with inner hole). */
+export const CIRCLE_DONUT_PATH = harmonicDonutPath(0, 0, INNER_R)
+
 /**
  * Build SMIL keyframe attributes for a given pulse sequence.
+ *
+ * Uses donut paths (fill-rule evenodd): the sphere state is a ring (outer circle
+ * + inner hole), harmonic states are solid (inner collapsed to centre). SMIL
+ * interpolates between them point-by-point — the ring smoothly closes as the
+ * shape blooms, reopens when returning to sphere.
  */
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
-  /** Inner-disc radius: INNER_R during sphere (ring), 0 during harmonic (solid). */
-  innerRadius: string
   dur: string
 } {
-  const pulsePaths = sequence.map(({ mode, rotation }) => harmonicPath(mode, rotation))
+  // Harmonic donut paths with inner hole at r=0 (solid)
+  const solidPaths = sequence.map(({ mode, rotation }) => harmonicDonutPath(mode, rotation, 0))
   const values: string[] = []
-  const radii: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
   let t = 0
   for (let i = 0; i < sequence.length; i++) {
-    // Sphere hold start — inner disc at full radius (ring)
-    values.push(CIRCLE_PATH)
-    radii.push(INNER_R)
+    // Sphere hold start — ring (full inner hole)
+    values.push(CIRCLE_DONUT_PATH)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
-    // Sphere hold end — morph-out begins, disc starts shrinking
-    values.push(CIRCLE_PATH)
-    radii.push(INNER_R)
+    // Sphere hold end — morph-out begins
+    values.push(CIRCLE_DONUT_PATH)
     times.push(t / total)
     t += MORPH_MS
 
-    // Shape arrived — inner disc shrunk to 0 (solid harmonic)
-    values.push(pulsePaths[i])
-    radii.push(0)
+    // Shape arrived — solid (inner hole collapsed)
+    values.push(solidPaths[i])
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
-    // Shape hold end — morph-back begins, disc starts growing
-    values.push(pulsePaths[i])
-    radii.push(0)
+    // Shape hold end — morph-back begins
+    values.push(solidPaths[i])
     times.push(t / total)
     t += MORPH_MS
   }
 
-  // Final: back to circle, disc at full radius (ring)
-  values.push(CIRCLE_PATH)
-  radii.push(INNER_R)
+  // Final: back to ring
+  values.push(CIRCLE_DONUT_PATH)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
-    innerRadius: radii.join(";"),
     dur: `${total}ms`,
   }
 }
@@ -258,6 +302,11 @@ export const PULSE_SEQUENCE: ReadonlyArray<{ mode: number; rotation: number }> =
 /** Pre-computed paths for the deterministic test sequence. */
 export const PULSE_PATHS: readonly string[] = PULSE_SEQUENCE.map(
   ({ mode, rotation }) => harmonicPath(mode, rotation),
+)
+
+/** Pre-computed donut paths (solid, inner r=0) for the deterministic test sequence. */
+export const PULSE_DONUT_PATHS: readonly string[] = PULSE_SEQUENCE.map(
+  ({ mode, rotation }) => harmonicDonutPath(mode, rotation, 0),
 )
 
 /** Pre-computed base paths for all raw modes (no rotation). */

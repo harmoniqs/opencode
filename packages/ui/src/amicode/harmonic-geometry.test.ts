@@ -12,7 +12,9 @@ import {
   MODE_COUNT,
   HARMONIC_PATHS,
   CIRCLE_PATH,
+  CIRCLE_DONUT_PATH,
   PULSE_PATHS,
+  PULSE_DONUT_PATHS,
   PULSE_SEQUENCE,
   PULSE_MODES,
   SMIL,
@@ -265,13 +267,13 @@ describe("SMIL keyframes", () => {
     expect(SMIL.dur).toBe(`${CYCLE_MS}ms`)
   })
 
-  test("first and last values are both circle (seamless loop)", () => {
+  test("first and last values are both circle donut (seamless loop)", () => {
     const vals = SMIL.values.split(";")
-    expect(vals[0]).toBe(CIRCLE_PATH)
-    expect(vals[vals.length - 1]).toBe(CIRCLE_PATH)
+    expect(vals[0]).toBe(CIRCLE_DONUT_PATH)
+    expect(vals[vals.length - 1]).toBe(CIRCLE_DONUT_PATH)
   })
 
-  test("every other pair of values is (circle, circle) for sphere holds", () => {
+  test("every other pair of values is (circle donut, circle donut) for sphere holds", () => {
     // Pattern: C,C,S,S,C,C,S,S,...,C
     // Positions 0,1 are circle (first sphere hold)
     // Positions 4,5 are circle (second sphere hold)
@@ -279,18 +281,18 @@ describe("SMIL keyframes", () => {
     const vals = SMIL.values.split(";")
     for (let pulse = 0; pulse < PULSE_COUNT; pulse++) {
       const base = pulse * 4
-      expect(vals[base]).toBe(CIRCLE_PATH)
-      expect(vals[base + 1]).toBe(CIRCLE_PATH)
+      expect(vals[base]).toBe(CIRCLE_DONUT_PATH)
+      expect(vals[base + 1]).toBe(CIRCLE_DONUT_PATH)
     }
   })
 
-  test("shape values match PULSE_PATHS at the right positions", () => {
+  test("shape values match PULSE_DONUT_PATHS at the right positions", () => {
     const vals = SMIL.values.split(";")
     for (let pulse = 0; pulse < PULSE_COUNT; pulse++) {
       const base = pulse * 4
       // Positions base+2 and base+3 are the shape
-      expect(vals[base + 2]).toBe(PULSE_PATHS[pulse])
-      expect(vals[base + 3]).toBe(PULSE_PATHS[pulse])
+      expect(vals[base + 2]).toBe(PULSE_DONUT_PATHS[pulse])
+      expect(vals[base + 3]).toBe(PULSE_DONUT_PATHS[pulse])
     }
   })
 
@@ -347,9 +349,9 @@ describe("randomPulseSequence + buildSmil", () => {
     for (let i = 1; i < times.length; i++) {
       expect(times[i]).toBeGreaterThanOrEqual(times[i - 1])
     }
-    // First and last are circle
-    expect(vals[0]).toBe(CIRCLE_PATH)
-    expect(vals[vals.length - 1]).toBe(CIRCLE_PATH)
+    // First and last are circle donut
+    expect(vals[0]).toBe(CIRCLE_DONUT_PATH)
+    expect(vals[vals.length - 1]).toBe(CIRCLE_DONUT_PATH)
   })
 
   test("all angles are from 45° increment set", () => {
