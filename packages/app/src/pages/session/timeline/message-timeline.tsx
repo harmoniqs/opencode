@@ -1394,15 +1394,25 @@ export function MessageTimeline(props: {
     }
     const railLabel = () => {
       const row = input.row()
-      return row._tag === "AssistantPart" ? row.railLabel : undefined
+      if (row._tag === "AssistantPart") return row.railLabel
+      if (row._tag === "Thinking" && !assistantTokensForTurn(row.userMessageID)) return "Thinking..."
+      return undefined
     }
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The Thinking row is NOT a rail node: it shows "Thinking..." status only.
-    // The rail appears once actual assistant output arrives (AssistantPart rows).
+    // The Thinking row is a lone running rail step (first + last + running)
+    // ONLY before any assistant output exists: harmonic dot in the gutter with
+    // "Thinking..." label. Once the first AssistantPart arrives, the Thinking
+    // row drops its rail and the AssistantPart rows take over.
     const rail = () => {
       const row = input.row()
+      if (row._tag === "Thinking") {
+        if (!assistantTokensForTurn(row.userMessageID)) {
+          return { first: true, last: true, running: true }
+        }
+        return undefined
+      }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       return { first: !row.previousAssistantPart, last: row.lastAssistantPart, running: row.turnRunning }
