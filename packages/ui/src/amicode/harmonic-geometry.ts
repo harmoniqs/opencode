@@ -12,9 +12,6 @@
 /** CSS size of the morphing dot when in the running state (px). */
 export const HARMONIC_SIZE = 13
 
-/** Internal SVG resolution — 2x CSS size for crisp rendering on all displays. */
-export const HARMONIC_VIEWBOX = 26
-
 /** Number of angular samples per shape — shared across all modes for SMIL compat. */
 export const HARMONIC_SAMPLES = 64
 
@@ -117,10 +114,10 @@ export function harmonicRadius(mode: number, theta: number): number {
  * @param samples — number of angular samples (must be consistent for SMIL)
  */
 export function harmonicPath(mode: number, rotationDeg: number = 0, samples: number = HARMONIC_SAMPLES): string {
-  const cx = HARMONIC_VIEWBOX / 2
-  const cy = HARMONIC_VIEWBOX / 2
-  // Leave 1px margin in viewBox units for anti-aliasing / stroke overshoot
-  const maxR = (HARMONIC_VIEWBOX - 2) / 2
+  const cx = HARMONIC_SIZE / 2
+  const cy = HARMONIC_SIZE / 2
+  // Leave 0.5px margin for anti-aliasing / border
+  const maxR = (HARMONIC_SIZE - 1) / 2
   const rotationRad = (rotationDeg * Math.PI) / 180
 
   const round = (n: number) => Math.round(n * 100) / 100
@@ -199,51 +196,38 @@ export const CIRCLE_PATH = harmonicPath(0)
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
-  fillOpacity: string
   dur: string
 } {
   const pulsePaths = sequence.map(({ mode, rotation }) => harmonicPath(mode, rotation))
   const values: string[] = []
-  const opacities: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
   let t = 0
   for (let i = 0; i < sequence.length; i++) {
-    // Sphere hold start — hollow (opacity 0)
     values.push(CIRCLE_PATH)
-    opacities.push(0)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
-    // Sphere hold end — still hollow, morph-out begins
     values.push(CIRCLE_PATH)
-    opacities.push(0)
     times.push(t / total)
     t += MORPH_MS
 
-    // Shape arrived — solid (opacity 1)
     values.push(pulsePaths[i])
-    opacities.push(1)
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
-    // Shape hold end — still solid, morph-back begins
     values.push(pulsePaths[i])
-    opacities.push(1)
     times.push(t / total)
     t += MORPH_MS
   }
 
-  // Final: back to circle, hollow
   values.push(CIRCLE_PATH)
-  opacities.push(0)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
-    fillOpacity: opacities.join(";"),
     dur: `${total}ms`,
   }
 }

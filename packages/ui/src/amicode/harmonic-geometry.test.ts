@@ -2,7 +2,6 @@
 import { describe, expect, test } from "bun:test"
 import {
   HARMONIC_SIZE,
-  HARMONIC_VIEWBOX,
   HARMONIC_SAMPLES,
   SPHERE_HOLD_MS,
   MORPH_MS,
@@ -169,12 +168,12 @@ describe("harmonicPath", () => {
     }
   })
 
-  test("all coordinates stay within the viewBox (0, 0, VIEWBOX, VIEWBOX)", () => {
+  test("all coordinates stay within the viewBox (0, 0, SIZE, SIZE)", () => {
     for (let mode = 0; mode < MODE_COUNT; mode++) {
       const coords = harmonicPath(mode).match(/-?[\d.]+/g)!.map(Number)
       for (const c of coords) {
         expect(c).toBeGreaterThanOrEqual(-0.01)
-        expect(c).toBeLessThanOrEqual(HARMONIC_VIEWBOX + 0.01)
+        expect(c).toBeLessThanOrEqual(HARMONIC_SIZE + 0.01)
       }
     }
   })
