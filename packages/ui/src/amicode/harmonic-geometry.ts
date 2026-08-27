@@ -2,7 +2,10 @@
 // AMICODE: pure geometry + timing for the spherical-harmonic morphing dot (harmonic-dot.tsx).
 // Mirrors the wave-geometry.ts pattern: DOM-free, unit-tested, module-level precomputation.
 //
-// The dot morphs through four Y_l^m silhouettes rendered as 2D polar outlines.
+// Rhythm: sphere → harmonic → sphere → harmonic → ... (the sphere is "home base").
+// Each pulse is ~1.2s: sphere-hold (350ms) → morph-out (175ms) → shape-hold (500ms)
+// → morph-back (175ms). Four pulses make one full cycle (~4.8s).
+//
 // All paths share the same command structure (64 points, M + 63 L + Z) so SVG
 // SMIL <animate attributeName="d"> can interpolate natively between them.
 
@@ -12,13 +15,29 @@ export const HARMONIC_SIZE = 13
 /** Number of angular samples per shape — shared across all modes for SMIL compat. */
 export const HARMONIC_SAMPLES = 64
 
-/** How long each harmonic mode is displayed before morphing to the next (ms). */
-export const MODE_HOLD_MS = 2300
+// --- Timing constants (pulse rhythm) ---
 
-/** Full rotation period for the slow CSS transform (ms). */
-export const ROTATION_PERIOD_MS = 12000
+/** How long the sphere rests between pulses (ms). */
+export const SPHERE_HOLD_MS = 350
 
-/** Number of harmonic modes in the cycle. */
+/** Duration of the morph transition sphere↔shape (ms). */
+export const MORPH_MS = 175
+
+/** How long each harmonic shape is held at full excitation (ms). */
+export const SHAPE_HOLD_MS = 500
+
+/** One full pulse: sphere-hold + morph-out + shape-hold + morph-back (ms). */
+export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
+
+/** Number of pulses in one full cycle. */
+export const PULSE_COUNT = 4
+
+/** Total cycle duration (ms). */
+export const CYCLE_MS = PULSE_MS * PULSE_COUNT
+
+// --- Modes ---
+
+/** Number of distinct harmonic modes (circle + 3 shapes). */
 export const MODE_COUNT = 4
 
 /**
@@ -59,22 +78,28 @@ export function harmonicRadius(mode: number, theta: number): number {
 }
 
 /**
- * Generate a closed SVG path (M...L...Z) for a harmonic mode.
+ * Generate a closed SVG path for a harmonic mode, optionally rotated.
  * The path fits inside a HARMONIC_SIZE × HARMONIC_SIZE viewBox,
  * centred at (HARMONIC_SIZE/2, HARMONIC_SIZE/2).
+ *
+ * @param mode — which harmonic shape (0=circle, 1=dumbbell, 2=pinched, 3=clover)
+ * @param rotationDeg — rotation angle in degrees (applied as offset to sampling angle)
+ * @param samples — number of angular samples (must be consistent for SMIL)
  */
-export function harmonicPath(mode: number, samples: number = HARMONIC_SAMPLES): string {
+export function harmonicPath(mode: number, rotationDeg: number = 0, samples: number = HARMONIC_SAMPLES): string {
   const cx = HARMONIC_SIZE / 2
   const cy = HARMONIC_SIZE / 2
   // Leave 0.5px margin for anti-aliasing / border
   const maxR = (HARMONIC_SIZE - 1) / 2
+  const rotationRad = (rotationDeg * Math.PI) / 180
 
   const round = (n: number) => Math.round(n * 100) / 100
 
   const parts: string[] = []
   for (let i = 0; i < samples; i++) {
     const theta = (i / samples) * 2 * Math.PI
-    const r = harmonicRadius(mode, theta) * maxR
+    // Sample the harmonic at the rotated angle, but plot at the original angle
+    const r = harmonicRadius(mode, theta - rotationRad) * maxR
     const x = round(cx + r * Math.cos(theta))
     const y = round(cy + r * Math.sin(theta))
     parts.push(i === 0 ? `M${x},${y}` : `L${x},${y}`)
@@ -83,55 +108,143 @@ export function harmonicPath(mode: number, samples: number = HARMONIC_SAMPLES): 
   return parts.join("")
 }
 
-/** Pre-computed paths for all modes — module-level, once. */
+/**
+ * The pulse sequence: which mode + orientation appears in each pulse.
+ * Designed for maximum visual contrast between consecutive shapes.
+ *
+ * 1. dumbbell at 0° (vertical)    — tall
+ * 2. clover at 45° (diagonal)     — square/round
+ * 3. dumbbell at 90° (horizontal) — wide
+ * 4. pinched at 0° (vertical)     — tall but different profile
+ */
+export const PULSE_SEQUENCE: ReadonlyArray<{ mode: number; rotation: number }> = [
+  { mode: 1, rotation: 0 },    // dumbbell vertical
+  { mode: 3, rotation: 45 },   // clover diagonal
+  { mode: 1, rotation: 90 },   // dumbbell horizontal
+  { mode: 2, rotation: 0 },    // pinched vertical
+]
+
+/** Pre-computed circle path (the "home" shape). */
+export const CIRCLE_PATH = harmonicPath(0)
+
+/** Pre-computed paths for each pulse's harmonic shape. */
+export const PULSE_PATHS: readonly string[] = PULSE_SEQUENCE.map(
+  ({ mode, rotation }) => harmonicPath(mode, rotation),
+)
+
+/** Pre-computed base paths for all raw modes (no rotation). For testing. */
 export const HARMONIC_PATHS: readonly string[] = Array.from(
   { length: MODE_COUNT },
   (_, mode) => harmonicPath(mode),
 )
 
-/** Total cadence of the full morph cycle (ms). */
-export const MORPH_CADENCE_MS = MODE_HOLD_MS * MODE_COUNT
+// --- SMIL attributes ---
 
 /**
- * SMIL `values` attribute content: all paths semicolon-joined, with the first
- * repeated at the end for a seamless loop.
+ * Build the SMIL `values` for the pulse rhythm.
+ * Pattern: circle; shape1; circle; shape2; circle; shape3; circle; shape4; circle
+ * (9 values — starts and ends on circle for seamless loop)
  */
-export const SMIL_VALUES = [...HARMONIC_PATHS, HARMONIC_PATHS[0]].join(";")
-
-/**
- * SMIL `keyTimes` for a hold-then-morph cadence. Each mode holds for most of
- * its slot, then morphs quickly to the next. This gives the viewer time to
- * perceive each shape before it transitions.
- */
-export function smilKeyTimes(holdFraction: number = 0.7): string {
-  // With 4 modes + loop-close = 5 path values, we need 5 keyTimes in [0, 1].
-  // Each mode gets 1/MODE_COUNT of the total duration.
-  // Within each slot: hold for holdFraction, morph for (1-holdFraction).
-  const times: number[] = [0]
-  const slotSize = 1 / MODE_COUNT
-  for (let i = 0; i < MODE_COUNT; i++) {
-    if (i < MODE_COUNT - 1) {
-      // End of hold for this mode = start of transition to next
-      times.push((i + holdFraction) * slotSize)
-    }
-    if (i < MODE_COUNT - 1) {
-      // Start of next mode's hold
-      times.push((i + 1) * slotSize)
-    }
+function buildSmilValues(): string {
+  const values: string[] = [CIRCLE_PATH]
+  for (const shapePath of PULSE_PATHS) {
+    values.push(shapePath)
+    values.push(CIRCLE_PATH)
   }
-  // Final value is always 1
+  return values.join(";")
+}
+
+/**
+ * Build SMIL `keyTimes` for the asymmetric pulse rhythm.
+ *
+ * 9 values = 8 intervals. Each pulse (sphere→shape→sphere) has 4 phases:
+ *   sphere-hold → morph-out → shape-hold → morph-back
+ *
+ * But in terms of intervals between the 9 keyframes:
+ *   [0] circle → [1] shape1: morph-out (175ms) — preceded by sphere-hold
+ *   [1] shape1 → [2] circle: morph-back (175ms) — preceded by shape-hold
+ *   ... etc.
+ *
+ * We encode holds by adjusting keyTime positions so the morph intervals are
+ * short and the holds are "time spent at the same value" (between adjacent
+ * identical keyframes in `values` — but our values alternate, so we handle
+ * holds by making the keyTimes asymmetric).
+ *
+ * Actually, SMIL interpolates between ADJACENT values during each interval.
+ * Since our pattern is: C, S1, C, S2, C, S3, C, S4, C (9 values, 8 intervals):
+ *
+ * Interval 0: C→S1 (should take: sphere_hold + morph_out = 525ms)
+ *   The sphere "holds" at the start of this interval (nothing moves since the
+ *   previous value was also C), then morphs to S1.
+ *   Duration fraction: (SPHERE_HOLD_MS + MORPH_MS) / CYCLE_MS
+ *
+ * Interval 1: S1→C (should take: shape_hold + morph_back = 675ms)
+ *   The shape holds, then morphs back to circle.
+ *   Duration fraction: (SHAPE_HOLD_MS + MORPH_MS) / CYCLE_MS
+ *
+ * Wait — that's wrong. SMIL linear interpolation spreads the morph evenly across
+ * the entire interval. To get a hold followed by a morph we'd need extra keyframes
+ * (duplicate values for the hold portion).
+ *
+ * Better approach: use MORE keyframes with duplicates to create holds explicitly.
+ * Pattern with holds:
+ *   C, C, S1, S1, C, C, S2, S2, C, C, S3, S3, C, C, S4, S4, C
+ *   (17 values = 16 intervals)
+ *
+ * Each pulse = 4 intervals:
+ *   C→C (sphere hold, 350ms), C→S (morph out, 175ms),
+ *   S→S (shape hold, 500ms), S→C (morph back, 175ms)
+ */
+function buildSmilKeyframes(): { values: string; keyTimes: string; dur: string } {
+  // 17-value approach with explicit holds
+  const values: string[] = []
+  const times: number[] = []
+
+  let t = 0
+  const total = CYCLE_MS
+
+  for (let i = 0; i < PULSE_COUNT; i++) {
+    const shapePath = PULSE_PATHS[i]
+
+    // Sphere hold start
+    values.push(CIRCLE_PATH)
+    times.push(t / total)
+    t += SPHERE_HOLD_MS
+
+    // Sphere hold end / morph-out start
+    values.push(CIRCLE_PATH)
+    times.push(t / total)
+    t += MORPH_MS
+
+    // Shape arrived / shape hold start
+    values.push(shapePath)
+    times.push(t / total)
+    t += SHAPE_HOLD_MS
+
+    // Shape hold end / morph-back start
+    values.push(shapePath)
+    times.push(t / total)
+    t += MORPH_MS
+  }
+
+  // Final: back to circle (loop close)
+  values.push(CIRCLE_PATH)
   times.push(1)
 
-  // But SMIL values needs exactly N keyTimes for N values.
-  // We have MODE_COUNT + 1 values (4 shapes + loop-close).
-  // Simplest: evenly spaced keyTimes, let SMIL's calcMode="spline" handle hold/morph.
-  // Actually for the cleanest approach with hold phases: use calcMode="linear"
-  // with explicit duplicate values for holds.
-  //
-  // Simplest correct approach: MODE_COUNT+1 evenly-spaced keyTimes with linear interp.
-  const simple: number[] = []
-  for (let i = 0; i <= MODE_COUNT; i++) {
-    simple.push(Math.round((i / MODE_COUNT) * 10000) / 10000)
+  return {
+    values: values.join(";"),
+    keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
+    dur: `${total}ms`,
   }
-  return simple.join(";")
+}
+
+/** Pre-computed SMIL attributes for the animate element. */
+export const SMIL = buildSmilKeyframes()
+
+// Legacy exports kept for backward compat with tests
+export const SMIL_VALUES = buildSmilValues()
+export const MORPH_CADENCE_MS = CYCLE_MS
+
+export function smilKeyTimes(): string {
+  return SMIL.keyTimes
 }

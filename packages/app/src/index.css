@@ -376,15 +376,11 @@
   }
 }
 
-/* The thought rail's live node: a spherical-harmonic morphing dot that cycles
-   through Y_l^m silhouettes via SMIL path animation. The grow animation fires
-   on mount (7→13px), the rotation is slow and continuous. Honours reduced motion. */
+/* The thought rail's live node: a spherical-harmonic morphing dot that pulses
+   through Y_l^m silhouettes via SMIL path animation (sphere → shape → sphere).
+   The grow animation fires on mount (7→13px). Honours reduced motion. */
 .thought-rail-dot--harmonic {
   animation: thought-rail-grow 150ms ease-out both;
-}
-.thought-rail-dot--harmonic .harmonic-dot-rotate {
-  animation: thought-rail-harmonic-rotate 12s linear infinite;
-  transform-origin: center center;
 }
 @keyframes thought-rail-grow {
   from {
@@ -396,15 +392,8 @@
     opacity: 1;
   }
 }
-@keyframes thought-rail-harmonic-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
 @media (prefers-reduced-motion: reduce) {
   .thought-rail-dot--harmonic {
-    animation: none;
-  }
-  .thought-rail-dot--harmonic .harmonic-dot-rotate {
     animation: none;
   }
   .thought-rail-dot--harmonic .harmonic-dot-shape animate {

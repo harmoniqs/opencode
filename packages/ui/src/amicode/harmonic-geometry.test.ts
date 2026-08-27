@@ -3,10 +3,18 @@ import { describe, expect, test } from "bun:test"
 import {
   HARMONIC_SIZE,
   HARMONIC_SAMPLES,
-  MODE_HOLD_MS,
-  ROTATION_PERIOD_MS,
+  SPHERE_HOLD_MS,
+  MORPH_MS,
+  SHAPE_HOLD_MS,
+  PULSE_MS,
+  PULSE_COUNT,
+  CYCLE_MS,
   MODE_COUNT,
   HARMONIC_PATHS,
+  CIRCLE_PATH,
+  PULSE_PATHS,
+  PULSE_SEQUENCE,
+  SMIL,
   harmonicRadius,
   harmonicPath,
 } from "./harmonic-geometry"
@@ -23,13 +31,26 @@ describe("constants", () => {
   test("MODE_COUNT is 4 — circle, dumbbell, pinched, clover", () => {
     expect(MODE_COUNT).toBe(4)
   })
+})
 
-  test("MODE_HOLD_MS matches the wave's existing cadence", () => {
-    expect(MODE_HOLD_MS).toBe(2300)
+describe("pulse timing", () => {
+  test("one pulse is sphere-hold + morph-out + shape-hold + morph-back", () => {
+    expect(PULSE_MS).toBe(SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS)
   })
 
-  test("ROTATION_PERIOD_MS is 12s — slow organic rotation", () => {
-    expect(ROTATION_PERIOD_MS).toBe(12000)
+  test("pulse timing is ~1.2s (snappy, energetic)", () => {
+    expect(PULSE_MS).toBe(1200)
+  })
+
+  test("full cycle is 4 pulses = ~4.8s", () => {
+    expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
+    expect(CYCLE_MS).toBe(4800)
+  })
+
+  test("timing breakdown: 350 + 175 + 500 + 175 = 1200", () => {
+    expect(SPHERE_HOLD_MS).toBe(350)
+    expect(MORPH_MS).toBe(175)
+    expect(SHAPE_HOLD_MS).toBe(500)
   })
 })
 
@@ -53,7 +74,6 @@ describe("harmonicRadius", () => {
   test("mode 2 (pinched) has distinct shape from mode 1", () => {
     const r2_side = harmonicRadius(2, Math.PI / 2)
     const r1_side = harmonicRadius(1, Math.PI / 2)
-    // Mode 2 should differ from mode 1 at the equator
     expect(r2_side).not.toBeCloseTo(r1_side, 2)
   })
 
@@ -78,7 +98,7 @@ describe("harmonicRadius", () => {
         const theta = (i / 256) * 2 * Math.PI
         const r = harmonicRadius(mode, theta)
         expect(r).toBeGreaterThan(0)
-        expect(r).toBeLessThanOrEqual(1.0001) // float tolerance
+        expect(r).toBeLessThanOrEqual(1.0001)
       }
     }
   })
@@ -93,61 +113,144 @@ describe("harmonicPath", () => {
     }
   })
 
-  test("all modes produce paths with the same number of L commands (HARMONIC_SAMPLES)", () => {
-    const counts = Array.from({ length: MODE_COUNT }, (_, mode) => {
+  test("all modes produce paths with HARMONIC_SAMPLES - 1 L commands", () => {
+    for (let mode = 0; mode < MODE_COUNT; mode++) {
       const path = harmonicPath(mode)
-      // Count L commands: every point after the first M is an L
-      return (path.match(/L/g) || []).length
-    })
-    // All should be HARMONIC_SAMPLES - 1 (first is M, rest are L, then Z)
-    for (const count of counts) {
-      expect(count).toBe(HARMONIC_SAMPLES - 1)
+      expect((path.match(/L/g) || []).length).toBe(HARMONIC_SAMPLES - 1)
     }
   })
 
   test("identical command structure across modes — required for SMIL interpolation", () => {
-    const commandStructures = Array.from({ length: MODE_COUNT }, (_, mode) => {
-      const path = harmonicPath(mode)
-      // Extract just the command letters
-      return path.replace(/[-\d.,\s]/g, "")
-    })
-    const first = commandStructures[0]
-    for (const struct of commandStructures) {
-      expect(struct).toBe(first)
+    const structures = Array.from({ length: MODE_COUNT }, (_, mode) =>
+      harmonicPath(mode).replace(/[-\d.,\s]/g, ""),
+    )
+    for (const struct of structures) {
+      expect(struct).toBe(structures[0])
     }
   })
 
-  test("all coordinates stay within the viewBox (0, 0, HARMONIC_SIZE, HARMONIC_SIZE)", () => {
+  test("all coordinates stay within the viewBox (0, 0, SIZE, SIZE)", () => {
     for (let mode = 0; mode < MODE_COUNT; mode++) {
-      const path = harmonicPath(mode)
-      const coords = path.match(/-?[\d.]+/g)!.map(Number)
-      for (let i = 0; i < coords.length; i++) {
-        expect(coords[i]).toBeGreaterThanOrEqual(-0.01)
-        expect(coords[i]).toBeLessThanOrEqual(HARMONIC_SIZE + 0.01)
+      const coords = harmonicPath(mode).match(/-?[\d.]+/g)!.map(Number)
+      for (const c of coords) {
+        expect(c).toBeGreaterThanOrEqual(-0.01)
+        expect(c).toBeLessThanOrEqual(HARMONIC_SIZE + 0.01)
       }
+    }
+  })
+
+  test("rotation shifts the shape without changing structure", () => {
+    const p0 = harmonicPath(1, 0)
+    const p90 = harmonicPath(1, 90)
+    // Same structure (command letters)
+    expect(p90.replace(/[-\d.,\s]/g, "")).toBe(p0.replace(/[-\d.,\s]/g, ""))
+    // But different coordinates (the dumbbell is rotated)
+    expect(p90).not.toBe(p0)
+  })
+
+  test("rotation by 0° gives the same path as no rotation", () => {
+    expect(harmonicPath(1, 0)).toBe(harmonicPath(1))
+  })
+
+  test("circle is invariant under rotation (mode 0)", () => {
+    expect(harmonicPath(0, 0)).toBe(harmonicPath(0, 45))
+    expect(harmonicPath(0, 0)).toBe(harmonicPath(0, 90))
+  })
+})
+
+describe("pulse sequence", () => {
+  test("has PULSE_COUNT entries", () => {
+    expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
+  })
+
+  test("uses modes 1, 2, 3 (never mode 0 — circle is implicit home base)", () => {
+    for (const { mode } of PULSE_SEQUENCE) {
+      expect(mode).toBeGreaterThan(0)
+      expect(mode).toBeLessThan(MODE_COUNT)
+    }
+  })
+
+  test("consecutive shapes have maximum visual contrast (no two identical)", () => {
+    for (let i = 1; i < PULSE_SEQUENCE.length; i++) {
+      const prev = PULSE_SEQUENCE[i - 1]
+      const curr = PULSE_SEQUENCE[i]
+      const same = prev.mode === curr.mode && prev.rotation === curr.rotation
+      expect(same).toBe(false)
+    }
+  })
+
+  test("PULSE_PATHS matches the sequence", () => {
+    expect(PULSE_PATHS).toHaveLength(PULSE_COUNT)
+    for (let i = 0; i < PULSE_COUNT; i++) {
+      const { mode, rotation } = PULSE_SEQUENCE[i]
+      expect(PULSE_PATHS[i]).toBe(harmonicPath(mode, rotation))
     }
   })
 })
 
-describe("HARMONIC_PATHS", () => {
-  test("pre-computed array has MODE_COUNT entries", () => {
-    expect(HARMONIC_PATHS).toHaveLength(MODE_COUNT)
+describe("SMIL keyframes", () => {
+  test("values has 4*4 + 1 = 17 entries (4 pulses × 4 keyframes + close)", () => {
+    const count = SMIL.values.split(";").length
+    expect(count).toBe(PULSE_COUNT * 4 + 1)
   })
 
-  test("matches harmonicPath() output for each mode", () => {
-    for (let mode = 0; mode < MODE_COUNT; mode++) {
-      expect(HARMONIC_PATHS[mode]).toBe(harmonicPath(mode))
+  test("keyTimes has same count as values", () => {
+    const valCount = SMIL.values.split(";").length
+    const timeCount = SMIL.keyTimes.split(";").length
+    expect(timeCount).toBe(valCount)
+  })
+
+  test("keyTimes starts at 0 and ends at 1", () => {
+    const times = SMIL.keyTimes.split(";").map(Number)
+    expect(times[0]).toBe(0)
+    expect(times[times.length - 1]).toBe(1)
+  })
+
+  test("keyTimes are monotonically non-decreasing", () => {
+    const times = SMIL.keyTimes.split(";").map(Number)
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeGreaterThanOrEqual(times[i - 1])
     }
   })
 
-  test("the SMIL values string (semicolon-joined) can be derived from HARMONIC_PATHS", () => {
-    // Verify the paths can form a valid SMIL values attribute
-    const smilValues = HARMONIC_PATHS.join(";")
-    expect(smilValues.split(";")).toHaveLength(MODE_COUNT)
-    // Each segment must start with M and end with Z
-    for (const segment of smilValues.split(";")) {
-      expect(segment.startsWith("M")).toBe(true)
-      expect(segment.endsWith("Z")).toBe(true)
+  test("dur matches CYCLE_MS", () => {
+    expect(SMIL.dur).toBe(`${CYCLE_MS}ms`)
+  })
+
+  test("first and last values are both circle (seamless loop)", () => {
+    const vals = SMIL.values.split(";")
+    expect(vals[0]).toBe(CIRCLE_PATH)
+    expect(vals[vals.length - 1]).toBe(CIRCLE_PATH)
+  })
+
+  test("every other pair of values is (circle, circle) for sphere holds", () => {
+    // Pattern: C,C,S,S,C,C,S,S,...,C
+    // Positions 0,1 are circle (first sphere hold)
+    // Positions 4,5 are circle (second sphere hold)
+    // etc.
+    const vals = SMIL.values.split(";")
+    for (let pulse = 0; pulse < PULSE_COUNT; pulse++) {
+      const base = pulse * 4
+      expect(vals[base]).toBe(CIRCLE_PATH)
+      expect(vals[base + 1]).toBe(CIRCLE_PATH)
+    }
+  })
+
+  test("shape values match PULSE_PATHS at the right positions", () => {
+    const vals = SMIL.values.split(";")
+    for (let pulse = 0; pulse < PULSE_COUNT; pulse++) {
+      const base = pulse * 4
+      // Positions base+2 and base+3 are the shape
+      expect(vals[base + 2]).toBe(PULSE_PATHS[pulse])
+      expect(vals[base + 3]).toBe(PULSE_PATHS[pulse])
+    }
+  })
+
+  test("all value paths have identical SMIL-compatible structure", () => {
+    const vals = SMIL.values.split(";")
+    const structure = vals[0].replace(/[-\d.,\s]/g, "")
+    for (const v of vals) {
+      expect(v.replace(/[-\d.,\s]/g, "")).toBe(structure)
     }
   })
 })
