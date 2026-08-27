@@ -252,11 +252,14 @@ export const CIRCLE_DONUT_PATH = harmonicDonutPath(0, 0, INNER_R)
 export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: number }>): {
   values: string
   keyTimes: string
+  /** Background masking circle radius: INNER_R during sphere, 0 during harmonic. */
+  innerRadius: string
   dur: string
 } {
   // Harmonic donut paths with inner hole at r=0 (solid)
   const solidPaths = sequence.map(({ mode, rotation }) => harmonicDonutPath(mode, rotation, 0))
   const values: string[] = []
+  const radii: number[] = []
   const times: number[] = []
   const total = PULSE_MS * sequence.length
 
@@ -264,32 +267,38 @@ export function buildSmil(sequence: ReadonlyArray<{ mode: number; rotation: numb
   for (let i = 0; i < sequence.length; i++) {
     // Sphere hold start — ring (full inner hole)
     values.push(CIRCLE_DONUT_PATH)
+    radii.push(INNER_R)
     times.push(t / total)
     t += SPHERE_HOLD_MS
 
     // Sphere hold end — morph-out begins
     values.push(CIRCLE_DONUT_PATH)
+    radii.push(INNER_R)
     times.push(t / total)
     t += MORPH_MS
 
     // Shape arrived — solid (inner hole collapsed)
     values.push(solidPaths[i])
+    radii.push(0)
     times.push(t / total)
     t += SHAPE_HOLD_MS
 
     // Shape hold end — morph-back begins
     values.push(solidPaths[i])
+    radii.push(0)
     times.push(t / total)
     t += MORPH_MS
   }
 
   // Final: back to ring
   values.push(CIRCLE_DONUT_PATH)
+  radii.push(INNER_R)
   times.push(1)
 
   return {
     values: values.join(";"),
     keyTimes: times.map((v) => Math.round(v * 10000) / 10000).join(";"),
+    innerRadius: radii.join(";"),
     dur: `${total}ms`,
   }
 }

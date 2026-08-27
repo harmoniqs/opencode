@@ -142,9 +142,9 @@ export function ThoughtRail(props: {
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
-      {/* Rail line BEHIND the dot — the harmonic ring's inner disc (solid
-          background) masks it at the centre; the line reaches dotCentre
-          geometrically but the disc keeps the ring interior clean. */}
+      {/* Rail line BEHIND the dot — the SVG's internal background circle
+          masks the line within the ring's interior. The line reaches dotCentre
+          geometrically to connect with harmonic shapes that extend inward. */}
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
