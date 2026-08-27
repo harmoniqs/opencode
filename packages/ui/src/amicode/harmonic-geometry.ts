@@ -202,13 +202,15 @@ export const PULSE_MODES: readonly number[] = [
  *
  * In SVG coordinates, theta=0 points RIGHT. The dumbbell's natural shape
  * (rotation=0°) has lobes at LEFT/RIGHT = horizontal. Rotation=90° makes
- * it VERTICAL — which looks phallic. So modes 1 and 2 EXCLUDE 90° and 270°.
+ * it VERTICAL — which looks phallic. Pill-shaped modes (1, 2, 7) are
+ * restricted to horizontal only (0°/180°) so they always read as a
+ * horizontal lozenge, never at an odd diagonal.
  */
 const ANGLES_ANY = [0, 45, 90, 135, 180, 225, 270, 315] as const
-const ANGLES_NO_VERTICAL = [0, 45, 135, 180, 225, 315] as const
+const ANGLES_HORIZONTAL = [0, 180] as const
 
 function allowedAngles(mode: number): readonly number[] {
-  if (mode === 1 || mode === 2 || mode === 7) return ANGLES_NO_VERTICAL
+  if (mode === 1 || mode === 2 || mode === 7) return ANGLES_HORIZONTAL
   return ANGLES_ANY
 }
 
