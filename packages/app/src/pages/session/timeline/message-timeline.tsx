@@ -152,16 +152,17 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number; hasOutput?: boolean }) {
-  if (props.hasOutput) return null
   return (
-    <div data-slot="session-turn-thinking">
-      <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
-        <span class="shrink-0">Thinking</span>
-        <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
-          <ThinkingLine tokens={props.tokens} />
+    <Show when={!props.hasOutput}>
+      <div data-slot="session-turn-thinking">
+        <span class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong leading-[22px]">
+          <span class="shrink-0">Thinking</span>
+          <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base">
+            <ThinkingLine tokens={props.tokens} />
+          </span>
         </span>
-      </span>
-    </div>
+      </div>
+    </Show>
   )
 }
 
