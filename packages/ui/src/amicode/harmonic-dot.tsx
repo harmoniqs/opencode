@@ -42,7 +42,7 @@ export function HarmonicDot(props: {
         fill="var(--accent)"
         fill-opacity="0"
         stroke="var(--accent-edge)"
-        stroke-width="1"
+        stroke-width="2"
       >
         <animate
           attributeName="d"
