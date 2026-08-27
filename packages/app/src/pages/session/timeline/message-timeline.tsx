@@ -19,6 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
+import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
 import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
@@ -152,9 +153,21 @@ const markBoundaryGesture = (input: {
 }
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean; tokens?: number }) {
-  // Simple version - just show the ThinkingLine without collapsible dropdown
+  // The harmonic dot appears in the rail gutter during initial thinking
+  // (before tokens flow). Once content arrives, the rail dot on the first
+  // AssistantPart takes over and this one unmounts.
+  const showDot = () => props.tokens == null
   return (
     <div data-slot="session-turn-thinking">
+      <Show when={showDot()}>
+        <HarmonicDot
+          class="pointer-events-none absolute"
+          style={{
+            top: `${DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2}px`,
+            left: `${11 - HARMONIC_SIZE / 2}px`,
+          }}
+        />
+      </Show>
       <ThinkingLine tokens={props.tokens} />
     </div>
   )

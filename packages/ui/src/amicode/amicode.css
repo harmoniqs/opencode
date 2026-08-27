@@ -49,12 +49,10 @@
 }
 
 /* ---- thinking block (meta line while a reply streams) -------------------- */
-/* The harmonic dot appears in the rail gutter during initial thinking (before
- * content arrives). Once the rail dot takes over, the inline dot unmounts.
- * The meta line (elapsed · tokens · esc) sits to the right as always. */
+/* The meta line (elapsed · tokens · esc). The harmonic dot is rendered by the
+ * timeline at the rail-dot position, not by this component. */
 .amc-thinking {
-  display: block;
-  position: relative;
+  display: inline-block;
   min-width: 0;
   max-width: 100%;
   font-size: 11px;
@@ -74,15 +72,6 @@
 }
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
-
-/* The dot sits in the rail gutter — same position as thought-rail dots (left: 4.5px).
- * Vertically centred with the timer text line. */
-.amc-thinking-dot {
-  position: absolute;
-  left: -20px; /* aligns with LINE_X - HARMONIC_SIZE/2 relative to content inset */
-  top: 50%;
-  transform: translateY(-50%);
-}
 
 /* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
 /* Expanding a skill used to dump its instructions as bare markdown straight into the

@@ -1,11 +1,12 @@
 import { createSignal, onCleanup, onMount, Show, type ComponentProps } from "solid-js"
 import { formatElapsed, formatTokens } from "./thinking"
-import { HarmonicDot } from "./harmonic-dot"
 
 // AMICODE: the "thinking" meta line — shown while a reply streams.
-// Contains the harmonic dot positioned in the rail gutter (same x as rail dots)
-// during the initial thinking phase. Once content arrives and the real rail dot
-// takes over, the inline dot simply disappears.
+// Shows elapsed time, token count, and interrupt hint.
+//
+// The harmonic dot is rendered by the TIMELINE (message-timeline.tsx) at the
+// rail-dot position, not by this component. This keeps the dot's positioning
+// aligned with the rail gutter regardless of padding/container structure.
 
 const TICK_MS = 1000
 
@@ -27,9 +28,6 @@ export function ThinkingLine(props: {
     onCleanup(() => clearInterval(clock))
   })
 
-  // Hide dot once tokens flow (rail dot takes over)
-  const hasContent = () => props.tokens != null
-
   return (
     <span
       class={`amc-thinking${props.class ? " " + props.class : ""}`}
@@ -39,11 +37,6 @@ export function ThinkingLine(props: {
       <span class="sr-only" role="status">
         Amico is working…
       </span>
-      <Show when={!hasContent()}>
-        <span class="amc-thinking-dot" aria-hidden="true">
-          <HarmonicDot />
-        </span>
-      </Show>
       <span class="amc-thinking-meta" aria-hidden="true">
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
         <Show when={props.tokens != null}>
