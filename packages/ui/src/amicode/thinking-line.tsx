@@ -1,20 +1,13 @@
 import { createSignal, onCleanup, onMount, Show, type ComponentProps } from "solid-js"
 import { formatElapsed, formatTokens } from "./thinking"
+import { HarmonicDot } from "./harmonic-dot"
 
-// AMICODE: the "thinking" meta line — a single-row block shown while a reply
-// streams (app TimelineThinkingRow; session-ui lane in message-part.tsx).
-// Shows elapsed time, token count, and interrupt hint.
-//
-// The wave + cycling gerund were removed in #261: the thought-rail's morphing
-// spherical-harmonic dot is now the sole working indicator. This component
-// retains only the metadata that the dot cannot communicate — timing and
-// token volume.
-//
-// Layout: a single inline row. The meta NEVER wraps mid-phrase (nowrap).
-// The elapsed counter ticks from mount, so the block's height is constant.
-//
-// a11y: the ticking parts are aria-hidden and a single sr-only role=status
-// announces the working state ONCE.
+// AMICODE: the "thinking" meta line — shown while a reply streams.
+// Contains the harmonic dot (inline, next to the timer) during the initial
+// thinking phase (before tokens flow). Once content arrives and the rail dot
+// takes over, the inline dot departs with a smooth translate animation toward
+// the rail gutter, creating the illusion of a single dot migrating from
+// timer → rail.
 
 const TICK_MS = 1000
 
@@ -36,6 +29,9 @@ export function ThinkingLine(props: {
     onCleanup(() => clearInterval(clock))
   })
 
+  // The dot departs once tokens start flowing (rail dot takes over)
+  const departing = () => props.tokens != null
+
   return (
     <span
       class={`amc-thinking${props.class ? " " + props.class : ""}`}
@@ -46,6 +42,14 @@ export function ThinkingLine(props: {
         Amico is working…
       </span>
       <span class="amc-thinking-meta" aria-hidden="true">
+        <span
+          classList={{
+            "amc-thinking-dot": true,
+            "amc-thinking-dot--departing": departing(),
+          }}
+        >
+          <HarmonicDot />
+        </span>
         <span class="amc-thinking-elapsed">{formatElapsed(elapsedMs())}</span>
         <Show when={props.tokens != null}>
           <span class="amc-thinking-sep">·</span>
