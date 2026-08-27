@@ -164,9 +164,9 @@ function TimelineThinkingRow(_props: { reasoningHeading?: string; showReasoningS
 function TimelineThinkingMetaRow(props: { turnRunning: boolean; turnDurationMs?: number; tokens?: number }) {
   return (
     <div data-slot="session-turn-thinking-meta">
-      <span class="min-w-0 flex items-center gap-2 text-13 text-text-dimmed leading-[20px]">
-        <Show when={props.turnRunning} fallback={
-          <Show when={props.turnDurationMs != null}>
+      <Show when={props.turnRunning} fallback={
+        <Show when={props.turnDurationMs != null}>
+          <span class="amc-thinking" data-slot="amc-thinking">
             <span class="amc-thinking-meta" aria-hidden="true">
               <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
               <Show when={props.tokens != null}>
@@ -174,11 +174,11 @@ function TimelineThinkingMetaRow(props: { turnRunning: boolean; turnDurationMs?:
                 <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
               </Show>
             </span>
-          </Show>
-        }>
-          <ThinkingLine tokens={props.tokens} />
+          </span>
         </Show>
-      </span>
+      }>
+        <ThinkingLine tokens={props.tokens} />
+      </Show>
     </div>
   )
 }
