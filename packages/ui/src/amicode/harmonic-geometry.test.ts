@@ -31,8 +31,8 @@ describe("constants", () => {
     expect(HARMONIC_SAMPLES).toBe(64)
   })
 
-  test("MODE_COUNT is 7 — circle + 6 shapes (dumbbell kept for compat but unused)", () => {
-    expect(MODE_COUNT).toBe(7)
+  test("MODE_COUNT is 8 — circle + 7 shapes (dumbbell kept but constrained)", () => {
+    expect(MODE_COUNT).toBe(8)
   })
 })
 
@@ -45,9 +45,9 @@ describe("pulse timing", () => {
     expect(PULSE_MS).toBe(1200)
   })
 
-  test("full cycle is 10 pulses = 12s", () => {
+  test("full cycle is 11 pulses = 13.2s", () => {
     expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
-    expect(CYCLE_MS).toBe(12000)
+    expect(CYCLE_MS).toBe(13200)
   })
 
   test("timing breakdown: 350 + 175 + 500 + 175 = 1200", () => {
@@ -131,6 +131,21 @@ describe("harmonicRadius", () => {
     expect(r0).toBeGreaterThan(node)
   })
 
+  test("mode 7 (double pinch) has two-fold symmetry with multiple lobes", () => {
+    // |P_4^0(cosθ)| — symmetric about both axes, with 4 lobes along polar axis
+    const r0 = harmonicRadius(7, 0)
+    const rPi = harmonicRadius(7, Math.PI)
+    const r90 = harmonicRadius(7, Math.PI / 2)
+    // Symmetric: r(0) = r(π)
+    expect(r0).toBeCloseTo(rPi, 4)
+    // Has a lobe at the equator (r(π/2) > 0) — distinguishes from simple dumbbell
+    expect(r90).toBeGreaterThan(0.2)
+    // Has nodes (pinch points) between 0 and π/2
+    const rNode = harmonicRadius(7, Math.PI * 30.6 / 180) // near first zero of P_4^0
+    expect(r0).toBeGreaterThan(rNode)
+    expect(r90).toBeGreaterThan(rNode)
+  })
+
   test("all modes have radii in (0, 1] — never zero, never exceeds unit", () => {
     for (let mode = 0; mode < MODE_COUNT; mode++) {
       for (let i = 0; i < 256; i++) {
@@ -209,9 +224,9 @@ describe("pulse sequence", () => {
     }
   })
 
-  test("skinny shapes (modes 1, 2) are never at 90° or 270° — avoids vertical elongation", () => {
+  test("skinny shapes (modes 1, 2, 7) are never at 90° or 270° — avoids vertical elongation", () => {
     for (const { mode, rotation } of PULSE_SEQUENCE) {
-      if (mode === 1 || mode === 2) {
+      if (mode === 1 || mode === 2 || mode === 7) {
         expect(rotation).not.toBe(90)
         expect(rotation).not.toBe(270)
       }
@@ -312,12 +327,11 @@ describe("randomPulseSequence + buildSmil", () => {
     }
   })
 
-  test("skinny modes (1, 2) never get 90° or 270° in random sequences", () => {
-    // Run 50 random sequences to test the constraint probabilistically
+  test("skinny modes (1, 2, 7) never get 90° or 270° in random sequences", () => {
     for (let run = 0; run < 50; run++) {
       const seq = randomPulseSequence()
       for (const { mode, rotation } of seq) {
-        if (mode === 1 || mode === 2) {
+        if (mode === 1 || mode === 2 || mode === 7) {
           expect(rotation).not.toBe(90)
           expect(rotation).not.toBe(270)
         }

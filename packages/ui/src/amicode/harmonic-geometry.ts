@@ -30,15 +30,15 @@ export const SHAPE_HOLD_MS = 500
 export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
 
 /** Number of pulses in one full cycle. */
-export const PULSE_COUNT = 10
+export const PULSE_COUNT = 11
 
 /** Total cycle duration (ms). */
 export const CYCLE_MS = PULSE_MS * PULSE_COUNT
 
 // --- Modes ---
 
-/** Number of distinct harmonic modes (circle + 6 shapes). */
-export const MODE_COUNT = 7
+/** Number of distinct harmonic modes (circle + 7 shapes). */
+export const MODE_COUNT = 8
 
 /**
  * Compute the normalized radius [0, 1] for a given mode at angle theta.
@@ -50,6 +50,7 @@ export const MODE_COUNT = 7
  * Mode 4: l=3 m=3 — six-lobe rosette (|cos(3θ)| with base)
  * Mode 5: l=3 m=0 — trefoil (gentle 3-lobe via (1+cos(3θ))/2)
  * Mode 6: l=4 m=4 — eight-lobe star (|cos(4θ)| with base)
+ * Mode 7: l=4 m=0 — double pinch (|P_4^0(cosθ)| — 4 lobes along axis with 2 waists)
  *
  * A base offset (min radius ~0.2–0.3) prevents cusps and keeps shapes "spherical" —
  * at 13px a cusp would be a single-pixel spike, unreadable.
@@ -89,6 +90,14 @@ export function harmonicRadius(mode: number, theta: number): number {
       // Eight-lobe star: |cos(4θ)| gives eight fine lobes
       const raw = Math.abs(Math.cos(4 * theta)) // range [0, 1]
       return 0.3 + 0.7 * raw
+    }
+    case 7: {
+      // Double pinch: |P_4^0(cosθ)| = |35cos⁴θ − 30cos²θ + 3|/8
+      // Gives 4 lobes along the polar axis with two pinched waists between them
+      const cos = Math.cos(theta)
+      const cos2 = cos * cos
+      const raw = Math.abs(35 * cos2 * cos2 - 30 * cos2 + 3) / 8 // range [0, 1]
+      return 0.2 + 0.8 * raw
     }
     default:
       return 1.0
@@ -138,6 +147,7 @@ export const PULSE_MODES: readonly number[] = [
   5, // trefoil
   2, // pinched
   6, // star-8
+  7, // double pinch
   3, // clover
   1, // dumbbell
   4, // rosette-6
@@ -155,7 +165,7 @@ const ANGLES_ANY = [0, 45, 90, 135, 180, 225, 270, 315] as const
 const ANGLES_NO_VERTICAL = [0, 45, 135, 180, 225, 315] as const
 
 function allowedAngles(mode: number): readonly number[] {
-  if (mode === 1 || mode === 2) return ANGLES_NO_VERTICAL
+  if (mode === 1 || mode === 2 || mode === 7) return ANGLES_NO_VERTICAL
   return ANGLES_ANY
 }
 
