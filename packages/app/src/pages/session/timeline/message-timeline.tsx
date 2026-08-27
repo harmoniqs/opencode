@@ -1400,13 +1400,14 @@ export function MessageTimeline(props: {
     // The thought rail: a spine down a turn's assistant steps. Drawn per-row
     // because the timeline is virtualised and consecutive rows share no ancestor.
     //
-    // The Thinking row is NOT a rail node (Kate 2026-08-24): its squiggle is
-    // already the working signal, so a dot beside it did no work — and worse,
-    // it broke the rail's invariant. Thinking railed as {first, last} no
-    // matter what stood above it, so a turn with assistant parts showed the
-    // tail part's dot AND a second lone dot below with no segment between
-    // them: n dots, fewer than n-1 lines. Nodes are assistant parts only;
-    // their adjacency math guarantees every consecutive pair is connected.
+    // The Thinking row is NOT a rail node: it only shows metadata (elapsed +
+    // tokens), and adding a dot broke the rail's invariant. Thinking railed
+    // as {first, last} no matter what stood above it, so a turn with
+    // assistant parts showed the tail part's dot AND a second lone dot below
+    // with no segment between them: n dots, fewer than n-1 lines. Nodes are
+    // assistant parts only; their adjacency math guarantees every consecutive
+    // pair is connected. The running dot (spherical-harmonic morph) on the
+    // LAST assistant part is the sole working signal.
     const rail = () => {
       const row = input.row()
       if (row._tag !== "AssistantPart") return undefined

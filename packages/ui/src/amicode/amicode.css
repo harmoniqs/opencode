@@ -48,46 +48,20 @@
   flex-shrink: 0;
 }
 
-/* ---- thinking block (Claude-Code-esque working indicator) ---------------- */
-/* Two-row grid shown while a reply streams (thinking-line.tsx): the harmonic
- * wave and cycling gerund ride the top row; the live meta line (elapsed ·
- * tokens · esc) sits below, starting under the wave. Anti-glitch invariants,
- * earned the hard way:
- *  - GRID, never flex-wrap — the old flex row once let a greedy sibling
- *    heading squeeze the meta until "↑ 8.7k tokens" shattered across three
- *    lines, and baseline alignment scattered the wave/verb;
- *  - the verb reserves the longest gerund's width (16ch covers
- *    "Fidelitymaxxing…") so word rotation never shifts the layout around it;
- *  - the meta renders from mount (elapsed always ticks), so the block's height
- *    is constant whether or not tokens/hints are present;
- *  - nowrap + ellipsis on the meta for absurdly narrow panes.
- * DOM order is word-first so the block's first baseline is the VERB's — the
- * sibling activity heading (session-turn-thinking) aligns with the verb, not
- * the wave's edge. Explicit grid placement keeps the visual order. */
+/* ---- thinking block (meta line while a reply streams) -------------------- */
+/* Single-row inline block (thinking-line.tsx): just the live meta line
+ * (elapsed · tokens · esc). The wave + gerund were removed in #261 — the
+ * thought-rail's morphing harmonic dot is now the working indicator.
+ * nowrap + ellipsis for absurdly narrow panes. */
 .amc-thinking {
-  display: inline-grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 8px;
-  row-gap: 2px;
-  align-items: center;
+  display: inline-block;
   min-width: 0;
   max-width: 100%;
   font-size: 11px;
   letter-spacing: 0.01em;
   color: var(--v2-text-text-muted);
 }
-.amc-thinking .amc-wave { grid-column: 1; grid-row: 1; }
-.amc-thinking-word {
-  grid-column: 2;
-  grid-row: 1;
-  font-weight: 600;
-  white-space: nowrap;
-  min-width: 16ch;
-  color: var(--v2-text-text-accent);
-}
 .amc-thinking-meta {
-  grid-column: 1 / -1;
-  grid-row: 2;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
