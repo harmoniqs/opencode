@@ -43,6 +43,7 @@ function FileNameWithPicker(props: {
   }
 
   return createComponent(Show, {
+    keyed: true,
     get when() { return hasFilePicker() },
     get fallback() {
       const span = document.createElement("span")
