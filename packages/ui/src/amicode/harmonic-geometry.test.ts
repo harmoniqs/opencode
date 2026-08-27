@@ -28,8 +28,8 @@ describe("constants", () => {
     expect(HARMONIC_SAMPLES).toBe(64)
   })
 
-  test("MODE_COUNT is 4 — circle, dumbbell, pinched, clover", () => {
-    expect(MODE_COUNT).toBe(4)
+  test("MODE_COUNT is 7 — circle + 6 shapes (dumbbell kept for compat but unused)", () => {
+    expect(MODE_COUNT).toBe(7)
   })
 })
 
@@ -42,9 +42,9 @@ describe("pulse timing", () => {
     expect(PULSE_MS).toBe(1200)
   })
 
-  test("full cycle is 4 pulses = ~4.8s", () => {
+  test("full cycle is 10 pulses = 12s", () => {
     expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
-    expect(CYCLE_MS).toBe(4800)
+    expect(CYCLE_MS).toBe(12000)
   })
 
   test("timing breakdown: 350 + 175 + 500 + 175 = 1200", () => {
@@ -89,6 +89,42 @@ describe("harmonicRadius", () => {
     expect(r180).toBeCloseTo(r270, 4)
     // Nodes at 45° are smaller than lobes at 0°
     const node = harmonicRadius(3, Math.PI / 4)
+    expect(r0).toBeGreaterThan(node)
+  })
+
+  test("mode 4 (rosette) has six-fold symmetry", () => {
+    // |cos(3θ)| has 6 lobes at 0, 60°, 120°, 180°, 240°, 300°
+    const r0 = harmonicRadius(4, 0)
+    const r60 = harmonicRadius(4, Math.PI / 3)
+    const r120 = harmonicRadius(4, 2 * Math.PI / 3)
+    expect(r0).toBeCloseTo(r60, 4)
+    expect(r60).toBeCloseTo(r120, 4)
+    // Nodes at 30°
+    const node = harmonicRadius(4, Math.PI / 6)
+    expect(r0).toBeGreaterThan(node)
+  })
+
+  test("mode 5 (trefoil) has three-fold symmetry", () => {
+    // (1 + cos(3θ))/2 has 3 lobes at 0, 120°, 240°
+    const r0 = harmonicRadius(5, 0)
+    const r120 = harmonicRadius(5, 2 * Math.PI / 3)
+    const r240 = harmonicRadius(5, 4 * Math.PI / 3)
+    expect(r0).toBeCloseTo(r120, 4)
+    expect(r120).toBeCloseTo(r240, 4)
+    // Minima at 60°, 180°, 300°
+    const rMin = harmonicRadius(5, Math.PI / 3)
+    expect(r0).toBeGreaterThan(rMin)
+  })
+
+  test("mode 6 (star-8) has eight-fold symmetry", () => {
+    // |cos(4θ)| has 8 lobes at 0, 45°, 90°, 135°, etc.
+    const r0 = harmonicRadius(6, 0)
+    const r45 = harmonicRadius(6, Math.PI / 4)
+    const r90 = harmonicRadius(6, Math.PI / 2)
+    expect(r0).toBeCloseTo(r45, 4)
+    expect(r45).toBeCloseTo(r90, 4)
+    // Nodes at 22.5°
+    const node = harmonicRadius(6, Math.PI / 8)
     expect(r0).toBeGreaterThan(node)
   })
 
@@ -163,9 +199,9 @@ describe("pulse sequence", () => {
     expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
   })
 
-  test("uses modes 1, 2, 3 (never mode 0 — circle is implicit home base)", () => {
+  test("uses modes 2–6 only (never circle or dumbbell)", () => {
     for (const { mode } of PULSE_SEQUENCE) {
-      expect(mode).toBeGreaterThan(0)
+      expect(mode).toBeGreaterThanOrEqual(2)
       expect(mode).toBeLessThan(MODE_COUNT)
     }
   })
@@ -189,7 +225,7 @@ describe("pulse sequence", () => {
 })
 
 describe("SMIL keyframes", () => {
-  test("values has 4*4 + 1 = 17 entries (4 pulses × 4 keyframes + close)", () => {
+  test("values has PULSE_COUNT*4 + 1 entries (holds + morphs + close)", () => {
     const count = SMIL.values.split(";").length
     expect(count).toBe(PULSE_COUNT * 4 + 1)
   })

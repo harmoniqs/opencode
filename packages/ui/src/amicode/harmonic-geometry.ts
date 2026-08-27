@@ -30,25 +30,28 @@ export const SHAPE_HOLD_MS = 500
 export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
 
 /** Number of pulses in one full cycle. */
-export const PULSE_COUNT = 4
+export const PULSE_COUNT = 10
 
 /** Total cycle duration (ms). */
 export const CYCLE_MS = PULSE_MS * PULSE_COUNT
 
 // --- Modes ---
 
-/** Number of distinct harmonic modes (circle + 3 shapes). */
-export const MODE_COUNT = 4
+/** Number of distinct harmonic modes (circle + 6 shapes). */
+export const MODE_COUNT = 7
 
 /**
  * Compute the normalized radius [0, 1] for a given mode at angle theta.
  *
  * Mode 0: Y_0^0 — circle (constant)
- * Mode 1: Y_1^0 — dumbbell (cos²θ with base)
+ * Mode 1: Y_1^0 — dumbbell (cos²θ) — NOT USED in pulse sequence (phallic-adjacent)
  * Mode 2: Y_2^0 — pinched (|3cos²θ − 1| normalized, with base)
- * Mode 3: Y_2^2 — four-lobe clover (|cos(2θ)| with base)
+ * Mode 3: l=2 m=2 — four-lobe clover (|cos(2θ)| with base)
+ * Mode 4: l=3 m=3 — six-lobe rosette (|cos(3θ)| with base)
+ * Mode 5: l=3 m=0 — trefoil (gentle 3-lobe via (1+cos(3θ))/2)
+ * Mode 6: l=4 m=4 — eight-lobe star (|cos(4θ)| with base)
  *
- * A base offset (min radius ~0.2) prevents cusps and keeps shapes "spherical" —
+ * A base offset (min radius ~0.2–0.3) prevents cusps and keeps shapes "spherical" —
  * at 13px a cusp would be a single-pixel spike, unreadable.
  */
 export function harmonicRadius(mode: number, theta: number): number {
@@ -57,7 +60,7 @@ export function harmonicRadius(mode: number, theta: number): number {
       // Perfect circle
       return 1.0
     case 1: {
-      // Dumbbell: two lobes at top/bottom, narrow waist
+      // Dumbbell: two lobes (legacy, not in pulse sequence)
       const cos = Math.cos(theta)
       return 0.25 + 0.75 * cos * cos
     }
@@ -71,6 +74,21 @@ export function harmonicRadius(mode: number, theta: number): number {
       // Four-lobe clover: |cos(2θ)| gives four symmetric lobes
       const raw = Math.abs(Math.cos(2 * theta)) // range [0, 1]
       return 0.2 + 0.8 * raw
+    }
+    case 4: {
+      // Six-lobe rosette: |cos(3θ)| gives six symmetric lobes
+      const raw = Math.abs(Math.cos(3 * theta)) // range [0, 1]
+      return 0.25 + 0.75 * raw
+    }
+    case 5: {
+      // Trefoil: (1 + cos(3θ))/2 gives gentle 3-lobe shape
+      const raw = (1 + Math.cos(3 * theta)) / 2 // range [0, 1]
+      return 0.3 + 0.7 * raw
+    }
+    case 6: {
+      // Eight-lobe star: |cos(4θ)| gives eight fine lobes
+      const raw = Math.abs(Math.cos(4 * theta)) // range [0, 1]
+      return 0.3 + 0.7 * raw
     }
     default:
       return 1.0
@@ -110,18 +128,23 @@ export function harmonicPath(mode: number, rotationDeg: number = 0, samples: num
 
 /**
  * The pulse sequence: which mode + orientation appears in each pulse.
- * Designed for maximum visual contrast between consecutive shapes.
+ * 10 pulses using 5 shapes (modes 2–6) at 45°-increment rotations.
+ * No dumbbell (mode 1). No adjacent pulses share the same shape.
  *
- * 1. dumbbell at 0° (vertical)    — tall
- * 2. clover at 45° (diagonal)     — square/round
- * 3. dumbbell at 90° (horizontal) — wide
- * 4. pinched at 0° (vertical)     — tall but different profile
+ * Shapes: clover(3), rosette(4), pinched(2), trefoil(5), star(6)
+ * Angles: 0°, 45°, 90°, 135° — spread across the sequence.
  */
 export const PULSE_SEQUENCE: ReadonlyArray<{ mode: number; rotation: number }> = [
-  { mode: 1, rotation: 0 },    // dumbbell vertical
-  { mode: 3, rotation: 45 },   // clover diagonal
-  { mode: 1, rotation: 90 },   // dumbbell horizontal
-  { mode: 2, rotation: 0 },    // pinched vertical
+  { mode: 3, rotation: 0 },    // clover, lobes at axes
+  { mode: 4, rotation: 45 },   // rosette-6, rotated
+  { mode: 2, rotation: 90 },   // pinched, horizontal
+  { mode: 5, rotation: 0 },    // trefoil, upright
+  { mode: 6, rotation: 45 },   // star-8, rotated
+  { mode: 3, rotation: 45 },   // clover, lobes at diagonals
+  { mode: 4, rotation: 0 },    // rosette-6, axis-aligned
+  { mode: 2, rotation: 135 },  // pinched, diagonal
+  { mode: 5, rotation: 45 },   // trefoil, rotated
+  { mode: 6, rotation: 0 },    // star-8, axis-aligned
 ]
 
 /** Pre-computed circle path (the "home" shape). */
