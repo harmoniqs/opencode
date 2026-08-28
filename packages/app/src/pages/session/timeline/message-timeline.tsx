@@ -2711,51 +2711,62 @@ export function MessageTimeline(props: {
           }}
         >
           <For each={virtualRowKeys()}>{(rowKey) => <VirtualTimelineRow rowKey={rowKey} />}</For>
-          {/* Turn overlay: persistent dot + continuous rail line (#630, #633) */}
+          {/* Turn overlay: persistent dot + continuous rail line (#630, #633)
+              The overlay mirrors the row centering (max-w + mx-auto + pl-3) so the
+              dot and line align with the per-row rail inside TimelineRowFrame. */}
           <Show when={overlayTop() !== undefined}>
-            {/* Continuous rail line for the active turn — one element, no per-row seams */}
-            <Show when={overlayRailTop() !== undefined && overlayRailHeight() > 0}>
-              <span
-                data-slot="overlay-rail-line"
-                aria-hidden="true"
-                class="pointer-events-none absolute w-px"
-                style={{
-                  top: `${overlayRailTop()}px`,
-                  left: `${OVERLAY_LINE_X}px`,
-                  height: `${overlayRailHeight()}px`,
-                  background: "var(--v2-text-text-base)",
-                  "z-index": 9,
-                  opacity: overlayFading() ? "0" : "1",
-                  transition: overlayFading() ? "opacity 150ms ease-out" : undefined,
-                }}
-              />
-            </Show>
-            {/* The dot — positioned at turn-start, sticky at 50vh within the turn span */}
             <div
               data-turn-overlay
               data-state={overlayFading() ? "completed" : undefined}
               aria-hidden="true"
-              class="pointer-events-none absolute left-0 w-0"
+              class="pointer-events-none absolute left-0 w-full"
               style={{
                 top: `${overlayRailTop() ?? overlayTop()!}px`,
                 height: `${(overlayTop()! - (overlayRailTop() ?? overlayTop()!)) + HARMONIC_SIZE}px`,
                 "z-index": 10,
               }}
             >
+              {/* Centering wrapper — must match TimelineRowFrame's classList */}
               <div
-                class="pointer-events-none"
-                classList={{ "turn-overlay-dot--settled": overlaySettled() }}
-                style={{
-                  position: "sticky",
-                  top: "calc(50vh - 6.5px)",
-                  left: `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
-                  width: `${HARMONIC_SIZE}px`,
-                  height: `${HARMONIC_SIZE}px`,
+                classList={{
+                  "relative flex flex-col h-full": true,
+                  "md:max-w-200 2xl:max-w-[1000px]": props.centered,
+                  "md:mx-auto": props.centered,
+                  "md:pl-3": true,
                 }}
               >
-                <HarmonicDot
-                  class="pointer-events-none thought-rail-dot--harmonic"
-                />
+                {/* Continuous rail line */}
+                <Show when={overlayRailHeight() > 0}>
+                  <span
+                    data-slot="overlay-rail-line"
+                    aria-hidden="true"
+                    class="pointer-events-none absolute w-px"
+                    style={{
+                      top: "0px",
+                      left: `${OVERLAY_LINE_X}px`,
+                      height: `${overlayRailHeight()}px`,
+                      background: "var(--v2-text-text-base)",
+                    }}
+                  />
+                </Show>
+                {/* Spacer pushes dot to the bottom (its natural position = last row) */}
+                <div class="flex-1" />
+                {/* Sticky dot — sticks at 50vh within this turn-spanning container */}
+                <div
+                  classList={{ "turn-overlay-dot--settled": overlaySettled() }}
+                  style={{
+                    position: "sticky",
+                    bottom: "0px",
+                    top: "calc(50vh - 6.5px)",
+                    "margin-left": `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
+                    width: `${HARMONIC_SIZE}px`,
+                    height: `${HARMONIC_SIZE}px`,
+                  }}
+                >
+                  <HarmonicDot
+                    class="pointer-events-none thought-rail-dot--harmonic"
+                  />
+                </div>
               </div>
             </div>
           </Show>
