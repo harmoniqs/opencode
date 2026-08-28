@@ -99,6 +99,7 @@ import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { sessionTitle } from "@/utils/session-title"
 import { scheduleConnectedMeasure } from "./measure"
 import { observeElementOffsetReconnectAware } from "./observe-element-offset"
+import { smoothScrollInterpolate, SMOOTH_SCROLL_DURATION } from "./smooth-scroll"
 import { createTimelineProjection } from "./projection"
 import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows"
 import { filterVirtualIndexes } from "./virtual-items"
@@ -703,6 +704,64 @@ export function MessageTimeline(props: {
       )
     },
   })
+
+  // ── Smooth scroll (#631) ───────────────────────────────────────────────
+  // Custom RAF loop for bottom-follow scrolls (180ms ease-out cubic). Instant
+  // scrollToEnd is used for mount, reveal, and prepend-anchor; smooth only for
+  // the "new content arrived while anchored" path. Cancels on user gesture.
+  let smoothFrame: number | undefined
+  let smoothStartY = 0
+  let smoothStartTime = 0
+  const prefersReducedMotion = typeof window !== "undefined"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : undefined
+
+  const cancelSmoothScroll = () => {
+    if (smoothFrame !== undefined) {
+      cancelAnimationFrame(smoothFrame)
+      smoothFrame = undefined
+    }
+  }
+
+  const smoothScrollToEnd = () => {
+    const el = listRoot()
+    if (!el) { virtualizer.scrollToEnd(); return }
+    // Reduced motion: instant
+    if (prefersReducedMotion?.matches) { virtualizer.scrollToEnd(); return }
+    // Compute target (max scroll position = scrollHeight - clientHeight)
+    const target = el.scrollHeight - el.clientHeight
+    const current = el.scrollTop
+    if (Math.abs(target - current) < 2) return // already there
+    // If an animation is in flight, restart from current position
+    cancelSmoothScroll()
+    smoothStartY = current
+    smoothStartTime = performance.now()
+    const tick = (now: number) => {
+      const elapsed = now - smoothStartTime
+      const y = smoothScrollInterpolate(smoothStartY, target, elapsed, SMOOTH_SCROLL_DURATION)
+      el.scrollTop = y
+      if (elapsed < SMOOTH_SCROLL_DURATION) smoothFrame = requestAnimationFrame(tick)
+      else smoothFrame = undefined
+    }
+    smoothFrame = requestAnimationFrame(tick)
+  }
+
+  // Cancel smooth scroll on user gesture (wheel, touch, pointer)
+  onMount(() => {
+    const el = listRoot()
+    if (!el) return
+    const cancel = () => cancelSmoothScroll()
+    el.addEventListener("wheel", cancel, { passive: true })
+    el.addEventListener("touchstart", cancel, { passive: true })
+    el.addEventListener("pointerdown", cancel)
+    onCleanup(() => {
+      el.removeEventListener("wheel", cancel)
+      el.removeEventListener("touchstart", cancel)
+      el.removeEventListener("pointerdown", cancel)
+      cancelSmoothScroll()
+    })
+  })
+
   const resizeItem = virtualizer.resizeItem
   let resizeAnchorScheduled = false
   const anchorResizedBottom = () => {
@@ -711,7 +770,7 @@ export function MessageTimeline(props: {
     queueMicrotask(() => {
       resizeAnchorScheduled = false
       if (!props.shouldAnchorBottom() || props.hasScrollGesture()) return
-      virtualizer.scrollToEnd()
+      smoothScrollToEnd()
     })
   }
   virtualizer.resizeItem = (index, size) => {
@@ -820,7 +879,7 @@ export function MessageTimeline(props: {
       if (index === undefined) return
       virtualizer.scrollToIndex(index, { align: "center" })
     })
-    props.setScrollToEnd?.(() => virtualizer.scrollToEnd())
+    props.setScrollToEnd?.(() => smoothScrollToEnd())
     props.setHistoryAnchor?.({ capture: capturePrependAnchor, restore: restorePrependAnchor })
   })
 
@@ -844,7 +903,7 @@ export function MessageTimeline(props: {
     if (resizePinFrame !== undefined) cancelAnimationFrame(resizePinFrame)
     clearPrependAnchor()
     if (prependAnchorFrame !== undefined) cancelAnimationFrame(prependAnchorFrame)
-    virtualizer.scrollToEnd()
+    smoothScrollToEnd()
   }
 
   let measuredSessionKey = sessionKey()
