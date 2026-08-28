@@ -1465,10 +1465,18 @@ export function MessageTimeline(props: {
     // the count is bounded by the virtualizer's window.
     let turnEl: HTMLDivElement | undefined
     const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
+    const [dotSettled, setDotSettled] = createSignal(false)
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
       const hostTop = turnEl.getBoundingClientRect().top
-      const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
+      // Travelling dot (#265): when the row has prose-fragment cards, target
+      // the LAST one so the dot (running or done) aligns with the newest
+      // settled chunk. This applies in both running and done states — the
+      // done-dot should stay at the last card, not jump back to the first.
+      const fragments = turnEl.querySelectorAll("[data-prose-fragment]")
+      const lastFragment = fragments.length > 0 ? (fragments[fragments.length - 1] as HTMLElement) : null
+      const target = lastFragment ?? turnEl
+      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
       let node: Node | null
       while ((node = walker.nextNode())) {
         if (!node.textContent?.trim()) continue
@@ -1477,10 +1485,12 @@ export function MessageTimeline(props: {
         const rect = range.getClientRects()[0]
         if (!rect || rect.height === 0) continue
         const centre = rect.top + rect.height / 2 - hostTop
-        // Half-px grid; never above the default (a dot poking into the
-        // inter-row gap would detach from its own tail cap), and a sanity
-        // ceiling against mid-virtualisation nonsense measurements.
-        if (centre > 0 && centre < 80) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        // When targeting a fragment, the dot can be anywhere down the row
+        // (no ceiling). For non-fragment rows the 80px ceiling guards against
+        // mid-virtualisation nonsense measurements.
+        const maxCentre = lastFragment ? Infinity : 80
+        if (centre > 0 && centre < maxCentre) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        if (!dotSettled()) setDotSettled(true)
         return
       }
     }
@@ -1512,7 +1522,7 @@ export function MessageTimeline(props: {
         >
           <Show when={rail()}>
             {(r) => (
-              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} />
+              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} settled={dotSettled()} />
             )}
           </Show>
           {/* The gutter is reserved for EVERY assistant part, not only the ones

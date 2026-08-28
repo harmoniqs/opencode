@@ -128,6 +128,9 @@ export function ThoughtRail(props: {
   /** measured centre of the row's first text line (px from the row's top);
    *  defaults to DEFAULT_DOT_CENTRE for unmeasured/prose rows */
   dotCentre?: number
+  /** true once the first measurement has landed — gates the CSS transition
+   *  so the initial mount uses the grow animation alone (#265) */
+  settled?: boolean
 }) {
   // Only the tail of a still-running turn is hollow. Everything above it has,
   // by definition, been succeeded. (Rule 4 — adjacency.)
@@ -172,8 +175,10 @@ export function ThoughtRail(props: {
         // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
         // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
         // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
+        // The settled class gates the top transition (#265): after the first
+        // measurement, subsequent dotCentre changes slide smoothly.
         <HarmonicDot
-          class="pointer-events-none absolute thought-rail-dot--harmonic"
+          class={`pointer-events-none absolute thought-rail-dot--harmonic${props.settled ? " thought-rail-dot--settled" : ""}`}
           style={{
             top: `${dotCentre() - HARMONIC_SIZE / 2}px`,
             left: `${LINE_X - HARMONIC_SIZE / 2}px`,
