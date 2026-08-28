@@ -1361,6 +1361,40 @@ describe("session.message-v2.toModelMessage", () => {
     const texts = (result[0].content as any[]).filter((p) => p.type === "text")
     expect(texts.map((t) => t.text)).toStrictEqual(["", "hello"])
   })
+
+  test("strips reasoning blocks when forCompaction is true, even for same model", async () => {
+    // When building messages for the compaction agent, reasoning blocks must be
+    // unconditionally stripped (downgraded to text) regardless of model match.
+    // This prevents the Anthropic API error: "thinking blocks in the latest
+    // assistant message cannot be modified."
+    const assistantID = "m-assistant-compaction"
+    const input: SessionV1.WithParts[] = [
+      {
+        info: assistantInfo(assistantID, "m-parent"),
+        parts: [
+          {
+            ...basePart(assistantID, "p1"),
+            type: "reasoning",
+            text: "deep thinking about the problem",
+            metadata: { anthropic: { signature: "sig-compaction" } },
+          },
+          { ...basePart(assistantID, "p2"), type: "text", text: "the answer" },
+        ] as SessionV1.Part[],
+      },
+    ]
+
+    // Without forCompaction, same-model reasoning is preserved
+    const preserved = await MessageV2.toModelMessages(input, model)
+    const preservedParts = preserved[0].content as any[]
+    expect(preservedParts.some((p) => p.type === "reasoning")).toBe(true)
+
+    // With forCompaction, reasoning is stripped to text
+    const stripped = await MessageV2.toModelMessages(input, model, { forCompaction: true })
+    const strippedParts = stripped[0].content as any[]
+    expect(strippedParts.some((p) => p.type === "reasoning")).toBe(false)
+    expect(strippedParts.some((p) => p.type === "text" && p.text === "deep thinking about the problem")).toBe(true)
+    expect(strippedParts.some((p) => p.type === "text" && p.text === "the answer")).toBe(true)
+  })
 })
 
 describe("session.message-v2.fromError", () => {
@@ -1658,6 +1692,102 @@ describe("session.message-v2.latest", () => {
     expect(state.user?.id).toBe(NEW_COMPACTION_USER)
     expect(state.tasks).toHaveLength(1)
     expect(state.tasks[0]).toMatchObject({ type: "compaction", auto: true })
+  })
+})
+
+describe("session.message-v2.filterCompacted — orphaned compaction guard", () => {
+  const ANCIENT_USER = MessageID.make("msg_009")
+  const ANCIENT_ASSISTANT = MessageID.make("msg_010")
+  const TAIL_USER = MessageID.make("msg_011")
+  const TAIL_ASSISTANT = MessageID.make("msg_012")
+  const COMPACTION_USER = MessageID.make("msg_013")
+  const ERRORED_SUMMARY = MessageID.make("msg_014")
+
+  const ancientUser: SessionV1.WithParts = {
+    info: userInfo(ANCIENT_USER),
+    parts: [{ ...basePart(ANCIENT_USER, "p1"), type: "text", text: "ancient question" }] as SessionV1.Part[],
+  }
+
+  const ancientAssistant: SessionV1.WithParts = {
+    info: {
+      ...assistantInfo(ANCIENT_ASSISTANT, ANCIENT_USER),
+      finish: "stop",
+      tokens: { input: 100, output: 100, reasoning: 0, cache: { read: 0, write: 0 }, total: 200 },
+    } as SessionV1.Assistant,
+    parts: [{ ...basePart(ANCIENT_ASSISTANT, "p1"), type: "text", text: "ancient response" }] as SessionV1.Part[],
+  }
+
+  const tailUser: SessionV1.WithParts = {
+    info: userInfo(TAIL_USER),
+    parts: [{ ...basePart(TAIL_USER, "p1"), type: "text", text: "recent question" }] as SessionV1.Part[],
+  }
+
+  const tailAssistant: SessionV1.WithParts = {
+    info: {
+      ...assistantInfo(TAIL_ASSISTANT, TAIL_USER),
+      finish: "stop",
+      tokens: { input: 100, output: 100, reasoning: 0, cache: { read: 0, write: 0 }, total: 200 },
+    } as SessionV1.Assistant,
+    parts: [{ ...basePart(TAIL_ASSISTANT, "p1"), type: "text", text: "recent response" }] as SessionV1.Part[],
+  }
+
+  // tail_start_id points at TAIL_USER, meaning ancientUser + ancientAssistant
+  // would normally be "summarized away" — but only if the summary succeeds.
+  const compactionUser: SessionV1.WithParts = {
+    info: userInfo(COMPACTION_USER),
+    parts: [
+      {
+        ...basePart(COMPACTION_USER, "p1"),
+        type: "compaction",
+        auto: true,
+        tail_start_id: TAIL_USER,
+      },
+    ] as SessionV1.Part[],
+  }
+
+  test("errored summary does not truncate pre-tail history", () => {
+    // When the compaction LLM call fails (e.g. thinking block API error), the
+    // summary-assistant gets summary:true but also error set. filterCompacted
+    // must NOT use this as a valid boundary — the ancient messages must survive.
+    const erroredSummary: SessionV1.WithParts = {
+      info: {
+        ...assistantInfo(ERRORED_SUMMARY, COMPACTION_USER),
+        summary: true,
+        finish: "error",
+        error: { name: "APIError", message: "thinking blocks cannot be modified" } as any,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 }, total: 0 },
+      } as SessionV1.Assistant,
+      parts: [],
+    }
+
+    // Newest-first (DB order)
+    const input: SessionV1.WithParts[] = [
+      erroredSummary,
+      compactionUser,
+      tailAssistant,
+      tailUser,
+      ancientAssistant,
+      ancientUser,
+    ]
+
+    const result = MessageV2.filterCompacted(input)
+
+    // ALL messages must be preserved — errored compaction is not a valid boundary
+    expect(result).toHaveLength(6)
+    // Critically: ancient messages (before tail_start_id) must still be present
+    expect(result.some((m) => m.info.id === ANCIENT_USER)).toBe(true)
+    expect(result.some((m) => m.info.id === ANCIENT_ASSISTANT)).toBe(true)
+  })
+
+  test("missing summary does not truncate pre-tail history", () => {
+    // Compaction marker exists with tail_start_id but no summary-assistant
+    const input: SessionV1.WithParts[] = [compactionUser, tailAssistant, tailUser, ancientAssistant, ancientUser]
+
+    const result = MessageV2.filterCompacted(input)
+
+    // All messages preserved
+    expect(result).toHaveLength(5)
+    expect(result.some((m) => m.info.id === ANCIENT_USER)).toBe(true)
   })
 })
 
