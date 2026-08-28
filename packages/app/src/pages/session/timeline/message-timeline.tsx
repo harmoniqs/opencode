@@ -1610,59 +1610,36 @@ export function MessageTimeline(props: {
   // A single persistent HarmonicDot rendered once per running turn, outside
   // the per-row virtualizer loop. Positioned absolutely in virtual content
   // space. Repositions only on step boundaries (row count changes).
-  const computeOverlayPosition = () => {
+  //
+  // Position is read from the DOM (the rendered session-turn element) rather
+  // than computed from virtualizer math — this guarantees alignment with
+  // per-row dots regardless of padding, centering, or measurement timing.
+  const computeOverlayPosition = (): { top: number; left: number } | undefined => {
+    if (!virtualContent) return undefined
     const id = activeMessageID()
     if (!id || sessionStatus().type === "idle") return undefined
-    // Find the first and last rows for the running turn
+    // Find the last running row
     const rows = timelineRows()
-    let firstIndex = -1
     let lastIndex = -1
-    let lastRow: TimelineRow.TimelineRow | undefined
-    for (let i = 0; i < rows.length; i++) {
+    for (let i = rows.length - 1; i >= 0; i--) {
       const row = rows[i]
       if (row.userMessageID !== id) continue
-      if (row._tag === "Thinking" || row._tag === "AssistantPart") {
-        if (firstIndex === -1) firstIndex = i
-        if (row._tag === "Thinking") {
-          if (lastIndex === -1) { lastIndex = i; lastRow = row }
-        }
-        if (row._tag === "AssistantPart" && row.lastAssistantPart) {
-          lastIndex = i; lastRow = row
-        }
-      }
+      if (row._tag === "AssistantPart" && row.lastAssistantPart) { lastIndex = i; break }
+      if (row._tag === "Thinking" && lastIndex === -1) lastIndex = i
     }
-    if (lastIndex === -1 || !lastRow) return undefined
-    // Look up position from the reactive virtualItemByKey (visible items)
-    // or fall back to measurementsCache (all items, may lag one frame)
+    if (lastIndex === -1) return undefined
+    // Find the rendered DOM element by its timeline key
     const rowKey = TimelineRow.key(rows[lastIndex])
-    const virtualItem = virtualItemByKey().get(rowKey)
-    const start = virtualItem?.start ?? virtualizer.measurementsCache[lastIndex]?.start
-    if (start === undefined) return undefined
-    const firstRowKey = firstIndex >= 0 ? TimelineRow.key(rows[firstIndex]) : undefined
-    const firstItem = firstRowKey ? virtualItemByKey().get(firstRowKey) : undefined
-    const firstStart = firstItem?.start ?? (firstIndex >= 0 ? virtualizer.measurementsCache[firstIndex]?.start : undefined)
-    // Deterministic dot centre based on group type
-    let centre = DEFAULT_DOT_CENTRE
-    if (lastRow._tag === "AssistantPart") {
-      if (lastRow.group.type !== "part") centre = DEFAULT_DOT_CENTRE
-      else {
-        const part = getMsgPart(lastRow.group.ref.messageID, lastRow.group.ref.partID)
-        centre = part?.type === "tool" ? 16 : 21
-      }
-    }
-    const headerOffset = showHeader() ? 64 : 0
-    const dotTop = start - headerOffset + centre - HARMONIC_SIZE / 2
-    // Rail line: from first row's dot centre to the current dot position
-    const firstTop = firstStart !== undefined
-      ? firstStart - headerOffset + DEFAULT_DOT_CENTRE
-      : dotTop + HARMONIC_SIZE / 2
-    const railHeight = Math.max(0, start - headerOffset + centre - firstTop)
+    const rowEl = virtualContent.querySelector(`[data-timeline-key="${rowKey}"]`) as HTMLElement | null
+    if (!rowEl) return undefined
+    const turnEl = rowEl.querySelector("[data-component='session-turn']") as HTMLElement | null
+    if (!turnEl) return undefined
+    // Position relative to virtualContent (the containing block for absolute children)
+    const containerRect = virtualContent.getBoundingClientRect()
+    const turnRect = turnEl.getBoundingClientRect()
     return {
-      top: dotTop,
-      railTop: firstTop,
-      railHeight,
-      turnStartedAt: "turnStartedAt" in lastRow ? (lastRow as any).turnStartedAt as number | undefined : undefined,
-      tokens: assistantTokensForTurn(id) || undefined,
+      top: turnRect.top - containerRect.top + DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2,
+      left: turnRect.left - containerRect.left + OVERLAY_LINE_X - HARMONIC_SIZE / 2,
     }
   }
 
@@ -1673,8 +1650,7 @@ export function MessageTimeline(props: {
     return `${id}:${timelineRows().filter(r => r.userMessageID === id).length}`
   })
   const [overlayTop, setOverlayTop] = createSignal<number | undefined>(undefined)
-  const [overlayRailTop, setOverlayRailTop] = createSignal<number | undefined>(undefined)
-  const [overlayRailHeight, setOverlayRailHeight] = createSignal(0)
+  const [overlayLeft, setOverlayLeft] = createSignal(0)
   const [overlaySettled, setOverlaySettled] = createSignal(false)
   const [overlayFading, setOverlayFading] = createSignal(false)
   let overlayFadeTimer: ReturnType<typeof setTimeout> | undefined
@@ -1684,8 +1660,7 @@ export function MessageTimeline(props: {
     const pos = computeOverlayPosition()
     if (pos) {
       setOverlayTop(pos.top)
-      setOverlayRailTop(pos.railTop)
-      setOverlayRailHeight(pos.railHeight)
+      setOverlayLeft(pos.left)
       if (!overlaySettled()) requestAnimationFrame(() => setOverlaySettled(true))
       return true
     }
@@ -1721,8 +1696,6 @@ export function MessageTimeline(props: {
         if (overlayFadeTimer) clearTimeout(overlayFadeTimer)
         overlayFadeTimer = setTimeout(() => {
           setOverlayTop(undefined)
-          setOverlayRailTop(undefined)
-          setOverlayRailHeight(0)
           setOverlayFading(false)
           overlayFadeTimer = undefined
         }, 150)
@@ -2711,63 +2684,27 @@ export function MessageTimeline(props: {
           }}
         >
           <For each={virtualRowKeys()}>{(rowKey) => <VirtualTimelineRow rowKey={rowKey} />}</For>
-          {/* Turn overlay: persistent dot + continuous rail line (#630, #633)
-              The overlay mirrors the row centering (max-w + mx-auto + pl-3) so the
-              dot and line align with the per-row rail inside TimelineRowFrame. */}
+          {/* Turn overlay: single persistent dot for the running turn (#630).
+              Per-row ThoughtRail handles rail lines; the overlay only provides
+              the never-remounting HarmonicDot. Position read from DOM. */}
           <Show when={overlayTop() !== undefined}>
             <div
               data-turn-overlay
               data-state={overlayFading() ? "completed" : undefined}
               aria-hidden="true"
-              class="pointer-events-none absolute left-0 w-full"
+              class="pointer-events-none absolute"
+              classList={{ "turn-overlay-dot--settled": overlaySettled() }}
               style={{
-                top: `${overlayRailTop() ?? overlayTop()!}px`,
-                height: `${(overlayTop()! - (overlayRailTop() ?? overlayTop()!)) + HARMONIC_SIZE}px`,
+                top: `${overlayTop()}px`,
+                left: `${overlayLeft()}px`,
+                width: `${HARMONIC_SIZE}px`,
+                height: `${HARMONIC_SIZE}px`,
                 "z-index": 10,
               }}
             >
-              {/* Centering wrapper — must match TimelineRowFrame's classList */}
-              <div
-                classList={{
-                  "relative flex flex-col h-full": true,
-                  "md:max-w-200 2xl:max-w-[1000px]": props.centered,
-                  "md:mx-auto": props.centered,
-                  "md:pl-3": true,
-                }}
-              >
-                {/* Continuous rail line */}
-                <Show when={overlayRailHeight() > 0}>
-                  <span
-                    data-slot="overlay-rail-line"
-                    aria-hidden="true"
-                    class="pointer-events-none absolute w-px"
-                    style={{
-                      top: "0px",
-                      left: `${OVERLAY_LINE_X}px`,
-                      height: `${overlayRailHeight()}px`,
-                      background: "var(--v2-text-text-base)",
-                    }}
-                  />
-                </Show>
-                {/* Spacer pushes dot to the bottom (its natural position = last row) */}
-                <div class="flex-1" />
-                {/* Sticky dot — sticks at 50vh within this turn-spanning container */}
-                <div
-                  classList={{ "turn-overlay-dot--settled": overlaySettled() }}
-                  style={{
-                    position: "sticky",
-                    bottom: "0px",
-                    top: "calc(50vh - 6.5px)",
-                    "margin-left": `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
-                    width: `${HARMONIC_SIZE}px`,
-                    height: `${HARMONIC_SIZE}px`,
-                  }}
-                >
-                  <HarmonicDot
-                    class="pointer-events-none thought-rail-dot--harmonic"
-                  />
-                </div>
-              </div>
+              <HarmonicDot
+                class="pointer-events-none thought-rail-dot--harmonic"
+              />
             </div>
           </Show>
           <Show when={timelineRows().length > 0}>
