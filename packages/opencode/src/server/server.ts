@@ -7,6 +7,7 @@ import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
 import { createServer } from "node:http"
 import { MDNS } from "./mdns"
+import { BootId } from "./boot-id"
 import * as AmicodeConnections from "./amicode/connections"
 import { HttpApiApp } from "./routes/instance/httpapi/server"
 import { disposeMiddleware } from "./routes/instance/httpapi/lifecycle"
@@ -72,6 +73,7 @@ export async function openapi() {
 export let url: URL | undefined
 
 export async function listen(opts: ListenOptions): Promise<Listener> {
+  BootId.refresh()
   const listener = await Effect.runPromise(listenEffect(opts))
   return {
     hostname: listener.hostname,

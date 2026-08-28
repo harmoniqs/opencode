@@ -58,6 +58,7 @@ import { usePlatform } from "@/context/platform"
 import { setPendingAutoSend } from "@/pages/new-session/new-session-draft-controller"
 import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
+import { inAmicode } from "@/utils/amicode-bridge"
 import { SettingsProvider, useSettings } from "@/context/settings"
 import { TabsProvider, tabHref, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
@@ -493,6 +494,28 @@ function AmicodeNavigateBridge() {
   return null
 }
 
+/** Phase 4: extension-host → webview URL push. When the extension restarts the
+ *  server on a different port (ephemeral mode), it recreates the panel (so
+ *  location.origin is already correct). For same-port restarts, it posts
+ *  server-url-changed as a "restart happened" signal — the SSE reconnect loop
+ *  and boot-ID detection handle the actual state refresh. This component is the
+ *  fallback safety net: if the URL in the message differs from location.origin,
+ *  the panel was NOT recreated and we redirect to the new URL. */
+function AmicodeServerBridge() {
+  if (!inAmicode()) return null
+  const onMsg = (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; url?: string } | undefined
+    if (d?.source !== "amicode" || d.kind !== "server-url-changed" || !d.url) return
+    // Same origin: server restarted on same port. SSE reconnect handles it.
+    if (d.url === location.origin || new URL(d.url).origin === location.origin) return
+    // Different origin: panel should have been recreated, but wasn't. Redirect.
+    window.location.href = d.url + location.pathname + location.search
+  }
+  window.addEventListener("message", onMsg)
+  onCleanup(() => window.removeEventListener("message", onMsg))
+  return null
+}
+
 export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
   return (
     <MetaProvider>
@@ -695,6 +718,7 @@ export function AppInterface(props: {
                 root={(routerProps) => (
                   <TabsProvider>
                     <AmicodeNavigateBridge />
+                    <AmicodeServerBridge />
                     <PermissionProvider>
                       <NotificationProvider>
                         <ServerShell>

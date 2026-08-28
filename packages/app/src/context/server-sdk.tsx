@@ -206,6 +206,7 @@ type ServerSDKBase = {
 
 function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerScope): ServerSDKBase {
   const platform = usePlatform()
+  const serverCtx = useServer()
   const abort = new AbortController()
 
   const eventFetch = (() => {
@@ -271,6 +272,8 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   }
 
   let streamErrorLogged = false
+  let consecutiveFailures = 0
+  const MAX_CONSECUTIVE_FAILURES = 10
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   let attempt: AbortController | undefined
   let run: Promise<void> | undefined
@@ -319,11 +322,32 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
               ? (await eventSdk.global.event({ signal: attempt.signal, onSseError })).stream
               : eventApi.event.subscribe({ signal: attempt.signal })
           setStreamStatus("connected")
+          consecutiveFailures = 0
           let yielded = Date.now()
           for await (const event of events) {
             streamErrorLogged = false
             const legacy = "payload" in event
             if (legacy && event.payload.type === "sync") continue
+
+            // Boot-ID detection: compare the server's boot identifier on each
+            // server.connected event to detect restarts across reconnections.
+            const eventType = legacy ? event.payload.type : event.type
+            if (eventType === "server.connected") {
+              const props = legacy ? event.payload.properties : (event as { properties?: Record<string, unknown> }).properties
+              const newBootId = typeof props?.bootId === "string" ? props.bootId : undefined
+              if (newBootId) {
+                const previousBootId = serverCtx.getBootId(scope)
+                if (previousBootId && previousBootId !== newBootId) {
+                  console.warn("[server-sdk] server restarted (boot-ID changed)", {
+                    previous: previousBootId,
+                    current: newBootId,
+                    scope,
+                  })
+                }
+                serverCtx.setBootId(newBootId, scope)
+              }
+            }
+
             const directory = legacy ? (event.directory ?? "global") : (event.location?.directory ?? "global")
             const payload = legacy ? (event.payload as Event) : adaptServerEvent(event)
             if (enqueueServerEvent(queue, { directory, payload })) schedule()
@@ -333,7 +357,10 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
             await wait(0)
           }
         } catch (error) {
-          if (!isStreamClosed(error, attempt?.signal)) setStreamStatus("disconnected")
+          if (!isStreamClosed(error, attempt?.signal)) {
+            setStreamStatus("disconnected")
+            consecutiveFailures++
+          }
           if (!isStreamClosed(error, attempt?.signal) && !streamErrorLogged) {
             streamErrorLogged = true
             console.error("[global-sdk] event stream failed", {
@@ -349,6 +376,13 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
 
         if (abort.signal.aborted || !started || generation !== active) return
         await wait(RECONNECT_DELAY_MS)
+
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          console.warn("[server-sdk] server unreachable after", MAX_CONSECUTIVE_FAILURES, "retries — SSE loop stopped", {
+            url: server.http.url,
+          })
+          break
+        }
       }
     })().finally(() => {
       if (run !== current) return
