@@ -61,7 +61,6 @@ describe("current session timeline rows", () => {
       "turn-gap:msg_3",
       "user-message:msg_3",
       "thinking:msg_3",
-      "thinking-meta:msg_3",
     ])
   })
 
@@ -177,7 +176,6 @@ describe("current session timeline rows", () => {
       "turn-gap:msg_2",
       "user-message:msg_2",
       "thinking:msg_2",
-      "thinking-meta:msg_2",
     ])
   })
 
@@ -218,7 +216,7 @@ describe("current session timeline rows", () => {
     // The stale error row must not appear once the turn resumes. The resumed
     // text is the streaming tail (no time.end) so it is withheld until it
     // completes — Thinking, not the half-streamed part, is what renders.
-    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking", "ThinkingMeta"])
+    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking"])
   })
 
   test("harmonic dot travels: on Thinking when no output, on last AssistantPart once output lands", () => {
@@ -307,6 +305,50 @@ describe("current session timeline rows", () => {
     const parts3 = r3.rows.filter((r) => r._tag === "AssistantPart")
     for (const p of parts3) {
       expect((p as any).turnRunning).toBe(false)
+    }
+  })
+
+  test("turnStartedAt is threaded through Thinking and AssistantPart rows from user message time.created", () => {
+    const source = [
+      { id: "msg_u", type: "user", text: "go", time: { created: 1000 } },
+      {
+        id: "msg_a",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "output" }],
+        time: { created: 1050, completed: 1200 },
+      },
+      {
+        id: "msg_b",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "more" }],
+        time: { created: 1300 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const normalized = normalizeSessionMessages("ses_1", source)
+    const messages = new Map(normalized.messages.map((m) => [m.id, m]))
+
+    const result = Timeline.constructSessionMessageRows(
+      source,
+      (id) => messages.get(id),
+      (id) => normalized.parts.get(id) ?? [],
+      true,
+      "busy",
+      true,
+      normalized.messages.filter((m) => m.role === "user"),
+    )
+
+    // Thinking row carries the user message's time.created as turnStartedAt
+    const thinking = result.rows.find((r) => r._tag === "Thinking")!
+    expect((thinking as any).turnStartedAt).toBe(1000)
+
+    // AssistantPart rows carry it too (for dot tooltip on last part)
+    const assistantParts = result.rows.filter((r) => r._tag === "AssistantPart")
+    for (const part of assistantParts) {
+      expect((part as any).turnStartedAt).toBe(1000)
     }
   })
 })

@@ -246,15 +246,20 @@
 
 [data-component="text-part"] {
   width: 100%;
-  margin-top: 24px;
+  margin-top: 12px;
+  position: relative;
 
   [data-slot="text-part-body"] {
     margin-top: 0;
   }
 
   [data-slot="text-part-copy-wrapper"] {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    transform: translateY(100%);
+    padding-top: 4px;
     min-height: 24px;
-    margin-top: 4px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -263,6 +268,7 @@
     pointer-events: none;
     transition: opacity 0.15s ease;
     will-change: opacity;
+    z-index: 10;
 
     [data-component="tooltip-trigger"] {
       display: inline-flex;

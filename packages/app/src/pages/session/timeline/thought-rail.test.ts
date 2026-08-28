@@ -19,8 +19,8 @@ const turn = (n: number, running: boolean) =>
   )
 
 describe("thought rail", () => {
-  test("a finished single-step turn draws no rail — one dot is decoration, not a sequence", () => {
-    expect(turn(1, false)[0].render).toBe(false)
+  test("a finished single-step turn still renders a rail — Thinking row above provides the sequence", () => {
+    expect(turn(1, false)[0].render).toBe(true)
   })
 
   test("a RUNNING turn rails from its very first step — the live dot is the only working mark", () => {

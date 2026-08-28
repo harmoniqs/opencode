@@ -20,7 +20,7 @@ import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualIt
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
 import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
-import { formatElapsed, formatTokens, ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
+import { formatElapsed, formatTokens, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -161,23 +161,19 @@ function TimelineThinkingRow(_props: { reasoningHeading?: string; showReasoningS
   )
 }
 
-function TimelineThinkingMetaRow(props: { turnRunning: boolean; turnDurationMs?: number; tokens?: number }) {
+function TimelineThinkingMetaRow(props: { turnDurationMs?: number; tokens?: number }) {
   return (
     <div data-slot="session-turn-thinking-meta">
-      <Show when={props.turnRunning} fallback={
-        <Show when={props.turnDurationMs != null}>
-          <span class="amc-thinking" data-slot="amc-thinking">
-            <span class="amc-thinking-meta" aria-hidden="true">
-              <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
-              <Show when={props.tokens != null}>
-                <span class="amc-thinking-sep">·</span>
-                <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
-              </Show>
-            </span>
+      <Show when={props.turnDurationMs != null}>
+        <span class="amc-thinking" data-slot="amc-thinking">
+          <span class="amc-thinking-meta" aria-hidden="true">
+            <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
+            <Show when={props.tokens != null}>
+              <span class="amc-thinking-sep">·</span>
+              <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
+            </Show>
           </span>
-        </Show>
-      }>
-        <ThinkingLine tokens={props.tokens} />
+        </span>
       </Show>
     </div>
   )
@@ -658,7 +654,7 @@ export function MessageTimeline(props: {
       return showHeader() ? 64 : 0
     },
     overscan: 50,
-    paddingEnd: 64,
+    paddingEnd: 24,
     rangeExtractor: (range) => {
       const id = activeMessageID()
       const active = id ? (messageLastRowIndex().get(id) ?? -1) : -1
@@ -1418,7 +1414,7 @@ export function MessageTimeline(props: {
     }
     const previousAssistantPart = () => {
       const row = input.row()
-      if (row._tag === "ThinkingMeta") return true
+      if (row._tag === "ThinkingMeta") return false
       if (row._tag !== "AssistantPart") return false
       // Gap above if there's a previous assistant part, OR if Thinking row
       // sits above (always true since Thinking is always first)
@@ -1523,7 +1519,15 @@ export function MessageTimeline(props: {
         >
           <Show when={rail()}>
             {(r) => (
-              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} settled={dotSettled()} />
+              <ThoughtRail
+                first={r().first}
+                last={r().last}
+                running={r().running}
+                dotCentre={dotCentre()}
+                settled={dotSettled()}
+                turnStartedAt={"turnStartedAt" in input.row() ? (input.row() as any).turnStartedAt : undefined}
+                tokens={r().running && r().last ? assistantTokensForTurn(input.row().userMessageID) || undefined : undefined}
+              />
             )}
           </Show>
           {/* The gutter is reserved for EVERY assistant part, not only the ones
@@ -1673,7 +1677,6 @@ export function MessageTimeline(props: {
               class="w-full px-4 md:px-5 relative"
             >
               <TimelineThinkingMetaRow
-                turnRunning={metaRow().turnRunning}
                 turnDurationMs={metaRow().turnDurationMs}
                 tokens={assistantTokensForTurn(metaRow().userMessageID) || undefined}
               />
@@ -2513,8 +2516,8 @@ export function MessageTimeline(props: {
             <div
               data-timeline-row="bottom-spacer"
               aria-hidden="true"
-              class="h-16 absolute top-0 left-0 w-full"
-              style={{ transform: `translateY(${virtualizer.getTotalSize() - 64}px)` }}
+              class="h-6 absolute top-0 left-0 w-full"
+              style={{ transform: `translateY(${virtualizer.getTotalSize() - 24}px)` }}
             />
           </Show>
         </div>

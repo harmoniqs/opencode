@@ -84,7 +84,9 @@
 //   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
 
 
+import { createSignal, onCleanup, Show } from "solid-js"
 import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
+import { formatElapsed, formatTokens } from "@opencode-ai/ui/amicode-thinking"
 
 const NODE = 7 // dot diameter, px — matches the site's Step
 
@@ -131,6 +133,10 @@ export function ThoughtRail(props: {
   /** true once the first measurement has landed — gates the CSS transition
    *  so the initial mount uses the grow animation alone (#265) */
   settled?: boolean
+  /** epoch-ms when the user message was created — anchors the tooltip timer */
+  turnStartedAt?: number
+  /** streamed token count for this turn — shown in the tooltip */
+  tokens?: number
 }) {
   // Only the tail of a still-running turn is hollow. Everything above it has,
   // by definition, been succeeded. (Rule 4 — adjacency.)
@@ -177,12 +183,12 @@ export function ThoughtRail(props: {
         // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
         // The settled class gates the top transition (#265): after the first
         // measurement, subsequent dotCentre changes slide smoothly.
-        <HarmonicDot
-          class={`pointer-events-none absolute thought-rail-dot--harmonic${props.settled ? " thought-rail-dot--settled" : ""}`}
-          style={{
-            top: `${dotCentre() - HARMONIC_SIZE / 2}px`,
-            left: `${LINE_X - HARMONIC_SIZE / 2}px`,
-          }}
+        // Tooltip on hover shows elapsed time + token count (#625).
+        <DotWithTooltip
+          dotCentre={dotCentre()}
+          settled={props.settled}
+          turnStartedAt={props.turnStartedAt}
+          tokens={props.tokens}
         />
       ) : (
         // DONE: 7px ink circle — the rail is one ink stroke (Rule 5).
@@ -201,11 +207,66 @@ export function ThoughtRail(props: {
             width: `${NODE}px`,
             height: `${NODE}px`,
             border: "1px solid var(--v2-text-text-base)",
-            background: "var(--v2-text-text-base)",
+             background: "var(--v2-text-text-base)",
           }}
         />
       )}
     </>
+  )
+}
+
+/** Running dot with a hover tooltip showing elapsed time + tokens (#625).
+ *  The tooltip only renders while hovered to keep DOM cost near zero. The
+ *  timer ticks from `turnStartedAt` (the user message's `time.created`), so
+ *  it survives component remount across session switches. */
+function DotWithTooltip(props: {
+  dotCentre: number
+  settled?: boolean
+  turnStartedAt?: number
+  tokens?: number
+}) {
+  const [hovered, setHovered] = createSignal(false)
+  const [elapsedMs, setElapsedMs] = createSignal(0)
+
+  // Tick the timer only while hovered — no cost when tooltip is hidden
+  let clock: ReturnType<typeof setInterval> | undefined
+  const startTicking = () => {
+    if (props.turnStartedAt == null) return
+    setElapsedMs(Date.now() - props.turnStartedAt)
+    clock = setInterval(() => setElapsedMs(Date.now() - props.turnStartedAt!), 1000)
+  }
+  const stopTicking = () => {
+    if (clock != null) clearInterval(clock)
+    clock = undefined
+  }
+  onCleanup(stopTicking)
+
+  return (
+    <span
+      class="absolute"
+      style={{
+        top: `${props.dotCentre - HARMONIC_SIZE / 2}px`,
+        left: `${LINE_X - HARMONIC_SIZE / 2}px`,
+      }}
+      onMouseEnter={() => { setHovered(true); startTicking() }}
+      onMouseLeave={() => { setHovered(false); stopTicking() }}
+    >
+      <HarmonicDot
+        class={`pointer-events-none thought-rail-dot--harmonic${props.settled ? " thought-rail-dot--settled" : ""}`}
+      />
+      <Show when={hovered() && props.turnStartedAt != null}>
+        <span
+          class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] tracking-[0.01em] tabular-nums bg-v2-background-bg-elevated text-v2-text-text-faint shadow-sm border border-v2-border-border-base z-50"
+          role="status"
+        >
+          {formatElapsed(elapsedMs())}
+          <Show when={props.tokens != null}>
+            <span class="mx-1 opacity-55">·</span>
+            {formatTokens(props.tokens!)} tokens
+          </Show>
+        </span>
+      </Show>
+    </span>
   )
 }
 
