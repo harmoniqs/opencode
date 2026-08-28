@@ -1469,12 +1469,13 @@ export function MessageTimeline(props: {
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
       const hostTop = turnEl.getBoundingClientRect().top
-      // Travelling dot (#265): when the row has prose-fragment cards, target
-      // the LAST one so the dot (running or done) aligns with the newest
-      // settled chunk. This applies in both running and done states — the
-      // done-dot should stay at the last card, not jump back to the first.
-      const fragments = turnEl.querySelectorAll("[data-prose-fragment]")
-      const lastFragment = fragments.length > 0 ? (fragments[fragments.length - 1] as HTMLElement) : null
+      // Travelling dot (#265): ONLY the running dot tracks the last
+      // prose-fragment card. The done-dot stays at the first text line
+      // (top of the row) so the rail reads as a sequence of origin marks.
+      const r = rail()
+      const isRunning = r && r.last && r.running
+      const fragments = isRunning ? turnEl.querySelectorAll("[data-prose-fragment]") : undefined
+      const lastFragment = fragments && fragments.length > 0 ? (fragments[fragments.length - 1] as HTMLElement) : null
       const target = lastFragment ?? turnEl
       const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
       let node: Node | null
