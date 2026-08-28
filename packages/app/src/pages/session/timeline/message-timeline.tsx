@@ -42,6 +42,7 @@ import {
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { readPartText, settledChunkBoundary } from "@opencode-ai/session-ui/message-part-text"
+import { buildTrace } from "@opencode-ai/session-ui/build-trace"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -89,6 +90,7 @@ import { useTabs } from "@/context/tabs"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { draftPrompt } from "@/utils/start-prompt"
 import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
+import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -161,12 +163,36 @@ function TimelineThinkingRow(_props: { reasoningHeading?: string; showReasoningS
   )
 }
 
-function TimelineThinkingMetaRow(props: { turnDurationMs?: number; tokens?: number }) {
+function TimelineThinkingMetaRow(props: { turnDurationMs?: number; tokens?: number; onCopy?: () => void }) {
+  const language = useLanguage()
+  const [copied, setCopied] = createSignal(false)
+
+  const handleCopy = () => {
+    props.onCopy?.()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div data-slot="session-turn-thinking-meta">
+      <TooltipV2
+        value={copied() ? language.t("ui.message.copied") : language.t("ui.message.copyTrace")}
+        placement="bottom"
+        gutter={4}
+      >
+        <IconButtonV2
+          icon={<IconV2 name={copied() ? "check" : "outline-copy"} size="small" />}
+          size="normal"
+          variant="ghost-muted"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleCopy}
+          aria-label={copied() ? language.t("ui.message.copied") : language.t("ui.message.copyTrace")}
+        />
+      </TooltipV2>
       <Show when={props.turnDurationMs != null}>
         <span class="amc-thinking" data-slot="amc-thinking">
           <span class="amc-thinking-meta" aria-hidden="true">
+            <span class="amc-thinking-sep">·</span>
             <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
             <Show when={props.tokens != null}>
               <span class="amc-thinking-sep">·</span>
@@ -448,6 +474,17 @@ export function MessageTimeline(props: {
     const start = msgs.findIndex((m) => m.id === userMessageID)
     if (start === -1) return 0
     return turnTokens(msgs.slice(start + 1).filter((m) => m.role === "assistant"))
+  }
+
+  // Copy the full assistant trace for a turn to the clipboard.
+  const copyTraceForTurn = (userMessageID: string) => {
+    const msgs = sessionMessages()
+    const start = msgs.findIndex((m) => m.id === userMessageID)
+    if (start === -1) return
+    const assistantMsgs = msgs.slice(start + 1).filter((m): m is AssistantMessage => m.role === "assistant")
+    const content = buildTrace(assistantMsgs, getMsgParts)
+    if (!content) return
+    if (!writeClipboardViaBridge(content)) void navigator.clipboard?.writeText(content)
   }
   /** True when at least one AssistantPart ROW exists in the projected timeline
    *  for this turn — meaning renderable, settled output is visible. Reasoning
@@ -1679,6 +1716,7 @@ export function MessageTimeline(props: {
               <TimelineThinkingMetaRow
                 turnDurationMs={metaRow().turnDurationMs}
                 tokens={assistantTokensForTurn(metaRow().userMessageID) || undefined}
+                onCopy={() => copyTraceForTurn(metaRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>

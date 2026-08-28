@@ -73,6 +73,13 @@
 .amc-thinking-sep { opacity: 0.55; }
 .amc-thinking-hint { font-style: italic; }
 
+/* Turn footer: the completed-turn meta row (copy + elapsed + tokens) */
+[data-slot="session-turn-thinking-meta"] {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
 /* ---- an opened skill file (message-part.tsx, ToolRegistry "skill") ------- */
 /* Expanding a skill used to dump its instructions as bare markdown straight into the
  * transcript, because [data-component="tool-output"] carries no surface of its own — no
