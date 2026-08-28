@@ -28,9 +28,10 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test src --only-failures"
+    "test": "bun test --conditions=browser src"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "20.0.11",
     "@tsconfig/node22": "catalog:",
     "@types/bun": "catalog:",
     "@types/katex": "0.16.7",

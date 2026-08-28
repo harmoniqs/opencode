@@ -196,4 +196,5 @@ export const dict = {
   "ui.toolErrorCard.copyError": "Fehler kopieren",
   "ui.message.duration.seconds": "{{count}}s",
   "ui.message.duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
-} satisfies Partial<Record<Keys, string>>
+  "ui.message.copyTrace": "Copy trace",
+}
