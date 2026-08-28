@@ -178,18 +178,10 @@ export function ThoughtRail(props: {
         }}
       />
       {isRunning() ? (
-        // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
-        // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
-        // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
-        // The settled class gates the top transition (#265): after the first
-        // measurement, subsequent dotCentre changes slide smoothly.
-        // Tooltip on hover shows elapsed time + token count (#625).
-        <DotWithTooltip
-          dotCentre={dotCentre()}
-          settled={props.settled}
-          turnStartedAt={props.turnStartedAt}
-          tokens={props.tokens}
-        />
+        // RUNNING: the overlay handles the live dot — render nothing here.
+        // The overlay is a single persistent element at the MessageTimeline
+        // level that transitions between rows on step boundaries (#630).
+        null
       ) : (
         // DONE: 7px ink circle — the rail is one ink stroke (Rule 5).
         // text-base is the fg: literal black on light, near-white on dark,
@@ -292,6 +284,18 @@ export function ThoughtRailLabel(props: { label: string }) {
  *  15px; pl-6 (24px) leaves the same ~9px dot-to-content breath the website's
  *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. (Rule 5) */
 export const THOUGHT_RAIL_INSET = "pl-6"
+
+/** Deterministic dot centre per group type — replaces the old ResizeObserver
+ *  measurement. The offsets are the vertical centre of the first text line for
+ *  each content species, measured once and tabulated. If CSS padding changes,
+ *  update the one constant here. */
+export function dotCentreForGroup(groupType: string): number {
+  if (groupType === "prose") return 21
+  if (groupType === "single_tool") return 16
+  if (groupType === "tool_group") return 11
+  if (groupType === "thinking") return 11
+  return DEFAULT_DOT_CENTRE
+}
 
 /**
  * Rule 6 — lone COMPLETED steps render nothing (one dot is decoration). A

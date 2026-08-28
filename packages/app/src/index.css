@@ -387,12 +387,17 @@
    class gates the transition so the initial mount uses the grow animation
    alone — no slide from top:0 to the first measured position. */
 .thought-rail-dot--settled {
-  transition: top 150ms ease-out;
+  transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Turn overlay dot (#630): the persistent overlay uses the same spring timing
+   for its top transition on step boundaries. */
+.turn-overlay-dot--settled {
+  transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 /* The rail line extends in sync with the dot — same timing so the spine
    grows as the dot descends. */
 [data-slot="thought-rail-line"] {
-  transition: height 150ms ease-out;
+  transition: height 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes thought-rail-grow {
   from {
@@ -413,6 +418,9 @@
     display: none;
   }
   .thought-rail-dot--settled {
+    transition: none;
+  }
+  .turn-overlay-dot--settled {
     transition: none;
   }
   [data-slot="thought-rail-line"] {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { shouldRenderRail } from "./thought-rail"
+import { shouldRenderRail, dotCentreForGroup } from "./thought-rail"
 
 // The rail's grammar, stated as tests. A step is "running" only when it is the
 // TAIL of a turn that is still working; everything above it has by definition
@@ -61,5 +61,19 @@ describe("thought rail", () => {
     const steps = turn(3, false)
     expect(steps.map((s) => s.first)).toEqual([true, false, false])
     expect(steps.map((s) => s.last)).toEqual([false, false, true])
+  })
+})
+
+describe("dotCentreForGroup", () => {
+  test("returns deterministic offsets per group type", () => {
+    expect(dotCentreForGroup("prose")).toBe(21)
+    expect(dotCentreForGroup("tool_group")).toBe(11)
+    expect(dotCentreForGroup("single_tool")).toBe(16)
+    expect(dotCentreForGroup("thinking")).toBe(11)
+  })
+
+  test("returns default for unknown group types", () => {
+    expect(dotCentreForGroup("unknown")).toBe(11)
+    expect(dotCentreForGroup("")).toBe(11)
   })
 })

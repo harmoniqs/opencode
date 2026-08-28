@@ -19,8 +19,9 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
+import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail, dotCentreForGroup } from "./thought-rail"
 import { formatElapsed, formatTokens, turnTokens } from "@opencode-ai/ui/amicode-thinking"
+import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -1487,54 +1488,20 @@ export function MessageTimeline(props: {
       return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart }
     }
 
-    // The dot sits on the row's FIRST TEXT LINE, wherever the content puts it
-    // (Kate 2026-08-24: dots must line up with the text they coincide with).
-    // Prose and rail-label rows put it at the default 11px; rows that open
-    // with a card (a tool chip, a group header, a widget preview) start their
-    // first line lower by that card's own padding — measured, not tabulated,
-    // because the set of card species is open-ended. The ResizeObserver
-    // re-measures when async card content mounts (deferToolContent) or
-    // streaming reflows the row; observers exist only on rendered rows, so
-    // the count is bounded by the virtualizer's window.
+    // The dot sits on a deterministic centre per group type — no measurement
+    // needed. Prose=21px, tool groups=11px, single tools=16px, thinking=11px.
+    // Done-dots pass this to ThoughtRail; the running dot is in the overlay.
     let turnEl: HTMLDivElement | undefined
-    const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
-    const [dotSettled, setDotSettled] = createSignal(false)
-    const measureDotCentre = () => {
-      if (!turnEl || !rail()) return
-      const hostTop = turnEl.getBoundingClientRect().top
-      // Travelling dot (#265): ONLY the running dot tracks the last
-      // prose-fragment card. The done-dot stays at the first text line
-      // (top of the row) so the rail reads as a sequence of origin marks.
-      const r = rail()
-      const isRunning = r && r.last && r.running
-      const fragments = isRunning ? turnEl.querySelectorAll("[data-prose-fragment]") : undefined
-      const lastFragment = fragments && fragments.length > 0 ? (fragments[fragments.length - 1] as HTMLElement) : null
-      const target = lastFragment ?? turnEl
-      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
-      let node: Node | null
-      while ((node = walker.nextNode())) {
-        if (!node.textContent?.trim()) continue
-        const range = document.createRange()
-        range.selectNodeContents(node)
-        const rect = range.getClientRects()[0]
-        if (!rect || rect.height === 0) continue
-        const centre = rect.top + rect.height / 2 - hostTop
-        // When targeting a fragment, the dot can be anywhere down the row
-        // (no ceiling). For non-fragment rows the 80px ceiling guards against
-        // mid-virtualisation nonsense measurements.
-        const maxCentre = lastFragment ? Infinity : 80
-        if (centre > 0 && centre < maxCentre) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
-        if (!dotSettled()) setDotSettled(true)
-        return
-      }
+    const dotCentre = () => {
+      const row = input.row()
+      if (row._tag === "Thinking") return DEFAULT_DOT_CENTRE
+      if (row._tag !== "AssistantPart") return DEFAULT_DOT_CENTRE
+      if (row.group.type !== "part") return DEFAULT_DOT_CENTRE // context/shell/edit group → 11
+      // Single part: check if it's a tool (16) or prose (21)
+      const part = getMsgPart(row.group.ref.messageID, row.group.ref.partID)
+      if (part?.type === "tool") return 16
+      return 21 // text, reasoning
     }
-    onMount(() => {
-      if (!rail()) return
-      measureDotCentre()
-      const observer = new ResizeObserver(() => measureDotCentre())
-      if (turnEl) observer.observe(turnEl)
-      onCleanup(() => observer.disconnect())
-    })
 
     return (
       <div
@@ -1561,7 +1528,6 @@ export function MessageTimeline(props: {
                 last={r().last}
                 running={r().running}
                 dotCentre={dotCentre()}
-                settled={dotSettled()}
                 turnStartedAt={"turnStartedAt" in input.row() ? (input.row() as any).turnStartedAt : undefined}
                 tokens={r().running && r().last ? assistantTokensForTurn(input.row().userMessageID) || undefined : undefined}
               />
@@ -1579,6 +1545,80 @@ export function MessageTimeline(props: {
       </div>
     )
   }
+
+  // ── Turn Overlay (#630) ──────────────────────────────────────────────
+  // A single persistent HarmonicDot rendered once per running turn, outside
+  // the per-row virtualizer loop. Positioned absolutely in virtual content
+  // space; uses CSS sticky to stay visible near the viewport top during long
+  // responses. Repositions only on step boundaries (row count changes).
+  const overlayDotPosition = createMemo(() => {
+    const id = activeMessageID()
+    if (!id || sessionStatus().type === "idle") return undefined
+    // Find the last AssistantPart row for the running turn
+    const rows = timelineRows()
+    let lastIndex = -1
+    let lastRow: TimelineRow.TimelineRow | undefined
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i]
+      if (row.userMessageID !== id) continue
+      if (row._tag === "AssistantPart" && row.lastAssistantPart) {
+        lastIndex = i
+        lastRow = row
+        break
+      }
+      // If no assistant parts yet, target the Thinking row
+      if (row._tag === "Thinking" && lastIndex === -1) {
+        lastIndex = i
+        lastRow = row
+      }
+    }
+    if (lastIndex === -1 || !lastRow) return undefined
+    // Get the virtual measurement for this row
+    const measurement = virtualizer.measurementsCache[lastIndex]
+    if (!measurement) return undefined
+    // Deterministic dot centre based on group type
+    let centre = DEFAULT_DOT_CENTRE
+    if (lastRow._tag === "AssistantPart") {
+      if (lastRow.group.type !== "part") centre = DEFAULT_DOT_CENTRE
+      else {
+        const part = getMsgPart(lastRow.group.ref.messageID, lastRow.group.ref.partID)
+        centre = part?.type === "tool" ? 16 : 21
+      }
+    }
+    return {
+      top: measurement.start - (showHeader() ? 64 : 0) + centre - HARMONIC_SIZE / 2,
+      turnStartedAt: "turnStartedAt" in lastRow ? (lastRow as any).turnStartedAt as number | undefined : undefined,
+      tokens: assistantTokensForTurn(id) || undefined,
+    }
+  })
+
+  // Track row count per active turn — dot moves only on step boundaries
+  const overlayStepKey = createMemo(() => {
+    const id = activeMessageID()
+    if (!id || sessionStatus().type === "idle") return ""
+    return `${id}:${timelineRows().filter(r => r.userMessageID === id).length}`
+  })
+  const [overlayTop, setOverlayTop] = createSignal<number | undefined>(undefined)
+  const [overlaySettled, setOverlaySettled] = createSignal(false)
+  createEffect(
+    on(overlayStepKey, () => {
+      const pos = overlayDotPosition()
+      if (pos) {
+        setOverlayTop(pos.top)
+        // After first position, enable the spring transition
+        if (!overlaySettled()) requestAnimationFrame(() => setOverlaySettled(true))
+      }
+    }),
+  )
+  // Reset settled state when the running turn changes
+  createEffect(
+    on(activeMessageID, () => {
+      setOverlaySettled(false)
+    }, { defer: true }),
+  )
+
+  // The line x position (must match thought-rail.tsx constants)
+  const OVERLAY_LINE_X = 8 + 7 / 2 - 0.5 // GUTTER + NODE/2 - 0.5 = 11
 
   const renderTimelineRow = (row: Accessor<TimelineRow.TimelineRow>, onSizeChange?: () => void) => {
     switch (row()._tag) {
@@ -2550,6 +2590,24 @@ export function MessageTimeline(props: {
           }}
         >
           <For each={virtualRowKeys()}>{(rowKey) => <VirtualTimelineRow rowKey={rowKey} />}</For>
+          {/* Turn overlay: single persistent dot for the running turn (#630) */}
+          <Show when={overlayTop() !== undefined}>
+            <div
+              data-turn-overlay
+              aria-hidden="true"
+              class="pointer-events-none absolute"
+              style={{
+                top: `${overlayTop()}px`,
+                left: `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
+                "z-index": 10,
+              }}
+              classList={{ "turn-overlay-dot--settled": overlaySettled() }}
+            >
+              <HarmonicDot
+                class="pointer-events-none thought-rail-dot--harmonic"
+              />
+            </div>
+          </Show>
           <Show when={timelineRows().length > 0}>
             <div
               data-timeline-row="bottom-spacer"
