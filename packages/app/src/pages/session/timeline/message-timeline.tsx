@@ -1634,12 +1634,15 @@ export function MessageTimeline(props: {
     if (!rowEl) return undefined
     const turnEl = rowEl.querySelector("[data-component='session-turn']") as HTMLElement | null
     if (!turnEl) return undefined
-    // Position relative to virtualContent (the containing block for absolute children)
-    const containerRect = virtualContent.getBoundingClientRect()
-    const turnRect = turnEl.getBoundingClientRect()
+    // The VirtualTimelineRow's top is set as inline style (absolute positioned in virtualContent).
+    // session-turn's offsetTop relative to the row = any pt-3 padding above it.
+    const rowTop = parseFloat(rowEl.style.top || "0")
+    const turnOffsetTop = turnEl.offsetTop
+    // Horizontal: turnEl.offsetLeft relative to virtualContent
+    const turnOffsetLeft = turnEl.getBoundingClientRect().left - virtualContent.getBoundingClientRect().left
     return {
-      top: turnRect.top - containerRect.top + DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2,
-      left: turnRect.left - containerRect.left + OVERLAY_LINE_X - HARMONIC_SIZE / 2,
+      top: rowTop + turnOffsetTop + DEFAULT_DOT_CENTRE - HARMONIC_SIZE / 2,
+      left: turnOffsetLeft + OVERLAY_LINE_X - HARMONIC_SIZE / 2,
     }
   }
 
