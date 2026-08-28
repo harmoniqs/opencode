@@ -56,15 +56,46 @@ describe("splitSettledChunks", () => {
     expect(tail).toBe("After the fence starts")
   })
 
-  test("splits before a list's first item, never between its items", () => {
+  test("a label followed by a list keeps everything in one chunk, never splits between items", () => {
     const text = "Steps:\n\n1. one\n\n2. two\n\n> quoted\n\nNext paragraph beg"
     const { chunks, tail } = splitSettledChunks(text)
-    expect(chunks).toEqual(["Steps:\n\n", "1. one\n\n2. two\n\n> quoted\n\n"])
+    // "Steps:" is a short label — stays glued; list items stay together via continuation guard
+    expect(chunks).toEqual(["Steps:\n\n1. one\n\n2. two\n\n> quoted\n\n"])
     expect(tail).toBe("Next paragraph beg")
   })
 
   test("trailing blank lines do not settle the tail", () => {
     const text = "Done paragraph.\n\n"
     expect(settledChunkBoundary(text)).toBe(0)
+  })
+
+  test("a short label (<40 chars ending with colon) stays with the following content", () => {
+    const text = "Results:\n\n- item 1\n- item 2\n\nNext paragraph"
+    const { chunks, tail } = splitSettledChunks(text)
+    // "Results:" is a label — stays glued to its content, no split after it
+    expect(chunks).toEqual(["Results:\n\n- item 1\n- item 2\n\n"])
+    expect(tail).toBe("Next paragraph")
+  })
+
+  test("a short label followed by a paragraph stays in one chunk", () => {
+    const text = "Summary:\n\nThis is the summary text.\n\nAnother section begins"
+    const { chunks, tail } = splitSettledChunks(text)
+    expect(chunks).toEqual(["Summary:\n\nThis is the summary text.\n\n"])
+    expect(tail).toBe("Another section begins")
+  })
+
+  test("a long line (>40 chars) ending with colon still splits normally", () => {
+    const text = "This is a complete sentence that happens to end with a colon:\n\nNext content"
+    const { chunks, tail } = splitSettledChunks(text)
+    // 62 chars — too long to be a label, splits normally
+    expect(chunks).toEqual(["This is a complete sentence that happens to end with a colon:\n\n"])
+    expect(tail).toBe("Next content")
+  })
+
+  test("whitespace-only chunks are never emitted", () => {
+    // Even if boundaries produce a whitespace segment, it should be filtered
+    const text = "Before.\n\n   \n\nAfter begins"
+    const { chunks, tail } = splitSettledChunks(text)
+    expect(chunks.every(c => c.trim() !== "")).toBe(true)
   })
 })

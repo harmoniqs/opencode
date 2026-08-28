@@ -14,6 +14,7 @@ export function readPartText(accum: Record<string, string> | undefined, part: { 
 
 const FENCE = /^\s{0,3}(```|~~~)/
 const CONTINUATION = /^\s{0,3}([-*+]\s|\d{1,3}[.)]\s|>)|^\s{4,}\S/
+const LABEL_MAX = 40
 
 /** Every settled chunk boundary of a streaming text, in order. Each value is
  *  the char index where the NEXT chunk begins. Monotonic as the text grows.
@@ -45,6 +46,14 @@ function chunkBoundaries(text: string): number[] {
       CONTINUATION.test(lines[j]) &&
       prevNonBlank !== undefined &&
       CONTINUATION.test(prevNonBlank)
+    )
+      continue
+    // A short label (< 40 chars ending with `:`) stays glued to the content
+    // that follows — splitting here orphans the label in a tiny card.
+    if (
+      prevNonBlank !== undefined &&
+      prevNonBlank.length < LABEL_MAX &&
+      prevNonBlank.trimEnd().endsWith(":")
     )
       continue
     boundaries.push(candidate)
