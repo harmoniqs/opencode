@@ -394,6 +394,19 @@
 .turn-overlay-dot--settled {
   transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+/* Turn overlay crossfade (#633): on turn completion the overlay fades out over
+   150ms and the per-row done-dots appear underneath. */
+[data-turn-overlay] {
+  opacity: 1;
+  transition: opacity 150ms ease-out;
+}
+[data-turn-overlay][data-state="completed"] {
+  opacity: 0;
+}
+/* The overlay's rail line transitions height in sync with the dot. */
+[data-turn-overlay] [data-slot="overlay-rail-line"] {
+  transition: height 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 /* The rail line extends in sync with the dot — same timing so the spine
    grows as the dot descends. */
 [data-slot="thought-rail-line"] {
@@ -421,6 +434,12 @@
     transition: none;
   }
   .turn-overlay-dot--settled {
+    transition: none;
+  }
+  [data-turn-overlay] {
+    transition: none;
+  }
+  [data-turn-overlay] [data-slot="overlay-rail-line"] {
     transition: none;
   }
   [data-slot="thought-rail-line"] {

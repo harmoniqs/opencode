@@ -1572,6 +1572,7 @@ export function MessageTimeline(props: {
           "md:max-w-200 2xl:max-w-[1000px]": props.centered,
           "md:mx-auto": props.centered,
           "pt-3": previousAssistantPart(),
+          "md:pl-3": assistantPart(),
         }}
       >
         <div
@@ -1613,28 +1614,29 @@ export function MessageTimeline(props: {
   const overlayDotPosition = createMemo(() => {
     const id = activeMessageID()
     if (!id || sessionStatus().type === "idle") return undefined
-    // Find the last AssistantPart row for the running turn
+    // Find the first and last rows for the running turn
     const rows = timelineRows()
+    let firstIndex = -1
     let lastIndex = -1
     let lastRow: TimelineRow.TimelineRow | undefined
-    for (let i = rows.length - 1; i >= 0; i--) {
+    for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
       if (row.userMessageID !== id) continue
-      if (row._tag === "AssistantPart" && row.lastAssistantPart) {
-        lastIndex = i
-        lastRow = row
-        break
-      }
-      // If no assistant parts yet, target the Thinking row
-      if (row._tag === "Thinking" && lastIndex === -1) {
-        lastIndex = i
-        lastRow = row
+      if (row._tag === "Thinking" || row._tag === "AssistantPart") {
+        if (firstIndex === -1) firstIndex = i
+        if (row._tag === "Thinking") {
+          if (lastIndex === -1) { lastIndex = i; lastRow = row }
+        }
+        if (row._tag === "AssistantPart" && row.lastAssistantPart) {
+          lastIndex = i; lastRow = row
+        }
       }
     }
     if (lastIndex === -1 || !lastRow) return undefined
-    // Get the virtual measurement for this row
-    const measurement = virtualizer.measurementsCache[lastIndex]
-    if (!measurement) return undefined
+    // Get virtual measurements
+    const lastMeasurement = virtualizer.measurementsCache[lastIndex]
+    const firstMeasurement = firstIndex >= 0 ? virtualizer.measurementsCache[firstIndex] : undefined
+    if (!lastMeasurement) return undefined
     // Deterministic dot centre based on group type
     let centre = DEFAULT_DOT_CENTRE
     if (lastRow._tag === "AssistantPart") {
@@ -1644,8 +1646,17 @@ export function MessageTimeline(props: {
         centre = part?.type === "tool" ? 16 : 21
       }
     }
+    const headerOffset = showHeader() ? 64 : 0
+    const dotTop = lastMeasurement.start - headerOffset + centre - HARMONIC_SIZE / 2
+    // Rail line: from first row's dot centre to the current dot position
+    const firstTop = firstMeasurement
+      ? firstMeasurement.start - headerOffset + DEFAULT_DOT_CENTRE
+      : dotTop + HARMONIC_SIZE / 2
+    const railHeight = Math.max(0, lastMeasurement.start - headerOffset + centre - firstTop)
     return {
-      top: measurement.start - (showHeader() ? 64 : 0) + centre - HARMONIC_SIZE / 2,
+      top: dotTop,
+      railTop: firstTop,
+      railHeight,
       turnStartedAt: "turnStartedAt" in lastRow ? (lastRow as any).turnStartedAt as number | undefined : undefined,
       tokens: assistantTokensForTurn(id) || undefined,
     }
@@ -1658,21 +1669,48 @@ export function MessageTimeline(props: {
     return `${id}:${timelineRows().filter(r => r.userMessageID === id).length}`
   })
   const [overlayTop, setOverlayTop] = createSignal<number | undefined>(undefined)
+  const [overlayRailTop, setOverlayRailTop] = createSignal<number | undefined>(undefined)
+  const [overlayRailHeight, setOverlayRailHeight] = createSignal(0)
   const [overlaySettled, setOverlaySettled] = createSignal(false)
+  const [overlayFading, setOverlayFading] = createSignal(false)
+  let overlayFadeTimer: ReturnType<typeof setTimeout> | undefined
   createEffect(
     on(overlayStepKey, () => {
       const pos = overlayDotPosition()
       if (pos) {
         setOverlayTop(pos.top)
+        setOverlayRailTop(pos.railTop)
+        setOverlayRailHeight(pos.railHeight)
         // After first position, enable the spring transition
         if (!overlaySettled()) requestAnimationFrame(() => setOverlaySettled(true))
       }
     }),
   )
-  // Reset settled state when the running turn changes
+  // Crossfade (#633): when the turn completes, fade the overlay out over 150ms
+  // then remove it. Done-dots are always rendered per-row underneath — they
+  // become visible as the overlay's opacity drops.
+  createEffect(
+    on(() => sessionStatus().type, (status, prev) => {
+      if (prev !== "idle" && status === "idle" && overlayTop() !== undefined) {
+        // Turn just completed — start fade
+        setOverlayFading(true)
+        if (overlayFadeTimer) clearTimeout(overlayFadeTimer)
+        overlayFadeTimer = setTimeout(() => {
+          setOverlayTop(undefined)
+          setOverlayRailTop(undefined)
+          setOverlayRailHeight(0)
+          setOverlayFading(false)
+          overlayFadeTimer = undefined
+        }, 150)
+      }
+    }, { defer: true }),
+  )
+  // Reset settled state and cancel any pending fade when a new turn starts
   createEffect(
     on(activeMessageID, () => {
       setOverlaySettled(false)
+      if (overlayFadeTimer) { clearTimeout(overlayFadeTimer); overlayFadeTimer = undefined }
+      setOverlayFading(false)
     }, { defer: true }),
   )
 
@@ -2649,10 +2687,29 @@ export function MessageTimeline(props: {
           }}
         >
           <For each={virtualRowKeys()}>{(rowKey) => <VirtualTimelineRow rowKey={rowKey} />}</For>
-          {/* Turn overlay: single persistent dot for the running turn (#630) */}
+          {/* Turn overlay: persistent dot + continuous rail line (#630, #633) */}
           <Show when={overlayTop() !== undefined}>
+            {/* Continuous rail line for the active turn — one element, no per-row seams */}
+            <Show when={overlayRailTop() !== undefined && overlayRailHeight() > 0}>
+              <span
+                data-slot="overlay-rail-line"
+                aria-hidden="true"
+                class="pointer-events-none absolute w-px"
+                style={{
+                  top: `${overlayRailTop()}px`,
+                  left: `${OVERLAY_LINE_X}px`,
+                  height: `${overlayRailHeight()}px`,
+                  background: "var(--v2-text-text-base)",
+                  "z-index": 9,
+                  opacity: overlayFading() ? "0" : "1",
+                  transition: overlayFading() ? "opacity 150ms ease-out" : undefined,
+                }}
+              />
+            </Show>
+            {/* The dot */}
             <div
               data-turn-overlay
+              data-state={overlayFading() ? "completed" : undefined}
               aria-hidden="true"
               class="pointer-events-none absolute"
               style={{
