@@ -20,7 +20,7 @@ import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualIt
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
 import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
-import { formatElapsed, formatTokens, ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
+import { formatElapsed, formatTokens, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
   entityLabel,
@@ -42,6 +42,7 @@ import {
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { readPartText, settledChunkBoundary } from "@opencode-ai/session-ui/message-part-text"
+import { buildTrace } from "@opencode-ai/session-ui/build-trace"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -89,6 +90,7 @@ import { useTabs } from "@/context/tabs"
 import { amicodeGet, amicodePost } from "@/utils/amicode-fetch"
 import { draftPrompt } from "@/utils/start-prompt"
 import { inAmicode, postAmicode } from "@/pages/session/use-amicode-commands"
+import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -161,23 +163,43 @@ function TimelineThinkingRow(_props: { reasoningHeading?: string; showReasoningS
   )
 }
 
-function TimelineThinkingMetaRow(props: { turnRunning: boolean; turnDurationMs?: number; tokens?: number }) {
+function TimelineThinkingMetaRow(props: { turnDurationMs?: number; tokens?: number; onCopy?: () => void }) {
+  const language = useLanguage()
+  const [copied, setCopied] = createSignal(false)
+
+  const handleCopy = () => {
+    props.onCopy?.()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div data-slot="session-turn-thinking-meta">
-      <Show when={props.turnRunning} fallback={
-        <Show when={props.turnDurationMs != null}>
-          <span class="amc-thinking" data-slot="amc-thinking">
-            <span class="amc-thinking-meta" aria-hidden="true">
-              <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
-              <Show when={props.tokens != null}>
-                <span class="amc-thinking-sep">·</span>
-                <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
-              </Show>
-            </span>
+      <TooltipV2
+        value={copied() ? language.t("ui.message.copied") : language.t("ui.message.copyTrace")}
+        placement="bottom"
+        gutter={4}
+      >
+        <IconButtonV2
+          icon={<IconV2 name={copied() ? "check" : "outline-copy"} size="small" />}
+          size="normal"
+          variant="ghost-muted"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleCopy}
+          aria-label={copied() ? language.t("ui.message.copied") : language.t("ui.message.copyTrace")}
+        />
+      </TooltipV2>
+      <Show when={props.turnDurationMs != null}>
+        <span class="amc-thinking" data-slot="amc-thinking">
+          <span class="amc-thinking-meta" aria-hidden="true">
+            <span class="amc-thinking-sep">·</span>
+            <span class="amc-thinking-elapsed">{formatElapsed(props.turnDurationMs!)}</span>
+            <Show when={props.tokens != null}>
+              <span class="amc-thinking-sep">·</span>
+              <span class="amc-thinking-tokens">↑ {formatTokens(props.tokens!)} tokens</span>
+            </Show>
           </span>
-        </Show>
-      }>
-        <ThinkingLine tokens={props.tokens} />
+        </span>
       </Show>
     </div>
   )
@@ -453,6 +475,17 @@ export function MessageTimeline(props: {
     if (start === -1) return 0
     return turnTokens(msgs.slice(start + 1).filter((m) => m.role === "assistant"))
   }
+
+  // Copy the full assistant trace for a turn to the clipboard.
+  const copyTraceForTurn = (userMessageID: string) => {
+    const msgs = sessionMessages()
+    const start = msgs.findIndex((m) => m.id === userMessageID)
+    if (start === -1) return
+    const assistantMsgs = msgs.slice(start + 1).filter((m): m is AssistantMessage => m.role === "assistant")
+    const content = buildTrace(assistantMsgs, getMsgParts)
+    if (!content) return
+    if (!writeClipboardViaBridge(content)) void navigator.clipboard?.writeText(content)
+  }
   /** True when at least one AssistantPart ROW exists in the projected timeline
    *  for this turn — meaning renderable, settled output is visible. Reasoning
    *  parts withheld while streaming do NOT count (they produce no row until
@@ -658,7 +691,7 @@ export function MessageTimeline(props: {
       return showHeader() ? 64 : 0
     },
     overscan: 50,
-    paddingEnd: 64,
+    paddingEnd: 24,
     rangeExtractor: (range) => {
       const id = activeMessageID()
       const active = id ? (messageLastRowIndex().get(id) ?? -1) : -1
@@ -1418,7 +1451,7 @@ export function MessageTimeline(props: {
     }
     const previousAssistantPart = () => {
       const row = input.row()
-      if (row._tag === "ThinkingMeta") return true
+      if (row._tag === "ThinkingMeta") return false
       if (row._tag !== "AssistantPart") return false
       // Gap above if there's a previous assistant part, OR if Thinking row
       // sits above (always true since Thinking is always first)
@@ -1465,10 +1498,19 @@ export function MessageTimeline(props: {
     // the count is bounded by the virtualizer's window.
     let turnEl: HTMLDivElement | undefined
     const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
+    const [dotSettled, setDotSettled] = createSignal(false)
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
       const hostTop = turnEl.getBoundingClientRect().top
-      const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
+      // Travelling dot (#265): ONLY the running dot tracks the last
+      // prose-fragment card. The done-dot stays at the first text line
+      // (top of the row) so the rail reads as a sequence of origin marks.
+      const r = rail()
+      const isRunning = r && r.last && r.running
+      const fragments = isRunning ? turnEl.querySelectorAll("[data-prose-fragment]") : undefined
+      const lastFragment = fragments && fragments.length > 0 ? (fragments[fragments.length - 1] as HTMLElement) : null
+      const target = lastFragment ?? turnEl
+      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
       let node: Node | null
       while ((node = walker.nextNode())) {
         if (!node.textContent?.trim()) continue
@@ -1477,10 +1519,12 @@ export function MessageTimeline(props: {
         const rect = range.getClientRects()[0]
         if (!rect || rect.height === 0) continue
         const centre = rect.top + rect.height / 2 - hostTop
-        // Half-px grid; never above the default (a dot poking into the
-        // inter-row gap would detach from its own tail cap), and a sanity
-        // ceiling against mid-virtualisation nonsense measurements.
-        if (centre > 0 && centre < 80) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        // When targeting a fragment, the dot can be anywhere down the row
+        // (no ceiling). For non-fragment rows the 80px ceiling guards against
+        // mid-virtualisation nonsense measurements.
+        const maxCentre = lastFragment ? Infinity : 80
+        if (centre > 0 && centre < maxCentre) setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
+        if (!dotSettled()) setDotSettled(true)
         return
       }
     }
@@ -1512,7 +1556,15 @@ export function MessageTimeline(props: {
         >
           <Show when={rail()}>
             {(r) => (
-              <ThoughtRail first={r().first} last={r().last} running={r().running} dotCentre={dotCentre()} />
+              <ThoughtRail
+                first={r().first}
+                last={r().last}
+                running={r().running}
+                dotCentre={dotCentre()}
+                settled={dotSettled()}
+                turnStartedAt={"turnStartedAt" in input.row() ? (input.row() as any).turnStartedAt : undefined}
+                tokens={r().running && r().last ? assistantTokensForTurn(input.row().userMessageID) || undefined : undefined}
+              />
             )}
           </Show>
           {/* The gutter is reserved for EVERY assistant part, not only the ones
@@ -1662,9 +1714,9 @@ export function MessageTimeline(props: {
               class="w-full px-4 md:px-5 relative"
             >
               <TimelineThinkingMetaRow
-                turnRunning={metaRow().turnRunning}
                 turnDurationMs={metaRow().turnDurationMs}
                 tokens={assistantTokensForTurn(metaRow().userMessageID) || undefined}
+                onCopy={() => copyTraceForTurn(metaRow().userMessageID)}
               />
             </div>
           </TimelineRowFrame>
@@ -2502,8 +2554,8 @@ export function MessageTimeline(props: {
             <div
               data-timeline-row="bottom-spacer"
               aria-hidden="true"
-              class="h-16 absolute top-0 left-0 w-full"
-              style={{ transform: `translateY(${virtualizer.getTotalSize() - 64}px)` }}
+              class="h-6 absolute top-0 left-0 w-full"
+              style={{ transform: `translateY(${virtualizer.getTotalSize() - 24}px)` }}
             />
           </Show>
         </div>

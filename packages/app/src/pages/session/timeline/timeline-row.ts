@@ -27,6 +27,8 @@ export namespace TimelineRow {
     lastAssistantPart: boolean
     /** the turn is still working, so the tail step is in flight rather than done */
     turnRunning: boolean
+    /** epoch-ms when the user message was created — anchors the dot tooltip timer */
+    turnStartedAt: number
     /** eyebrow naming the action for steps whose content doesn't already open
      *  with its own title — reasoning ("Reasoning") only. Prose carries no
      *  caption (the words are the step), and tool cards and the Explored /
@@ -38,6 +40,8 @@ export namespace TimelineRow {
     reasoningHeading?: string
     /** the turn is still actively streaming */
     turnRunning: boolean
+    /** epoch-ms when the user message was created — anchors the dot tooltip timer */
+    turnStartedAt: number
   }> {}
   export class ThinkingMeta extends Data.TaggedClass("ThinkingMeta")<{
     userMessageID: string

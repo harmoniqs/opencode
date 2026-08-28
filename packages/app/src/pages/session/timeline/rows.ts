@@ -234,6 +234,7 @@ export namespace Timeline {
           userMessageID: userMessage.id,
           reasoningHeading: heading,
           turnRunning: turnIsRunning,
+          turnStartedAt: userMessage.time.created,
         }),
       )
     }
@@ -256,20 +257,22 @@ export namespace Timeline {
           previousAssistantPart: assistantGroupIndex > 0,
           lastAssistantPart: itemIndex === lastRenderableIndex,
           turnRunning: turnIsRunning,
+          turnStartedAt: userMessage.time.created,
           railLabel: railLabel(item.group),
         }),
       )
       assistantGroupIndex += 1
     })
 
-    // ThinkingMeta row renders LAST — timer + tokens always visible at the
-    // bottom of the turn. This is where the harmonic dot lives while running.
-    if (assistantPartRefs.length > 0 || turnIsRunning) {
+    // ThinkingMeta row renders LAST — duration + tokens as a historical record.
+    // Hidden while streaming (the harmonic dot signals "working"); appears only
+    // after the turn completes.
+    if (assistantPartRefs.length > 0 && !turnIsRunning) {
       rows.push(
         new TimelineRow.ThinkingMeta({
           userMessageID: userMessage.id,
-          turnRunning: turnIsRunning,
-          turnDurationMs: turnIsRunning ? undefined : computeTurnDuration(userMessage, assistantMessages),
+          turnRunning: false,
+          turnDurationMs: computeTurnDuration(userMessage, assistantMessages),
         }),
       )
     }

@@ -14,6 +14,7 @@ const context = (key: string, partIDs: string[], userMessageID = "user-1") =>
     previousAssistantPart: false,
     lastAssistantPart: false,
     turnRunning: false,
+    turnStartedAt: 0,
   })
 
 const user = (userMessageID = "user-1") => new TimelineRow.UserMessage({ userMessageID, anchor: true })
