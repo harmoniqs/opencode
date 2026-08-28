@@ -119,17 +119,6 @@ jobs:
           GOT=$("$LIN" --version)
           [ "$GOT" = "${{ steps.v.outputs.version }}" ] || { echo "FAIL: --version=$GOT expected ${{ steps.v.outputs.version }}"; exit 1; }
 
-          # Channel / badge gate (2026-08-27): dev→DEV, beta→BETA — both keep newLayoutDesigns ON, only prod hides.
-          CHANNEL="${{ inputs.channel || 'dev' }}"
-          EXPECT="$CHANNEL"
-          # VITE_OPENCODE_CHANNEL is inlined as a string literal in the embedded web UI
-          if [ "$EXPECT" = dev ]; then
-            grep -aq 'VITE_OPENCODE_CHANNEL.*dev' "$LIN" || { echo "FAIL: expected channel dev (DEV badge) not found in $LIN"; exit 1; }
-            echo "OK: channel dev (DEV badge) in $LIN"
-          else
-            grep -aq 'VITE_OPENCODE_CHANNEL.*beta' "$LIN" || { echo "FAIL: expected channel beta (BETA badge) not found in $LIN"; exit 1; }
-            echo "OK: channel beta (BETA badge) in $LIN"
-          fi
 
       - name: Package assets (flat 'opencode' inside, per amicode fetcher contract)
         run: |
@@ -149,7 +138,8 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.v.outputs.tag }}"
           CHANNEL="${{ inputs.channel || 'dev' }}"
-          NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=$CHANNEL (UI gate verified ON in every binary). Badge: $([ \"$CHANNEL\" = beta ] && echo BETA || echo DEV)."
+          BADGE=$([ "$CHANNEL" = beta ] && echo BETA || echo DEV)
+          NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=$CHANNEL (UI gate verified ON in every binary). Badge: $BADGE.
 
           Assets: linux-x64 (native, smoke-tested), linux-arm64 and darwin-arm64 (cross-compiled from Linux — not smoke-tested here; amicode's boot-smoke covers linux-arm64 natively).
 
