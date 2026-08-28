@@ -1609,9 +1609,8 @@ export function MessageTimeline(props: {
   // ── Turn Overlay (#630) ──────────────────────────────────────────────
   // A single persistent HarmonicDot rendered once per running turn, outside
   // the per-row virtualizer loop. Positioned absolutely in virtual content
-  // space; uses CSS sticky to stay visible near the viewport top during long
-  // responses. Repositions only on step boundaries (row count changes).
-  const overlayDotPosition = createMemo(() => {
+  // space. Repositions only on step boundaries (row count changes).
+  const computeOverlayPosition = () => {
     const id = activeMessageID()
     if (!id || sessionStatus().type === "idle") return undefined
     // Find the first and last rows for the running turn
@@ -1633,10 +1632,15 @@ export function MessageTimeline(props: {
       }
     }
     if (lastIndex === -1 || !lastRow) return undefined
-    // Get virtual measurements
-    const lastMeasurement = virtualizer.measurementsCache[lastIndex]
-    const firstMeasurement = firstIndex >= 0 ? virtualizer.measurementsCache[firstIndex] : undefined
-    if (!lastMeasurement) return undefined
+    // Look up position from the reactive virtualItemByKey (visible items)
+    // or fall back to measurementsCache (all items, may lag one frame)
+    const rowKey = TimelineRow.key(rows[lastIndex])
+    const virtualItem = virtualItemByKey().get(rowKey)
+    const start = virtualItem?.start ?? virtualizer.measurementsCache[lastIndex]?.start
+    if (start === undefined) return undefined
+    const firstRowKey = firstIndex >= 0 ? TimelineRow.key(rows[firstIndex]) : undefined
+    const firstItem = firstRowKey ? virtualItemByKey().get(firstRowKey) : undefined
+    const firstStart = firstItem?.start ?? (firstIndex >= 0 ? virtualizer.measurementsCache[firstIndex]?.start : undefined)
     // Deterministic dot centre based on group type
     let centre = DEFAULT_DOT_CENTRE
     if (lastRow._tag === "AssistantPart") {
@@ -1647,12 +1651,12 @@ export function MessageTimeline(props: {
       }
     }
     const headerOffset = showHeader() ? 64 : 0
-    const dotTop = lastMeasurement.start - headerOffset + centre - HARMONIC_SIZE / 2
+    const dotTop = start - headerOffset + centre - HARMONIC_SIZE / 2
     // Rail line: from first row's dot centre to the current dot position
-    const firstTop = firstMeasurement
-      ? firstMeasurement.start - headerOffset + DEFAULT_DOT_CENTRE
+    const firstTop = firstStart !== undefined
+      ? firstStart - headerOffset + DEFAULT_DOT_CENTRE
       : dotTop + HARMONIC_SIZE / 2
-    const railHeight = Math.max(0, lastMeasurement.start - headerOffset + centre - firstTop)
+    const railHeight = Math.max(0, start - headerOffset + centre - firstTop)
     return {
       top: dotTop,
       railTop: firstTop,
@@ -1660,7 +1664,7 @@ export function MessageTimeline(props: {
       turnStartedAt: "turnStartedAt" in lastRow ? (lastRow as any).turnStartedAt as number | undefined : undefined,
       tokens: assistantTokensForTurn(id) || undefined,
     }
-  })
+  }
 
   // Track row count per active turn — dot moves only on step boundaries
   const overlayStepKey = createMemo(() => {
@@ -1674,17 +1678,37 @@ export function MessageTimeline(props: {
   const [overlaySettled, setOverlaySettled] = createSignal(false)
   const [overlayFading, setOverlayFading] = createSignal(false)
   let overlayFadeTimer: ReturnType<typeof setTimeout> | undefined
+  let overlayRetryFrame: number | undefined
+
+  const applyOverlayPosition = () => {
+    const pos = computeOverlayPosition()
+    if (pos) {
+      setOverlayTop(pos.top)
+      setOverlayRailTop(pos.railTop)
+      setOverlayRailHeight(pos.railHeight)
+      if (!overlaySettled()) requestAnimationFrame(() => setOverlaySettled(true))
+      return true
+    }
+    return false
+  }
+
   createEffect(
     on(overlayStepKey, () => {
-      const pos = overlayDotPosition()
-      if (pos) {
-        setOverlayTop(pos.top)
-        setOverlayRailTop(pos.railTop)
-        setOverlayRailHeight(pos.railHeight)
-        // After first position, enable the spring transition
-        if (!overlaySettled()) requestAnimationFrame(() => setOverlaySettled(true))
+      // Try immediately — if measurements aren't ready, retry next frame
+      if (!applyOverlayPosition()) {
+        if (overlayRetryFrame) cancelAnimationFrame(overlayRetryFrame)
+        overlayRetryFrame = requestAnimationFrame(() => {
+          overlayRetryFrame = undefined
+          applyOverlayPosition()
+        })
       }
     }),
+  )
+  // Also update when virtualItemByKey changes (items get measured/repositioned)
+  createEffect(
+    on(virtualItemByKey, () => {
+      if (overlayTop() === undefined && overlayStepKey() !== "") applyOverlayPosition()
+    }, { defer: true }),
   )
   // Crossfade (#633): when the turn completes, fade the overlay out over 150ms
   // then remove it. Done-dots are always rendered per-row underneath — they
@@ -2706,22 +2730,33 @@ export function MessageTimeline(props: {
                 }}
               />
             </Show>
-            {/* The dot */}
+            {/* The dot — positioned at turn-start, sticky at 50vh within the turn span */}
             <div
               data-turn-overlay
               data-state={overlayFading() ? "completed" : undefined}
               aria-hidden="true"
-              class="pointer-events-none absolute"
+              class="pointer-events-none absolute left-0 w-0"
               style={{
-                top: `${overlayTop()}px`,
-                left: `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
+                top: `${overlayRailTop() ?? overlayTop()!}px`,
+                height: `${(overlayTop()! - (overlayRailTop() ?? overlayTop()!)) + HARMONIC_SIZE}px`,
                 "z-index": 10,
               }}
-              classList={{ "turn-overlay-dot--settled": overlaySettled() }}
             >
-              <HarmonicDot
-                class="pointer-events-none thought-rail-dot--harmonic"
-              />
+              <div
+                class="pointer-events-none"
+                classList={{ "turn-overlay-dot--settled": overlaySettled() }}
+                style={{
+                  position: "sticky",
+                  top: "calc(50vh - 6.5px)",
+                  left: `${OVERLAY_LINE_X - HARMONIC_SIZE / 2}px`,
+                  width: `${HARMONIC_SIZE}px`,
+                  height: `${HARMONIC_SIZE}px`,
+                }}
+              >
+                <HarmonicDot
+                  class="pointer-events-none thought-rail-dot--harmonic"
+                />
+              </div>
             </div>
           </Show>
           <Show when={timelineRows().length > 0}>

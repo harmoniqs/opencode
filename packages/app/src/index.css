@@ -389,16 +389,15 @@
 .thought-rail-dot--settled {
   transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-/* Turn overlay dot (#630): the persistent overlay uses the same spring timing
-   for its top transition on step boundaries. */
+/* Turn overlay dot (#630): the settled class enables the spring transition
+   on the overlay container's height (which drives the sticky dot's position). */
 .turn-overlay-dot--settled {
   transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-/* Turn overlay crossfade (#633): on turn completion the overlay fades out over
-   150ms and the per-row done-dots appear underneath. */
+/* Turn overlay wrapper — height transitions for dot travel */
 [data-turn-overlay] {
   opacity: 1;
-  transition: opacity 150ms ease-out;
+  transition: opacity 150ms ease-out, height 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 [data-turn-overlay][data-state="completed"] {
   opacity: 0;
