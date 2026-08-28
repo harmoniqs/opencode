@@ -351,6 +351,7 @@ const layer = Layer.effect(
       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
         stripMedia: true,
         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
+        forCompaction: true,
       })
       const ctx = yield* InstanceState.context
       const msg: SessionV1.Assistant = {
