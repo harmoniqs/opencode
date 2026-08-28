@@ -2146,9 +2146,19 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     return items.filter((x) => !!x).join(" \u00B7 ")
   })
 
-  const streaming = createMemo(
-    () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
-  )
+  const streaming = createMemo(() => {
+    if (props.message.role !== "assistant") return false
+    const message = props.message as AssistantMessage
+    // Message is complete → not streaming
+    if (typeof message.time.completed === "number") return false
+    // If subsequent parts exist after this text part, the model has moved on
+    // (e.g. to a tool call) — the text content is finalized, flush the tail
+    // so it renders before the tool row appears (#265).
+    const allParts = data.store.part?.[props.message.id] ?? []
+    const myIndex = allParts.findIndex((p) => p?.id === part().id)
+    if (myIndex >= 0 && myIndex < allParts.length - 1) return false
+    return true
+  })
   const text = () => readPartText(data.store.part_text_accum_delta, part())
   const isLastTextPart = createMemo(() => {
     const last = (data.store.part?.[props.message.id] ?? [])
