@@ -23,10 +23,10 @@ afterEach(() => {
   delete process.env.AMICODE_WIDGETS_DIR
 })
 
-const BUILTIN_ORDER = ["meet-amico", "about-you", "jump-back-in", "now-solving", "pulse-bank", "showcase", "library"]
+const BUILTIN_ORDER = ["jump-back-in"]
 
 describe("loadRegistry", () => {
-  test("lists 7 built-ins in default order with stable hashes", () => {
+  test("lists built-ins in default order with stable hashes", () => {
     userDir()
     const { widgets, warnings } = loadRegistry()
     expect(widgets.map((w) => w.manifest.id)).toEqual(BUILTIN_ORDER)
@@ -41,17 +41,17 @@ describe("loadRegistry", () => {
     mkdirSync(path.join(root, "my-widget"))
     writeFileSync(path.join(root, "my-widget", "manifest.toml"), 'id = "my-widget"\nname = "Mine"')
     writeFileSync(path.join(root, "my-widget", "widget.js"), "export default { mount() {} }")
-    mkdirSync(path.join(root, "pulse-bank"))
-    writeFileSync(path.join(root, "pulse-bank", "manifest.toml"), 'id = "pulse-bank"\nname = "My bank"')
-    writeFileSync(path.join(root, "pulse-bank", "widget.js"), "export default { mount() {} }")
+    mkdirSync(path.join(root, "jump-back-in"))
+    writeFileSync(path.join(root, "jump-back-in", "manifest.toml"), 'id = "jump-back-in"\nname = "My jump"')
+    writeFileSync(path.join(root, "jump-back-in", "widget.js"), "export default { mount() {} }")
 
     const { widgets } = loadRegistry()
     const mine = widgets.find((w) => w.manifest.id === "my-widget")!
     expect(mine.builtin).toBe(false)
     expect(mine.path).toContain("my-widget")
-    const bank = widgets.find((w) => w.manifest.id === "pulse-bank")!
+    const bank = widgets.find((w) => w.manifest.id === "jump-back-in")!
     expect(bank.overridden).toBe(true)
-    expect(bank.manifest.name).toBe("My bank")
+    expect(bank.manifest.name).toBe("My jump")
   })
 
   test("bad user manifest → warning, widget skipped", () => {
@@ -70,10 +70,10 @@ describe("widget routes", () => {
     userDir()
     const list = JSON.parse(widgetsResponse())
     expect(list.ok).toBe(true)
-    expect(list.widgets).toHaveLength(7)
+    expect(list.widgets).toHaveLength(BUILTIN_ORDER.length)
     expect(list.widgets[0].hash).toMatch(/^[0-9a-f]{16}$/)
 
-    const code = JSON.parse(widgetCodeResponse("meet-amico"))
+    const code = JSON.parse(widgetCodeResponse("jump-back-in"))
     expect(code.ok).toBe(true)
     expect(code.code).toContain("mount")
     expect(code.hash).toBe(list.widgets[0].hash)
@@ -88,17 +88,17 @@ describe("widget routes", () => {
 
   test("fork copies a built-in, rewrites id, appends origin; forked widget is valid in registry", () => {
     const root = userDir()
-    const r = JSON.parse(forkWidgetResponse(JSON.stringify({ id: "pulse-bank", new_id: "my-bank", session: "s1" })))
+    const r = JSON.parse(forkWidgetResponse(JSON.stringify({ id: "jump-back-in", new_id: "my-jump", session: "s1" })))
     expect(r.ok).toBe(true)
-    expect(r.id).toBe("my-bank")
-    expect(existsSync(path.join(root, "my-bank", "widget.js"))).toBe(true)
-    const manifest = readFileSync(path.join(root, "my-bank", "manifest.toml"), "utf8")
-    expect(manifest).toContain('id = "my-bank"')
+    expect(r.id).toBe("my-jump")
+    expect(existsSync(path.join(root, "my-jump", "widget.js"))).toBe(true)
+    const manifest = readFileSync(path.join(root, "my-jump", "manifest.toml"), "utf8")
+    expect(manifest).toContain('id = "my-jump"')
     expect(manifest).toContain("[origin]")
     expect(manifest).toContain('session = "s1"')
 
     const { widgets, warnings } = loadRegistry()
-    const forked = widgets.find((w) => w.manifest.id === "my-bank")!
+    const forked = widgets.find((w) => w.manifest.id === "my-jump")!
     expect(forked.builtin).toBe(false)
     expect(forked.manifest.origin?.session).toBe("s1")
     expect(warnings).toEqual([])
@@ -107,7 +107,7 @@ describe("widget routes", () => {
   test("fork errors: unknown source, existing target, bad body", () => {
     userDir()
     expect(JSON.parse(forkWidgetResponse(JSON.stringify({ id: "ghost" }))).ok).toBe(false)
-    expect(JSON.parse(forkWidgetResponse(JSON.stringify({ id: "pulse-bank", new_id: "showcase" }))).ok).toBe(false)
+    expect(JSON.parse(forkWidgetResponse(JSON.stringify({ id: "jump-back-in", new_id: "jump-back-in" }))).ok).toBe(false)
     expect(JSON.parse(forkWidgetResponse("not json")).ok).toBe(false)
   })
 
@@ -157,12 +157,12 @@ describe("authorWidget (Stage 2 chat authoring)", () => {
 
   test("a user id overriding a builtin wins in the registry", () => {
     userDir()
-    authorWidget({ id: "pulse-bank", name: "My Bank", size: "tile", height: 120, js: validJs })
+    authorWidget({ id: "jump-back-in", name: "My Jump", size: "tile", height: 120, js: validJs })
     const { widgets } = loadRegistry()
-    const w = widgets.find((x) => x.manifest.id === "pulse-bank")
+    const w = widgets.find((x) => x.manifest.id === "jump-back-in")
     expect(w?.builtin).toBe(false)
     expect(w?.overridden).toBe(true)
-    expect(w?.manifest.name).toBe("My Bank")
+    expect(w?.manifest.name).toBe("My Jump")
   })
 
   test("names with quotes/punctuation round-trip through the manifest", () => {
