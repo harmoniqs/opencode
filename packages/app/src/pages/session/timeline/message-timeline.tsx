@@ -1543,9 +1543,14 @@ export function MessageTimeline(props: {
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       // Last AssistantPart gets the dot when the turn is still running.
-      // prose = "part" type group (text/reasoning content that grows).
-      // !prose = shell/edit/context (compact tool cards) → dot at dotCentre.
-      const isProse = row.group.type === "part"
+      // prose = text content that grows → dot bottom-anchored.
+      // !prose = tool/status row → dot at dotCentre.
+      // A "part" group can be either text or a single tool — check the actual part.
+      let isProse = false
+      if (row.group.type === "part") {
+        const part = getMsgPart(row.group.ref.messageID, row.group.ref.partID)
+        isProse = part?.type === "text"
+      }
       return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart, prose: isProse }
     }
 
