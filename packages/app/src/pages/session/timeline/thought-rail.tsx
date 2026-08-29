@@ -90,6 +90,12 @@ import { formatElapsed, formatTokens } from "@opencode-ai/ui/amicode-thinking"
 
 const NODE = 7 // dot diameter, px — matches the site's Step
 
+// The bottom-anchored dot on prose rows sits with its centre at the last
+// text line's vertical centre — approximately: card bottom-padding (10px) +
+// half body line-height (~11px) = 21px from the row's bottom edge. This is
+// a fixed offset, so the dot never jumps — it just rides down as the row grows.
+const PROSE_DOT_BOTTOM_INSET = 21
+
 /** Where a row's dot centre sits when nothing measures it: 11px — the centre
  *  of a 22px first text line starting at the row's top, which is what prose
  *  and rail-label rows produce. Rows whose content opens with a CARD (a tool
@@ -167,10 +173,10 @@ export function ThoughtRail(props: {
             ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
             : props.last && isRunning() && props.prose
-              ? // running prose tail: line extends to bottom of the row (dot sits there)
+              ? // running prose tail: line extends to the dot's vertical centre
                 {
                   top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                  bottom: "0px",
+                  bottom: `${PROSE_DOT_BOTTOM_INSET}px`,
                 }
               : props.last
                 ? // completed tail OR running status row: capped at the dot centre
@@ -259,7 +265,7 @@ function DotWithTooltip(props: {
       data-slot="thought-rail-dot"
       data-state="running"
       style={props.bottomAnchored
-        ? { bottom: `${-HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
+        ? { bottom: `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
         : { top: `${props.dotCentre - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
       }
       onMouseEnter={() => { setHovered(true); startTicking() }}
