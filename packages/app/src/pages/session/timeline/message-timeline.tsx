@@ -1543,9 +1543,9 @@ export function MessageTimeline(props: {
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
       // Last AssistantPart gets the dot when the turn is still running.
-      // prose = no railLabel → growing text content → bottom-anchored dot.
-      // !prose = tool/shell/edit row → compact status card → dot at dotCentre.
-      const isProse = !row.railLabel
+      // prose = "part" type group (text/reasoning content that grows).
+      // !prose = shell/edit/context (compact tool cards) → dot at dotCentre.
+      const isProse = row.group.type === "part"
       return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart, prose: isProse }
     }
 
