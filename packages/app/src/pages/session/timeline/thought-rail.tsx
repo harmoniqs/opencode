@@ -313,13 +313,17 @@ export function ThoughtRailLabel(props: { label: string }) {
  *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. (Rule 5) */
 export const THOUGHT_RAIL_INSET = "pl-6"
 
-/** Deterministic dot centre per group type — replaces the old ResizeObserver
- *  measurement. The offsets are the vertical centre of the first text line for
- *  each content species, measured once and tabulated. If CSS padding changes,
- *  update the one constant here. */
+/** Deterministic dot centre per group type — the vertical centre of the first
+ *  text line for each content species, measured once and tabulated. Used as the
+ *  initial value for dotCentre (the ResizeObserver measurement refines it once
+ *  the DOM settles, but the initial value prevents a frame of misalignment).
+ *  If CSS padding changes, update the one constant here.
+ *
+ *  Accepts both the internal group names ("single_tool", "tool_group", "prose",
+ *  "thinking") and the PartGroup.type values ("part", "shell", "edit", "context"). */
 export function dotCentreForGroup(groupType: string): number {
-  if (groupType === "prose") return 21
-  if (groupType === "single_tool") return 16
+  if (groupType === "prose" || groupType === "part") return 21
+  if (groupType === "single_tool" || groupType === "shell" || groupType === "edit" || groupType === "context") return 16
   if (groupType === "tool_group") return 16
   if (groupType === "thinking") return 11
   return DEFAULT_DOT_CENTRE

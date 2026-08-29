@@ -19,7 +19,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { AmicodeEntityRail } from "@opencode-ai/ui/amicode-entity-rail"
-import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail } from "./thought-rail"
+import { DEFAULT_DOT_CENTRE, ThoughtRail, ThoughtRailLabel, THOUGHT_RAIL_INSET, shouldRenderRail, dotCentreForGroup } from "./thought-rail"
 import { formatElapsed, formatTokens, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import {
   AmicodeEntityView,
@@ -1550,12 +1550,17 @@ export function MessageTimeline(props: {
     }
 
     // The dot aligns with the vertical centre of the row's first text line.
-    // Measured from the DOM so it's self-correcting when CSS changes (Kate
-    // 2026-08-24: dots must line up with the text they coincide with).
-    // ResizeObserver re-measures when async content mounts or streaming reflows.
-    // NOTE: only used for DONE dots — running dot is bottom-anchored.
+    // Initialized from dotCentreForGroup (deterministic per row type) so the
+    // dot starts in the right place without waiting for DOM measurement.
+    // ResizeObserver refines the value once the content has rendered.
     let turnEl: HTMLDivElement | undefined
-    const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
+    const initialDotCentre = () => {
+      const row = input.row()
+      if (row._tag === "Thinking") return dotCentreForGroup("thinking")
+      if (row._tag === "AssistantPart") return dotCentreForGroup(row.group.type)
+      return DEFAULT_DOT_CENTRE
+    }
+    const [dotCentre, setDotCentre] = createSignal(initialDotCentre())
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
       const hostTop = turnEl.getBoundingClientRect().top

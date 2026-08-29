@@ -66,10 +66,16 @@ describe("thought rail", () => {
 
 describe("dotCentreForGroup", () => {
   test("returns deterministic offsets per group type", () => {
+    // Internal group names
     expect(dotCentreForGroup("prose")).toBe(21)
     expect(dotCentreForGroup("tool_group")).toBe(16)
     expect(dotCentreForGroup("single_tool")).toBe(16)
     expect(dotCentreForGroup("thinking")).toBe(11)
+    // PartGroup.type values (used by TimelineRowFrame)
+    expect(dotCentreForGroup("part")).toBe(21)
+    expect(dotCentreForGroup("shell")).toBe(16)
+    expect(dotCentreForGroup("edit")).toBe(16)
+    expect(dotCentreForGroup("context")).toBe(16)
   })
 
   test("returns default for unknown group types", () => {
