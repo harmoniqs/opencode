@@ -265,9 +265,9 @@ function DotWithTooltip(props: {
       data-slot="thought-rail-dot"
       data-state="running"
       style={{
-        ...(props.bottomAnchored
-          ? { bottom: `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
-          : { top: `${props.dotCentre - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }),
+        top: props.bottomAnchored ? undefined : `${props.dotCentre - HARMONIC_SIZE / 2}px`,
+        bottom: props.bottomAnchored ? `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px` : undefined,
+        left: `${GUTTER + NODE / 2 - HARMONIC_SIZE / 2}px`,
         width: `${HARMONIC_SIZE}px`,
         height: `${HARMONIC_SIZE}px`,
       }}
@@ -325,10 +325,10 @@ export const THOUGHT_RAIL_INSET = "pl-6"
  *  Accepts both the internal group names ("single_tool", "tool_group", "prose",
  *  "thinking") and the PartGroup.type values ("part", "shell", "edit", "context"). */
 export function dotCentreForGroup(groupType: string): number {
-  if (groupType === "prose" || groupType === "part") return 21
-  if (groupType === "single_tool" || groupType === "shell" || groupType === "edit" || groupType === "context") return 16
-  if (groupType === "tool_group") return 16
-  if (groupType === "thinking") return 11
+  if (groupType === "prose" || groupType === "part") return DEFAULT_DOT_CENTRE
+  if (groupType === "single_tool" || groupType === "shell" || groupType === "edit" || groupType === "context") return DEFAULT_DOT_CENTRE
+  if (groupType === "tool_group") return DEFAULT_DOT_CENTRE
+  if (groupType === "thinking") return DEFAULT_DOT_CENTRE
   return DEFAULT_DOT_CENTRE
 }
 

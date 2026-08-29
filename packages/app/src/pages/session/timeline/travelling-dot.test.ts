@@ -10,27 +10,21 @@ const indexCss = readFileSync(resolve(__dirname, "../../../index.css"), "utf8")
 const polishCss = readFileSync(resolve(__dirname, "../../../design-polish.css"), "utf8")
 
 describe("bottom-anchored harmonic dot", () => {
-  test("grow animation exists on mount", () => {
+  test("harmonic dot class has display:block (kills SVG baseline gap)", () => {
     expect(indexCss).toContain("thought-rail-dot--harmonic")
-    expect(indexCss).toContain("thought-rail-grow")
-  })
-
-  test("grow animation scales from done-dot size (7/13)", () => {
-    expect(indexCss).toMatch(/thought-rail-grow[\s\S]*scale\(0\.538\)/)
+    expect(indexCss).toMatch(/thought-rail-dot--harmonic[^}]*display:\s*block/)
   })
 
   test("no position transition on the dot (bottom-anchored, passive)", () => {
-    // The settled class with top transition was removed — verify it's gone
     expect(indexCss).not.toContain("thought-rail-dot--settled")
   })
 
   test("no height transition on rail line (no travelling)", () => {
-    // The line transition was for the travelling dot — verify it's gone
     expect(indexCss).not.toMatch(/thought-rail-line[^}]*transition[^}]*height/)
   })
 
-  test("reduced motion disables grow animation", () => {
-    expect(indexCss).toMatch(/prefers-reduced-motion[\s\S]*thought-rail-dot--harmonic[\s\S]*animation:\s*none/)
+  test("reduced motion disables SMIL animation", () => {
+    expect(indexCss).toMatch(/prefers-reduced-motion[\s\S]*harmonic-dot-shape[\s\S]*display:\s*none/)
   })
 })
 
