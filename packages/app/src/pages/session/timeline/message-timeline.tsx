@@ -1563,6 +1563,12 @@ export function MessageTimeline(props: {
     const [dotCentre, setDotCentre] = createSignal(initialDotCentre())
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
+      // Skip measurement for running rows — the running dot uses either
+      // bottom-anchoring (prose) or the deterministic dotCentreForGroup value
+      // (tools). Measurement is only needed for DONE dots aligning with the
+      // row's first text line after content has settled.
+      const r = rail()
+      if (r && r.running && r.last) return
       const hostTop = turnEl.getBoundingClientRect().top
       const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
       let node: Node | null
