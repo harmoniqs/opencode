@@ -2,63 +2,38 @@ export function readPartText(accum: Record<string, string> | undefined, part: { 
   return (accum?.[part.id] ?? part.text ?? "").trim()
 }
 
-/* Streaming prose lands in whole CHUNKS (Kate 2026-08-25: no typing reveal,
-   but no waiting for the entire reply either). A chunk boundary is a blank
-   line that is
-     · OUTSIDE a code fence — splitting inside one corrupts the markdown, and
-     · not immediately before a list item, blockquote, or indented line —
-       splitting those restarts ordered-list numbering and swells the gap
-       between fragments that render as separate lists.
-   Text past the last boundary is still being composed and stays withheld
-   until the next boundary or completion. */
+/* Streaming prose lands in whole SECTIONS (heading-anchored segmentation).
+   A chunk boundary fires at every markdown heading (`# `, `## `, `### `, etc.)
+   that is OUTSIDE a code fence. Each section = heading + everything until the
+   next heading of any rank. The intro (text before the first heading) is its
+   own section. Text past the last boundary is still being composed and stays
+   withheld until the next heading appears or the message completes.
+
+   This replaces the old blank-line splitting which produced orphan heading
+   cards, empty cards from `---`, and isolated math blocks. */
 
 const FENCE = /^\s{0,3}(```|~~~)/
-const CONTINUATION = /^\s{0,3}([-*+]\s|\d{1,3}[.)]\s|>)|^\s{4,}\S/
-const LABEL_MAX = 40
+const HEADING = /^#{1,6}\s/
 
 /** Every settled chunk boundary of a streaming text, in order. Each value is
- *  the char index where the NEXT chunk begins. Monotonic as the text grows.
- *  A boundary is invalid when the next line CONTINUES a construct the
- *  previous line already started (list item after list item, quote after
- *  quote): splitting there restarts ordered-list numbering across fragments.
- *  A construct's FIRST line after a paragraph is a fine place to split. */
+ *  the char index where the heading line begins. A boundary fires at each
+ *  heading outside a code fence, EXCEPT the first heading when it's at the
+ *  very start of the text (that heading opens the first section, not a split
+ *  point). The last section is always the tail (still composing). */
 function chunkBoundaries(text: string): number[] {
   const lines = text.split("\n")
   const boundaries: number[] = []
   let inFence = false
   let offset = 0
-  let prevNonBlank: string | undefined
+  let foundFirstContent = false
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (FENCE.test(line)) inFence = !inFence
-    offset += line.length + 1
-    if (line.trim() !== "") prevNonBlank = line
-    if (inFence || line.trim() !== "") continue
-    // blank line: the boundary candidate sits at the next non-blank line
-    let j = i + 1
-    let candidate = offset
-    while (j < lines.length && lines[j].trim() === "") {
-      candidate += lines[j].length + 1
-      j++
+    if (!inFence && HEADING.test(line) && foundFirstContent) {
+      boundaries.push(offset)
     }
-    if (j >= lines.length) break // trailing blanks — the tail is still composing
-    if (
-      CONTINUATION.test(lines[j]) &&
-      prevNonBlank !== undefined &&
-      CONTINUATION.test(prevNonBlank)
-    )
-      continue
-    // A short label (< 40 chars ending with `:`) stays glued to the content
-    // that follows — splitting here orphans the label in a tiny card.
-    if (
-      prevNonBlank !== undefined &&
-      prevNonBlank.length < LABEL_MAX &&
-      prevNonBlank.trimEnd().endsWith(":")
-    )
-      continue
-    boundaries.push(candidate)
-    offset = candidate
-    i = j - 1
+    if (line.trim() !== "") foundFirstContent = true
+    offset += line.length + 1
   }
   return boundaries
 }
