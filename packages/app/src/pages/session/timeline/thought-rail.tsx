@@ -264,10 +264,13 @@ function DotWithTooltip(props: {
       class="absolute"
       data-slot="thought-rail-dot"
       data-state="running"
-      style={props.bottomAnchored
-        ? { bottom: `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
-        : { top: `${props.dotCentre - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
-      }
+      style={{
+        ...(props.bottomAnchored
+          ? { bottom: `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
+          : { top: `${props.dotCentre - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }),
+        width: `${HARMONIC_SIZE}px`,
+        height: `${HARMONIC_SIZE}px`,
+      }}
       onMouseEnter={() => { setHovered(true); startTicking() }}
       onMouseLeave={() => { setHovered(false); stopTicking() }}
     >
