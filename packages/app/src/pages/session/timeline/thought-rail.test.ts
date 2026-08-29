@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { shouldRenderRail, dotCentreForGroup } from "./thought-rail"
+import { shouldRenderRail, dotCentreForGroup } from "./thought-rail-pure"
 
 // The rail's grammar, stated as tests. A step is "running" only when it is the
 // TAIL of a turn that is still working; everything above it has by definition

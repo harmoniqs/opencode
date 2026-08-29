@@ -84,9 +84,11 @@
 //   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
 
 
-import { createSignal, onCleanup, Show } from "solid-js"
+import { createSignal, onCleanup } from "solid-js"
 import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
 import { formatElapsed, formatTokens } from "@opencode-ai/ui/amicode-thinking"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
+export { DEFAULT_DOT_CENTRE, dotCentreForGroup, shouldRenderRail } from "./thought-rail-pure"
 
 const NODE = 7 // dot diameter, px — matches the site's Step
 
@@ -96,16 +98,9 @@ const NODE = 7 // dot diameter, px — matches the site's Step
 // a fixed offset, so the dot never jumps — it just rides down as the row grows.
 const PROSE_DOT_BOTTOM_INSET = 21
 
-/** Where a row's dot centre sits when nothing measures it: 11px — the centre
- *  of a 22px first text line starting at the row's top, which is what prose
- *  and rail-label rows produce. Rows whose content opens with a CARD (a tool
- *  chip, a group header, a widget preview) start their first text line lower
- *  — measured 16px for a chip row, 26.5px for a widget preview — so
- *  TimelineRowFrame measures the actual first line and passes `dotCentre`
- *  (Kate 2026-08-24: dots must line up with the text they coincide with).
- *  Segment caps derive from the same value, so alignment can never detach
- *  the spine from its dots. */
-export const DEFAULT_DOT_CENTRE = 11
+// DEFAULT_DOT_CENTRE, dotCentreForGroup, shouldRenderRail are re-exported
+// from ./thought-rail-pure (extracted for test isolation from Kobalte SSR).
+import { DEFAULT_DOT_CENTRE } from "./thought-rail-pure"
 
 // The rail sits in a gutter carved out of the row's own left inset, NOT flush
 // against the row edge. Flush was wrong: below the md breakpoint the message
@@ -234,30 +229,40 @@ export function ThoughtRail(props: {
  *  - bottomAnchored=false: sits at dotCentre (first-line aligned). Used for
  *    the Thinking row and status rows where the dot signals "working" beside
  *    a fixed label, not below growing content.
- *  The tooltip only renders while hovered to keep DOM cost near zero. The
- *  timer ticks from `turnStartedAt` (the user message's `time.created`), so
- *  it survives component remount across session switches. */
+ *  Uses TooltipV2 (placement="bottom") so the popup renders below the dot and
+ *  never occludes the rail or chat content above. The timer ticks from
+ *  `turnStartedAt` (the user message's `time.created`), so it survives
+ *  component remount across session switches. */
 function DotWithTooltip(props: {
   bottomAnchored: boolean
   dotCentre: number
   turnStartedAt?: number
   tokens?: number
 }) {
-  const [hovered, setHovered] = createSignal(false)
-  const [elapsedMs, setElapsedMs] = createSignal(0)
+  // Tick elapsed time every second while this component is mounted.
+  // Only one running dot exists at a time, so the cost is trivial.
+  const [elapsedMs, setElapsedMs] = createSignal(
+    props.turnStartedAt != null ? Date.now() - props.turnStartedAt : 0,
+  )
+  const clock = setInterval(() => {
+    if (props.turnStartedAt != null) setElapsedMs(Date.now() - props.turnStartedAt)
+  }, 1000)
+  onCleanup(() => clearInterval(clock))
 
-  // Tick the timer only while hovered — no cost when tooltip is hidden
-  let clock: ReturnType<typeof setInterval> | undefined
-  const startTicking = () => {
-    if (props.turnStartedAt == null) return
-    setElapsedMs(Date.now() - props.turnStartedAt)
-    clock = setInterval(() => setElapsedMs(Date.now() - props.turnStartedAt!), 1000)
+  const tooltipValue = () => {
+    if (props.turnStartedAt == null) return undefined
+    return (
+      <span class="whitespace-nowrap tabular-nums">
+        {formatElapsed(elapsedMs())}
+        {props.tokens != null && (
+          <>
+            <span class="mx-1 opacity-55">{"\u00B7"}</span>
+            {"\u2191"} {formatTokens(props.tokens!)} tokens
+          </>
+        )}
+      </span>
+    )
   }
-  const stopTicking = () => {
-    if (clock != null) clearInterval(clock)
-    clock = undefined
-  }
-  onCleanup(stopTicking)
 
   return (
     <span
@@ -271,24 +276,17 @@ function DotWithTooltip(props: {
         width: `${HARMONIC_SIZE}px`,
         height: `${HARMONIC_SIZE}px`,
       }}
-      onMouseEnter={() => { setHovered(true); startTicking() }}
-      onMouseLeave={() => { setHovered(false); stopTicking() }}
     >
-      <HarmonicDot
-        class="pointer-events-none thought-rail-dot--harmonic"
-      />
-      <Show when={hovered() && props.turnStartedAt != null}>
-        <span
-          class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] tracking-[0.01em] tabular-nums bg-v2-background-bg-elevated text-v2-text-text-faint shadow-sm border border-v2-border-border-base z-50"
-          role="status"
-        >
-          {formatElapsed(elapsedMs())}
-          <Show when={props.tokens != null}>
-            <span class="mx-1 opacity-55">·</span>
-            {formatTokens(props.tokens!)} tokens
-          </Show>
-        </span>
-      </Show>
+      <TooltipV2
+        placement="bottom"
+        value={tooltipValue()}
+        inactive={props.turnStartedAt == null}
+        openDelay={200}
+      >
+        <HarmonicDot
+          class="thought-rail-dot--harmonic"
+        />
+      </TooltipV2>
     </span>
   )
 }
@@ -315,38 +313,3 @@ export function ThoughtRailLabel(props: { label: string }) {
  *  15px; pl-6 (24px) leaves the same ~9px dot-to-content breath the website's
  *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. (Rule 5) */
 export const THOUGHT_RAIL_INSET = "pl-6"
-
-/** Deterministic dot centre per group type — the vertical centre of the first
- *  text line for each content species, measured once and tabulated. Used as the
- *  initial value for dotCentre (the ResizeObserver measurement refines it once
- *  the DOM settles, but the initial value prevents a frame of misalignment).
- *  If CSS padding changes, update the one constant here.
- *
- *  Accepts both the internal group names ("single_tool", "tool_group", "prose",
- *  "thinking") and the PartGroup.type values ("part", "shell", "edit", "context"). */
-export function dotCentreForGroup(groupType: string): number {
-  if (groupType === "prose" || groupType === "part") return DEFAULT_DOT_CENTRE
-  if (groupType === "single_tool" || groupType === "shell" || groupType === "edit" || groupType === "context") return DEFAULT_DOT_CENTRE
-  if (groupType === "tool_group") return DEFAULT_DOT_CENTRE
-  if (groupType === "thinking") return DEFAULT_DOT_CENTRE
-  return DEFAULT_DOT_CENTRE
-}
-
-/**
- * Rule 6 — lone COMPLETED steps render nothing (one dot is decoration). A
- * RUNNING turn rails from its very first step, though — the live dot is the
- * timeline's only "working" mark (the card's pulsing sig and Livedot are
- * gone), and a turn's first step is often its longest, so waiting for step
- * two meant the whole opening had no status signal. The lone live dot draws
- * no line — every line must end at a dot at both ends, so a single dot has
- * no dangling half — and a one-step completion still reads as "dot fills".
- */
-export function shouldRenderRail(_input: {
-  previousAssistantPart: boolean
-  lastAssistantPart: boolean
-  turnRunning: boolean
-}) {
-  // The Thinking row is always the first rail node, so every AssistantPart
-  // always has at least one other node above it — the rail always renders.
-  return true
-}
