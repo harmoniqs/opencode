@@ -128,11 +128,8 @@ export function ThoughtRail(props: {
   /** the turn is still working, so this tail step is in flight */
   running: boolean
   /** measured centre of the row's first text line (px from the row's top);
-   *  defaults to DEFAULT_DOT_CENTRE for unmeasured/prose rows */
+   *  used for done-dot alignment only — running dot is bottom-anchored */
   dotCentre?: number
-  /** true once the first measurement has landed — gates the CSS transition
-   *  so the initial mount uses the grow animation alone (#265) */
-  settled?: boolean
   /** epoch-ms when the user message was created — anchors the tooltip timer */
   turnStartedAt?: number
   /** streamed token count for this turn — shown in the tooltip */
@@ -152,8 +149,7 @@ export function ThoughtRail(props: {
   return (
     <>
       {/* Rail line BEHIND the dot — the SVG's internal background circle
-          masks the line within the ring's interior. The line reaches dotCentre
-          geometrically to connect with harmonic shapes that extend inward. */}
+          masks the line within the ring's interior. */}
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
@@ -167,26 +163,29 @@ export function ThoughtRail(props: {
           ...(isLoneRunning()
             ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
-            : props.last
-              ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
+            : props.last && isRunning()
+              ? // running tail: line extends to bottom of the row (dot sits there)
                 {
                   top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
+                  bottom: "0px",
                 }
-              : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
-                { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
+              : props.last
+                ? // completed tail: capped at the dot centre, never below (Rule 3)
+                  {
+                    top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
+                    height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
+                  }
+                : // mid-run: from dot centre (first) or gap (others) down to row bottom
+                  { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
       {isRunning() ? (
-        // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
-        // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
-        // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
-        // The settled class gates the top transition (#265): after the first
-        // measurement, subsequent dotCentre changes slide smoothly.
+        // RUNNING: spherical-harmonic morphing dot — bottom-anchored.
+        // The dot stays at the bottom edge of the last row. As content grows
+        // above it, the row's height increases and the dot rides down
+        // passively — no transitions, no re-renders. Cards appear above it.
         // Tooltip on hover shows elapsed time + token count (#625).
         <DotWithTooltip
-          dotCentre={dotCentre()}
-          settled={props.settled}
           turnStartedAt={props.turnStartedAt}
           tokens={props.tokens}
         />
@@ -216,12 +215,13 @@ export function ThoughtRail(props: {
 }
 
 /** Running dot with a hover tooltip showing elapsed time + tokens (#625).
+ *  Bottom-anchored: sits at the bottom edge of the row and rides down as
+ *  content grows above it. No position transitions — the virtualizer updates
+ *  the row's height and the dot stays at bottom passively.
  *  The tooltip only renders while hovered to keep DOM cost near zero. The
  *  timer ticks from `turnStartedAt` (the user message's `time.created`), so
  *  it survives component remount across session switches. */
 function DotWithTooltip(props: {
-  dotCentre: number
-  settled?: boolean
   turnStartedAt?: number
   tokens?: number
 }) {
@@ -244,15 +244,17 @@ function DotWithTooltip(props: {
   return (
     <span
       class="absolute"
+      data-slot="thought-rail-dot"
+      data-state="running"
       style={{
-        top: `${props.dotCentre - HARMONIC_SIZE / 2}px`,
+        bottom: `${-HARMONIC_SIZE / 2}px`,
         left: `${LINE_X - HARMONIC_SIZE / 2}px`,
       }}
       onMouseEnter={() => { setHovered(true); startTicking() }}
       onMouseLeave={() => { setHovered(false); stopTicking() }}
     >
       <HarmonicDot
-        class={`pointer-events-none thought-rail-dot--harmonic${props.settled ? " thought-rail-dot--settled" : ""}`}
+        class="pointer-events-none thought-rail-dot--harmonic"
       />
       <Show when={hovered() && props.turnStartedAt != null}>
         <span

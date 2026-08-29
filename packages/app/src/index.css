@@ -378,21 +378,11 @@
 
 /* The thought rail's live node: a spherical-harmonic morphing dot that pulses
    through Y_l^m silhouettes via SMIL path animation (sphere → shape → sphere).
-   The grow animation fires on mount (7→13px). Honours reduced motion. */
+   The grow animation fires on mount (7→13px). Honours reduced motion.
+   Bottom-anchored: the dot sits at the bottom edge of the last row and rides
+   down passively as content grows — no position transitions needed. */
 .thought-rail-dot--harmonic {
   animation: thought-rail-grow 150ms ease-out both;
-}
-/* Travelling dot (#265): after the first measurement settles, the dot
-   transitions smoothly to track the latest prose-fragment card. The settled
-   class gates the transition so the initial mount uses the grow animation
-   alone — no slide from top:0 to the first measured position. */
-.thought-rail-dot--settled {
-  transition: top 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-/* The rail line extends in sync with the dot — same timing so the spine
-   grows as the dot descends. */
-[data-slot="thought-rail-line"] {
-  transition: height 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes thought-rail-grow {
   from {
@@ -411,11 +401,5 @@
   .thought-rail-dot--harmonic .harmonic-dot-shape animate {
     /* SMIL respects this; browsers also pause SMIL under reduced-motion */
     display: none;
-  }
-  .thought-rail-dot--settled {
-    transition: none;
-  }
-  [data-slot="thought-rail-line"] {
-    transition: none;
   }
 }

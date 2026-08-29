@@ -1550,9 +1550,9 @@ export function MessageTimeline(props: {
     // Measured from the DOM so it's self-correcting when CSS changes (Kate
     // 2026-08-24: dots must line up with the text they coincide with).
     // ResizeObserver re-measures when async content mounts or streaming reflows.
+    // NOTE: only used for DONE dots — running dot is bottom-anchored.
     let turnEl: HTMLDivElement | undefined
     const [dotCentre, setDotCentre] = createSignal(DEFAULT_DOT_CENTRE)
-    const [dotSettled, setDotSettled] = createSignal(false)
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
       const hostTop = turnEl.getBoundingClientRect().top
@@ -1567,7 +1567,6 @@ export function MessageTimeline(props: {
         const centre = rect.top + rect.height / 2 - hostTop
         if (centre > 0 && centre < 80) {
           setDotCentre(Math.max(DEFAULT_DOT_CENTRE, Math.round(centre * 2) / 2))
-          if (!dotSettled()) setDotSettled(true)
           return
         }
       }
@@ -1606,7 +1605,6 @@ export function MessageTimeline(props: {
                 last={r().last}
                 running={r().running}
                 dotCentre={dotCentre()}
-                settled={dotSettled()}
                 turnStartedAt={"turnStartedAt" in input.row() ? (input.row() as any).turnStartedAt : undefined}
                 tokens={r().running && r().last ? assistantTokensForTurn(input.row().userMessageID) || undefined : undefined}
               />
