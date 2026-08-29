@@ -180,12 +180,17 @@ export function ThoughtRail(props: {
         }}
       />
       {isRunning() ? (
-        // RUNNING: spherical-harmonic morphing dot — bottom-anchored.
-        // The dot stays at the bottom edge of the last row. As content grows
-        // above it, the row's height increases and the dot rides down
-        // passively — no transitions, no re-renders. Cards appear above it.
+        // RUNNING: spherical-harmonic morphing dot.
+        // - Lone running (Thinking row, no output yet): centred on dotCentre
+        //   so the dot aligns with the "Thinking" text — it's a status signal,
+        //   not a growing content card.
+        // - Content rows (AssistantPart): bottom-anchored. As content grows
+        //   above it, the row's height increases and the dot rides down
+        //   passively — no transitions, no re-renders. Cards appear above it.
         // Tooltip on hover shows elapsed time + token count (#625).
         <DotWithTooltip
+          bottomAnchored={!isLoneRunning()}
+          dotCentre={dotCentre()}
           turnStartedAt={props.turnStartedAt}
           tokens={props.tokens}
         />
@@ -215,13 +220,18 @@ export function ThoughtRail(props: {
 }
 
 /** Running dot with a hover tooltip showing elapsed time + tokens (#625).
- *  Bottom-anchored: sits at the bottom edge of the row and rides down as
- *  content grows above it. No position transitions — the virtualizer updates
- *  the row's height and the dot stays at bottom passively.
+ *  Two positioning modes:
+ *  - bottomAnchored=true: sits at the bottom edge of the row, rides down as
+ *    content grows above it. Used for AssistantPart content rows.
+ *  - bottomAnchored=false: sits at dotCentre (first-line aligned). Used for
+ *    the Thinking row and status rows where the dot signals "working" beside
+ *    a fixed label, not below growing content.
  *  The tooltip only renders while hovered to keep DOM cost near zero. The
  *  timer ticks from `turnStartedAt` (the user message's `time.created`), so
  *  it survives component remount across session switches. */
 function DotWithTooltip(props: {
+  bottomAnchored: boolean
+  dotCentre: number
   turnStartedAt?: number
   tokens?: number
 }) {
@@ -246,10 +256,10 @@ function DotWithTooltip(props: {
       class="absolute"
       data-slot="thought-rail-dot"
       data-state="running"
-      style={{
-        bottom: `${-HARMONIC_SIZE / 2}px`,
-        left: `${LINE_X - HARMONIC_SIZE / 2}px`,
-      }}
+      style={props.bottomAnchored
+        ? { bottom: `${-HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
+        : { top: `${props.dotCentre - HARMONIC_SIZE / 2}px`, left: `${LINE_X - HARMONIC_SIZE / 2}px` }
+      }
       onMouseEnter={() => { setHovered(true); startTicking() }}
       onMouseLeave={() => { setHovered(false); stopTicking() }}
     >
