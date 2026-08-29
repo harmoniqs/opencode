@@ -42,7 +42,7 @@ export function HarmonicDot(props: {
       viewBox={`0 0 ${HARMONIC_SIZE} ${HARMONIC_SIZE}`}
       shape-rendering="geometricPrecision"
       aria-hidden="true"
-      style={props.style}
+      style={{ display: "block", ...((props.style as any) ?? {}) }}
     >
       {/* Background disc — masks the rail line behind the SVG. Sits behind
           the donut path so it fills the evenodd hole with the page background.

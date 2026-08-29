@@ -1563,17 +1563,6 @@ export function MessageTimeline(props: {
     const [dotCentre, setDotCentre] = createSignal(initialDotCentre())
     const measureDotCentre = () => {
       if (!turnEl || !rail()) return
-      // Skip measurement for running tool rows (shell/edit/context) — the
-      // TreeWalker finds a slightly wrong first-text position on these cards.
-      // They use the deterministic dotCentreForGroup value instead.
-      // Thinking and prose rows still measure (Thinking needs it for the
-      // "Thinking" label alignment; prose uses bottom-anchoring so measurement
-      // only matters when the row transitions to done).
-      const row = input.row()
-      if (row._tag === "AssistantPart" && row.group.type !== "part") {
-        const r = rail()
-        if (r && r.running && r.last) return
-      }
       const hostTop = turnEl.getBoundingClientRect().top
       const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT)
       let node: Node | null
