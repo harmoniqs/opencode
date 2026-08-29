@@ -380,8 +380,11 @@
    through Y_l^m silhouettes via SMIL path animation (sphere → shape → sphere).
    The grow animation fires on mount (7→13px). Honours reduced motion.
    Bottom-anchored: the dot sits at the bottom edge of the last row and rides
-   down passively as content grows — no position transitions needed. */
+   down passively as content grows — no position transitions needed.
+   display:block kills the inline SVG baseline gap (~2-3px descender space)
+   that otherwise pushes the dot above its intended centre. */
 .thought-rail-dot--harmonic {
+  display: block;
   animation: thought-rail-grow 150ms ease-out both;
 }
 @keyframes thought-rail-grow {
