@@ -127,8 +127,11 @@ export function ThoughtRail(props: {
   last: boolean
   /** the turn is still working, so this tail step is in flight */
   running: boolean
+  /** true for prose/text rows (growing content) — dot bottom-anchors.
+   *  false for Thinking/tool/shell rows (status cards) — dot at dotCentre. */
+  prose: boolean
   /** measured centre of the row's first text line (px from the row's top);
-   *  used for done-dot alignment only — running dot is bottom-anchored */
+   *  used for done-dot alignment and status-row running dot */
   dotCentre?: number
   /** epoch-ms when the user message was created — anchors the tooltip timer */
   turnStartedAt?: number
@@ -163,14 +166,14 @@ export function ThoughtRail(props: {
           ...(isLoneRunning()
             ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
-            : props.last && isRunning()
-              ? // running tail: line extends to bottom of the row (dot sits there)
+            : props.last && isRunning() && props.prose
+              ? // running prose tail: line extends to bottom of the row (dot sits there)
                 {
                   top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
                   bottom: "0px",
                 }
               : props.last
-                ? // completed tail: capped at the dot centre, never below (Rule 3)
+                ? // completed tail OR running status row: capped at the dot centre
                   {
                     top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
                     height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
@@ -181,15 +184,14 @@ export function ThoughtRail(props: {
       />
       {isRunning() ? (
         // RUNNING: spherical-harmonic morphing dot.
-        // - Lone running (Thinking row, no output yet): centred on dotCentre
-        //   so the dot aligns with the "Thinking" text — it's a status signal,
-        //   not a growing content card.
-        // - Content rows (AssistantPart): bottom-anchored. As content grows
-        //   above it, the row's height increases and the dot rides down
-        //   passively — no transitions, no re-renders. Cards appear above it.
+        // - Prose rows (growing text content): bottom-anchored. As content
+        //   grows above it, the row's height increases and the dot rides down
+        //   passively — no transitions, no re-renders.
+        // - Status rows (Thinking, Shell, Edit, etc.): centred on dotCentre
+        //   so the dot aligns with the label text.
         // Tooltip on hover shows elapsed time + token count (#625).
         <DotWithTooltip
-          bottomAnchored={!isLoneRunning()}
+          bottomAnchored={props.prose}
           dotCentre={dotCentre()}
           turnStartedAt={props.turnStartedAt}
           tokens={props.tokens}

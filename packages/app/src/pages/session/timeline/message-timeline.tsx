@@ -1538,12 +1538,15 @@ export function MessageTimeline(props: {
       if (row._tag === "Thinking") {
         const hasOutput = hasAssistantParts(row.userMessageID)
         // Dot stays on Thinking only while no output exists
-        return { first: true, last: !hasOutput, running: row.turnRunning && !hasOutput }
+        return { first: true, last: !hasOutput, running: row.turnRunning && !hasOutput, prose: false }
       }
       if (row._tag !== "AssistantPart") return undefined
       if (!shouldRenderRail(row)) return undefined
-      // Last AssistantPart gets the dot when the turn is still running
-      return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart }
+      // Last AssistantPart gets the dot when the turn is still running.
+      // prose = no railLabel → growing text content → bottom-anchored dot.
+      // !prose = tool/shell/edit row → compact status card → dot at dotCentre.
+      const isProse = !row.railLabel
+      return { first: false, last: row.lastAssistantPart, running: row.turnRunning && row.lastAssistantPart, prose: isProse }
     }
 
     // The dot aligns with the vertical centre of the row's first text line.
@@ -1604,6 +1607,7 @@ export function MessageTimeline(props: {
                 first={r().first}
                 last={r().last}
                 running={r().running}
+                prose={r().prose}
                 dotCentre={dotCentre()}
                 turnStartedAt={"turnStartedAt" in input.row() ? (input.row() as any).turnStartedAt : undefined}
                 tokens={r().running && r().last ? assistantTokensForTurn(input.row().userMessageID) || undefined : undefined}
