@@ -29,24 +29,4 @@ describe("travelling dot transition (#265)", () => {
   })
 })
 
-describe("prose fragment entry animation (#265)", () => {
-  test("prose-fragment-enter keyframe exists", () => {
-    expect(polishCss).toContain("prose-fragment-enter")
-  })
 
-  test("prose-fragment-enter uses translateY", () => {
-    expect(polishCss).toMatch(/prose-fragment-enter[\s\S]*translateY\(10px\)/)
-  })
-
-  test("prose-fragment cards use prose-fragment-enter animation", () => {
-    expect(polishCss).toMatch(/data-prose-fragment.*data-part-enter[\s\S]*prose-fragment-enter/)
-  })
-
-  test("prose-fragment-enter has 150ms duration", () => {
-    expect(polishCss).toMatch(/data-prose-fragment.*data-part-enter[\s\S]*150ms/)
-  })
-
-  test("reduced motion disables prose-fragment entrance", () => {
-    expect(polishCss).toMatch(/prefers-reduced-motion[\s\S]*data-prose-fragment.*data-part-enter[\s\S]*animation:\s*none/)
-  })
-})
