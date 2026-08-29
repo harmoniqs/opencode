@@ -67,7 +67,7 @@ describe("thought rail", () => {
 describe("dotCentreForGroup", () => {
   test("returns deterministic offsets per group type", () => {
     expect(dotCentreForGroup("prose")).toBe(21)
-    expect(dotCentreForGroup("tool_group")).toBe(11)
+    expect(dotCentreForGroup("tool_group")).toBe(16)
     expect(dotCentreForGroup("single_tool")).toBe(16)
     expect(dotCentreForGroup("thinking")).toBe(11)
   })

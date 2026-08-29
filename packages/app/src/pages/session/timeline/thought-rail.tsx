@@ -178,10 +178,18 @@ export function ThoughtRail(props: {
         }}
       />
       {isRunning() ? (
-        // RUNNING: the overlay handles the live dot — render nothing here.
-        // The overlay is a single persistent element at the MessageTimeline
-        // level that transitions between rows on step boundaries (#630).
-        null
+        // RUNNING: spherical-harmonic morphing dot — 13px SVG centred on LINE_X.
+        // The grow animation (7→13px) is a CSS @keyframes on mount; the morph
+        // cycles Y_l^m silhouettes via SMIL; slow rotation via CSS on the <g>.
+        // The settled class gates the top transition (#265): after the first
+        // measurement, subsequent dotCentre changes slide smoothly.
+        // Tooltip on hover shows elapsed time + token count (#625).
+        <DotWithTooltip
+          dotCentre={dotCentre()}
+          settled={props.settled}
+          turnStartedAt={props.turnStartedAt}
+          tokens={props.tokens}
+        />
       ) : (
         // DONE: 7px ink circle — the rail is one ink stroke (Rule 5).
         // text-base is the fg: literal black on light, near-white on dark,
@@ -292,7 +300,7 @@ export const THOUGHT_RAIL_INSET = "pl-6"
 export function dotCentreForGroup(groupType: string): number {
   if (groupType === "prose") return 21
   if (groupType === "single_tool") return 16
-  if (groupType === "tool_group") return 11
+  if (groupType === "tool_group") return 16
   if (groupType === "thinking") return 11
   return DEFAULT_DOT_CENTRE
 }

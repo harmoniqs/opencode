@@ -3,6 +3,8 @@ import { createMemo, createResource, onCleanup, untrack, type Accessor } from "s
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 import { same } from "@/utils/same"
+import { isTimelineReady, loadOlderTimeline, selectUserMessages, selectVisibleUserMessages } from "./model-pure"
+export { isTimelineReady, loadOlderTimeline, selectUserMessages, selectVisibleUserMessages } from "./model-pure"
 
 const emptyUserMessages: UserMessage[] = []
 const sessionFreshness = 15_000
@@ -92,37 +94,4 @@ export function createTimelineModel(input: {
     refreshFrame = undefined
     refreshTimer = undefined
   }
-}
-
-export function selectUserMessages(messages: Message[]) {
-  return messages.filter((message): message is UserMessage => message.role === "user")
-}
-
-export function isTimelineReady(messages: Message[] | undefined, loading: boolean) {
-  return messages !== undefined && (messages.some((message) => message.role === "user") || !loading)
-}
-
-export function selectVisibleUserMessages(messages: UserMessage[], revertMessageID?: string) {
-  if (!revertMessageID) return messages
-  return messages.filter((message) => message.id < revertMessageID)
-}
-
-export async function loadOlderTimeline(input: {
-  sessionID: Accessor<string | undefined>
-  more: Accessor<boolean>
-  loading: Accessor<boolean>
-  loadMore: (sessionID: string) => Promise<void>
-  before?: () => void
-  after?: (done: boolean) => void
-}) {
-  const id = input.sessionID()
-  if (!id || !input.more() || input.loading()) return
-
-  input.before?.()
-  await input.loadMore(id).catch((error) => {
-    if (input.sessionID() === id) input.after?.(true)
-    throw error
-  })
-  if (input.sessionID() !== id) return
-  input.after?.(true)
 }
