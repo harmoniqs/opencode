@@ -47,9 +47,9 @@ describe("pulse timing", () => {
     expect(PULSE_MS).toBe(1200)
   })
 
-  test("full cycle is 12 pulses = 14.4s", () => {
+  test("full cycle is 10 pulses = 12s", () => {
     expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
-    expect(CYCLE_MS).toBe(14400)
+    expect(CYCLE_MS).toBe(12000)
   })
 
   test("timing breakdown: 350 + 175 + 500 + 175 = 1200", () => {
@@ -185,14 +185,14 @@ describe("harmonicPath", () => {
 })
 
 describe("pulse sequence", () => {
-  test("has PULSE_COUNT (12) entries", () => {
+  test("has PULSE_COUNT (10) entries", () => {
     expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
-    expect(PULSE_SEQUENCE).toHaveLength(12)
+    expect(PULSE_SEQUENCE).toHaveLength(10)
   })
 
-  test("is strictly ascending: l=2 (m=0,1,2), l=3 (m=0,1,2,3), l=4 (m=0,1,2,3,4)", () => {
-    // The modes map to (l,m) pairs in this exact order
-    const expected = [2, 8, 3, 5, 9, 10, 4, 7, 11, 12, 13, 6]
+  test("is strictly ascending: l=2 (m=0,1,2), l=3 (m=1,2,3), l=4 (m=0,2,3,4)", () => {
+    // Genuine harmonics only — no trefoil (3,0), no redundant (4,1)
+    const expected = [2, 8, 3, 9, 10, 4, 7, 12, 13, 6]
     expect([...PULSE_MODES]).toEqual(expected)
   })
 

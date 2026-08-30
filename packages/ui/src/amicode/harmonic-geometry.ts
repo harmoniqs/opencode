@@ -4,11 +4,11 @@
 //
 // Rhythm: sphere → harmonic → sphere → harmonic → ... (the sphere is "home base").
 // Each pulse is ~1.2s: sphere-hold (350ms) → morph-out (175ms) → shape-hold (500ms)
-// → morph-back (175ms). Twelve pulses make one full cycle (~14.4s).
+// → morph-back (175ms). Ten pulses make one full cycle (12s).
 //
 // The sequence is strictly ascending by quantum numbers (l, m): l=2→4, m=0→l
-// within each level. This gives a natural build-up from simple pills to complex
-// stars as the animation loops.
+// within each level, using only genuine spherical harmonic cross-sections.
+// This gives a natural build-up from simple pills to complex stars as it loops.
 //
 // All paths share the same command structure (64 points, M + 63 L + Z) so SVG
 // SMIL <animate attributeName="d"> can interpolate natively between them.
@@ -34,7 +34,7 @@ export const SHAPE_HOLD_MS = 500
 export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
 
 /** Number of pulses in one full cycle. */
-export const PULSE_COUNT = 12
+export const PULSE_COUNT = 10
 
 /** Total cycle duration (ms). */
 export const CYCLE_MS = PULSE_MS * PULSE_COUNT
@@ -220,20 +220,20 @@ export function harmonicDonutPath(mode: number, rotationDeg: number = 0, innerR:
 }
 
 /**
- * The pulse mode sequence: strictly ascending by (l, m).
- * l=2: m=0, m=1, m=2 → l=3: m=0, m=1, m=2, m=3 → l=4: m=0, m=1, m=2, m=3, m=4.
- * Each level starts with its pill (m=0), then builds lobes as m increases.
+ * The pulse mode sequence: strictly ascending by (l, m), genuine harmonics only.
+ * l=2: m=0, m=1, m=2 → l=3: m=1, m=2, m=3 → l=4: m=0, m=2, m=3, m=4.
+ *
+ * Omitted: (3,0) — its trefoil formula was (1+cos3θ)/2, NOT a spherical harmonic
+ * (no Y_l^m has 3-fold symmetry). (4,1) — indistinguishable from (3,1) at 13px.
  */
 export const PULSE_MODES: readonly number[] = [
-  2,  // (2,0) — pinched pill
+  2,  // (2,0) — pinched pill (P_2^0 polar cross-section)
   8,  // (2,1) — soft pill
   3,  // (2,2) — 4-lobe clover
-  5,  // (3,0) — trefoil
   9,  // (3,1) — sharp pill
   10, // (3,2) — sharp 4-lobe
   4,  // (3,3) — 6-lobe rosette
-  7,  // (4,0) — double-pinch pill
-  11, // (4,1) — deep pill
+  7,  // (4,0) — double-pinch pill (P_4^0 polar cross-section)
   12, // (4,2) — deep 4-lobe
   13, // (4,3) — sharp 6-lobe
   6,  // (4,4) — 8-lobe star
@@ -248,15 +248,13 @@ export const PULSE_ROTATIONS: readonly number[] = [
   0,  // (2,0) — pill, horizontal
   0,  // (2,1) — pill, horizontal
   45, // (2,2) — 4-lobe X
-  0,  // (3,0) — trefoil, no vertical lobes
   0,  // (3,1) — pill, horizontal
   45, // (3,2) — 4-lobe X
   0,  // (3,3) — 6-lobe, no vertical lobes
   0,  // (4,0) — pill, horizontal
-  0,  // (4,1) — pill, horizontal
   45, // (4,2) — 4-lobe X
   0,  // (4,3) — 6-lobe, no vertical lobes
-  0,  // (4,4) — 8-lobe, 0° (accepted)
+  0,  // (4,4) — 8-lobe, 0°
 ]
 
 /** The canonical deterministic pulse sequence — mode + fixed rotation per slot.
