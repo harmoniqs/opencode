@@ -173,8 +173,8 @@ describe("pulse sequence", () => {
     expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
   })
 
-  test("modes: pill, pinched, clover, rosette, double-pinch, star-8, star-10, star-12", () => {
-    expect([...PULSE_MODES]).toEqual([1, 2, 3, 5, 6, 7, 8, 10])
+  test("modes: pill, clover, rosette, pinched, double-pinch, star-8, star-10, star-12", () => {
+    expect([...PULSE_MODES]).toEqual([1, 3, 5, 2, 6, 7, 8, 10])
   })
 
   test("only the clover (mode 3) is rotated 45°", () => {
