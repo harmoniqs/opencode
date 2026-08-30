@@ -215,10 +215,10 @@ export function harmonicDonutPath(mode: number, rotationDeg: number = 0, innerR:
  */
 export const PULSE_MODES: readonly number[] = [
   1,  // pill          — 2 lobes
-  3,  // clover        — 4 lobes
-  5,  // rosette       — 6 lobes
   2,  // pinched       — P_2^0, 2 big + 2 bumps
   6,  // double-pinch  — P_4^0, complex
+  3,  // clover        — 4 lobes
+  5,  // rosette       — 6 lobes
   7,  // star-8        — 8 lobes
   8,  // star-10       — 10 lobes
   10, // star-12       — 12 lobes
@@ -230,10 +230,10 @@ export const PULSE_MODES: readonly number[] = [
  */
 export const PULSE_ROTATIONS: readonly number[] = [
   0,  // pill
-  45, // clover — X not +
-  0,  // rosette
   0,  // pinched
   0,  // double-pinch
+  45, // clover — X not +
+  0,  // rosette
   0,  // star-8
   0,  // star-10
   0,  // star-12
