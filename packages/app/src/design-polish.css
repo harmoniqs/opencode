@@ -252,13 +252,6 @@
 [data-prose-fragment] :last-child {
   margin-bottom: 0;
 }
-/* A text part with empty content after trimming leaves only SolidJS comment
-   nodes inside the assistant-content wrapper.  :empty doesn't match (comment
-   nodes are still child nodes), but :has(*) detects when no element children
-   exist — hide the wrapper so the empty frame row collapses. */
-[data-slot="session-turn-assistant-content"]:not(:has(*)) {
-  display: none;
-}
 
 /* No exit animation. The site's GONE grammar (up + re-blur) was tried as a
    positioned ghost clone and misfired — a body-appended clone escapes the
