@@ -34,7 +34,7 @@ export const SHAPE_HOLD_MS = 500
 export const PULSE_MS = SPHERE_HOLD_MS + MORPH_MS + SHAPE_HOLD_MS + MORPH_MS
 
 /** Number of pulses in one full cycle. */
-export const PULSE_COUNT = 10
+export const PULSE_COUNT = 8
 
 /** Total cycle duration (ms). */
 export const CYCLE_MS = PULSE_MS * PULSE_COUNT
@@ -210,38 +210,32 @@ export function harmonicDonutPath(mode: number, rotationDeg: number = 0, innerR:
 }
 
 /**
- * The pulse mode sequence: 10 visually distinct genuine spherical harmonics.
- * Alternates azimuthal |cos(mθ)| shapes with zonal Legendre P_l^0 shapes,
- * building from simple (2 lobes) to complex (10 lobes + fine structure).
+ * The pulse mode sequence: 8 visually distinct genuine spherical harmonics.
+ * Azimuthal |cos(mθ)| lobe ladder interleaved with 2 zonal Legendres.
  */
 export const PULSE_MODES: readonly number[] = [
   1,  // pill          — 2 lobes
   2,  // pinched       — P_2^0, 2 big + 2 bumps
   3,  // clover        — 4 lobes
-  4,  // peanut        — P_3^0, 2 big + 4 bumps
   5,  // rosette       — 6 lobes
   6,  // double-pinch  — P_4^0, complex
   7,  // star-8        — 8 lobes
   8,  // star-10       — 10 lobes
-  9,  // hedgehog      — P_5^0, 2 big + 8 bumps
   10, // star-12       — 12 lobes
 ]
 
 /**
  * Fixed rotation angle per pulse slot (degrees).
- * m=2 shapes (4-lobe) rotate 45° so fins form an X (avoid vertical).
- * Everything else stays at 0°.
+ * Only the clover (4-lobe) rotates 45° so fins form an X.
  */
 export const PULSE_ROTATIONS: readonly number[] = [
   0,  // pill
   0,  // pinched
   45, // clover — X not +
-  0,  // peanut
   0,  // rosette
   0,  // double-pinch
   0,  // star-8
   0,  // star-10
-  0,  // hedgehog
   0,  // star-12
 ]
 

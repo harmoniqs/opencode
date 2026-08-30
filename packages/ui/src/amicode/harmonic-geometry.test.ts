@@ -47,9 +47,9 @@ describe("pulse timing", () => {
     expect(PULSE_MS).toBe(1200)
   })
 
-  test("full cycle is 10 pulses = 12s", () => {
+  test("full cycle is 8 pulses = 9.6s", () => {
     expect(CYCLE_MS).toBe(PULSE_MS * PULSE_COUNT)
-    expect(CYCLE_MS).toBe(12000)
+    expect(CYCLE_MS).toBe(9600)
   })
 })
 
@@ -168,13 +168,13 @@ describe("harmonicPath", () => {
 })
 
 describe("pulse sequence", () => {
-  test("has 10 entries", () => {
-    expect(PULSE_SEQUENCE).toHaveLength(10)
+  test("has 8 entries", () => {
+    expect(PULSE_SEQUENCE).toHaveLength(8)
     expect(PULSE_SEQUENCE).toHaveLength(PULSE_COUNT)
   })
 
-  test("modes ascend 1–10: pill, pinched, clover, peanut, rosette, double-pinch, star-8, star-10, hedgehog, star-12", () => {
-    expect([...PULSE_MODES]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  test("modes: pill, pinched, clover, rosette, double-pinch, star-8, star-10, star-12", () => {
+    expect([...PULSE_MODES]).toEqual([1, 2, 3, 5, 6, 7, 8, 10])
   })
 
   test("only the clover (mode 3) is rotated 45°", () => {
