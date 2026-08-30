@@ -15,14 +15,21 @@ export function readPartText(accum: Record<string, string> | undefined, part: { 
 const FENCE = /^\s{0,3}(```|~~~)/
 const HEADING = /^#{1,6}\s/
 
+/** Max lines in a section before paragraph-gap fallback kicks in. */
+const MAX_SECTION_LINES = 40
+
 /** Every settled chunk boundary of a streaming text, in order. Each value is
  *  the char index where the heading line begins. A boundary fires at each
  *  heading outside a code fence, EXCEPT the first heading when it's at the
  *  very start of the text (that heading opens the first section, not a split
- *  point). The last section is always the tail (still composing). */
+ *  point). The last section is always the tail (still composing).
+ *
+ *  Paragraph-gap fallback: if any section between heading boundaries exceeds
+ *  MAX_SECTION_LINES, sub-split at double-newline paragraph breaks within it
+ *  (respecting code fences). */
 function chunkBoundaries(text: string): number[] {
   const lines = text.split("\n")
-  const boundaries: number[] = []
+  const headingBoundaries: number[] = []
   let inFence = false
   let offset = 0
   let foundFirstContent = false
@@ -30,12 +37,66 @@ function chunkBoundaries(text: string): number[] {
     const line = lines[i]
     if (FENCE.test(line)) inFence = !inFence
     if (!inFence && HEADING.test(line) && foundFirstContent) {
-      boundaries.push(offset)
+      headingBoundaries.push(offset)
     }
     if (line.trim() !== "") foundFirstContent = true
     offset += line.length + 1
   }
-  return boundaries
+
+  // Paragraph-gap fallback: sub-split oversized sections
+  const sectionStarts = [0, ...headingBoundaries]
+  const boundaries: number[] = []
+
+  for (let s = 0; s < sectionStarts.length; s++) {
+    const sectionStart = sectionStarts[s]
+    const sectionEnd = s + 1 < sectionStarts.length ? sectionStarts[s + 1] : text.length
+    const section = text.slice(sectionStart, sectionEnd)
+    const sectionLines = section.split("\n")
+
+    if (sectionLines.length <= MAX_SECTION_LINES) {
+      if (s > 0) boundaries.push(sectionStart)
+      continue
+    }
+
+    // Sub-split at paragraph gaps (double newlines) outside code fences.
+    // Strategy: scan lines, track paragraph-gap positions, emit a boundary
+    // when the distance since the last emitted split exceeds MAX_SECTION_LINES.
+    let fenced = false
+    let linesSinceLastSplit = 0
+    let lastParaGapOffset = -1
+    let linesSinceLastParaGap = 0
+    let localOffset = 0
+
+    for (let i = 0; i < sectionLines.length; i++) {
+      const line = sectionLines[i]
+      if (FENCE.test(line)) fenced = !fenced
+      linesSinceLastSplit++
+      linesSinceLastParaGap++
+
+      // Detect paragraph gap: empty line followed by non-empty content
+      if (!fenced && line.trim() === "" && i > 0 && i + 1 < sectionLines.length && sectionLines[i + 1].trim() !== "") {
+        const gapOffset = localOffset + line.length + 1
+        // Only consider this gap if enough lines have accumulated since the last split
+        if (linesSinceLastSplit > MAX_SECTION_LINES) {
+          boundaries.push(sectionStart + gapOffset)
+          linesSinceLastSplit = 0
+          linesSinceLastParaGap = 0
+          lastParaGapOffset = -1
+        } else {
+          lastParaGapOffset = gapOffset
+          linesSinceLastParaGap = 0
+        }
+      }
+
+      localOffset += line.length + 1
+    }
+
+    if (s > 0 && (boundaries.length === 0 || boundaries[boundaries.length - 1] !== sectionStart)) {
+      boundaries.push(sectionStart)
+    }
+  }
+
+  return boundaries.sort((a, b) => a - b)
 }
 
 /** Index just past the last settled chunk boundary (0 if nothing settled). */

@@ -123,3 +123,56 @@ describe("splitSettledChunks — heading-anchored segmentation", () => {
     expect(tail).toBe("## Section\n\nBody.")
   })
 })
+
+describe("splitSettledChunks — paragraph-gap fallback for long sections", () => {
+
+  test("long headingless prose (>40 lines) splits at paragraph gaps", () => {
+    // 3 paragraphs of ~20 lines each = ~60 lines total, no headings
+    const para = (n: number) => Array.from({ length: 20 }, (_, i) => `Line ${i + 1} of paragraph ${n}.`).join("\n")
+    const text = para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+    const { chunks, tail } = splitSettledChunks(text)
+    // Should split at paragraph gaps — first 2 paragraphs settled, third is tail
+    expect(chunks.length).toBeGreaterThanOrEqual(1)
+    expect(chunks[0]).toContain("paragraph 1")
+    expect(tail).toContain("paragraph 3")
+  })
+
+  test("paragraph gaps inside code fences are not split points", () => {
+    // A huge code block with blank lines inside — blank lines inside the
+    // fence must NOT be used as split points, only the gap after the fence
+    const codeLines = Array.from({ length: 60 }, (_, i) =>
+      i % 15 === 14 ? "" : `  code line ${i + 1}`
+    ).join("\n")
+    const text = "Intro.\n\n```julia\n" + codeLines + "\n```\n\nAfter."
+    const { chunks, tail } = splitSettledChunks(text)
+    // The code block must stay intact in a single chunk — no splits inside the fence.
+    // The paragraph gap after ``` is a valid split, so code block lands in chunks[0].
+    if (chunks.length > 0) {
+      expect(chunks[0]).toContain("```julia")
+      expect(chunks[0]).toContain("```\n")
+      // The entire fence is in one chunk, not split at internal blank lines
+      expect(chunks[0]).toContain("code line 1")
+      expect(chunks[0]).toContain("code line 59")
+    }
+  })
+
+  test("short headingless prose (<40 lines) does not trigger paragraph-gap splits", () => {
+    const para = (n: number) => Array.from({ length: 10 }, (_, i) => `Line ${i + 1} of para ${n}.`).join("\n")
+    const text = para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+    const { chunks, tail } = splitSettledChunks(text)
+    // 30 lines total — under threshold, no splits
+    expect(chunks).toEqual([])
+    expect(tail).toBe(text)
+  })
+
+  test("headed section followed by long unheaded block — tail sub-splits at paragraphs", () => {
+    const para = (n: number) => Array.from({ length: 20 }, (_, i) => `Line ${i + 1} of block ${n}.`).join("\n")
+    const text = "## Analysis\n\nShort intro.\n\n" + para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+    const { chunks, tail } = splitSettledChunks(text)
+    // The heading creates one boundary, then the long tail sub-splits
+    expect(chunks.length).toBeGreaterThanOrEqual(1)
+    expect(chunks[0]).toContain("## Analysis")
+    // The long unheaded tail should be sub-split — not all in the tail
+    expect(tail.split("\n").length).toBeLessThan(60)
+  })
+})
