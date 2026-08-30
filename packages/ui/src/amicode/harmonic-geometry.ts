@@ -41,103 +41,93 @@ export const CYCLE_MS = PULSE_MS * PULSE_COUNT
 
 // --- Modes ---
 
-/** Number of distinct harmonic modes (circle + 13 shapes). */
-export const MODE_COUNT = 14
+/** Number of distinct harmonic modes (circle + 10 genuine shapes). */
+export const MODE_COUNT = 11
 
 /**
  * Compute the normalized radius [0, 1] for a given mode at angle theta.
  *
- * Modes are indexed by increasing (l, m):
- *   Mode  0: circle         — Y_0^0 (home base, not in pulse sequence)
- *   Mode  1: dumbbell       — (1,0) cos²θ, base 0.25 [legacy, not in sequence]
- *   Mode  2: pinched        — (2,0) |3cos²θ−1|/2, base 0.2
- *   Mode  3: clover         — (2,2) |cos(2θ)|, base 0.2
- *   Mode  4: rosette        — (3,3) |cos(3θ)|, base 0.25
- *   Mode  5: trefoil        — (3,0) (1+cos3θ)/2, base 0.3
- *   Mode  6: star-8         — (4,4) |cos(4θ)|, base 0.3
- *   Mode  7: double-pinch   — (4,0) |P_4^0|, base 0.2
- *   Mode  8: soft-pill      — (2,1) cos²θ, base 0.35
- *   Mode  9: sharp-pill     — (3,1) cos²θ, base 0.15
- *   Mode 10: sharp-clover   — (3,2) |cos(2θ)|, base 0.15
- *   Mode 11: deep-pill      — (4,1) cos²θ, base 0.1
- *   Mode 12: deep-clover    — (4,2) |cos(2θ)|, base 0.1
- *   Mode 13: sharp-rosette  — (4,3) |cos(3θ)|, base 0.15
+ * Each mode is a genuine spherical harmonic cross-section — either an
+ * azimuthal cut |cos(mφ)| (lobe count = 2m) or a polar Legendre |P_l^0(cosθ)|.
+ * Every mode is topologically distinct at 13px: different lobe count or
+ * different symmetry-breaking pattern.
  *
- * A base offset (min radius) prevents cusps and keeps shapes "spherical" —
- * at 13px a cusp would be a single-pixel spike, unreadable. Higher l for the
- * same lobe pattern uses a lower base, making valleys deeper (sharper shape).
+ *   Mode 0: circle        — Y_0^0 (home base, not in pulse sequence)
+ *   Mode 1: pill          — |cosθ| (m=1, 2 lobes)
+ *   Mode 2: pinched       — |P_2^0(cosθ)| (2 big + 2 equatorial bumps)
+ *   Mode 3: clover        — |cos2θ| (m=2, 4 lobes)
+ *   Mode 4: peanut        — |P_3^0(cosθ)| (2 big + 4 side bumps)
+ *   Mode 5: rosette       — |cos3θ| (m=3, 6 lobes)
+ *   Mode 6: double-pinch  — |P_4^0(cosθ)| (complex multi-node)
+ *   Mode 7: star-8        — |cos4θ| (m=4, 8 lobes)
+ *   Mode 8: star-10       — |cos5θ| (m=5, 10 lobes)
+ *   Mode 9: hedgehog      — |P_5^0(cosθ)| (2 big + 8 fine bumps)
+ *   Mode 10: star-12     — |cos6θ| (m=6, 12 lobes)
+ *
+ * A base offset (min radius) prevents cusps — at 13px a cusp would be a
+ * single-pixel spike, unreadable. Higher lobe counts use a higher base
+ * so the features remain visible at small pixel radius.
  */
 export function harmonicRadius(mode: number, theta: number): number {
   switch (mode) {
     case 0:
       return 1.0
     case 1: {
-      // (1,0) Dumbbell: two lobes, gentle — legacy
-      const cos = Math.cos(theta)
-      return 0.25 + 0.75 * cos * cos
-    }
-    case 2: {
-      // (2,0) Pinched: |3cos²θ - 1| gives lobes at poles + equatorial bump
-      const cos = Math.cos(theta)
-      const raw = Math.abs(3 * cos * cos - 1) / 2
-      return 0.2 + 0.8 * raw
-    }
-    case 3: {
-      // (2,2) Four-lobe clover: |cos(2θ)|, base 0.2
-      const raw = Math.abs(Math.cos(2 * theta))
-      return 0.2 + 0.8 * raw
-    }
-    case 4: {
-      // (3,3) Six-lobe rosette: |cos(3θ)|, base 0.25
-      const raw = Math.abs(Math.cos(3 * theta))
-      return 0.25 + 0.75 * raw
-    }
-    case 5: {
-      // (3,0) Trefoil: (1 + cos(3θ))/2 gives gentle 3-lobe shape
-      const raw = (1 + Math.cos(3 * theta)) / 2
-      return 0.3 + 0.7 * raw
-    }
-    case 6: {
-      // (4,4) Eight-lobe star: |cos(4θ)|, base 0.3
-      const raw = Math.abs(Math.cos(4 * theta))
-      return 0.3 + 0.7 * raw
-    }
-    case 7: {
-      // (4,0) Double pinch: |P_4^0(cosθ)| = |35cos⁴θ − 30cos²θ + 3|/8
-      const cos = Math.cos(theta)
-      const cos2 = cos * cos
-      const raw = Math.abs(35 * cos2 * cos2 - 30 * cos2 + 3) / 8
-      return 0.2 + 0.8 * raw
-    }
-    case 8: {
-      // (2,1) Soft pill: cos²θ, base 0.35 — gentler than (1,0)
-      const cos = Math.cos(theta)
-      return 0.35 + 0.65 * cos * cos
-    }
-    case 9: {
-      // (3,1) Sharp pill: cos²θ, base 0.15 — deeper waist
+      // m=1 pill: cos²θ, 2 lobes — the simplest non-circle
       const cos = Math.cos(theta)
       return 0.15 + 0.85 * cos * cos
     }
-    case 10: {
-      // (3,2) Sharp clover: |cos(2θ)|, base 0.15 — deeper valleys than (2,2)
-      const raw = Math.abs(Math.cos(2 * theta))
-      return 0.15 + 0.85 * raw
-    }
-    case 11: {
-      // (4,1) Deep pill: cos²θ, base 0.1 — near-cusp waist
+    case 2: {
+      // P_2^0: |3cos²θ - 1|/2 — 2 big lobes + 2 equatorial bumps
       const cos = Math.cos(theta)
-      return 0.1 + 0.9 * cos * cos
-    }
-    case 12: {
-      // (4,2) Deep clover: |cos(2θ)|, base 0.1 — very deep valleys
-      const raw = Math.abs(Math.cos(2 * theta))
-      return 0.1 + 0.9 * raw
-    }
-    case 13: {
-      // (4,3) Sharp rosette: |cos(3θ)|, base 0.15 — deeper than (3,3)
-      const raw = Math.abs(Math.cos(3 * theta))
+      const raw = Math.abs(3 * cos * cos - 1) / 2
       return 0.15 + 0.85 * raw
+    }
+    case 3: {
+      // m=2 clover: |cos(2θ)|, 4 symmetric lobes
+      const raw = Math.abs(Math.cos(2 * theta))
+      return 0.15 + 0.85 * raw
+    }
+    case 4: {
+      // P_3^0: |(5cos³θ - 3cosθ)/2| — 2 big lobes + 4 side bumps
+      const cos = Math.cos(theta)
+      const raw = Math.abs(5 * cos * cos * cos - 3 * cos) / 2
+      return 0.15 + 0.85 * raw
+    }
+    case 5: {
+      // m=3 rosette: |cos(3θ)|, 6 lobes
+      const raw = Math.abs(Math.cos(3 * theta))
+      return 0.2 + 0.8 * raw
+    }
+    case 6: {
+      // P_4^0: |(35cos⁴θ - 30cos²θ + 3)/8| — complex multi-node
+      const cos = Math.cos(theta)
+      const cos2 = cos * cos
+      const raw = Math.abs(35 * cos2 * cos2 - 30 * cos2 + 3) / 8
+      return 0.15 + 0.85 * raw
+    }
+    case 7: {
+      // m=4 star-8: |cos(4θ)|, 8 lobes
+      const raw = Math.abs(Math.cos(4 * theta))
+      return 0.25 + 0.75 * raw
+    }
+    case 8: {
+      // m=5 star-10: |cos(5θ)|, 10 lobes
+      const raw = Math.abs(Math.cos(5 * theta))
+      return 0.3 + 0.7 * raw
+    }
+    case 9: {
+      // P_5^0: |(63cos⁵θ - 70cos³θ + 15cosθ)/8| — 2 big + 8 fine bumps
+      const cos = Math.cos(theta)
+      const cos2 = cos * cos
+      const cos3 = cos2 * cos
+      const raw = Math.abs(63 * cos2 * cos3 - 70 * cos3 + 15 * cos) / 8
+      return 0.2 + 0.8 * raw
+    }
+    case 10: {
+      // m=6 star-12: |cos(6θ)|, 12 lobes
+      const raw = Math.abs(Math.cos(6 * theta))
+      return 0.35 + 0.65 * raw
     }
     default:
       return 1.0
@@ -220,41 +210,39 @@ export function harmonicDonutPath(mode: number, rotationDeg: number = 0, innerR:
 }
 
 /**
- * The pulse mode sequence: strictly ascending by (l, m), genuine harmonics only.
- * l=2: m=0, m=1, m=2 → l=3: m=1, m=2, m=3 → l=4: m=0, m=2, m=3, m=4.
- *
- * Omitted: (3,0) — its trefoil formula was (1+cos3θ)/2, NOT a spherical harmonic
- * (no Y_l^m has 3-fold symmetry). (4,1) — indistinguishable from (3,1) at 13px.
+ * The pulse mode sequence: 10 visually distinct genuine spherical harmonics.
+ * Alternates azimuthal |cos(mθ)| shapes with zonal Legendre P_l^0 shapes,
+ * building from simple (2 lobes) to complex (10 lobes + fine structure).
  */
 export const PULSE_MODES: readonly number[] = [
-  2,  // (2,0) — pinched pill (P_2^0 polar cross-section)
-  8,  // (2,1) — soft pill
-  3,  // (2,2) — 4-lobe clover
-  9,  // (3,1) — sharp pill
-  10, // (3,2) — sharp 4-lobe
-  4,  // (3,3) — 6-lobe rosette
-  7,  // (4,0) — double-pinch pill (P_4^0 polar cross-section)
-  12, // (4,2) — deep 4-lobe
-  13, // (4,3) — sharp 6-lobe
-  6,  // (4,4) — 8-lobe star
+  1,  // pill          — 2 lobes
+  2,  // pinched       — P_2^0, 2 big + 2 bumps
+  3,  // clover        — 4 lobes
+  4,  // peanut        — P_3^0, 2 big + 4 bumps
+  5,  // rosette       — 6 lobes
+  6,  // double-pinch  — P_4^0, complex
+  7,  // star-8        — 8 lobes
+  8,  // star-10       — 10 lobes
+  9,  // hedgehog      — P_5^0, 2 big + 8 bumps
+  10, // star-12       — 12 lobes
 ]
 
 /**
- * Fixed rotation angle per pulse slot (degrees). No randomization.
- * Rule: m=2 shapes (4-lobe) rotate 45° so fins form an X (avoid vertical).
+ * Fixed rotation angle per pulse slot (degrees).
+ * m=2 shapes (4-lobe) rotate 45° so fins form an X (avoid vertical).
  * Everything else stays at 0°.
  */
 export const PULSE_ROTATIONS: readonly number[] = [
-  0,  // (2,0) — pill, horizontal
-  0,  // (2,1) — pill, horizontal
-  45, // (2,2) — 4-lobe X
-  0,  // (3,1) — pill, horizontal
-  45, // (3,2) — 4-lobe X
-  0,  // (3,3) — 6-lobe, no vertical lobes
-  0,  // (4,0) — pill, horizontal
-  45, // (4,2) — 4-lobe X
-  0,  // (4,3) — 6-lobe, no vertical lobes
-  0,  // (4,4) — 8-lobe, 0°
+  0,  // pill
+  0,  // pinched
+  45, // clover — X not +
+  0,  // peanut
+  0,  // rosette
+  0,  // double-pinch
+  0,  // star-8
+  0,  // star-10
+  0,  // hedgehog
+  0,  // star-12
 ]
 
 /** The canonical deterministic pulse sequence — mode + fixed rotation per slot.
