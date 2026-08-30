@@ -453,16 +453,23 @@ span[data-component="tag"][data-variant="accent"] {
   pointer-events: none;
 }
 /* The scrim: everything except the stop's element and the walkthrough card is
-   softened, so the eye has one place to go. Blur is deliberately shallow (3px)
-   and paired with only a light dim — enough to push the rest of the window back
-   without hiding what the reader is being taught to recognise. The holes are
-   punched with an even-odd clip-path, recomputed as the ring moves. */
+   softened, so the eye has one place to go. Blur stays deliberately shallow
+   (3px) — enough to push the rest of the window back without hiding what the
+   reader is being taught to recognise. The holes are punched with an even-odd
+   clip-path, recomputed as the ring moves.
+
+   The dim is the shared overlay scrim token, the same one the drawer overlay
+   uses. It must NOT be mixed from --v2-background-bg-base: that token IS the
+   app ground, so compositing it over the ground is a no-op at any alpha — the
+   old `bg-base 22%` darkened nothing in either theme, and raising the
+   percentage changed nothing either. The scrim token is theme-aware and
+   actually deeper than the ground. */
 [data-component="amc-tour-spotlight"] .amc-tour-scrim {
   position: absolute;
   inset: 0;
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  background: color-mix(in srgb, var(--v2-background-bg-base) 22%, transparent);
+  background: var(--v2-overlay-simple-overlay-scrim);
   transition: opacity 0.2s ease;
 }
 [data-component="amc-tour-spotlight"] .amc-tour-ring {
