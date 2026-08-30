@@ -252,18 +252,11 @@
 [data-prose-fragment] :last-child {
   margin-bottom: 0;
 }
-/* An empty prose fragment (no markdown rendered) must be invisible — otherwise
-   the border + padding creates a visible empty box (e.g. a skill-only turn
-   where the text part is whitespace-only). */
-[data-prose-fragment]:empty {
-  display: none;
-}
-/* Hide assistant content wrappers when they contain no visible children —
-   prevents an empty frame row from taking up space below a tool chip. */
-[data-slot="session-turn-assistant-content"]:empty {
-  display: none;
-}
-[data-component="text-part"]:empty {
+/* A text part with empty content after trimming leaves only SolidJS comment
+   nodes inside the assistant-content wrapper.  :empty doesn't match (comment
+   nodes are still child nodes), but :has(*) detects when no element children
+   exist — hide the wrapper so the empty frame row collapses. */
+[data-slot="session-turn-assistant-content"]:not(:has(*)) {
   display: none;
 }
 
