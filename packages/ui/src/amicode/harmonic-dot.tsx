@@ -14,25 +14,23 @@
 // show through the evenodd hole. The circle matches INNER_R so it exactly fills
 // the ring's interior during the sphere state and shrinks with it during morphs.
 //
-// RANDOMIZED: each mount picks fresh random rotation angles.
-// Under prefers-reduced-motion the SMIL animates are hidden — static ring.
+// DETERMINISTIC: the sequence is level-ordered (l=1→l=4, pill first within each
+// level) with fixed rotation angles — no randomization. Every mount plays the
+// same animation. Under prefers-reduced-motion the SMIL animates are hidden —
+// static ring.
 
 import { type ComponentProps } from "solid-js"
 import {
   HARMONIC_SIZE,
   INNER_R,
   CIRCLE_DONUT_PATH,
-  randomPulseSequence,
-  buildSmil,
+  SMIL,
 } from "./harmonic-geometry"
 
 export function HarmonicDot(props: {
   class?: string
   style?: ComponentProps<"svg">["style"]
 }) {
-  const sequence = randomPulseSequence()
-  const smil = buildSmil(sequence)
-
   return (
     <svg
       data-component="harmonic-dot"
@@ -56,9 +54,9 @@ export function HarmonicDot(props: {
       >
         <animate
           attributeName="r"
-          values={smil.innerRadius}
-          keyTimes={smil.keyTimes}
-          dur={smil.dur}
+          values={SMIL.innerRadius}
+          keyTimes={SMIL.keyTimes}
+          dur={SMIL.dur}
           repeatCount="indefinite"
           calcMode="linear"
         />
@@ -72,9 +70,9 @@ export function HarmonicDot(props: {
       >
         <animate
           attributeName="d"
-          values={smil.values}
-          keyTimes={smil.keyTimes}
-          dur={smil.dur}
+          values={SMIL.values}
+          keyTimes={SMIL.keyTimes}
+          dur={SMIL.dur}
           repeatCount="indefinite"
           calcMode="linear"
         />
