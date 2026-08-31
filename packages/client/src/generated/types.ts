@@ -247,7 +247,11 @@ export type SessionsListOutput = {
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
     readonly title: string
-    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly location: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    }
     readonly subpath?: string
     readonly revert?: {
       readonly messageID: string
@@ -271,25 +275,41 @@ export type SessionsCreateInput = {
     readonly id?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    } | null
   }["id"]
   readonly agent?: {
     readonly id?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    } | null
   }["agent"]
   readonly model?: {
     readonly id?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    } | null
   }["model"]
   readonly location?: {
     readonly id?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    } | null
   }["location"]
 }
 
@@ -309,7 +329,11 @@ export type SessionsCreateOutput = {
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
     readonly title: string
-    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly location: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    }
     readonly subpath?: string
     readonly revert?: {
       readonly messageID: string
@@ -347,7 +371,11 @@ export type SessionsGetOutput = {
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
     readonly title: string
-    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly location: {
+      readonly directory: string
+      readonly directories?: ReadonlyArray<string>
+      readonly workspaceID?: string
+    }
     readonly subpath?: string
     readonly revert?: {
       readonly messageID: string
@@ -695,7 +723,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.agent.switched"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -708,7 +740,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.model.switched"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -721,11 +757,19 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.moved"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
-          readonly location: { readonly directory: string; readonly workspaceID?: string }
+          readonly location: {
+            readonly directory: string
+            readonly directories?: ReadonlyArray<string>
+            readonly workspaceID?: string
+          }
           readonly subdirectory?: string
         }
       }
@@ -734,7 +778,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.prompted"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -767,7 +815,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.prompt.admitted"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -800,7 +852,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.context.updated"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -813,7 +869,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.synthetic"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -826,7 +886,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.shell.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -840,7 +904,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.shell.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -853,7 +921,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.step.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -868,7 +940,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.step.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -890,7 +966,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.step.failed"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -903,7 +983,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.text.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -916,7 +1000,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.text.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -930,7 +1018,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.input.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -944,7 +1036,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.input.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -958,7 +1054,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.called"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -977,7 +1077,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.progress"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -995,7 +1099,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.success"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1019,7 +1127,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.tool.failed"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1038,7 +1150,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.reasoning.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1052,7 +1168,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.reasoning.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1067,7 +1187,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.retried"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1087,7 +1211,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.compaction.started"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1100,7 +1228,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.compaction.ended"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1115,7 +1247,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.revert.staged"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: {
           readonly timestamp: number
           readonly sessionID: string
@@ -1139,7 +1275,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.revert.cleared"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: { readonly timestamp: number; readonly sessionID: string }
       }
     | {
@@ -1147,7 +1287,11 @@ export type SessionsHistoryOutput = {
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.revert.committed"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly location?: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly data: { readonly timestamp: number; readonly sessionID: string; readonly messageID: string }
       }
   >
@@ -1165,7 +1309,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.agent.switched"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1178,7 +1326,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.model.switched"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1191,11 +1343,19 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.moved"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
-        readonly location: { readonly directory: string; readonly workspaceID?: string }
+        readonly location: {
+          readonly directory: string
+          readonly directories?: ReadonlyArray<string>
+          readonly workspaceID?: string
+        }
         readonly subdirectory?: string
       }
     }
@@ -1204,7 +1364,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.prompted"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1237,7 +1401,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.prompt.admitted"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1270,7 +1438,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.context.updated"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1283,7 +1455,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.synthetic"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1296,7 +1472,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.shell.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1310,7 +1490,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.shell.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1323,7 +1507,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.step.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1338,7 +1526,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.step.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1360,7 +1552,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.step.failed"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1373,7 +1569,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.text.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1386,7 +1586,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.text.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1400,7 +1604,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.input.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1414,7 +1622,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.input.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1428,7 +1640,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.called"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1447,7 +1663,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.progress"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1465,7 +1685,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.success"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1489,7 +1713,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.tool.failed"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1508,7 +1736,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.reasoning.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1522,7 +1754,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.reasoning.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1537,7 +1773,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.retried"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1557,7 +1797,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.compaction.started"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1570,7 +1814,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.compaction.ended"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1585,7 +1833,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.revert.staged"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: {
         readonly timestamp: number
         readonly sessionID: string
@@ -1609,7 +1861,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.revert.cleared"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: { readonly timestamp: number; readonly sessionID: string }
     }
   | {
@@ -1617,7 +1873,11 @@ export type SessionsEventsOutput =
       readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.revert.committed"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
-      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly location?: {
+        readonly directory: string
+        readonly directories?: ReadonlyArray<string>
+        readonly workspaceID?: string
+      }
       readonly data: { readonly timestamp: number; readonly sessionID: string; readonly messageID: string }
     }
 
@@ -2738,6 +2998,7 @@ export type QuestionsListRequestsOutput = {
       readonly options: ReadonlyArray<{ readonly label: string; readonly description: string }>
       readonly multiple?: boolean
       readonly kind?: "choice" | "text"
+      readonly default?: string
       readonly custom?: boolean
     }>
     readonly tool?: { readonly messageID: string; readonly callID: string }
@@ -2756,6 +3017,7 @@ export type QuestionsListOutput = {
       readonly options: ReadonlyArray<{ readonly label: string; readonly description: string }>
       readonly multiple?: boolean
       readonly kind?: "choice" | "text"
+      readonly default?: string
       readonly custom?: boolean
     }>
     readonly tool?: { readonly messageID: string; readonly callID: string }
