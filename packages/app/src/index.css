@@ -389,3 +389,10 @@
     display: none;
   }
 }
+
+/* Done-dot crossfade: when a running row transitions to done, the 7px ink
+   circle fades in over 150ms instead of appearing instantly. Softens the
+   running→done handoff so the eye reads continuity, not a hard swap. */
+[data-slot="thought-rail-dot"][data-state="done"] {
+  transition: opacity 150ms ease-out;
+}

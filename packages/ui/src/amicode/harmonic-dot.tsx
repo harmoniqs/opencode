@@ -25,12 +25,16 @@ import {
   INNER_R,
   CIRCLE_DONUT_PATH,
   SMIL,
+  smilBeginOffset,
 } from "./harmonic-geometry"
 
 export function HarmonicDot(props: {
   class?: string
   style?: ComponentProps<"svg">["style"]
 }) {
+  // Phase-lock: compute once at creation so SMIL picks up the global morph
+  // phase instead of restarting from the ring on every remount.
+  const begin = smilBeginOffset()
   return (
     <svg
       data-component="harmonic-dot"
@@ -57,6 +61,7 @@ export function HarmonicDot(props: {
           values={SMIL.innerRadius}
           keyTimes={SMIL.keyTimes}
           dur={SMIL.dur}
+          begin={begin}
           repeatCount="indefinite"
           calcMode="linear"
         />
@@ -73,6 +78,7 @@ export function HarmonicDot(props: {
           values={SMIL.values}
           keyTimes={SMIL.keyTimes}
           dur={SMIL.dur}
+          begin={begin}
           repeatCount="indefinite"
           calcMode="linear"
         />

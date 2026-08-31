@@ -344,3 +344,15 @@ export const MORPH_CADENCE_MS = CYCLE_MS
 export function smilKeyTimes(): string {
   return SMIL.keyTimes
 }
+
+/**
+ * Compute a SMIL `begin` offset that phase-locks the animation to a global
+ * modular clock. Every mount of HarmonicDot calls this once; the returned
+ * string (e.g. "-4200ms") makes the browser start the SMIL timeline as if
+ * it had been running since wall-clock t=0 mod CYCLE_MS. Two dots mounting
+ * at different times agree on the current shape because they share the same
+ * epoch.
+ */
+export function smilBeginOffset(): string {
+  return `-${Date.now() % CYCLE_MS}ms`
+}
