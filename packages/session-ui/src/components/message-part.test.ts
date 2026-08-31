@@ -126,15 +126,15 @@ describe("splitSettledChunks — heading-anchored segmentation", () => {
 
 describe("splitSettledChunks — paragraph-gap fallback for long sections", () => {
 
-  test("long headingless prose (>40 lines) splits at paragraph gaps", () => {
-    // 3 paragraphs of ~20 lines each = ~60 lines total, no headings
-    const para = (n: number) => Array.from({ length: 20 }, (_, i) => `Line ${i + 1} of paragraph ${n}.`).join("\n")
+  test("long headingless prose (>2000 chars) splits at paragraph gaps", () => {
+    // 3 long paragraphs, each ~800 chars, no headings
+    const para = (n: number) => `Paragraph ${n}: ` + "This is a long sentence that represents typical prose output from a model. ".repeat(10)
     const text = para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+    expect(text.length).toBeGreaterThan(2000)
     const { chunks, tail } = splitSettledChunks(text)
-    // Should split at paragraph gaps — first 2 paragraphs settled, third is tail
     expect(chunks.length).toBeGreaterThanOrEqual(1)
-    expect(chunks[0]).toContain("paragraph 1")
-    expect(tail).toContain("paragraph 3")
+    expect(chunks[0]).toContain("Paragraph 1")
+    expect(tail).toContain("Paragraph 3")
   })
 
   test("paragraph gaps inside code fences are not split points", () => {
@@ -156,18 +156,18 @@ describe("splitSettledChunks — paragraph-gap fallback for long sections", () =
     }
   })
 
-  test("short headingless prose (<40 lines) does not trigger paragraph-gap splits", () => {
-    const para = (n: number) => Array.from({ length: 10 }, (_, i) => `Line ${i + 1} of para ${n}.`).join("\n")
-    const text = para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+  test("short headingless prose (<1500 chars) does not trigger paragraph-gap splits", () => {
+    const text = "Short paragraph one.\n\nShort paragraph two.\n\nShort paragraph three."
+    expect(text.length).toBeLessThan(1500)
     const { chunks, tail } = splitSettledChunks(text)
-    // 30 lines total — under threshold, no splits
     expect(chunks).toEqual([])
     expect(tail).toBe(text)
   })
 
   test("headed section followed by long unheaded block — tail sub-splits at paragraphs", () => {
-    const para = (n: number) => Array.from({ length: 20 }, (_, i) => `Line ${i + 1} of block ${n}.`).join("\n")
+    const para = (n: number) => `Block ${n}: ` + "This sentence is repeated to create a long paragraph for testing. ".repeat(20)
     const text = "## Analysis\n\nShort intro.\n\n" + para(1) + "\n\n" + para(2) + "\n\n" + para(3)
+    expect(text.length).toBeGreaterThan(3000)
     const { chunks, tail } = splitSettledChunks(text)
     // The heading creates one boundary, then the long tail sub-splits
     expect(chunks.length).toBeGreaterThanOrEqual(1)
