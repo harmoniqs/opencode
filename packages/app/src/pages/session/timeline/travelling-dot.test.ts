@@ -28,6 +28,14 @@ describe("bottom-anchored harmonic dot", () => {
   })
 })
 
+describe("done-dot crossfade", () => {
+  test("done-dot has an opacity transition (fade-in on completion)", () => {
+    // The done-dot should fade in smoothly rather than appearing instantly.
+    // Look for a CSS rule with transition containing "opacity" on the done state.
+    expect(indexCss).toMatch(/thought-rail-dot[^}]*done[^}]*transition[^}]*opacity/)
+  })
+})
+
 describe("timeline entrance animation", () => {
   test("timeline-enter keyframe uses blur + rise + opacity", () => {
     expect(polishCss).toMatch(/timeline-enter[\s\S]*opacity:\s*0/)

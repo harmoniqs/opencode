@@ -22,6 +22,7 @@ import {
   harmonicRadius,
   harmonicPath,
   buildSmil,
+  smilBeginOffset,
 } from "./harmonic-geometry"
 
 describe("constants", () => {
@@ -237,6 +238,39 @@ describe("SMIL keyframes", () => {
     const structure = vals[0].replace(/[-\d.,\s]/g, "")
     for (const v of vals) {
       expect(v.replace(/[-\d.,\s]/g, "")).toBe(structure)
+    }
+  })
+})
+
+describe("smilBeginOffset (phase-lock)", () => {
+  test("returns a negative ms string matching -(now % CYCLE_MS)", () => {
+    const before = Date.now()
+    const result = smilBeginOffset()
+    const after = Date.now()
+    // Must be a string of the form "-<digits>ms"
+    expect(result).toMatch(/^-\d+ms$/)
+    // The numeric value should be within [before % CYCLE_MS, after % CYCLE_MS] ± 50ms
+    const offsetMs = parseInt(result.slice(1, -2), 10) // strip leading "-" and trailing "ms"
+    const expectedLow = before % CYCLE_MS
+    const expectedHigh = after % CYCLE_MS
+    // Handle the wraparound case where the modulus crosses the cycle boundary
+    if (expectedHigh >= expectedLow) {
+      expect(offsetMs).toBeGreaterThanOrEqual(expectedLow - 50)
+      expect(offsetMs).toBeLessThanOrEqual(expectedHigh + 50)
+    } else {
+      // Wraparound: either offsetMs is near the end of the cycle or near the start
+      const inRange =
+        (offsetMs >= expectedLow - 50) || (offsetMs <= expectedHigh + 50)
+      expect(inRange).toBe(true)
+    }
+  })
+
+  test("offset is always less than CYCLE_MS", () => {
+    for (let i = 0; i < 10; i++) {
+      const result = smilBeginOffset()
+      const offsetMs = parseInt(result.slice(1, -2), 10)
+      expect(offsetMs).toBeLessThan(CYCLE_MS)
+      expect(offsetMs).toBeGreaterThanOrEqual(0)
     }
   })
 })
