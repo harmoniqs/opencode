@@ -69,7 +69,7 @@ export function createPromptProjectController(input: {
           (pathKey(project.worktree) === key || project.sandboxes?.some((sandbox) => pathKey(sandbox) === key)),
       )
   }
-  const selected = () => current() ?? input.controls().available[0]
+  const selected = () => current()
   const projects = () => {
     const search = store.search.trim().toLowerCase()
     if (!search) return input.controls().available
@@ -533,16 +533,20 @@ function ProjectTrigger(props: ComponentProps<"button"> & { controller: PromptPr
       </Show>
       {/* amicode#663: inside the amicode webview show a short truncated name
           (first 5 chars + ellipsis) so the user sees which project is active;
-          the full name lives in the dropdown.  Outside amicode: full name. */}
+          the full name lives in the dropdown.  Outside amicode: full name.
+          amicode#673: when no project matches the draft directory, show
+          "Pick a project" instead of silently falling back to available[0]. */}
       <Show when={!inAmicode()}>
         <span class="min-w-0 truncate leading-5">
-          {project() ? displayName(project()!) : local.controller.labels.new()}
+          {project() ? displayName(project()!) : "Pick a project"}
         </span>
       </Show>
-      <Show when={inAmicode() && project()}>
-        <span class="min-w-0 truncate leading-5 text-[13px]">
+      <Show when={inAmicode()}>
+        <span class="min-w-0 truncate leading-5 text-[13px] text-v2-text-text-faint">
           {(() => {
-            const name = displayName(project()!)
+            const p = project()
+            if (!p) return "Pick a project"
+            const name = displayName(p)
             return name.length > 5 ? name.slice(0, 5) + "\u2026" : name
           })()}
         </span>
