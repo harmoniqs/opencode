@@ -94,6 +94,12 @@
   border-color: var(--v2-border-strong, rgba(255, 255, 255, 0.24));
 }
 
+.titlebar-control-dragging {
+  opacity: 0.5;
+  border-style: solid;
+  cursor: grabbing;
+}
+
 /* Context menu spawned by right-click on the titlebar */
 .titlebar-context-menu {
   display: flex;

@@ -52,3 +52,30 @@ export function createEditModeState() {
     },
   }
 }
+
+export function reorderWithinSlot(
+  layout: TitlebarLayout,
+  slot: "left" | "right",
+  fromIndex: number,
+  toIndex: number,
+): TitlebarLayout {
+  if (fromIndex === toIndex) return layout
+  const items = [...layout[slot]]
+  const [moved] = items.splice(fromIndex, 1)
+  items.splice(toIndex, 0, moved!)
+  return { ...layout, [slot]: items }
+}
+
+export function moveToSlot(
+  layout: TitlebarLayout,
+  controlId: TitlebarControlId,
+  toSlot: "left" | "right",
+  toIndex: number,
+): TitlebarLayout {
+  const fromSlot = layout.left.includes(controlId) ? "left" : "right"
+  if (fromSlot === toSlot) return layout
+  const fromItems = layout[fromSlot].filter((id) => id !== controlId)
+  const toItems = [...layout[toSlot]]
+  toItems.splice(toIndex, 0, controlId)
+  return { left: fromSlot === "left" ? fromItems : toItems, right: fromSlot === "right" ? fromItems : toItems }
+}

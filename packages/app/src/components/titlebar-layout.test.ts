@@ -7,6 +7,8 @@ import {
   isSessionScoped,
   validateTitlebarLayout,
   createEditModeState,
+  reorderWithinSlot,
+  moveToSlot,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -124,5 +126,53 @@ describe("edit mode state", () => {
     })
     expect(written).toEqual(defaultTitlebarLayout)
     expect(state.active()).toBe(false)
+  })
+})
+
+describe("reorder operations", () => {
+  test("reorderWithinSlot moves a control to a new position in the same slot", () => {
+    const layout = {
+      left: [],
+      right: ["sessions", "status", "side-panel", "profile", "settings"],
+    } satisfies TitlebarLayout
+    const result = reorderWithinSlot(layout, "right", 0, 2)
+    expect(result.right).toEqual(["status", "side-panel", "sessions", "profile", "settings"])
+    expect(result.left).toEqual([])
+  })
+
+  test("reorderWithinSlot is a no-op when from equals to", () => {
+    const layout = defaultTitlebarLayout
+    const result = reorderWithinSlot(layout, "right", 1, 1)
+    expect(result).toEqual(layout)
+  })
+
+  test("moveToSlot transfers a control from right to left", () => {
+    const layout = {
+      left: [],
+      right: ["sessions", "status", "side-panel", "profile", "settings"],
+    } satisfies TitlebarLayout
+    const result = moveToSlot(layout, "profile", "left", 0)
+    expect(result.left).toEqual(["profile"])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "settings"])
+  })
+
+  test("moveToSlot transfers a control from left to right at a specific index", () => {
+    const layout = {
+      left: ["profile", "settings"],
+      right: ["sessions", "status", "side-panel"],
+    } satisfies TitlebarLayout
+    const result = moveToSlot(layout, "profile", "right", 1)
+    expect(result.left).toEqual(["settings"])
+    expect(result.right).toEqual(["sessions", "profile", "status", "side-panel"])
+  })
+
+  test("moveToSlot appends to the end when index equals slot length", () => {
+    const layout = {
+      left: [],
+      right: ["sessions", "status", "side-panel", "profile", "settings"],
+    } satisfies TitlebarLayout
+    const result = moveToSlot(layout, "settings", "left", 0)
+    expect(result.left).toEqual(["settings"])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "profile"])
   })
 })

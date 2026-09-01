@@ -1,6 +1,11 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, startTransition, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
+import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
+import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
+import { Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
+import { RestrictToHorizontalAxis } from "@dnd-kit/abstract/modifiers"
+import { arrayMove } from "@dnd-kit/helpers"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
@@ -31,7 +36,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
-import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout } from "./titlebar-layout"
+import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -634,9 +639,12 @@ type TitlebarV2RightState = {
 
 function TitlebarControlSlot(props: {
   controls: TitlebarControlId[]
+  slot: "left" | "right"
   state: TitlebarV2RightState
   editMode?: boolean
   onExitEditMode?: () => void
+  onReorder?: (layout: TitlebarLayout) => void
+  layout?: TitlebarLayout
   showCheckmark?: boolean
 }) {
   const language = useLanguage()
@@ -654,60 +662,94 @@ function TitlebarControlSlot(props: {
       )
     })
   }
+
+  const renderControl = (id: TitlebarControlId) => (
+    <Switch>
+      <Match when={id === "profile"}>
+        <span class="flex shrink-0" data-tour-target="profile">
+          <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
+            <ProfilePopoverTrigger />
+          </TooltipV2>
+        </span>
+      </Match>
+      <Match when={id === "settings"}>
+        <Show when={props.state.update.visible}>
+          <TitlebarUpdateIconButton state={props.state.update} />
+        </Show>
+        <span class="flex shrink-0" data-tour-target="settings">
+          <TooltipV2
+            placement="bottom"
+            value={
+              <>
+                {language.t("command.settings.open")}
+                <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
+              </>
+            }
+            class="shrink-0"
+          >
+            <IconButtonV2
+              type="button"
+              variant="ghost-muted"
+              size="large"
+              class="!w-9 shrink-0"
+              icon={<IconV2 name="settings-gear" />}
+              state={settingsOpen() ? "pressed" : undefined}
+              onClick={props.editMode ? undefined : showSettings}
+              aria-label={language.t("command.settings.open")}
+            />
+          </TooltipV2>
+        </span>
+      </Match>
+      <Match when={isSessionScoped(id)}>
+        <div id={mountPointId(id)} class="flex shrink-0 items-center" />
+      </Match>
+    </Switch>
+  )
+
+  const renderItem = (id: TitlebarControlId, index: () => number) => {
+    if (!props.editMode) {
+      return <div class="titlebar-control-wrapper">{renderControl(id)}</div>
+    }
+    return <SortableControlItem id={id} index={index}>{renderControl(id)}</SortableControlItem>
+  }
+
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
-      <For each={props.controls}>
-        {(id) => (
-          <div
-            classList={{
-              "titlebar-control-wrapper": true,
-              "titlebar-control-edit": !!props.editMode,
-            }}
-            onClick={props.editMode ? (e: MouseEvent) => { e.stopPropagation(); e.preventDefault() } : undefined}
-          >
-            <Switch>
-              <Match when={id === "profile"}>
-                <span class="flex shrink-0" data-tour-target="profile">
-                  <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
-                    <ProfilePopoverTrigger />
-                  </TooltipV2>
-                </span>
-              </Match>
-              <Match when={id === "settings"}>
-                <Show when={props.state.update.visible}>
-                  <TitlebarUpdateIconButton state={props.state.update} />
-                </Show>
-                <span class="flex shrink-0" data-tour-target="settings">
-                  <TooltipV2
-                    placement="bottom"
-                    value={
-                      <>
-                        {language.t("command.settings.open")}
-                        <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
-                      </>
-                    }
-                    class="shrink-0"
-                  >
-                    <IconButtonV2
-                      type="button"
-                      variant="ghost-muted"
-                      size="large"
-                      class="!w-9 shrink-0"
-                      icon={<IconV2 name="settings-gear" />}
-                      state={settingsOpen() ? "pressed" : undefined}
-                      onClick={props.editMode ? undefined : showSettings}
-                      aria-label={language.t("command.settings.open")}
-                    />
-                  </TooltipV2>
-                </span>
-              </Match>
-              <Match when={isSessionScoped(id)}>
-                <div id={mountPointId(id)} class="flex shrink-0 items-center" />
-              </Match>
-            </Switch>
-          </div>
-        )}
-      </For>
+      <Show
+        when={props.editMode}
+        fallback={
+          <For each={props.controls}>
+            {(id) => <div class="titlebar-control-wrapper">{renderControl(id)}</div>}
+          </For>
+        }
+      >
+        <DragDropProvider
+          sensors={[
+            PointerSensor.configure({
+              activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
+            }),
+          ]}
+          modifiers={[RestrictToHorizontalAxis]}
+          plugins={(defaults) => [
+            ...defaults,
+            Feedback.configure({ dropAnimation: null }),
+          ]}
+          onDragEnd={(event) => {
+            if (event.canceled || !props.layout || !props.onReorder) return
+            const source = event.operation.source
+            if (!isSortable(source)) return
+            const { initialIndex, index } = source
+            if (initialIndex !== index) {
+              const updated = reorderWithinSlot(props.layout, props.slot, initialIndex, index)
+              props.onReorder(updated)
+            }
+          }}
+        >
+          <For each={props.controls}>
+            {(id, index) => renderItem(id, index)}
+          </For>
+        </DragDropProvider>
+      </Show>
       <Show when={props.showCheckmark && props.editMode}>
         <IconButtonV2
           type="button"
@@ -723,14 +765,41 @@ function TitlebarControlSlot(props: {
   )
 }
 
+function SortableControlItem(props: { id: string; index: () => number; children: any }) {
+  const sortable = useSortable({
+    get id() {
+      return props.id
+    },
+    get index() {
+      return props.index()
+    },
+  })
+  return (
+    <div
+      ref={sortable.ref}
+      classList={{
+        "titlebar-control-wrapper": true,
+        "titlebar-control-edit": true,
+        "titlebar-control-dragging": sortable.isDragSource(),
+      }}
+    >
+      {props.children}
+    </div>
+  )
+}
+
 function TitlebarV2Right(props: { state: TitlebarV2RightState; editMode: boolean; onExitEditMode: () => void }) {
   const settings = useSettings()
+  const layout = createMemo(() => settings.general.titlebarLayout())
   return (
     <TitlebarControlSlot
-      controls={settings.general.titlebarLayout().right}
+      controls={layout().right}
+      slot="right"
       state={props.state}
       editMode={props.editMode}
       onExitEditMode={props.onExitEditMode}
+      onReorder={(updated) => settings.general.setTitlebarLayout(updated)}
+      layout={layout()}
       showCheckmark
     />
   )
@@ -738,10 +807,18 @@ function TitlebarV2Right(props: { state: TitlebarV2RightState; editMode: boolean
 
 function TitlebarV2Left(props: { state: TitlebarV2RightState; editMode: boolean }) {
   const settings = useSettings()
-  const controls = createMemo(() => settings.general.titlebarLayout().left)
+  const layout = createMemo(() => settings.general.titlebarLayout())
+  const controls = createMemo(() => layout().left)
   return (
     <Show when={controls().length > 0}>
-      <TitlebarControlSlot controls={controls()} state={props.state} editMode={props.editMode} />
+      <TitlebarControlSlot
+        controls={controls()}
+        slot="left"
+        state={props.state}
+        editMode={props.editMode}
+        onReorder={(updated) => settings.general.setTitlebarLayout(updated)}
+        layout={layout()}
+      />
     </Show>
   )
 }
