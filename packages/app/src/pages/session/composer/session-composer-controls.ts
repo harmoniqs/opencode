@@ -105,9 +105,13 @@ export function createPromptProjectControls() {
   const selectProject = (worktree: string, serverKey?: string) => {
     // #673: toggle — re-clicking the already-selected project deselects it.
     // Reset to the hidden scaffold dir so current() returns undefined.
+    // Notify the extension with the non-matching path so the sidebar clears.
     if (pathKey(worktree) === pathKey(sdk().directory)) {
       const fallback = hiddenProjectWorktree()
-      if (search.draftId && fallback) tabs.updateDraft(search.draftId, { directory: fallback })
+      if (search.draftId && fallback) {
+        notifyProjectSelected(fallback, false)
+        tabs.updateDraft(search.draftId, { directory: fallback })
+      }
       return
     }
     // #663: tell the extension host so the sidebar can focus this project

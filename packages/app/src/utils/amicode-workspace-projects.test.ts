@@ -65,13 +65,25 @@ describe("prompt-project-selector — no false default (#673)", () => {
   })
 
   test("controller select always forwards to controls.select (no skip when same project)", () => {
-    // The old code had: if (pathKey(project.worktree) !== pathKey(current()?.worktree ?? "")) { ... }
-    // The new code should always call input.controls().select — no skip guard
     const selectFn = src.slice(src.indexOf("const select = (project"))
     const fnEnd = selectFn.indexOf("\n  const add")
     const selectBody = selectFn.slice(0, fnEnd)
     expect(selectBody).toContain("input.controls().select(")
-    // Must NOT have the old skip guard
     expect(selectBody).not.toMatch(/pathKey\(project\.worktree\)\s*!==\s*pathKey\(current/)
+  })
+})
+
+describe("session-composer-controls — toggle deselect (#673)", () => {
+  const ctrlSrc = readFileSync(
+    resolve(__dirname, "..", "pages", "session", "composer", "session-composer-controls.ts"),
+    "utf8",
+  )
+
+  test("deselect path notifies the extension to clear the sidebar highlight", () => {
+    // The toggle branch (pathKey match) must call notifyProjectSelected
+    // so the extension clears the sidebar highlight
+    const selectFn = ctrlSrc.slice(ctrlSrc.indexOf("const selectProject"))
+    const toggleBranch = selectFn.slice(0, selectFn.indexOf("notifyProjectSelected(worktree)"))
+    expect(toggleBranch).toMatch(/notifyProjectSelected/)
   })
 })
