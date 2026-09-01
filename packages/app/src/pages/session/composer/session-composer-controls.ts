@@ -5,6 +5,7 @@ import { type Accessor, createMemo } from "solid-js"
 import type { PromptInputControls } from "@/components/prompt-input/contracts"
 import type { PromptProjectControls } from "@/components/prompt-project-selector"
 import { hiddenProjectWorktree } from "@/utils/amicode-hidden-project"
+import { workspaceProjects, requestAddWorkspaceProject, notifyProjectSelected } from "@/utils/amicode-workspace-projects"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { useGlobal } from "@/context/global"
 import { useLayout } from "@/context/layout"
@@ -74,6 +75,18 @@ export function createPromptProjectControls() {
   const projectServer = () => serverSDK().server
   const projectServerCtx = createMemo(() => global.ensureServerCtx(projectServer()))
   const projects = createMemo(() => {
+    // amicode#663: when the extension host pushes workspace folder data, use
+    // it as the canonical project list (workspace-backed, type-grouped).
+    const wsProjects = workspaceProjects()
+    if (wsProjects.length > 0) {
+      return wsProjects.map((p) => ({
+        name: p.name,
+        worktree: p.worktree,
+        type: p.type as "research" | "dev",
+        status: p.status,
+      }))
+    }
+    // Fallback: opencode-native project discovery (standalone / no extension).
     const list =
       server.list.length <= 1
         ? search.draftId
@@ -86,12 +99,14 @@ export function createPromptProjectControls() {
               .projects.list()
               .map((project) => ({ ...project, server: item }))
           })
-    // amicode#203: hide the extension's scaffold project from the composer
-    // picker (same filter as the dashboard). Only set in the amicode webview.
     const hidden = hiddenProjectWorktree()
     return hidden ? list.filter((p) => p.worktree !== hidden) : list
   })
   const selectProject = (worktree: string, serverKey?: string) => {
+    // #663: tell the extension host so the sidebar can focus this project
+    // (collapse others, expand selected). Fire-and-forget — the sidebar update
+    // is cosmetic and must never block selection.
+    notifyProjectSelected(worktree)
     const conn = serverKey ? server.list.find((conn) => ServerConnection.key(conn) === serverKey) : projectServer()
     if (search.draftId) {
       if (!conn) return
@@ -118,6 +133,11 @@ export function createPromptProjectControls() {
   }
 
   const addProject = (title: string, serverKey?: string) => {
+    // amicode#663: delegate to the extension host for the native folder picker.
+    if (hiddenProjectWorktree()) {
+      requestAddWorkspaceProject()
+      return
+    }
     const conn = serverKey ? server.list.find((conn) => ServerConnection.key(conn) === serverKey) : projectServer()
     if (!conn) return
     pickDirectory({
