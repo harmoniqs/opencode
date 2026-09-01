@@ -6,6 +6,7 @@ import {
   mountPointId,
   isSessionScoped,
   validateTitlebarLayout,
+  createEditModeState,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -97,5 +98,31 @@ describe("titlebar layout", () => {
     expect(isSessionScoped("side-panel")).toBe(true)
     expect(isSessionScoped("profile")).toBe(false)
     expect(isSessionScoped("settings")).toBe(false)
+  })
+})
+
+describe("edit mode state", () => {
+  test("starts inactive", () => {
+    const state = createEditModeState()
+    expect(state.active()).toBe(false)
+  })
+
+  test("enter activates, exit deactivates", () => {
+    const state = createEditModeState()
+    state.enter()
+    expect(state.active()).toBe(true)
+    state.exit()
+    expect(state.active()).toBe(false)
+  })
+
+  test("reset writes the default layout and exits edit mode", () => {
+    const state = createEditModeState()
+    let written: TitlebarLayout | undefined
+    state.enter()
+    state.reset((layout) => {
+      written = layout
+    })
+    expect(written).toEqual(defaultTitlebarLayout)
+    expect(state.active()).toBe(false)
   })
 })

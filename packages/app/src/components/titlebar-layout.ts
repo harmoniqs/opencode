@@ -35,3 +35,20 @@ export function mountPointId(id: TitlebarControlId): string {
 export function isSessionScoped(id: TitlebarControlId): boolean {
   return SESSION_SCOPED.has(id)
 }
+
+export function createEditModeState() {
+  let _active = false
+  return {
+    active: () => _active,
+    enter: () => {
+      _active = true
+    },
+    exit: () => {
+      _active = false
+    },
+    reset: (write: (layout: TitlebarLayout) => void) => {
+      write(defaultTitlebarLayout)
+      _active = false
+    },
+  }
+}

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onMount, Show, startTransition, Switch, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, startTransition, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -31,7 +31,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
-import { type TitlebarControlId, mountPointId, isSessionScoped } from "./titlebar-layout"
+import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -71,6 +71,50 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
   const useV2Titlebar = createMemo(() => settings.general.newLayoutDesigns())
   const mobile = createMediaQuery("(max-width: 767px)")
   const bottom = createMemo(() => useV2Titlebar() && mobile() && settings.general.mobileTitlebarPosition() === "bottom")
+
+  // Edit mode for titlebar control reconfiguration
+  const [editMode, setEditMode] = createSignal(false)
+  const handleContextMenu = (e: MouseEvent) => {
+    if (!useV2Titlebar()) return
+    // Don't show on tabs — they may get their own context menu later
+    const target = e.target as HTMLElement
+    if (target.closest("[data-slot='titlebar-tab-strip']")) return
+    e.preventDefault()
+    const menu = document.createElement("div")
+    menu.className = "titlebar-context-menu"
+    menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:9999`
+    menu.innerHTML = `
+      <button data-action="customize" class="titlebar-context-menu-item">Customize</button>
+      <button data-action="reset" class="titlebar-context-menu-item">Reset</button>
+    `
+    const dismiss = () => {
+      menu.remove()
+      document.removeEventListener("pointerdown", onOutside)
+    }
+    const onOutside = (ev: PointerEvent) => {
+      if (!menu.contains(ev.target as Node)) dismiss()
+    }
+    menu.addEventListener("click", (ev) => {
+      const action = (ev.target as HTMLElement).dataset.action
+      if (action === "customize") setEditMode(true)
+      if (action === "reset") {
+        settings.general.setTitlebarLayout(defaultTitlebarLayout)
+        setEditMode(false)
+      }
+      dismiss()
+    })
+    document.body.appendChild(menu)
+    requestAnimationFrame(() => document.addEventListener("pointerdown", onOutside))
+  }
+  // Escape exits edit mode
+  createEffect(() => {
+    if (!editMode()) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditMode(false)
+    }
+    document.addEventListener("keydown", handler)
+    onCleanup(() => document.removeEventListener("keydown", handler))
+  })
 
   const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
   const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
@@ -181,6 +225,8 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
   return (
     <header
       data-slot={useV2Titlebar() ? "titlebar-v2" : undefined}
+      data-edit-mode={editMode() ? "" : undefined}
+      onContextMenu={handleContextMenu}
       classList={{
         "shrink-0 relative flex flex-row": true,
         "h-9 bg-v2-background-bg-deep overflow-visible": useV2Titlebar(),
@@ -385,7 +431,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
-                <TitlebarV2Left state={v2RightState()} />
+                <TitlebarV2Left state={v2RightState()} editMode={editMode()} />
                 {/* Profile and Settings live at the trailing edge with the
                     other account/status controls (Sessions, Status, Side
                     Panel) — see TitlebarV2Right. */}
@@ -432,7 +478,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   </span>
                 </Show>
                 <div class="flex-1" />
-                <TitlebarV2Right state={v2RightState()} />
+                <TitlebarV2Right state={v2RightState()} editMode={editMode()} onExitEditMode={() => setEditMode(false)} />
               </div>
             )
           }}
@@ -589,6 +635,9 @@ type TitlebarV2RightState = {
 function TitlebarControlSlot(props: {
   controls: TitlebarControlId[]
   state: TitlebarV2RightState
+  editMode?: boolean
+  onExitEditMode?: () => void
+  showCheckmark?: boolean
 }) {
   const language = useLanguage()
   const command = useCommand()
@@ -609,63 +658,90 @@ function TitlebarControlSlot(props: {
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
       <For each={props.controls}>
         {(id) => (
-          <Switch>
-            <Match when={id === "profile"}>
-              <span class="flex shrink-0" data-tour-target="profile">
-                <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
-                  <ProfilePopoverTrigger />
-                </TooltipV2>
-              </span>
-            </Match>
-            <Match when={id === "settings"}>
-              <Show when={props.state.update.visible}>
-                <TitlebarUpdateIconButton state={props.state.update} />
-              </Show>
-              <span class="flex shrink-0" data-tour-target="settings">
-                <TooltipV2
-                  placement="bottom"
-                  value={
-                    <>
-                      {language.t("command.settings.open")}
-                      <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
-                    </>
-                  }
-                  class="shrink-0"
-                >
-                  <IconButtonV2
-                    type="button"
-                    variant="ghost-muted"
-                    size="large"
-                    class="!w-9 shrink-0"
-                    icon={<IconV2 name="settings-gear" />}
-                    state={settingsOpen() ? "pressed" : undefined}
-                    onClick={showSettings}
-                    aria-label={language.t("command.settings.open")}
-                  />
-                </TooltipV2>
-              </span>
-            </Match>
-            <Match when={isSessionScoped(id)}>
-              <div id={mountPointId(id)} class="flex shrink-0 items-center" />
-            </Match>
-          </Switch>
+          <div
+            classList={{
+              "titlebar-control-wrapper": true,
+              "titlebar-control-edit": !!props.editMode,
+            }}
+            onClick={props.editMode ? (e: MouseEvent) => { e.stopPropagation(); e.preventDefault() } : undefined}
+          >
+            <Switch>
+              <Match when={id === "profile"}>
+                <span class="flex shrink-0" data-tour-target="profile">
+                  <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
+                    <ProfilePopoverTrigger />
+                  </TooltipV2>
+                </span>
+              </Match>
+              <Match when={id === "settings"}>
+                <Show when={props.state.update.visible}>
+                  <TitlebarUpdateIconButton state={props.state.update} />
+                </Show>
+                <span class="flex shrink-0" data-tour-target="settings">
+                  <TooltipV2
+                    placement="bottom"
+                    value={
+                      <>
+                        {language.t("command.settings.open")}
+                        <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
+                      </>
+                    }
+                    class="shrink-0"
+                  >
+                    <IconButtonV2
+                      type="button"
+                      variant="ghost-muted"
+                      size="large"
+                      class="!w-9 shrink-0"
+                      icon={<IconV2 name="settings-gear" />}
+                      state={settingsOpen() ? "pressed" : undefined}
+                      onClick={props.editMode ? undefined : showSettings}
+                      aria-label={language.t("command.settings.open")}
+                    />
+                  </TooltipV2>
+                </span>
+              </Match>
+              <Match when={isSessionScoped(id)}>
+                <div id={mountPointId(id)} class="flex shrink-0 items-center" />
+              </Match>
+            </Switch>
+          </div>
         )}
       </For>
+      <Show when={props.showCheckmark && props.editMode}>
+        <IconButtonV2
+          type="button"
+          variant="ghost-muted"
+          size="large"
+          class="!w-9 shrink-0"
+          icon={<IconV2 name="check" />}
+          onClick={() => props.onExitEditMode?.()}
+          aria-label="Done customizing"
+        />
+      </Show>
     </div>
   )
 }
 
-function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
+function TitlebarV2Right(props: { state: TitlebarV2RightState; editMode: boolean; onExitEditMode: () => void }) {
   const settings = useSettings()
-  return <TitlebarControlSlot controls={settings.general.titlebarLayout().right} state={props.state} />
+  return (
+    <TitlebarControlSlot
+      controls={settings.general.titlebarLayout().right}
+      state={props.state}
+      editMode={props.editMode}
+      onExitEditMode={props.onExitEditMode}
+      showCheckmark
+    />
+  )
 }
 
-function TitlebarV2Left(props: { state: TitlebarV2RightState }) {
+function TitlebarV2Left(props: { state: TitlebarV2RightState; editMode: boolean }) {
   const settings = useSettings()
   const controls = createMemo(() => settings.general.titlebarLayout().left)
   return (
     <Show when={controls().length > 0}>
-      <TitlebarControlSlot controls={controls()} state={props.state} />
+      <TitlebarControlSlot controls={controls()} state={props.state} editMode={props.editMode} />
     </Show>
   )
 }
