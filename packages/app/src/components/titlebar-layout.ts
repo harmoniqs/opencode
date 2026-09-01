@@ -25,3 +25,13 @@ export function validateTitlebarLayout(value: unknown): TitlebarLayout {
   }
   return { left: candidate.left as TitlebarControlId[], right: candidate.right as TitlebarControlId[] }
 }
+
+const SESSION_SCOPED: ReadonlySet<TitlebarControlId> = new Set(["sessions", "status", "side-panel"])
+
+export function mountPointId(id: TitlebarControlId): string {
+  return `opencode-titlebar-${id}`
+}
+
+export function isSessionScoped(id: TitlebarControlId): boolean {
+  return SESSION_SCOPED.has(id)
+}

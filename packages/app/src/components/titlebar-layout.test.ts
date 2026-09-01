@@ -3,6 +3,8 @@ import {
   type TitlebarLayout,
   TITLEBAR_CONTROL_IDS,
   defaultTitlebarLayout,
+  mountPointId,
+  isSessionScoped,
   validateTitlebarLayout,
 } from "./titlebar-layout"
 
@@ -79,5 +81,21 @@ describe("titlebar layout", () => {
       right: [],
     } satisfies TitlebarLayout
     expect(validateTitlebarLayout(input)).toEqual(input)
+  })
+
+  test("mountPointId produces the portal element ID for each control", () => {
+    expect(mountPointId("sessions")).toBe("opencode-titlebar-sessions")
+    expect(mountPointId("status")).toBe("opencode-titlebar-status")
+    expect(mountPointId("side-panel")).toBe("opencode-titlebar-side-panel")
+    expect(mountPointId("profile")).toBe("opencode-titlebar-profile")
+    expect(mountPointId("settings")).toBe("opencode-titlebar-settings")
+  })
+
+  test("isSessionScoped identifies controls that require a session to render", () => {
+    expect(isSessionScoped("sessions")).toBe(true)
+    expect(isSessionScoped("status")).toBe(true)
+    expect(isSessionScoped("side-panel")).toBe(true)
+    expect(isSessionScoped("profile")).toBe(false)
+    expect(isSessionScoped("settings")).toBe(false)
   })
 })

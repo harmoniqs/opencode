@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, Match, onMount, Show, startTransition, Switch, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onMount, Show, startTransition, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -31,6 +31,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
+import { type TitlebarControlId, mountPointId, isSessionScoped } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -48,6 +49,12 @@ export type TitlebarUpdate = {
 export function useTitlebarRightMount() {
   const [mount, setMount] = createSignal<HTMLElement | null>(null)
   onMount(() => setMount(document.getElementById("opencode-titlebar-right")))
+  return mount
+}
+
+export function useTitlebarControlMount(id: TitlebarControlId) {
+  const [mount, setMount] = createSignal<HTMLElement | null>(null)
+  onMount(() => setMount(document.getElementById(mountPointId(id))))
   return mount
 }
 
@@ -378,6 +385,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
+                <TitlebarV2Left state={v2RightState()} />
                 {/* Profile and Settings live at the trailing edge with the
                     other account/status controls (Sessions, Status, Side
                     Panel) — see TitlebarV2Right. */}
@@ -578,7 +586,10 @@ type TitlebarV2RightState = {
   update: TitlebarUpdatePillState
 }
 
-function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
+function TitlebarControlSlot(props: {
+  controls: TitlebarControlId[]
+  state: TitlebarV2RightState
+}) {
   const language = useLanguage()
   const command = useCommand()
   const dialog = useDialog()
@@ -596,40 +607,66 @@ function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
   }
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
-      <Show when={props.state.update.visible}>
-        <TitlebarUpdateIconButton state={props.state.update} />
-      </Show>
-      {/* Session-scoped controls (Sessions / Status / Side Panel) portal in here. */}
-      <div id="opencode-titlebar-right" class="flex shrink-0 items-center justify-end gap-0" />
-      <span class="flex shrink-0" data-tour-target="profile">
-        <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
-          <ProfilePopoverTrigger />
-        </TooltipV2>
-      </span>
-      <span class="flex shrink-0" data-tour-target="settings">
-        <TooltipV2
-          placement="bottom"
-          value={
-            <>
-              {language.t("command.settings.open")}
-              <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
-            </>
-          }
-          class="shrink-0"
-        >
-          <IconButtonV2
-            type="button"
-            variant="ghost-muted"
-            size="large"
-            class="!w-9 shrink-0"
-            icon={<IconV2 name="settings-gear" />}
-            state={settingsOpen() ? "pressed" : undefined}
-            onClick={showSettings}
-            aria-label={language.t("command.settings.open")}
-          />
-        </TooltipV2>
-      </span>
+      <For each={props.controls}>
+        {(id) => (
+          <Switch>
+            <Match when={id === "profile"}>
+              <span class="flex shrink-0" data-tour-target="profile">
+                <TooltipV2 placement="bottom" value={language.t("profile.title") || "Profile"} class="shrink-0">
+                  <ProfilePopoverTrigger />
+                </TooltipV2>
+              </span>
+            </Match>
+            <Match when={id === "settings"}>
+              <Show when={props.state.update.visible}>
+                <TitlebarUpdateIconButton state={props.state.update} />
+              </Show>
+              <span class="flex shrink-0" data-tour-target="settings">
+                <TooltipV2
+                  placement="bottom"
+                  value={
+                    <>
+                      {language.t("command.settings.open")}
+                      <KeybindV2 keys={command.keybindParts("settings.open")} variant="neutral" />
+                    </>
+                  }
+                  class="shrink-0"
+                >
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<IconV2 name="settings-gear" />}
+                    state={settingsOpen() ? "pressed" : undefined}
+                    onClick={showSettings}
+                    aria-label={language.t("command.settings.open")}
+                  />
+                </TooltipV2>
+              </span>
+            </Match>
+            <Match when={isSessionScoped(id)}>
+              <div id={mountPointId(id)} class="flex shrink-0 items-center" />
+            </Match>
+          </Switch>
+        )}
+      </For>
     </div>
+  )
+}
+
+function TitlebarV2Right(props: { state: TitlebarV2RightState }) {
+  const settings = useSettings()
+  return <TitlebarControlSlot controls={settings.general.titlebarLayout().right} state={props.state} />
+}
+
+function TitlebarV2Left(props: { state: TitlebarV2RightState }) {
+  const settings = useSettings()
+  const controls = createMemo(() => settings.general.titlebarLayout().left)
+  return (
+    <Show when={controls().length > 0}>
+      <TitlebarControlSlot controls={controls()} state={props.state} />
+    </Show>
   )
 }
 
