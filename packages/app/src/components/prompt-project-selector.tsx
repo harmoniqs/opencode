@@ -467,33 +467,35 @@ export function PromptProjectSelector(props: {
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
-            </Show>
-          </div>
-          {/* #673: "No project" — own section at the bottom so the user can
-              explicitly choose not to scope the session to any project. */}
-          <div class="h-px bg-v2-border-border-muted" />
-          <div class="flex flex-col p-0.5">
-            <DropdownMenu.Item
-              class="h-7 gap-2 rounded-sm px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint data-[highlighted]:!bg-v2-overlay-simple-overlay-hover"
-              style={{
-                "font-family": "var(--v2-font-family-sans)",
-                "font-size": "13px",
-                "font-weight": 440,
-                "line-height": "20px",
-                "letter-spacing": "-0.04px",
-                padding: "0 12px",
-              }}
-              closeOnSelect
-              onSelect={() => {
-                dismiss.preventTriggerRestore()
-                props.controller.setOpen(false)
-                dismiss.afterClose(() => props.controller.clear())
-              }}
-            >
-              <Icon name="close-small" size="small" class="shrink-0" />
-              <DropdownMenu.ItemLabel class="min-w-0 truncate leading-5">No project</DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-          </div>
+              </Show>
+              {/* #673: "No project" — inside the scrollable list as its own
+                  section, matching the type-group label style. */}
+              <div>
+                <div class="flex h-7 select-none items-center pl-1.5 pr-3 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-faint">
+                  No project
+                </div>
+                <DropdownMenu.Item
+                  class="h-7 gap-2 rounded-sm px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint data-[highlighted]:!bg-v2-overlay-simple-overlay-hover"
+                  style={{
+                    "font-family": "var(--v2-font-family-sans)",
+                    "font-size": "13px",
+                    "font-weight": 440,
+                    "line-height": "20px",
+                    "letter-spacing": "-0.04px",
+                    padding: "0 12px",
+                  }}
+                  closeOnSelect
+                  onSelect={() => {
+                    dismiss.preventTriggerRestore()
+                    props.controller.setOpen(false)
+                    dismiss.afterClose(() => props.controller.clear())
+                  }}
+                >
+                  <Icon name="close-small" size="small" class="shrink-0" />
+                  <DropdownMenu.ItemLabel class="min-w-0 truncate leading-5">None</DropdownMenu.ItemLabel>
+                </DropdownMenu.Item>
+              </div>
+            </div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu>

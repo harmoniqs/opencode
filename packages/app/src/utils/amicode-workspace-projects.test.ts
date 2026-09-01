@@ -60,8 +60,10 @@ describe("prompt-project-selector — no false default (#673)", () => {
     expect(src).toMatch(/Pick a project/i)
   })
 
-  test("dropdown includes a 'No project' deselect option", () => {
-    // Must be a rendered UI element, not just a comment
-    expect(src).toMatch(/>No project</)
+  test("dropdown includes a 'No project' section with a None item", () => {
+    // Section header
+    expect(src).toMatch(/No project/)
+    // The clickable item label
+    expect(src).toMatch(/>None</)
   })
 })
