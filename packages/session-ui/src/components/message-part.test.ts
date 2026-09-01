@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { readPartText, settledChunkBoundary, splitSettledChunks } from "./message-part-text"
+import { shouldShowUserMessageText } from "./message-part-user"
 
 describe("readPartText", () => {
   test("returns empty string when accum is undefined and part text is undefined", () => {
@@ -174,5 +175,27 @@ describe("splitSettledChunks — paragraph-gap fallback for long sections", () =
     expect(chunks[0]).toContain("## Analysis")
     // The long unheaded tail should be sub-split — not all in the tail
     expect(tail.split("\n").length).toBeLessThan(60)
+  })
+})
+
+describe("shouldShowUserMessageText", () => {
+  test("hidden when text is empty and no comments", () => {
+    expect(shouldShowUserMessageText("", 0)).toBe(false)
+  })
+
+  test("visible when text is present", () => {
+    expect(shouldShowUserMessageText("hello world", 0)).toBe(true)
+  })
+
+  test("visible when comments exist even without text", () => {
+    expect(shouldShowUserMessageText("", 2)).toBe(true)
+  })
+
+  test("visible when both text and comments exist", () => {
+    expect(shouldShowUserMessageText("hello", 1)).toBe(true)
+  })
+
+  test("hidden when text is whitespace-only and no comments", () => {
+    expect(shouldShowUserMessageText("   ", 0)).toBe(false)
   })
 })
