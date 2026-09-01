@@ -80,10 +80,16 @@ describe("session-composer-controls — toggle deselect (#673)", () => {
   )
 
   test("deselect path notifies the extension to clear the sidebar highlight", () => {
-    // The toggle branch (pathKey match) must call notifyProjectSelected
-    // so the extension clears the sidebar highlight
     const selectFn = ctrlSrc.slice(ctrlSrc.indexOf("const selectProject"))
     const toggleBranch = selectFn.slice(0, selectFn.indexOf("notifyProjectSelected(worktree)"))
     expect(toggleBranch).toMatch(/notifyProjectSelected/)
+  })
+
+  test("deselect notification passes autoExpand true so the folder collapses", () => {
+    const selectFn = ctrlSrc.slice(ctrlSrc.indexOf("const selectProject"))
+    // The toggle branch's notifyProjectSelected call (before the main one)
+    const toggleBranch = selectFn.slice(0, selectFn.indexOf("notifyProjectSelected(worktree)"))
+    // Must NOT pass false — needs true (or default) so the sidebar collapses the old folder
+    expect(toggleBranch).not.toMatch(/notifyProjectSelected\([^)]*,\s*false/)
   })
 })
