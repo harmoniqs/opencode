@@ -103,6 +103,7 @@ import { authTokenFromCredentials } from "@/utils/server"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
+import { notifyProjectSelected } from "@/utils/amicode-workspace-projects"
 import { setSessionCopyProvider } from "@/utils/global-clipboard"
 import { serializeSession } from "@/utils/serialize-session"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
@@ -264,6 +265,14 @@ function ResolvedTargetSessionRoute() {
       server: serverKey(),
       sessionId: session.root.id,
     })
+  })
+
+  // Notify the extension which project this session is bound to so the
+  // sidebar highlight tracks the active tab. autoExpand=false: session
+  // navigation should only change the highlight, never toggle folder state.
+  createEffect(() => {
+    const dir = directory()
+    if (dir) notifyProjectSelected(dir, false)
   })
 
   return (

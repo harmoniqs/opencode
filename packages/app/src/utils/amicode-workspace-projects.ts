@@ -29,7 +29,9 @@ export function requestAddWorkspaceProject(): void {
 }
 
 /** Notify the extension host that the user selected a project in the dropdown.
- *  The extension forwards this to the sidebar (collapse others, expand selected). */
-export function notifyProjectSelected(worktree: string): void {
-  window.parent.postMessage({ source: "amicode", kind: "project-selected", path: worktree }, "*")
+ *  The extension forwards this to the sidebar (collapse others, expand selected).
+ *  autoExpand=true (default) for explicit dropdown clicks; false for session
+ *  navigation (highlight only, don't toggle folder state). */
+export function notifyProjectSelected(worktree: string, autoExpand = true): void {
+  window.parent.postMessage({ source: "amicode", kind: "project-selected", path: worktree, autoExpand }, "*")
 }
