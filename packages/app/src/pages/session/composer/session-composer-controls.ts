@@ -133,12 +133,12 @@ export function createPromptProjectControls() {
   }
 
   // #673: deselect the current project — reset the draft directory to the
-  // server's own working directory so current() returns undefined and the
-  // trigger shows "Pick a project".
+  // server's hidden scaffold directory (guaranteed not in the visible project
+  // list) so current() returns undefined and the trigger shows "Pick a project".
   const clearProject = () => {
     if (!search.draftId) return
-    const serverDir = projectServerCtx().sync.data.project[0]?.worktree ?? ""
-    if (serverDir) tabs.updateDraft(search.draftId, { directory: serverDir })
+    const fallback = hiddenProjectWorktree() ?? ""
+    if (fallback) tabs.updateDraft(search.draftId, { directory: fallback })
   }
 
   const addProject = (title: string, serverKey?: string) => {
