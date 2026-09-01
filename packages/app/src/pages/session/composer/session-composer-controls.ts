@@ -103,6 +103,13 @@ export function createPromptProjectControls() {
     return hidden ? list.filter((p) => p.worktree !== hidden) : list
   })
   const selectProject = (worktree: string, serverKey?: string) => {
+    // #673: toggle — re-clicking the already-selected project deselects it.
+    // Reset to the hidden scaffold dir so current() returns undefined.
+    if (pathKey(worktree) === pathKey(sdk().directory)) {
+      const fallback = hiddenProjectWorktree()
+      if (search.draftId && fallback) tabs.updateDraft(search.draftId, { directory: fallback })
+      return
+    }
     // #663: tell the extension host so the sidebar can focus this project
     // (collapse others, expand selected). Fire-and-forget — the sidebar update
     // is cosmetic and must never block selection.
@@ -132,15 +139,6 @@ export function createPromptProjectControls() {
     navigate(`/${base64Encode(worktree)}/session`)
   }
 
-  // #673: deselect the current project — reset the draft directory to the
-  // server's hidden scaffold directory (guaranteed not in the visible project
-  // list) so current() returns undefined and the trigger shows "Pick a project".
-  const clearProject = () => {
-    if (!search.draftId) return
-    const fallback = hiddenProjectWorktree() ?? ""
-    if (fallback) tabs.updateDraft(search.draftId, { directory: fallback })
-  }
-
   const addProject = (title: string, serverKey?: string) => {
     // amicode#663: delegate to the extension host for the native folder picker.
     if (hiddenProjectWorktree()) {
@@ -165,6 +163,5 @@ export function createPromptProjectControls() {
     server: server.list.length > 1 ? ServerConnection.key(projectServer()) : undefined,
     select: selectProject,
     add: addProject,
-    clear: clearProject,
   }))
 }

@@ -60,10 +60,18 @@ describe("prompt-project-selector — no false default (#673)", () => {
     expect(src).toMatch(/Pick a project/i)
   })
 
-  test("dropdown includes a 'No project' section with a None item", () => {
-    // Section header
-    expect(src).toMatch(/No project/)
-    // The clickable item label
-    expect(src).toMatch(/>None</)
+  test("no 'No project' section in the dropdown (toggle replaces it)", () => {
+    expect(src).not.toMatch(/>None</)
+  })
+
+  test("controller select always forwards to controls.select (no skip when same project)", () => {
+    // The old code had: if (pathKey(project.worktree) !== pathKey(current()?.worktree ?? "")) { ... }
+    // The new code should always call input.controls().select — no skip guard
+    const selectFn = src.slice(src.indexOf("const select = (project"))
+    const fnEnd = selectFn.indexOf("\n  const add")
+    const selectBody = selectFn.slice(0, fnEnd)
+    expect(selectBody).toContain("input.controls().select(")
+    // Must NOT have the old skip guard
+    expect(selectBody).not.toMatch(/pathKey\(project\.worktree\)\s*!==\s*pathKey\(current/)
   })
 })

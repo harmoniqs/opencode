@@ -38,7 +38,6 @@ export type PromptProjectControls = {
   server?: string
   select: (worktree: string, server?: string) => void
   add: (title: string, server?: string) => void
-  clear?: () => void
 }
 
 const actionPrefix = "action:"
@@ -105,21 +104,12 @@ export function createPromptProjectController(input: {
     input.onDone()
   }
   const select = (project: PromptProject) => {
-    if (
-      pathKey(project.worktree) !== pathKey(current()?.worktree ?? "") ||
-      project.server?.key !== current()?.server?.key
-    ) {
-      input.controls().select(project.worktree, project.server?.key)
-    }
+    input.controls().select(project.worktree, project.server?.key)
     close()
   }
   const add = (server?: string) => {
     setStore({ open: false, search: "", active: "" })
     input.controls().add(language.t("command.project.open"), server)
-  }
-  const clear = () => {
-    input.controls().clear?.()
-    close()
   }
   const setSearch = (value: string) => {
     const search = value.trim().toLowerCase()
@@ -149,7 +139,6 @@ export function createPromptProjectController(input: {
       search: () => language.t("session.new.project.search"),
     },
     add,
-    clear,
     select,
     setOpen(open: boolean) {
       if (open) {
@@ -468,33 +457,6 @@ export function PromptProjectSelector(props: {
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
               </Show>
-              {/* #673: "No project" — inside the scrollable list as its own
-                  section, matching the type-group label style. */}
-              <div>
-                <div class="flex h-7 select-none items-center pl-1.5 pr-3 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-faint">
-                  No project
-                </div>
-                <DropdownMenu.Item
-                  class="h-7 gap-2 rounded-sm px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint data-[highlighted]:!bg-v2-overlay-simple-overlay-hover"
-                  style={{
-                    "font-family": "var(--v2-font-family-sans)",
-                    "font-size": "13px",
-                    "font-weight": 440,
-                    "line-height": "20px",
-                    "letter-spacing": "-0.04px",
-                    padding: "0 12px",
-                  }}
-                  closeOnSelect
-                  onSelect={() => {
-                    dismiss.preventTriggerRestore()
-                    props.controller.setOpen(false)
-                    dismiss.afterClose(() => props.controller.clear())
-                  }}
-                >
-                  <Icon name="close-small" size="small" class="shrink-0" />
-                  <DropdownMenu.ItemLabel class="min-w-0 truncate leading-5">None</DropdownMenu.ItemLabel>
-                </DropdownMenu.Item>
-              </div>
             </div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
