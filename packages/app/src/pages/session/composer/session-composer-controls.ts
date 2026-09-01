@@ -132,6 +132,15 @@ export function createPromptProjectControls() {
     navigate(`/${base64Encode(worktree)}/session`)
   }
 
+  // #673: deselect the current project — reset the draft directory to the
+  // server's own working directory so current() returns undefined and the
+  // trigger shows "Pick a project".
+  const clearProject = () => {
+    if (!search.draftId) return
+    const serverDir = projectServerCtx().sync.data.project[0]?.worktree ?? ""
+    if (serverDir) tabs.updateDraft(search.draftId, { directory: serverDir })
+  }
+
   const addProject = (title: string, serverKey?: string) => {
     // amicode#663: delegate to the extension host for the native folder picker.
     if (hiddenProjectWorktree()) {
@@ -156,5 +165,6 @@ export function createPromptProjectControls() {
     server: server.list.length > 1 ? ServerConnection.key(projectServer()) : undefined,
     select: selectProject,
     add: addProject,
+    clear: clearProject,
   }))
 }

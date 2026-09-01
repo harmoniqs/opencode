@@ -53,13 +53,15 @@ describe("prompt-project-selector — no false default (#673)", () => {
   )
 
   test("selected() returns current() without a fallback to available[0]", () => {
-    // The old line was: const selected = () => current() ?? input.controls().available[0]
-    // The new line must NOT fall back to available[0]
     expect(src).not.toMatch(/selected\s*=\s*\(\)\s*=>\s*current\(\)\s*\?\?\s*input/)
   })
 
   test("trigger shows a placeholder when no project is selected", () => {
-    // The trigger must have a fallback text for the unselected state
     expect(src).toMatch(/Pick a project/i)
+  })
+
+  test("dropdown includes a 'No project' deselect option", () => {
+    // Must be a rendered UI element, not just a comment
+    expect(src).toMatch(/>No project</)
   })
 })

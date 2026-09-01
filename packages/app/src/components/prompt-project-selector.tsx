@@ -38,6 +38,7 @@ export type PromptProjectControls = {
   server?: string
   select: (worktree: string, server?: string) => void
   add: (title: string, server?: string) => void
+  clear?: () => void
 }
 
 const actionPrefix = "action:"
@@ -116,6 +117,10 @@ export function createPromptProjectController(input: {
     setStore({ open: false, search: "", active: "" })
     input.controls().add(language.t("command.project.open"), server)
   }
+  const clear = () => {
+    input.controls().clear?.()
+    close()
+  }
   const setSearch = (value: string) => {
     const search = value.trim().toLowerCase()
     const first = input
@@ -144,6 +149,7 @@ export function createPromptProjectController(input: {
       search: () => language.t("session.new.project.search"),
     },
     add,
+    clear,
     select,
     setOpen(open: boolean) {
       if (open) {
@@ -360,6 +366,31 @@ export function PromptProjectSelector(props: {
               </Show>
             </div>
             <div class="max-h-[224px] overflow-y-auto">
+              {/* #673: "No project" deselect option — lets the user clear their
+                  selection and return to the neutral "Pick a project" state. */}
+              <Show when={props.controller.selected()}>
+                <DropdownMenu.Item
+                  class="h-7 gap-2 rounded-sm px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint data-[highlighted]:!bg-v2-overlay-simple-overlay-hover"
+                  style={{
+                    "font-family": "var(--v2-font-family-sans)",
+                    "font-size": "13px",
+                    "font-weight": 440,
+                    "line-height": "20px",
+                    "letter-spacing": "-0.04px",
+                    padding: "0 12px",
+                  }}
+                  closeOnSelect
+                  onSelect={() => {
+                    dismiss.preventTriggerRestore()
+                    props.controller.setOpen(false)
+                    dismiss.afterClose(() => props.controller.clear())
+                  }}
+                >
+                  <Icon name="close-small" size="small" class="shrink-0" />
+                  <DropdownMenu.ItemLabel class="min-w-0 truncate leading-5">No project</DropdownMenu.ItemLabel>
+                </DropdownMenu.Item>
+                <div class="mx-2.5 my-0.5 h-px bg-v2-border-border-muted" />
+              </Show>
               <Show
                 when={props.controller.servers().length > 1}
                 fallback={
