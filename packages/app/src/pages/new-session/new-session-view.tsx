@@ -74,8 +74,10 @@ export function NewSessionView(props: {
                 <PromptProjectAddButton controller={props.project} />
               </Show>
               {/* amicode#663: un-gated — the project selector now renders inside
-                  the Amicode webview with type grouping (Research/Dev). */}
-              <Show when={props.project.selected()}>
+                  the Amicode webview with type grouping (Research/Dev).
+                  amicode#673: show when projects exist, not only when one is
+                  pre-selected — otherwise "Pick a project" is never visible. */}
+              <Show when={!props.project.empty()}>
                 <div class="flex min-h-7 min-w-0 flex-col items-center justify-center gap-0 text-v2-text-text-faint sm:flex-row">
                   <PromptProjectSelector controller={props.project} placement="bottom" />
                   <Show
