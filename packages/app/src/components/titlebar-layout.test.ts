@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import { createRoot, createSignal } from "solid-js"
 import {
   type TitlebarLayout,
+  type TitlebarControlId,
   TITLEBAR_CONTROL_IDS,
   defaultTitlebarLayout,
   mountPointId,
@@ -9,6 +11,7 @@ import {
   createEditModeState,
   reorderWithinSlot,
   moveToSlot,
+  createMountPointTracker,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -174,5 +177,101 @@ describe("reorder operations", () => {
     const result = moveToSlot(layout, "settings", "left", 0)
     expect(result.left).toEqual(["settings"])
     expect(result.right).toEqual(["sessions", "status", "side-panel", "profile"])
+  })
+})
+
+describe("mount-point tracker", () => {
+  afterEach(() => {
+    // Clean up any mount-point divs left in the document by tests
+    for (const id of TITLEBAR_CONTROL_IDS) {
+      document.getElementById(mountPointId(id))?.remove()
+    }
+  })
+
+  test("returns a stable element reference for each session-scoped control", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+
+    let tracker!: ReturnType<typeof createMountPointTracker>
+    const dispose = createRoot((d) => {
+      tracker = createMountPointTracker()
+      return d
+    })
+
+    // Simulate what TitlebarControlSlot does: create mount-point divs
+    for (const id of TITLEBAR_CONTROL_IDS) {
+      if (!isSessionScoped(id)) continue
+      const el = document.createElement("div")
+      el.id = mountPointId(id)
+      container.appendChild(el)
+    }
+
+    // Tracker must find them
+    const sessionsEl = tracker.element("sessions")
+    const statusEl = tracker.element("status")
+    const sidePanelEl = tracker.element("side-panel")
+    expect(sessionsEl).toBe(container.querySelector(`#${mountPointId("sessions")}`))
+    expect(statusEl).toBe(container.querySelector(`#${mountPointId("status")}`))
+    expect(sidePanelEl).toBe(container.querySelector(`#${mountPointId("side-panel")}`))
+
+    // Non-session-scoped controls return null (they render inline, not as portals)
+    expect(tracker.element("profile")).toBeNull()
+    expect(tracker.element("settings")).toBeNull()
+
+    dispose()
+    container.remove()
+  })
+
+  test("returns the same element reference on repeated calls when the DOM is stable", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+
+    let tracker!: ReturnType<typeof createMountPointTracker>
+    const dispose = createRoot((d) => {
+      tracker = createMountPointTracker()
+      return d
+    })
+
+    const el = document.createElement("div")
+    el.id = mountPointId("sessions")
+    container.appendChild(el)
+
+    const ref1 = tracker.element("sessions")
+    const ref2 = tracker.element("sessions")
+    expect(ref1).toBe(el)
+    expect(ref2).toBe(el)
+
+    dispose()
+    container.remove()
+  })
+
+  test("detects when a mount-point div is replaced and returns the new element", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+
+    let tracker!: ReturnType<typeof createMountPointTracker>
+    const dispose = createRoot((d) => {
+      tracker = createMountPointTracker()
+      return d
+    })
+
+    // First element
+    const el1 = document.createElement("div")
+    el1.id = mountPointId("sessions")
+    container.appendChild(el1)
+    expect(tracker.element("sessions")).toBe(el1)
+
+    // Simulate the <Show> bug: remove old div, create replacement
+    el1.remove()
+    const el2 = document.createElement("div")
+    el2.id = mountPointId("sessions")
+    container.appendChild(el2)
+
+    // Tracker must return the NEW element, not the stale one
+    expect(tracker.element("sessions")).toBe(el2)
+    expect(tracker.element("sessions")).not.toBe(el1)
+
+    dispose()
+    container.remove()
   })
 })

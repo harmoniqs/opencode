@@ -59,7 +59,20 @@ export function useTitlebarRightMount() {
 
 export function useTitlebarControlMount(id: TitlebarControlId) {
   const [mount, setMount] = createSignal<HTMLElement | null>(null)
-  onMount(() => setMount(document.getElementById(mountPointId(id))))
+  const elId = mountPointId(id)
+  // Live query: re-check the DOM every animation frame until the mount point
+  // is found, then stop.  This replaces the old one-shot `onMount` +
+  // `getElementById` which went stale whenever the <Show> branch recreated
+  // the mount-point div (the root cause of the disappearing-buttons bug).
+  onMount(() => {
+    const found = document.getElementById(elId)
+    if (found) {
+      setMount(found)
+      return
+    }
+    const raf = requestAnimationFrame(() => setMount(document.getElementById(elId)))
+    onCleanup(() => cancelAnimationFrame(raf))
+  })
   return mount
 }
 
@@ -706,50 +719,51 @@ function TitlebarControlSlot(props: {
     </Switch>
   )
 
-  const renderItem = (id: TitlebarControlId, index: () => number) => {
-    if (!props.editMode) {
-      return <div class="titlebar-control-wrapper">{renderControl(id)}</div>
-    }
-    return <SortableControlItem id={id} index={index}>{renderControl(id)}</SortableControlItem>
-  }
-
+  // Single <For> loop — mount-point divs must never be destroyed by an
+  // edit-mode toggle.  The old code used <Show> with two separate <For>
+  // branches; switching between them recreated every mount-point <div>,
+  // leaving session-header portals pointing at detached nodes.
+  //
+  // Fix: one <For> always renders, wrapped by an always-present
+  // DragDropProvider.  When editMode is off the sensor list is empty so
+  // no drag can start; SortableControlItem gates visual treatment via
+  // the editMode prop.
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
-      <Show
-        when={props.editMode}
-        fallback={
-          <For each={props.controls}>
-            {(id) => <div class="titlebar-control-wrapper">{renderControl(id)}</div>}
-          </For>
+      <DragDropProvider
+        sensors={
+          props.editMode
+            ? [
+                PointerSensor.configure({
+                  activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
+                }),
+              ]
+            : []
         }
+        modifiers={[RestrictToHorizontalAxis]}
+        plugins={(defaults) => [
+          ...defaults,
+          Feedback.configure({ dropAnimation: null }),
+        ]}
+        onDragEnd={(event) => {
+          if (!props.editMode || event.canceled || !props.layout || !props.onReorder) return
+          const source = event.operation.source
+          if (!isSortable(source)) return
+          const { initialIndex, index } = source
+          if (initialIndex !== index) {
+            const updated = reorderWithinSlot(props.layout, props.slot, initialIndex, index)
+            props.onReorder(updated)
+          }
+        }}
       >
-        <DragDropProvider
-          sensors={[
-            PointerSensor.configure({
-              activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
-            }),
-          ]}
-          modifiers={[RestrictToHorizontalAxis]}
-          plugins={(defaults) => [
-            ...defaults,
-            Feedback.configure({ dropAnimation: null }),
-          ]}
-          onDragEnd={(event) => {
-            if (event.canceled || !props.layout || !props.onReorder) return
-            const source = event.operation.source
-            if (!isSortable(source)) return
-            const { initialIndex, index } = source
-            if (initialIndex !== index) {
-              const updated = reorderWithinSlot(props.layout, props.slot, initialIndex, index)
-              props.onReorder(updated)
-            }
-          }}
-        >
-          <For each={props.controls}>
-            {(id, index) => renderItem(id, index)}
-          </For>
-        </DragDropProvider>
-      </Show>
+        <For each={props.controls}>
+          {(id, index) => (
+            <SortableControlItem id={id} index={index} editMode={props.editMode}>
+              {renderControl(id)}
+            </SortableControlItem>
+          )}
+        </For>
+      </DragDropProvider>
       <Show when={props.showCheckmark && props.editMode}>
         <IconButtonV2
           type="button"
@@ -765,7 +779,7 @@ function TitlebarControlSlot(props: {
   )
 }
 
-function SortableControlItem(props: { id: string; index: () => number; children: any }) {
+function SortableControlItem(props: { id: string; index: () => number; editMode?: boolean; children: any }) {
   const sortable = useSortable({
     get id() {
       return props.id
@@ -779,8 +793,8 @@ function SortableControlItem(props: { id: string; index: () => number; children:
       ref={sortable.ref}
       classList={{
         "titlebar-control-wrapper": true,
-        "titlebar-control-edit": true,
-        "titlebar-control-dragging": sortable.isDragSource(),
+        "titlebar-control-edit": !!props.editMode,
+        "titlebar-control-dragging": !!props.editMode && sortable.isDragSource(),
       }}
     >
       {props.children}

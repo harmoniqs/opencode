@@ -36,6 +36,18 @@ export function isSessionScoped(id: TitlebarControlId): boolean {
   return SESSION_SCOPED.has(id)
 }
 
+/** Live mount-point lookup — always queries the current DOM, never caches a
+ *  stale reference. Session-scoped controls render as portal targets; the
+ *  tracker returns the live element (or null if the div is absent). */
+export function createMountPointTracker() {
+  return {
+    element(id: TitlebarControlId): HTMLElement | null {
+      if (!SESSION_SCOPED.has(id)) return null
+      return document.getElementById(mountPointId(id))
+    },
+  }
+}
+
 export function createEditModeState() {
   let _active = false
   return {
