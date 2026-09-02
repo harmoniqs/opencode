@@ -206,6 +206,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       return window.api.saveFilePicker({
         title: opts?.title ?? t("desktop.dialog.saveFile"),
         defaultPath: opts?.defaultPath,
+        content: opts?.content,
       })
     },
 
