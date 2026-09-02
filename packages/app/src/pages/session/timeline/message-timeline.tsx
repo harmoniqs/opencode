@@ -42,7 +42,7 @@ import {
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { readPartText, settledChunkBoundary } from "@opencode-ai/session-ui/message-part-text"
-import { buildTrace } from "@opencode-ai/session-ui/build-trace"
+import { buildTrace, buildSessionTrace } from "@opencode-ai/session-ui/build-trace"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -480,13 +480,51 @@ export function MessageTimeline(props: {
   // Copy the full assistant trace for a turn to the clipboard.
   const copyTraceForTurn = (userMessageID: string) => {
     const msgs = sessionMessages()
-    const start = msgs.findIndex((m) => m.id === userMessageID)
-    if (start === -1) return
-    const assistantMsgs = msgs.slice(start + 1).filter((m): m is AssistantMessage => m.role === "assistant")
-    const content = buildTrace(assistantMsgs, getMsgParts)
+    const userParts = getMsgParts(userMessageID)
+    const userTextPart = userParts.find(
+      (p): p is TextPart => p.type === "text" && !(p as TextPart).synthetic,
+    )
+    const assistantMsgs = msgs.filter(
+      (m): m is AssistantMessage => m.role === "assistant" && m.parentID === userMessageID,
+    )
+    const content = buildTrace(assistantMsgs, getMsgParts, userTextPart?.text)
     if (!content) return
     if (!writeClipboardViaBridge(content)) void navigator.clipboard?.writeText(content)
   }
+
+  // Export the full session trace to a file.
+  const exportSessionTrace = async () => {
+    const msgs = sessionMessages()
+    const content = buildSessionTrace(msgs, getMsgParts)
+    if (!content) return
+    const raw = titleValue() || "session"
+    const slug = raw
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    const date = new Date().toISOString().slice(0, 10)
+    const filename = `trace-${slug || "session"}-${date}.md`
+
+    if (platform.saveFilePickerDialog) {
+      await platform.saveFilePickerDialog({
+        title: language.t("session.exportTrace"),
+        defaultPath: filename,
+        content,
+      })
+    } else {
+      const blob = new Blob([content], { type: "text/markdown" })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+    }
+  }
+
   /** True when at least one AssistantPart ROW exists in the projected timeline
    *  for this turn — meaning renderable, settled output is visible. Reasoning
    *  parts withheld while streaming do NOT count (they produce no row until
@@ -2168,6 +2206,9 @@ export function MessageTimeline(props: {
                                     </DropdownMenu.ItemLabel>
                                   </DropdownMenu.Item>
                                 </Show>
+                                <DropdownMenu.Item onSelect={() => void exportSessionTrace()}>
+                                  <DropdownMenu.ItemLabel>{language.t("session.exportTrace")}</DropdownMenu.ItemLabel>
+                                </DropdownMenu.Item>
                                 <Show
                                   when={sync().session.get(id)?.time?.archived}
                                   fallback={
@@ -2248,6 +2289,9 @@ export function MessageTimeline(props: {
                                   {language.t("session.share.action.share")}...
                                 </MenuV2.Item>
                               </Show>
+                              <MenuV2.Item onSelect={() => void exportSessionTrace()}>
+                                {language.t("session.exportTrace")}
+                              </MenuV2.Item>
                               <Show
                                 when={sync().session.get(id)?.time?.archived}
                                 fallback={

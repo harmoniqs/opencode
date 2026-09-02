@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { stat } from "node:fs/promises"
+import { stat, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
@@ -187,13 +187,17 @@ export function registerIpcHandlers(deps: Deps) {
 
   ipcMain.handle(
     "save-file-picker",
-    async (_event: IpcMainInvokeEvent, opts?: { title?: string; defaultPath?: string }) => {
+    async (_event: IpcMainInvokeEvent, opts?: { title?: string; defaultPath?: string; content?: string }) => {
       const result = await dialog.showSaveDialog({
         title: opts?.title ?? "Save file",
         defaultPath: opts?.defaultPath,
       })
       if (result.canceled) return null
-      return result.filePath ?? null
+      const filePath = result.filePath ?? null
+      if (filePath && opts?.content) {
+        await writeFile(filePath, opts.content, "utf-8")
+      }
+      return filePath
     },
   )
 
