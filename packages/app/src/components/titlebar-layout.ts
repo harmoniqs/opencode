@@ -72,7 +72,9 @@ export function reorderWithinSlot(
   toIndex: number,
 ): TitlebarLayout {
   if (fromIndex === toIndex) return layout
-  const items = [...layout[slot]]
+  const source = layout[slot]
+  if (fromIndex < 0 || fromIndex >= source.length) return layout
+  const items = [...source]
   const [moved] = items.splice(fromIndex, 1)
   items.splice(toIndex, 0, moved!)
   return { ...layout, [slot]: items }
@@ -120,6 +122,8 @@ export function reconcileDropOnEmptySlot(
   return moveToSlot(layout, controlId, targetSlot, 0)
 }
 
+const VALID_SLOTS: ReadonlySet<string> = new Set(["left", "right"])
+
 /** Reconcile a drag-end event into a layout update.
  *
  *  @dnd-kit's `OptimisticSortingPlugin` mutates `source.group` and
@@ -131,7 +135,10 @@ export function reconcileDropOnEmptySlot(
  *  - Same group, same index → no-op (returns the original layout ref)
  *
  *  `initialGroup` / `group` may be `undefined` — treat as `"right"` (the
- *  default slot). */
+ *  default slot).  Returns the original layout unchanged when either group
+ *  is not a recognized slot name or when `initialIndex` is out of bounds —
+ *  this prevents the OptimisticSortingPlugin's stale intermediate values
+ *  from producing a corrupt layout on void drops. */
 export function reconcileDragEnd(
   layout: TitlebarLayout,
   initialGroup: string | undefined,
@@ -139,10 +146,14 @@ export function reconcileDragEnd(
   group: string | undefined,
   index: number,
 ): TitlebarLayout {
-  const from = (initialGroup ?? "right") as "left" | "right"
-  const to = (group ?? "right") as "left" | "right"
-  if (from === to) return reorderWithinSlot(layout, from, initialIndex, index)
-  const controlId = layout[from][initialIndex]
+  const from = initialGroup ?? "right"
+  const to = group ?? "right"
+  if (!VALID_SLOTS.has(from) || !VALID_SLOTS.has(to)) return layout
+  const fromSlot = from as "left" | "right"
+  const toSlot = to as "left" | "right"
+  if (initialIndex < 0 || initialIndex >= layout[fromSlot].length) return layout
+  if (fromSlot === toSlot) return reorderWithinSlot(layout, fromSlot, initialIndex, index)
+  const controlId = layout[fromSlot][initialIndex]
   if (!controlId) return layout
-  return moveToSlot(layout, controlId, to, index)
+  return moveToSlot(layout, controlId, toSlot, index)
 }

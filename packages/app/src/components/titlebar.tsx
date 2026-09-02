@@ -58,12 +58,22 @@ export function useTitlebarRightMount() {
 }
 
 export function useTitlebarControlMount(id: TitlebarControlId) {
+  const settings = useSettings()
   const [mount, setMount] = createSignal<HTMLElement | null>(null)
   const elId = mountPointId(id)
-  // Poll until the mount-point div appears.  The titlebar renders the divs
-  // unconditionally, but when this hook is called from a lazy-loaded route
-  // inside <Suspense>, onMount may fire before the titlebar's DOM is
-  // committed.  A short polling loop covers the race.
+
+  // Re-query the DOM whenever the titlebar layout changes.  Cross-slot
+  // moves destroy the old mount-point div and the <For> loop creates a new
+  // one with the same ID — the portal needs to retarget.  queueMicrotask
+  // defers until after Solid's synchronous render pass has committed the
+  // new div.
+  createEffect(() => {
+    settings.general.titlebarLayout()
+    queueMicrotask(() => setMount(document.getElementById(elId)))
+  })
+
+  // Belt-and-suspenders: if the first microtask didn't find the element
+  // (lazy route behind <Suspense>), poll a few rAF frames.
   onMount(() => {
     const found = document.getElementById(elId)
     if (found) {
@@ -85,6 +95,7 @@ export function useTitlebarControlMount(id: TitlebarControlId) {
     const raf = requestAnimationFrame(poll)
     onCleanup(() => cancelAnimationFrame(raf))
   })
+
   return mount
 }
 
@@ -476,6 +487,14 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     if (!editMode() || event.canceled) return
                     const source = event.operation.source
                     if (!isSortable(source)) return
+
+                    // No valid target → the button was dropped in the void
+                    // (on a tab, outside the window, etc.).  Don't change
+                    // anything — the Solid adapter's restorePosition already
+                    // put the DOM element back, so the button snaps home.
+                    const target = event.operation.target
+                    if (!target) return
+
                     const currentLayout = settings.general.titlebarLayout()
 
                     // When the target is a plain droppable (not a sortable),
@@ -483,8 +502,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     // source.index still reflect the original position.  Check
                     // whether the drop landed on an empty-slot drop zone and
                     // handle the cross-slot move manually.
-                    const target = event.operation.target
-                    if (target && !isSortable(target)) {
+                    if (!isSortable(target)) {
                       const targetId = target.id as string
                       if (targetId === "left" || targetId === "right") {
                         const updated = reconcileDropOnEmptySlot(

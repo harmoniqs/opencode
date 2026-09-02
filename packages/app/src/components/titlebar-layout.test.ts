@@ -152,6 +152,28 @@ describe("reorder operations", () => {
     expect(result).toEqual(layout)
   })
 
+  test("reorderWithinSlot returns original layout when fromIndex is out of bounds", () => {
+    const layout = defaultTitlebarLayout
+    const result = reorderWithinSlot(layout, "right", 99, 0)
+    expect(result).toBe(layout)
+  })
+
+  test("reorderWithinSlot returns original layout when fromIndex is negative", () => {
+    const layout = defaultTitlebarLayout
+    const result = reorderWithinSlot(layout, "right", -1, 0)
+    expect(result).toBe(layout)
+  })
+
+  test("reorderWithinSlot clamps toIndex to end of slot when out of bounds", () => {
+    const layout = {
+      left: [],
+      right: ["sessions", "status", "side-panel", "profile", "settings"],
+    } satisfies TitlebarLayout
+    const result = reorderWithinSlot(layout, "right", 0, 99)
+    // "sessions" moves to the end
+    expect(result.right).toEqual(["status", "side-panel", "profile", "settings", "sessions"])
+  })
+
   test("moveToSlot transfers a control from right to left", () => {
     const layout = {
       left: [],
@@ -328,6 +350,26 @@ describe("reconcileDragEnd", () => {
   test("undefined groups default to right", () => {
     const result = reconcileDragEnd(layout, undefined, 0, undefined, 2)
     expect(result.right).toEqual(["status", "side-panel", "sessions", "profile", "settings"])
+  })
+
+  test("returns original layout when destination group is not left or right", () => {
+    const result = reconcileDragEnd(layout, "right", 0, "tabs", 1)
+    expect(result).toBe(layout)
+  })
+
+  test("returns original layout when source group is not left or right", () => {
+    const result = reconcileDragEnd(layout, "tabs", 0, "right", 1)
+    expect(result).toBe(layout)
+  })
+
+  test("returns original layout when initialIndex is out of bounds", () => {
+    const result = reconcileDragEnd(layout, "right", 99, "right", 1)
+    expect(result).toBe(layout)
+  })
+
+  test("returns original layout when initialIndex is negative", () => {
+    const result = reconcileDragEnd(layout, "right", -1, "right", 1)
+    expect(result).toBe(layout)
   })
 })
 
