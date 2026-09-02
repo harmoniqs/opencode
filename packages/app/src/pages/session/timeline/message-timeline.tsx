@@ -480,13 +480,13 @@ export function MessageTimeline(props: {
   // Copy the full assistant trace for a turn to the clipboard.
   const copyTraceForTurn = (userMessageID: string) => {
     const msgs = sessionMessages()
-    const start = msgs.findIndex((m) => m.id === userMessageID)
-    if (start === -1) return
     const userParts = getMsgParts(userMessageID)
     const userTextPart = userParts.find(
       (p): p is TextPart => p.type === "text" && !(p as TextPart).synthetic,
     )
-    const assistantMsgs = msgs.slice(start + 1).filter((m): m is AssistantMessage => m.role === "assistant")
+    const assistantMsgs = msgs.filter(
+      (m): m is AssistantMessage => m.role === "assistant" && m.parentID === userMessageID,
+    )
     const content = buildTrace(assistantMsgs, getMsgParts, userTextPart?.text)
     if (!content) return
     if (!writeClipboardViaBridge(content)) void navigator.clipboard?.writeText(content)
