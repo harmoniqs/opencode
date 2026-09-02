@@ -98,6 +98,28 @@ export function controlSlotLabel(currentSlot: "left" | "right"): string {
   return currentSlot === "right" ? "Move to left of tabs" : "Move to right of tabs"
 }
 
+/** Reconcile a drop onto an empty-slot drop zone (a plain `useDroppable`,
+ *  not a sortable).
+ *
+ *  The `OptimisticSortingPlugin` requires both groups to have at least one
+ *  `useSortable` item, so when a slot is empty its drop zone is a plain
+ *  `Droppable` whose `id` equals the slot name.  The plugin ignores it
+ *  (the item snaps back).  This function handles the commit: look up the
+ *  control from `sourceGroup[sourceIndex]` and move it to `targetSlot` at
+ *  index 0.  Returns the original layout ref on no-op. */
+export function reconcileDropOnEmptySlot(
+  layout: TitlebarLayout,
+  sourceGroup: string | undefined,
+  sourceIndex: number,
+  targetSlot: "left" | "right",
+): TitlebarLayout {
+  const from = (sourceGroup ?? "right") as "left" | "right"
+  if (from === targetSlot) return layout
+  const controlId = layout[from][sourceIndex]
+  if (!controlId) return layout
+  return moveToSlot(layout, controlId, targetSlot, 0)
+}
+
 /** Reconcile a drag-end event into a layout update.
  *
  *  @dnd-kit's `OptimisticSortingPlugin` mutates `source.group` and

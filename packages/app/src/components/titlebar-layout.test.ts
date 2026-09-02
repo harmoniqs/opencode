@@ -14,6 +14,7 @@ import {
   createMountPointTracker,
   controlSlotLabel,
   reconcileDragEnd,
+  reconcileDropOnEmptySlot,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -327,5 +328,45 @@ describe("reconcileDragEnd", () => {
   test("undefined groups default to right", () => {
     const result = reconcileDragEnd(layout, undefined, 0, undefined, 2)
     expect(result.right).toEqual(["status", "side-panel", "sessions", "profile", "settings"])
+  })
+})
+
+describe("reconcileDropOnEmptySlot", () => {
+  const layout: TitlebarLayout = {
+    left: [],
+    right: ["sessions", "status", "side-panel", "profile", "settings"],
+  }
+
+  test("drops a control from right into an empty left slot at index 0", () => {
+    // Drag "profile" (right:3) and drop on the empty left drop zone
+    const result = reconcileDropOnEmptySlot(layout, "right", 3, "left")
+    expect(result.left).toEqual(["profile"])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "settings"])
+  })
+
+  test("drops a control from left into an empty right slot at index 0", () => {
+    const allLeft: TitlebarLayout = {
+      left: ["sessions", "status", "side-panel", "profile", "settings"],
+      right: [],
+    }
+    const result = reconcileDropOnEmptySlot(allLeft, "left", 0, "right")
+    expect(result.right).toEqual(["sessions"])
+    expect(result.left).toEqual(["status", "side-panel", "profile", "settings"])
+  })
+
+  test("returns original layout when source slot equals target slot", () => {
+    const result = reconcileDropOnEmptySlot(layout, "right", 2, "right")
+    expect(result).toBe(layout)
+  })
+
+  test("returns original layout when source index is out of bounds", () => {
+    const result = reconcileDropOnEmptySlot(layout, "right", 99, "left")
+    expect(result).toBe(layout)
+  })
+
+  test("undefined sourceGroup defaults to right", () => {
+    const result = reconcileDropOnEmptySlot(layout, undefined, 3, "left")
+    expect(result.left).toEqual(["profile"])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "settings"])
   })
 })

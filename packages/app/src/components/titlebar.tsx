@@ -36,7 +36,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
-import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot, controlSlotLabel, reconcileDragEnd } from "./titlebar-layout"
+import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot, controlSlotLabel, reconcileDropOnEmptySlot, reconcileDragEnd } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -465,6 +465,29 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     const source = event.operation.source
                     if (!isSortable(source)) return
                     const currentLayout = settings.general.titlebarLayout()
+
+                    // When the target is a plain droppable (not a sortable),
+                    // the OptimisticSortingPlugin never ran — source.group and
+                    // source.index still reflect the original position.  Check
+                    // whether the drop landed on an empty-slot drop zone and
+                    // handle the cross-slot move manually.
+                    const target = event.operation.target
+                    if (target && !isSortable(target)) {
+                      const targetId = target.id as string
+                      if (targetId === "left" || targetId === "right") {
+                        const updated = reconcileDropOnEmptySlot(
+                          currentLayout,
+                          source.initialGroup as string | undefined,
+                          source.initialIndex,
+                          targetId,
+                        )
+                        if (updated !== currentLayout) {
+                          settings.general.setTitlebarLayout(updated)
+                        }
+                      }
+                      return
+                    }
+
                     const updated = reconcileDragEnd(
                       currentLayout,
                       source.initialGroup as string | undefined,
