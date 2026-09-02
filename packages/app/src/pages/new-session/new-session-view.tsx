@@ -106,24 +106,36 @@ export function NewSessionView(props: {
   )
 }
 
-export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; visible: Accessor<boolean> }) {
+export function NewSessionStatus(props: {
+  sessionsMount: Accessor<HTMLElement | null>
+  statusMount: Accessor<HTMLElement | null>
+  visible: Accessor<boolean>
+}) {
   const language = useLanguage()
 
   return (
-    <Show when={props.mount()} keyed>
-      {(mount) => (
-        <Portal mount={mount}>
-          <div class="flex items-center gap-2">
-            <TooltipV2 placement="bottom" value="Sessions" class="shrink-0">
+    <>
+      <Show when={props.sessionsMount()} keyed>
+        {(mount) => (
+          <Portal mount={mount}>
+            <span class="flex shrink-0" data-tour-target="sessions">
               <SessionChatsDropdown />
-            </TooltipV2>
-            <TooltipV2 placement="bottom" value={language.t("status.popover.trigger")} class="shrink-0">
-              <StatusPopoverV2 />
-            </TooltipV2>
-          </div>
-        </Portal>
-      )}
-    </Show>
+            </span>
+          </Portal>
+        )}
+      </Show>
+      <Show when={props.statusMount()} keyed>
+        {(mount) => (
+          <Portal mount={mount}>
+            <span class="flex shrink-0" data-tour-target="status">
+              <TooltipV2 placement="bottom" value={language.t("status.popover.trigger")} class="shrink-0">
+                <StatusPopoverV2 />
+              </TooltipV2>
+            </span>
+          </Portal>
+        )}
+      </Show>
+    </>
   )
 }
 

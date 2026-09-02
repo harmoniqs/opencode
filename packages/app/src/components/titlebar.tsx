@@ -60,17 +60,29 @@ export function useTitlebarRightMount() {
 export function useTitlebarControlMount(id: TitlebarControlId) {
   const [mount, setMount] = createSignal<HTMLElement | null>(null)
   const elId = mountPointId(id)
-  // Live query: re-check the DOM every animation frame until the mount point
-  // is found, then stop.  This replaces the old one-shot `onMount` +
-  // `getElementById` which went stale whenever the <Show> branch recreated
-  // the mount-point div (the root cause of the disappearing-buttons bug).
+  // Poll until the mount-point div appears.  The titlebar renders the divs
+  // unconditionally, but when this hook is called from a lazy-loaded route
+  // inside <Suspense>, onMount may fire before the titlebar's DOM is
+  // committed.  A short polling loop covers the race.
   onMount(() => {
     const found = document.getElementById(elId)
     if (found) {
       setMount(found)
       return
     }
-    const raf = requestAnimationFrame(() => setMount(document.getElementById(elId)))
+    let attempts = 0
+    const poll = () => {
+      const el = document.getElementById(elId)
+      if (el) {
+        setMount(el)
+        return
+      }
+      if (++attempts < 10) {
+        const raf = requestAnimationFrame(poll)
+        onCleanup(() => cancelAnimationFrame(raf))
+      }
+    }
+    const raf = requestAnimationFrame(poll)
     onCleanup(() => cancelAnimationFrame(raf))
   })
   return mount
