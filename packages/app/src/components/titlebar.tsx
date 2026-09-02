@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, startTransition, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
-import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
+import { DragDropProvider, PointerSensor, useDroppable } from "@dnd-kit/solid"
 import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
 import { Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
 import { RestrictToHorizontalAxis } from "@dnd-kit/abstract/modifiers"
@@ -36,7 +36,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
-import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot, controlSlotLabel } from "./titlebar-layout"
+import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot, controlSlotLabel, reconcileDragEnd } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -449,6 +449,34 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
+                <DragDropProvider
+                  sensors={[
+                    PointerSensor.configure({
+                      activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
+                    }),
+                  ]}
+                  modifiers={[RestrictToHorizontalAxis]}
+                  plugins={(defaults) => [
+                    ...defaults,
+                    Feedback.configure({ dropAnimation: null }),
+                  ]}
+                  onDragEnd={(event) => {
+                    if (!editMode() || event.canceled) return
+                    const source = event.operation.source
+                    if (!isSortable(source)) return
+                    const currentLayout = settings.general.titlebarLayout()
+                    const updated = reconcileDragEnd(
+                      currentLayout,
+                      source.initialGroup as string | undefined,
+                      source.initialIndex,
+                      source.group as string | undefined,
+                      source.index,
+                    )
+                    if (updated !== currentLayout) {
+                      settings.general.setTitlebarLayout(updated)
+                    }
+                  }}
+                >
                 <TitlebarV2Left state={v2RightState()} editMode={editMode()} />
                 {/* Profile and Settings live at the trailing edge with the
                     other account/status controls (Sessions, Status, Side
@@ -497,6 +525,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 </Show>
                 <div class="flex-1" />
                 <TitlebarV2Right state={v2RightState()} editMode={editMode()} onExitEditMode={() => setEditMode(false)} />
+                </DragDropProvider>
               </div>
             )
           }}
@@ -653,6 +682,7 @@ type TitlebarV2RightState = {
 function TitlebarControlSlot(props: {
   controls: TitlebarControlId[]
   slot: "left" | "right"
+  group: string
   state: TitlebarV2RightState
   editMode?: boolean
   onExitEditMode?: () => void
@@ -752,51 +782,23 @@ function TitlebarControlSlot(props: {
   }
 
   // Single <For> loop — mount-point divs must never be destroyed by an
-  // edit-mode toggle.  The old code used <Show> with two separate <For>
-  // branches; switching between them recreated every mount-point <div>,
-  // leaving session-header portals pointing at detached nodes.
-  //
-  // Sensors are STATIC — PointerSensor binds pointerdown listeners to
-  // each sortable element at mount time.  Toggling sensors at runtime
-  // doesn't rebind existing elements, so dragging would silently break.
-  // Instead, useSortable's `disabled` flag gates drag activation per item.
+  // edit-mode toggle.  DragDropProvider is lifted to the V2 layout level
+  // so cross-slot drag works; this component only renders the sorted items.
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
-      <DragDropProvider
-        sensors={[
-          PointerSensor.configure({
-            activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
-          }),
-        ]}
-        modifiers={[RestrictToHorizontalAxis]}
-        plugins={(defaults) => [
-          ...defaults,
-          Feedback.configure({ dropAnimation: null }),
-        ]}
-        onDragEnd={(event) => {
-          if (!props.editMode || event.canceled || !props.layout || !props.onReorder) return
-          const source = event.operation.source
-          if (!isSortable(source)) return
-          const { initialIndex, index } = source
-          if (initialIndex !== index) {
-            const updated = reorderWithinSlot(props.layout, props.slot, initialIndex, index)
-            props.onReorder(updated)
-          }
-        }}
-      >
-        <For each={props.controls}>
-          {(id, index) => (
-            <SortableControlItem
-              id={id}
-              index={index}
-              editMode={props.editMode}
-              onContextMenu={(e) => showControlContextMenu(e, id)}
-            >
-              {renderControl(id)}
-            </SortableControlItem>
-          )}
-        </For>
-      </DragDropProvider>
+      <For each={props.controls}>
+        {(id, index) => (
+          <SortableControlItem
+            id={id}
+            index={index}
+            group={props.group}
+            editMode={props.editMode}
+            onContextMenu={(e) => showControlContextMenu(e, id)}
+          >
+            {renderControl(id)}
+          </SortableControlItem>
+        )}
+      </For>
       <Show when={props.showCheckmark && props.editMode}>
         <IconButtonV2
           type="button"
@@ -815,6 +817,7 @@ function TitlebarControlSlot(props: {
 function SortableControlItem(props: {
   id: string
   index: () => number
+  group?: string
   editMode?: boolean
   onContextMenu?: (e: MouseEvent) => void
   children: any
@@ -825,6 +828,9 @@ function SortableControlItem(props: {
     },
     get index() {
       return props.index()
+    },
+    get group() {
+      return props.group
     },
     get disabled() {
       return !props.editMode
@@ -854,6 +860,7 @@ function TitlebarV2Right(props: { state: TitlebarV2RightState; editMode: boolean
     <TitlebarControlSlot
       controls={layout().right}
       slot="right"
+      group="right"
       state={props.state}
       editMode={props.editMode}
       onExitEditMode={props.onExitEditMode}
@@ -869,14 +876,39 @@ function TitlebarV2Left(props: { state: TitlebarV2RightState; editMode: boolean 
   const layout = createMemo(() => settings.general.titlebarLayout())
   const controls = createMemo(() => layout().left)
   return (
-    <Show when={controls().length > 0}>
-      <TitlebarControlSlot
-        controls={controls()}
-        slot="left"
-        state={props.state}
-        editMode={props.editMode}
-        onReorder={(updated) => settings.general.setTitlebarLayout(updated)}
-        layout={layout()}
+    <Show when={controls().length > 0 || props.editMode}>
+      <Show
+        when={controls().length > 0}
+        fallback={<TitlebarEditDropZone group="left" editMode={props.editMode} />}
+      >
+        <TitlebarControlSlot
+          controls={controls()}
+          slot="left"
+          group="left"
+          state={props.state}
+          editMode={props.editMode}
+          onReorder={(updated) => settings.general.setTitlebarLayout(updated)}
+          layout={layout()}
+        />
+      </Show>
+    </Show>
+  )
+}
+
+/** Empty-slot drop target — visible in edit mode when a slot has no controls.
+ *  Uses `useDroppable` with an `id` matching the group key so that
+ *  @dnd-kit's `move()` helper can reconcile cross-slot drops. */
+function TitlebarEditDropZone(props: { group: string; editMode?: boolean }) {
+  const droppable = useDroppable({ get id() { return props.group } })
+  return (
+    <Show when={props.editMode}>
+      <div
+        ref={droppable.ref}
+        classList={{
+          "titlebar-drop-zone": true,
+          "titlebar-drop-zone-hover": droppable.isDropTarget(),
+        }}
+        aria-label={`Drop zone: ${props.group} of tabs`}
       />
     </Show>
   )

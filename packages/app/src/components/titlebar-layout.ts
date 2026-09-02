@@ -97,3 +97,30 @@ export function moveToSlot(
 export function controlSlotLabel(currentSlot: "left" | "right"): string {
   return currentSlot === "right" ? "Move to left of tabs" : "Move to right of tabs"
 }
+
+/** Reconcile a drag-end event into a layout update.
+ *
+ *  @dnd-kit's `OptimisticSortingPlugin` mutates `source.group` and
+ *  `source.index` during drag, so by `dragend` they reflect the destination.
+ *  This function maps that information to the right layout operation:
+ *
+ *  - Same group, different index → `reorderWithinSlot`
+ *  - Different group → `moveToSlot`
+ *  - Same group, same index → no-op (returns the original layout ref)
+ *
+ *  `initialGroup` / `group` may be `undefined` — treat as `"right"` (the
+ *  default slot). */
+export function reconcileDragEnd(
+  layout: TitlebarLayout,
+  initialGroup: string | undefined,
+  initialIndex: number,
+  group: string | undefined,
+  index: number,
+): TitlebarLayout {
+  const from = (initialGroup ?? "right") as "left" | "right"
+  const to = (group ?? "right") as "left" | "right"
+  if (from === to) return reorderWithinSlot(layout, from, initialIndex, index)
+  const controlId = layout[from][initialIndex]
+  if (!controlId) return layout
+  return moveToSlot(layout, controlId, to, index)
+}

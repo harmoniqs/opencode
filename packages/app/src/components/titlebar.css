@@ -139,3 +139,22 @@
 .titlebar-context-menu-item:hover {
   background: var(--v2-overlay-simple-overlay-hover, rgba(255, 255, 255, 0.06));
 }
+
+/* Edit-mode drop zone — visible placeholder for an empty slot */
+.titlebar-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 24px;
+  border: 1px dashed var(--v2-border-default, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.titlebar-drop-zone-hover {
+  border-color: var(--v2-border-strong, rgba(255, 255, 255, 0.24));
+  background: var(--v2-overlay-simple-overlay-hover, rgba(255, 255, 255, 0.06));
+  border-style: solid;
+}

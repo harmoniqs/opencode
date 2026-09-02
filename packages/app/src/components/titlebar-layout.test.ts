@@ -13,6 +13,7 @@ import {
   moveToSlot,
   createMountPointTracker,
   controlSlotLabel,
+  reconcileDragEnd,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -284,5 +285,47 @@ describe("controlSlotLabel", () => {
 
   test("returns 'Move to right of tabs' for a control in the left slot", () => {
     expect(controlSlotLabel("left")).toBe("Move to right of tabs")
+  })
+})
+
+describe("reconcileDragEnd", () => {
+  const layout: TitlebarLayout = {
+    left: [],
+    right: ["sessions", "status", "side-panel", "profile", "settings"],
+  }
+
+  test("same group, different index → within-slot reorder", () => {
+    // Drag "sessions" (right:0) to right:2
+    const result = reconcileDragEnd(layout, "right", 0, "right", 2)
+    expect(result.right).toEqual(["status", "side-panel", "sessions", "profile", "settings"])
+    expect(result.left).toEqual([])
+  })
+
+  test("different group → cross-slot move", () => {
+    // Move "profile" from right to left, landing at index 0
+    const result = reconcileDragEnd(layout, "right", 3, "left", 0)
+    expect(result.left).toEqual(["profile"])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "settings"])
+  })
+
+  test("same group, same index → no-op returns original layout", () => {
+    const result = reconcileDragEnd(layout, "right", 1, "right", 1)
+    expect(result).toBe(layout)
+  })
+
+  test("cross-slot move from a split layout", () => {
+    const split: TitlebarLayout = {
+      left: ["profile"],
+      right: ["sessions", "status", "side-panel", "settings"],
+    }
+    // Move "profile" from left:0 back to right, at index 4 (end)
+    const result = reconcileDragEnd(split, "left", 0, "right", 4)
+    expect(result.left).toEqual([])
+    expect(result.right).toEqual(["sessions", "status", "side-panel", "settings", "profile"])
+  })
+
+  test("undefined groups default to right", () => {
+    const result = reconcileDragEnd(layout, undefined, 0, undefined, 2)
+    expect(result.right).toEqual(["status", "side-panel", "sessions", "profile", "settings"])
   })
 })
