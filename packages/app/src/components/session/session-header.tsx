@@ -954,7 +954,7 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
           ref={triggerRef}
           type="button"
           data-action="session-chats-toggle-flyout"
-          class="flex shrink-0 items-center justify-center rounded-sm border-none bg-transparent p-1.5 cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
+          class="flex size-9 shrink-0 items-center justify-center rounded-sm border-none bg-transparent cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
           aria-label="Sessions"
           onClick={() => setOpen(!open())}
         >

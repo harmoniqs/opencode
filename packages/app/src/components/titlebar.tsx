@@ -808,7 +808,7 @@ function TitlebarControlSlot(props: {
   // edit-mode toggle.  DragDropProvider is lifted to the V2 layout level
   // so cross-slot drag works; this component only renders the sorted items.
   return (
-    <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
+    <div class="relative z-20 flex shrink-0 items-center justify-end gap-1 overflow-visible">
       <For each={props.controls}>
         {(id, index) => (
           <SortableControlItem
