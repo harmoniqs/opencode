@@ -84,10 +84,22 @@
 }
 
 .titlebar-control-edit {
+  position: relative;
   border: 1px dashed var(--v2-border-default, rgba(255, 255, 255, 0.12));
   border-radius: 6px;
-  pointer-events: none;
-  cursor: default;
+  cursor: grab;
+}
+
+/* Transparent overlay: captures pointer events for DnD on the wrapper
+   while suppressing clicks on interactive children (popovers, dropdowns).
+   Pseudo-elements are part of the generating element for hit-testing,
+   so pointerdown events on the overlay fire on the sortable wrapper. */
+.titlebar-control-edit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  border-radius: inherit;
 }
 
 .titlebar-control-edit:hover {

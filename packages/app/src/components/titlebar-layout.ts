@@ -91,3 +91,9 @@ export function moveToSlot(
   toItems.splice(toIndex, 0, controlId)
   return { left: fromSlot === "left" ? fromItems : toItems, right: fromSlot === "right" ? fromItems : toItems }
 }
+
+/** Label for the per-control context menu action that moves a control
+ *  to the opposite slot.  `currentSlot` is the slot the control is in now. */
+export function controlSlotLabel(currentSlot: "left" | "right"): string {
+  return currentSlot === "right" ? "Move to left of tabs" : "Move to right of tabs"
+}

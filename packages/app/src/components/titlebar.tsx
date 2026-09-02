@@ -36,7 +36,7 @@ import { tabHref, useTabs, type Tab } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import { normalizeSessionInfo } from "@/utils/session"
 import { channelBadgeText } from "./titlebar-channel"
-import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot } from "./titlebar-layout"
+import { type TitlebarControlId, type TitlebarLayout, mountPointId, isSessionScoped, defaultTitlebarLayout, reorderWithinSlot, moveToSlot, controlSlotLabel } from "./titlebar-layout"
 import "./titlebar.css"
 
 const legacyTitlebarHeight = 40
@@ -719,27 +719,55 @@ function TitlebarControlSlot(props: {
     </Switch>
   )
 
+  // Per-control context menu in edit mode — lets the user move a control
+  // between slots ("Move to left/right of tabs").
+  const showControlContextMenu = (e: MouseEvent, id: TitlebarControlId) => {
+    if (!props.editMode || !props.layout || !props.onReorder) return
+    e.preventDefault()
+    e.stopPropagation()
+    const otherSlot: "left" | "right" = props.slot === "left" ? "right" : "left"
+    const label = controlSlotLabel(props.slot)
+    const menu = document.createElement("div")
+    menu.className = "titlebar-context-menu"
+    menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:9999`
+    const btn = document.createElement("button")
+    btn.className = "titlebar-context-menu-item"
+    btn.textContent = label
+    btn.dataset.action = "move"
+    menu.appendChild(btn)
+    const dismiss = () => {
+      menu.remove()
+      document.removeEventListener("pointerdown", onOutside)
+    }
+    const onOutside = (ev: PointerEvent) => {
+      if (!menu.contains(ev.target as Node)) dismiss()
+    }
+    menu.addEventListener("click", () => {
+      const updated = moveToSlot(props.layout!, id, otherSlot, otherSlot === "left" ? (props.layout!.left.length) : (props.layout!.right.length))
+      props.onReorder!(updated)
+      dismiss()
+    })
+    document.body.appendChild(menu)
+    requestAnimationFrame(() => document.addEventListener("pointerdown", onOutside))
+  }
+
   // Single <For> loop — mount-point divs must never be destroyed by an
   // edit-mode toggle.  The old code used <Show> with two separate <For>
   // branches; switching between them recreated every mount-point <div>,
   // leaving session-header portals pointing at detached nodes.
   //
-  // Fix: one <For> always renders, wrapped by an always-present
-  // DragDropProvider.  When editMode is off the sensor list is empty so
-  // no drag can start; SortableControlItem gates visual treatment via
-  // the editMode prop.
+  // Sensors are STATIC — PointerSensor binds pointerdown listeners to
+  // each sortable element at mount time.  Toggling sensors at runtime
+  // doesn't rebind existing elements, so dragging would silently break.
+  // Instead, useSortable's `disabled` flag gates drag activation per item.
   return (
     <div class="relative z-20 flex shrink-0 items-center justify-end gap-0 overflow-visible">
       <DragDropProvider
-        sensors={
-          props.editMode
-            ? [
-                PointerSensor.configure({
-                  activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
-                }),
-              ]
-            : []
-        }
+        sensors={[
+          PointerSensor.configure({
+            activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
+          }),
+        ]}
         modifiers={[RestrictToHorizontalAxis]}
         plugins={(defaults) => [
           ...defaults,
@@ -758,7 +786,12 @@ function TitlebarControlSlot(props: {
       >
         <For each={props.controls}>
           {(id, index) => (
-            <SortableControlItem id={id} index={index} editMode={props.editMode}>
+            <SortableControlItem
+              id={id}
+              index={index}
+              editMode={props.editMode}
+              onContextMenu={(e) => showControlContextMenu(e, id)}
+            >
               {renderControl(id)}
             </SortableControlItem>
           )}
@@ -779,7 +812,13 @@ function TitlebarControlSlot(props: {
   )
 }
 
-function SortableControlItem(props: { id: string; index: () => number; editMode?: boolean; children: any }) {
+function SortableControlItem(props: {
+  id: string
+  index: () => number
+  editMode?: boolean
+  onContextMenu?: (e: MouseEvent) => void
+  children: any
+}) {
   const sortable = useSortable({
     get id() {
       return props.id
@@ -787,10 +826,16 @@ function SortableControlItem(props: { id: string; index: () => number; editMode?
     get index() {
       return props.index()
     },
+    get disabled() {
+      return !props.editMode
+    },
   })
   return (
     <div
       ref={sortable.ref}
+      onContextMenu={(e) => {
+        if (props.editMode) props.onContextMenu?.(e)
+      }}
       classList={{
         "titlebar-control-wrapper": true,
         "titlebar-control-edit": !!props.editMode,

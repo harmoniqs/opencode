@@ -12,6 +12,7 @@ import {
   reorderWithinSlot,
   moveToSlot,
   createMountPointTracker,
+  controlSlotLabel,
 } from "./titlebar-layout"
 
 describe("titlebar layout", () => {
@@ -273,5 +274,15 @@ describe("mount-point tracker", () => {
 
     dispose()
     container.remove()
+  })
+})
+
+describe("controlSlotLabel", () => {
+  test("returns 'Move to left of tabs' for a control in the right slot", () => {
+    expect(controlSlotLabel("right")).toBe("Move to left of tabs")
+  })
+
+  test("returns 'Move to right of tabs' for a control in the left slot", () => {
+    expect(controlSlotLabel("left")).toBe("Move to right of tabs")
   })
 })
