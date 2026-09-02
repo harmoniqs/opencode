@@ -59,6 +59,7 @@
     "@opencode-ai/sdk": "workspace:*",
     "@opencode-ai/session-ui": "workspace:*",
     "@opencode-ai/ui": "workspace:*",
+    "pdfjs-dist": "4.10.38",
     "@pierre/trees": "1.0.0-beta.4",
     "@sentry/solid": "catalog:",
     "@shikijs/transformers": "3.9.2",

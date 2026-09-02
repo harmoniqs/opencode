@@ -7,6 +7,7 @@ import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
 import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
+import { ZoomControl, createZoomState } from "@/components/zoom-control"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 
@@ -46,10 +47,7 @@ export function SessionPreviewTab(props: {
   const [fileStates, setFileStates] = createStore<Record<string, PreviewFileState>>({})
   const [fileContent, setFileContent] = createSignal<string>("")
   const [loading, setLoading] = createSignal(false)
-  const [zoom, setZoom] = createSignal(100)
-
-  const zoomIn = () => setZoom((z) => Math.min(z + 10, 200))
-  const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
+  const { zoom, setZoom, zoomIn, zoomOut } = createZoomState()
 
   // Derive the file list from touchedFiles (tool-edit history, persists regardless of git state)
   // supplemented by diffs for any files not already covered.
@@ -242,42 +240,8 @@ export function SessionPreviewTab(props: {
                   {saveStatus() === "saving" ? "Saving..." : "Saved"}
                 </span>
               </Show>
-              {/* Zoom control: [100% | - +] */}
-              <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
-                <input
-                  type="text"
-                  class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
-                  value={`${zoom()}%`}
-                  onInput={(e) => {
-                    const val = parseInt(e.currentTarget.value)
-                    if (!isNaN(val) && val >= 50 && val <= 200) setZoom(val)
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.value = `${zoom()}%`
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.currentTarget.blur()
-                    }
-                  }}
-                />
-                <div class="flex items-center border-l border-border-base">
-                  <button
-                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                    onClick={zoomOut}
-                    aria-label="Zoom out"
-                  >
-                    <span class="text-12-medium leading-none">−</span>
-                  </button>
-                  <button
-                    class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
-                    onClick={zoomIn}
-                    aria-label="Zoom in"
-                  >
-                    <span class="text-12-medium leading-none">+</span>
-                  </button>
-                </div>
-              </div>
+              {/* Zoom control */}
+              <ZoomControl zoom={zoom} setZoom={setZoom} zoomIn={zoomIn} zoomOut={zoomOut} />
               {/* Mode toggle */}
               <SegmentedControlV2
                 value={currentMode()}
