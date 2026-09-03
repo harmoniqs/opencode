@@ -311,6 +311,10 @@ export function createDiffEditor(opts: {
       }),
       unifiedMergeView({
         original: EditorState.create({ doc: opts.original }).doc,
+        mergeControls: false,
+        gutter: true,
+        highlightChanges: true,
+        syntaxHighlightDeletions: true,
       }),
     ]
 
