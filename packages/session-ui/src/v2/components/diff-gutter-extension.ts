@@ -51,13 +51,13 @@ class DiffMarker extends GutterMarker {
 
     switch (this.kind) {
       case DiffGutterMarkerKind.Added:
-        el.style.backgroundColor = "var(--amc-success, #4caf50)"
+        el.style.backgroundColor = "var(--v2-state-fg-success, var(--text-on-success-base, #4caf50))"
         break
       case DiffGutterMarkerKind.Removed:
-        el.style.backgroundColor = "var(--amc-danger, #f44336)"
+        el.style.backgroundColor = "var(--v2-state-fg-danger, var(--text-on-critical-base, #f44336))"
         break
       case DiffGutterMarkerKind.Changed:
-        el.style.backgroundColor = "var(--amc-warning, #ffc107)"
+        el.style.backgroundColor = "var(--v2-state-fg-warning, var(--border-warning-base, #ffc107))"
         break
     }
 

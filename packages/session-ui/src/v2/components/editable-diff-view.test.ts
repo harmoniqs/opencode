@@ -352,3 +352,79 @@ describe("createDiffEditor (unified mode)", () => {
     expect(view.state.doc.toString()).toBe(before)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Line wrapping
+// ---------------------------------------------------------------------------
+
+describe("lineWrapping", () => {
+  test("baseExtensions includes lineWrapping extension", () => {
+    const theme = buildThemeExtension("dark")
+    const exts = baseExtensions({ readOnly: false, theme })
+    // EditorView.lineWrapping is the specific extension object.
+    // Verify it's in the array by identity (same import path).
+    expect(exts).toContain(EditorView.lineWrapping)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scroll / height setup
+// ---------------------------------------------------------------------------
+
+describe("scroll behavior", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("split mode: mergeView.dom has height 100%", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a\nb\nc",
+      modified: "a\nb\nc\nd",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    expect(handle.mergeView).not.toBeNull()
+    expect(handle.mergeView!.dom.style.height).toBe("100%")
+  })
+
+  test("unified mode: editorView.dom has height 100%", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a\nb\nc",
+      modified: "a\nb\nc\nd",
+      diffStyle: "unified",
+      readOnly: false,
+      theme,
+    })
+
+    expect(handle.editorView).not.toBeNull()
+    expect(handle.editorView!.dom.style.height).toBe("100%")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Syntax highlight style
+// ---------------------------------------------------------------------------
+
+describe("buildSyntaxHighlightStyle", () => {
+  test("is exported and returns a valid Extension", async () => {
+    const { buildSyntaxHighlightStyle } = await import("./editable-diff-view-core")
+    const ext = buildSyntaxHighlightStyle()
+    expect(ext).toBeDefined()
+    expect(ext).not.toBeNull()
+  })
+})

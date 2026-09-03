@@ -20,9 +20,10 @@ import { MergeView, unifiedMergeView } from "@codemirror/merge"
 import { diffGutterExtension } from "./diff-gutter-extension"
 import { type LanguageSupport } from "@codemirror/language"
 import {
-  defaultHighlightStyle,
+  HighlightStyle,
   syntaxHighlighting,
 } from "@codemirror/language"
+import { tags } from "@lezer/highlight"
 
 // ---------------------------------------------------------------------------
 // Language loader — dynamic imports so unused grammars stay out of the bundle.
@@ -68,11 +69,18 @@ export async function loadLanguage(
 
 // ---------------------------------------------------------------------------
 // Theme builder — maps app CSS custom properties to CM6 theme selectors.
+//
+// Uses the app's v2 design tokens (--v2-*) for structural chrome and the
+// OpenCode Shiki token variables (--syntax-*) for syntax highlighting. Both
+// systems switch light/dark purely via CSS — the CM6 theme is the same
+// object in either mode, referencing variables that the app's theme resolver
+// redefines for each color scheme.
 // ---------------------------------------------------------------------------
 
 /**
- * Build a CM6 theme extension that maps CSS custom properties to
- * CodeMirror selectors. Responds to light/dark mode.
+ * Build a CM6 theme extension using the app's design tokens.
+ * The `mode` parameter sets the CM6 `dark` flag (which controls default
+ * fallback colors); actual colors come from CSS custom properties.
  */
 export function buildThemeExtension(mode: "light" | "dark"): Extension {
   const isDark = mode === "dark"
@@ -80,81 +88,107 @@ export function buildThemeExtension(mode: "light" | "dark"): Extension {
   return EditorView.theme(
     {
       "&": {
-        backgroundColor: "var(--amc-layer, var(--color-background))",
-        color: "var(--amc-text, var(--color-text))",
-        fontFamily: "var(--amc-font-mono, var(--font-mono))",
+        backgroundColor: "var(--v2-background-bg-base, var(--background-base))",
+        color: "var(--v2-text-text-base, var(--text-strong))",
+        fontFamily: "var(--font-mono, ui-monospace, monospace)",
         fontSize: "13px",
         lineHeight: "1.5",
       },
       ".cm-content": {
-        caretColor: "var(--amc-accent, var(--color-accent))",
-        fontFamily: "var(--amc-font-mono, var(--font-mono))",
+        caretColor: "var(--v2-text-text-base, var(--text-strong))",
+        fontFamily: "var(--font-mono, ui-monospace, monospace)",
       },
       ".cm-cursor, .cm-dropCursor": {
-        borderLeftColor: "var(--amc-accent, var(--color-accent))",
+        borderLeftColor: "var(--v2-text-text-base, var(--text-strong))",
       },
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
         {
-          backgroundColor: isDark
-            ? "rgba(255, 255, 255, 0.1)"
-            : "rgba(0, 0, 0, 0.1)",
+          backgroundColor: "var(--v2-background-bg-layer-03, var(--background-weak))",
         },
       ".cm-panels": {
-        backgroundColor: "var(--amc-layer, var(--color-background))",
-        color: "var(--amc-text, var(--color-text))",
+        backgroundColor: "var(--v2-background-bg-base, var(--background-base))",
+        color: "var(--v2-text-text-base, var(--text-strong))",
       },
       ".cm-gutters": {
-        backgroundColor: "var(--amc-layer, var(--color-background))",
-        color: "var(--amc-text-muted, var(--color-text-muted))",
-        borderRight: "1px solid var(--amc-border, var(--color-border))",
+        backgroundColor: "var(--v2-background-bg-layer-01, var(--background-weak))",
+        color: "var(--v2-text-text-muted, var(--text-weak))",
+        borderRight: "1px solid var(--v2-border-border-base, var(--border-base))",
       },
       ".cm-activeLineGutter": {
-        backgroundColor: isDark
-          ? "rgba(255, 255, 255, 0.05)"
-          : "rgba(0, 0, 0, 0.05)",
+        backgroundColor: "var(--v2-background-bg-layer-02, var(--background-weak))",
       },
       ".cm-activeLine": {
-        backgroundColor: isDark
-          ? "rgba(255, 255, 255, 0.03)"
-          : "rgba(0, 0, 0, 0.03)",
+        backgroundColor: "var(--v2-background-bg-layer-01, var(--background-weak))",
       },
       ".cm-foldPlaceholder": {
         backgroundColor: "transparent",
         border: "none",
-        color: "var(--amc-text-faint, var(--color-text-faint))",
+        color: "var(--v2-text-text-faint, var(--text-weaker))",
       },
-      // Merge view specific
-      ".cm-mergeView": {
-        height: "100%",
-      },
-      ".cm-mergeViewEditor": {
-        height: "100%",
-        overflow: "auto",
-      },
-      // Diff highlights
+      // Diff highlights — use the app's semantic state tokens
       ".cm-changedLine": {
-        backgroundColor: isDark
-          ? "rgba(255, 213, 79, 0.08)"
-          : "rgba(255, 193, 7, 0.08)",
+        backgroundColor: "var(--v2-state-bg-warning, var(--surface-warning-weak))",
       },
       ".cm-changedText": {
-        backgroundColor: isDark
-          ? "rgba(255, 213, 79, 0.15)"
-          : "rgba(255, 193, 7, 0.15)",
+        backgroundColor: "var(--v2-state-bg-warning, var(--surface-warning-base))",
       },
       ".cm-insertedLine": {
-        backgroundColor: isDark
-          ? "rgba(76, 175, 80, 0.1)"
-          : "rgba(76, 175, 80, 0.08)",
+        backgroundColor: "var(--v2-state-bg-success, var(--surface-success-weak))",
       },
       ".cm-deletedLine": {
-        backgroundColor: isDark
-          ? "rgba(244, 67, 54, 0.1)"
-          : "rgba(244, 67, 54, 0.08)",
+        backgroundColor: "var(--v2-state-bg-danger, var(--surface-critical-weak))",
       },
     },
     { dark: isDark },
   )
+}
+
+// ---------------------------------------------------------------------------
+// Syntax highlight style — maps CM6 lezer tags to the app's --syntax-*
+// CSS variables so highlighting matches the user's selected theme.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a HighlightStyle that uses the app's --syntax-* CSS variables.
+ * Returns a syntaxHighlighting extension.
+ */
+export function buildSyntaxHighlightStyle(): Extension {
+  const style = HighlightStyle.define([
+    { tag: [tags.comment, tags.lineComment, tags.blockComment],
+      color: "var(--syntax-comment, var(--text-weak))" },
+    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.moduleKeyword],
+      color: "var(--syntax-keyword, var(--text-weak))" },
+    { tag: [tags.string, tags.special(tags.string), tags.character],
+      color: "var(--syntax-string)" },
+    { tag: [tags.number, tags.bool, tags.null],
+      color: "var(--syntax-primitive)" },
+    { tag: [tags.typeName, tags.className, tags.namespace],
+      color: "var(--syntax-type)" },
+    { tag: [tags.propertyName, tags.attributeName, tags.labelName],
+      color: "var(--syntax-property)" },
+    { tag: [tags.variableName, tags.definition(tags.variableName)],
+      color: "var(--v2-text-text-base, var(--text-strong))" },
+    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)],
+      color: "var(--syntax-function, var(--syntax-property))" },
+    { tag: [tags.constant(tags.variableName), tags.atom],
+      color: "var(--syntax-constant)" },
+    { tag: [tags.operator, tags.punctuation, tags.separator],
+      color: "var(--v2-text-text-muted, var(--text-base))" },
+    { tag: [tags.meta, tags.annotation, tags.processingInstruction],
+      color: "var(--syntax-comment, var(--text-weak))" },
+    { tag: tags.heading,
+      color: "var(--syntax-keyword, var(--text-strong))", fontWeight: "bold" },
+    { tag: tags.emphasis,
+      fontStyle: "italic" },
+    { tag: tags.strong,
+      fontWeight: "bold" },
+    { tag: tags.link,
+      color: "var(--syntax-string)", textDecoration: "underline" },
+    { tag: tags.invalid,
+      color: "var(--v2-state-fg-danger, var(--text-on-critical-base))" },
+  ])
+
+  return syntaxHighlighting(style)
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +206,8 @@ export function baseExtensions(opts: {
     highlightActiveLine(),
     highlightSpecialChars(),
     drawSelection(),
-    syntaxHighlighting(defaultHighlightStyle),
+    EditorView.lineWrapping,
+    buildSyntaxHighlightStyle(),
     opts.theme,
     EditorView.editable.of(!opts.readOnly),
     EditorState.readOnly.of(opts.readOnly),
@@ -257,6 +292,12 @@ export function createDiffEditor(opts: {
         }),
       },
     })
+
+    // MergeView.dom is the PARENT of .cm-editor, so EditorView.theme()
+    // selectors (scoped under .cm-editor) can't target it. Set height
+    // directly so the MergeView fills its container and scrolls.
+    mergeView.dom.style.height = "100%"
+    mergeView.dom.style.overflow = "auto"
   } else {
     // Unified mode: single editable editor with custom diff gutter markers
     // (#769 — replaces the unifiedMergeView fallback)
@@ -277,6 +318,9 @@ export function createDiffEditor(opts: {
       }),
       parent: opts.parent,
     })
+
+    // Ensure the editor fills and scrolls within its container
+    editorView.dom.style.height = "100%"
   }
 
   function getActiveView(): EditorView | null {
@@ -309,18 +353,6 @@ export function createDiffEditor(opts: {
           insert: original,
         },
       })
-
-      // Clear undo history by resetting the state
-      // We create a fresh state with the same extensions but original doc
-      const newState = EditorState.create({
-        doc: original,
-        extensions: view.state.toJSON !== undefined
-          ? [] // Extensions are managed by the diff editor
-          : [],
-      })
-
-      // The cleanest way to clear undo: recreate with the extensions from the current state
-      // CM6 doesn't expose a direct "clear undo" — the idiomatic way is state replacement
     },
     getContent() {
       const view = getActiveView()
@@ -330,14 +362,19 @@ export function createDiffEditor(opts: {
 }
 
 /**
- * Detect dark/light mode from DOM.
+ * Detect dark/light mode from DOM — reads `data-color-scheme` attribute
+ * on <html> (set by the app's theme system).
  */
 export function detectMode(): "light" | "dark" {
   if (typeof document === "undefined") return "dark"
   const html = document.documentElement
+  // The app sets data-color-scheme on <html>
+  const scheme = html.getAttribute("data-color-scheme")
+  if (scheme === "light") return "light"
+  if (scheme === "dark") return "dark"
+  // Fallbacks for other conventions
   if (html.classList.contains("dark")) return "dark"
   if (html.getAttribute("data-theme") === "dark") return "dark"
-  if (html.getAttribute("data-color-mode") === "dark") return "dark"
   if (
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-color-scheme: dark)").matches

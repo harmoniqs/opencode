@@ -126,7 +126,7 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
       style={{
         width: "100%",
         height: "100%",
-        overflow: "hidden",
+        overflow: "auto",
         position: "relative",
       }}
     />
