@@ -88,7 +88,7 @@ import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
-import { accumulateDiffs } from "@/pages/session/v2/accumulate-diffs"
+import { accumulateDiffs, mergeServerAndToolDiffs, toHomePath } from "@/pages/session/v2/accumulate-diffs"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
@@ -706,35 +706,16 @@ export default function Page() {
     }
   })
   const reviewDiffs = createMemo(() => {
-    // Server endpoint returns the authoritative full-session diff (queries all messages).
-    const serverDiffs = sessionDiffQuery.data ?? []
-    // Once the server has responded at least once, trust it — even if it returned [].
-    // The client-side fallback is only for the initial load before any server response,
-    // never during refetches (where keepPreviousData already preserves the last result).
-    const serverResponded = sessionDiffQuery.status === "success" || sessionDiffQuery.isPlaceholderData
-    if (serverDiffs.length > 0 || serverResponded) {
-      // Server paths are relative to the project root — prefix with ~/project-path
-      const dir = sdk().directory
-      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
-      const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
-      return serverDiffs
-        .filter((d): d is SnapshotFileDiff & { file: string } => !!d.file)
-        .map((d) => ({ ...d, file: d.file.startsWith("/") || d.file.startsWith("~/") ? d.file : `${prefix}/${d.file}` }))
-    }
-    // Fallback: derive from tool parts currently loaded in the client.
-    // This shows immediate results for visible messages while the server query loads.
-    const allMessages = messages()
-    if (!allMessages.length) return [] as Array<SnapshotFileDiff & { file: string }>
+    // Shared path normalization — both sources must use the same function for dedup to work.
     const dir = sdk().directory
     const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
     const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
-    const toHomePath = (p: string) => {
-      if (p.startsWith("~/")) return p
-      if (home && p.startsWith(home)) return "~" + p.slice(home.length)
-      if (!p.startsWith("/")) return `${prefix}/${p}`
-      return p
-    }
+
+    // --- Tool-metadata diffs (always computed, not just as fallback) ---
+    // Scraped from completed edit/write/patch/apply_patch tool parts across all messages.
+    // These see every file the agent touched regardless of directory.
     const editParts: import("@/pages/session/v2/accumulate-diffs").ToolEditPart[] = []
+    const allMessages = messages()
     for (const msg of allMessages) {
       const msgParts = sync().data.part[msg.id]
       if (!msgParts) continue
@@ -747,7 +728,7 @@ export default function Page() {
           const rawTitle = (part.state as { title?: string }).title || filediff.file
           editParts.push({
             file: filediff.file,
-            title: toHomePath(rawTitle),
+            title: toHomePath(rawTitle, home, prefix),
             patch: filediff.patch,
             additions: filediff.additions ?? 0,
             deletions: filediff.deletions ?? 0,
@@ -755,7 +736,19 @@ export default function Page() {
         }
       }
     }
-    return accumulateDiffs(editParts)
+    const toolDiffs = accumulateDiffs(editParts)
+
+    // --- Server diffs (authoritative for in-project files) ---
+    const serverDiffs = sessionDiffQuery.data ?? []
+    const serverResponded = sessionDiffQuery.status === "success" || sessionDiffQuery.isPlaceholderData
+
+    return mergeServerAndToolDiffs({
+      serverDiffs,
+      toolDiffs,
+      serverResponded,
+      directory: dir,
+      home,
+    })
   })
 
   // All files touched by edit tools in this session — fetched from the server

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { accumulateDiffs, type ToolEditPart } from "./accumulate-diffs"
+import { accumulateDiffs, mergeServerAndToolDiffs, type ToolEditPart } from "./accumulate-diffs"
 
 const edit = (file: string, overrides: Partial<ToolEditPart> = {}): ToolEditPart => ({
   file,
@@ -110,5 +110,96 @@ describe("accumulateDiffs", () => {
     // A hypothetical net diff would be lower — the client must never show
     // this stale/inflated data during a refetch. The fix is keepPreviousData
     // on the query so the fallback never fires while server data exists.
+  })
+})
+
+// --- mergeServerAndToolDiffs ---
+
+const HOME = "/Users/jj"
+const DIR = "/Users/jj/harmoniqs/amicode"
+const diff = (
+  file: string,
+  patch = "mock",
+  additions = 1,
+  deletions = 0,
+  status: "added" | "modified" | "deleted" = "modified",
+) => ({ file, patch, additions, deletions, status })
+
+describe("mergeServerAndToolDiffs", () => {
+  test("cross-project tool diffs pass through when server has responded", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [diff("src/foo.ts")],
+      toolDiffs: [diff("~/other-project/bar.ts")],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    const files = result.map((d) => d.file)
+    expect(files).toContain("~/harmoniqs/amicode/src/foo.ts")
+    expect(files).toContain("~/other-project/bar.ts")
+  })
+
+  test("in-project files come from the server, not tool metadata (server wins)", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [diff("src/foo.ts", "server-patch", 10, 5)],
+      toolDiffs: [diff("~/harmoniqs/amicode/src/foo.ts", "tool-patch", 3, 1)],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    const entry = result.find((d) => d.file.endsWith("src/foo.ts"))
+    expect(entry).toBeDefined()
+    expect(entry!.patch).toBe("server-patch")
+    expect(entry!.additions).toBe(10)
+  })
+
+  test("in-project file absent from server (created+deleted) is excluded, not leaked as cross-project", () => {
+    // The bug: file was created by the write tool, then manually deleted.
+    // Server correctly has no diff (net zero). Tool metadata still has it.
+    // The old code leaked it through the cross-project filter.
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [diff("~/harmoniqs/amicode/files-changed-test.md", "stale-patch", 3, 0, "added")],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(result).toHaveLength(0)
+  })
+
+  test("in-project file with relative path absent from server is also excluded", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [diff("~/harmoniqs/amicode/src/temp.ts")],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(result).toHaveLength(0)
+  })
+
+  test("fallback: all tool diffs shown when server has not responded", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [
+        diff("~/harmoniqs/amicode/src/foo.ts"),
+        diff("~/other/bar.ts"),
+      ],
+      serverResponded: false,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(result).toHaveLength(2)
+  })
+
+  test("dedup by normalized path — server wins on conflict", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [diff("/Users/jj/harmoniqs/amicode/src/foo.ts")],
+      toolDiffs: [diff("~/harmoniqs/amicode/src/foo.ts")],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(result).toHaveLength(1)
   })
 })
