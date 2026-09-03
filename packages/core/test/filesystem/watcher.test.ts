@@ -30,10 +30,12 @@ const configLayer = Layer.succeed(
 
 const flagsLayer = ConfigProvider.layer(
   ConfigProvider.fromUnknown({
-    OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
     OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "false",
   }),
 )
+
+// Same flags — verifies the watcher runs without any explicit enable flag (#743).
+const defaultFlagsLayer = flagsLayer
 
 function provide(directory: string, vcs?: Location.Interface["vcs"]) {
   const locationLayer = Layer.succeed(
@@ -48,10 +50,24 @@ function provide(directory: string, vcs?: Location.Interface["vcs"]) {
   )
 }
 
+function provideDefault(directory: string, vcs?: Location.Interface["vcs"]) {
+  const locationLayer = Layer.succeed(
+    Location.Service,
+    Location.Service.of(location({ directory: AbsolutePath.make(directory) }, { vcs })),
+  )
+  return Effect.provide(
+    AppNodeBuilder.build(Watcher.node, [
+      [Config.node, configLayer],
+      [Location.node, locationLayer],
+    ]).pipe(Layer.provide(defaultFlagsLayer)),
+  )
+}
+
 function withTmp<A, E, R>(
   f: (directory: string, vcs?: Location.Interface["vcs"]) => Effect.Effect<A, E, R>,
-  options?: { git?: boolean; init?: (directory: string) => Promise<void> },
+  options?: { git?: boolean; init?: (directory: string) => Promise<void>; useDefaultFlags?: boolean },
 ) {
+  const providerFn = options?.useDefaultFlags ? provideDefault : provide
   return Effect.acquireRelease(
     Effect.promise(async () => {
       const tmp = await tmpdir()
@@ -66,7 +82,7 @@ function withTmp<A, E, R>(
       return { tmp, vcs: { type: "git" as const, store: AbsolutePath.make(path.join(tmp.path, ".git")) } }
     }),
     ({ tmp }) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
-  ).pipe(Effect.flatMap(({ tmp, vcs }) => f(tmp.path, vcs).pipe(provide(tmp.path, vcs))))
+  ).pipe(Effect.flatMap(({ tmp, vcs }) => f(tmp.path, vcs).pipe(providerFn(tmp.path, vcs))))
 }
 
 function wait(check: (event: WatcherEvent) => boolean) {
@@ -263,4 +279,19 @@ describeWatcher("Watcher", () => {
       ),
     )
   })
+
+  it.live("runs by default for git repos without the enable flag (#743)", () =>
+    withTmp(
+      (directory) =>
+        Effect.gen(function* () {
+          const fs = yield* FSUtil.Service
+          const file = path.join(directory, "default-watch.txt")
+          yield* ready(directory)
+          expect(
+            yield* nextUpdate((event) => event.file === file && event.event === "add", fs.writeFileString(file, "a")),
+          ).toEqual({ file, event: "add" })
+        }),
+      { git: true, useDefaultFlags: true },
+    ),
+  )
 })
