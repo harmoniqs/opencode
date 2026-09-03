@@ -18,6 +18,7 @@ import {
   homeProjectDirectories,
   homeSessionServerStatus,
   latestRootSession,
+  sessionListDirectories,
   toggleHomeProjectSelection,
 } from "./helpers"
 import { pathKey } from "@/utils/path-key"
@@ -317,5 +318,31 @@ describe("layout workspace helpers", () => {
     expect(errorMessage({ data: { message: "boom" } }, "fallback")).toBe("boom")
     expect(errorMessage(new Error("broken"), "fallback")).toBe("broken")
     expect(errorMessage("unknown", "fallback")).toBe("fallback")
+  })
+
+  describe("sessionListDirectories", () => {
+    test("uses opened projects when present", () => {
+      const opened = [{ worktree: "/a", sandboxes: ["/a-sbx"] }, { worktree: "/b" }]
+      const server = [{ worktree: "/server", sandboxes: ["/server-sbx"] }]
+      expect(sessionListDirectories(opened, server)).toEqual(["/a", "/a-sbx", "/b"])
+    })
+
+    test("falls back to server projects when nothing is opened (fresh client, amicode#288)", () => {
+      const server = [
+        { worktree: "/", sandboxes: ["/staging"] },
+        { worktree: "/amicode" },
+        { worktree: "/opencode" },
+      ]
+      expect(sessionListDirectories([], server)).toEqual(["/", "/staging", "/amicode", "/opencode"])
+    })
+
+    test("fallback dedupes and drops empty entries", () => {
+      const server = [
+        { worktree: "/a", sandboxes: ["/a"] },
+        { worktree: "/a" },
+        { worktree: "", sandboxes: [""] },
+      ]
+      expect(sessionListDirectories([], server)).toEqual(["/a"])
+    })
   })
 })

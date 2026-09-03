@@ -57,6 +57,28 @@ export const childSessionOnPath = (sessions: Session[] | undefined, rootID: stri
 export const displayName = (project: { name?: string; worktree: string }) =>
   project.name || getFilename(project.worktree) || project.worktree
 
+/**
+ * Directories whose sessions the list surfaces (Sessions dropdown, home list)
+ * aggregate over: the user's opened projects, falling back to the server's
+ * registered projects when nothing has been opened yet (fresh client, empty
+ * persisted registry — amicode#288). Session listing only; this must NOT feed
+ * the project switcher, or closing a server-registered project becomes
+ * impossible (the fallback would re-add it).
+ */
+export function sessionListDirectories(
+  opened: { worktree: string; sandboxes?: string[] }[],
+  serverProjects: { worktree: string; sandboxes?: string[] }[],
+): string[] {
+  const dirs = opened.flatMap((p) => [p.worktree, ...(p.sandboxes ?? [])])
+  if (dirs.length > 0) return dirs
+  const seen = new Set<string>()
+  return serverProjects.flatMap((p) => [p.worktree, ...(p.sandboxes ?? [])]).filter((d) => {
+    if (!d || seen.has(d)) return false
+    seen.add(d)
+    return true
+  })
+}
+
 export function toggleHomeProjectSelection(
   current: HomeProjectSelection | undefined,
   server: ServerConnection.Key,
