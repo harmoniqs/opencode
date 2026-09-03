@@ -207,6 +207,15 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         for (const d of diffs) {
           expect((d.additions ?? 0) + (d.deletions ?? 0)).toBeGreaterThan(0)
         }
+
+        // Idempotency: a second call returns the exact same result (#744 flash fix)
+        const response2 = yield* requestInDirectory(
+          pathFor(SessionPaths.diff, { sessionID: session.id }),
+          test.directory,
+        )
+        expect(response2.status).toBe(200)
+        const diffs2 = yield* response2.json
+        expect(diffs2).toEqual(diffs)
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )
