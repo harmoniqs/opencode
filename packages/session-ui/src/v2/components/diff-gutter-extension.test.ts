@@ -5,6 +5,7 @@ import {
   diffGutterExtension,
   DiffGutterMarkerKind,
   getDiffMarkers,
+  getDeletedLineDecorations,
 } from "./diff-gutter-extension"
 
 /**
@@ -153,5 +154,88 @@ describe("diffGutterExtension", () => {
     })
 
     expect(view.state.doc.toString()).toBe("")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Inline deleted-line decorations
+// ---------------------------------------------------------------------------
+
+describe("deleted-line decorations", () => {
+  let parent: HTMLDivElement
+  let view: EditorView
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    view?.destroy()
+    parent.remove()
+  })
+
+  test("getDeletedLineDecorations is exported", async () => {
+    const mod = await import("./diff-gutter-extension")
+    expect(mod.getDeletedLineDecorations).toBeDefined()
+    expect(typeof mod.getDeletedLineDecorations).toBe("function")
+  })
+
+  test("deleted lines produce decoration state entries", async () => {
+    view = createEditor({
+      doc: "line1\nline3",
+      original: "line1\nline2\nline3",
+      parent,
+    })
+
+    // Wait for debounced diff computation
+    await sleep(400)
+
+    const decos = getDeletedLineDecorations(view.state)
+    expect(decos.size).toBeGreaterThan(0)
+  })
+
+  test("no deleted-line decorations when content is identical", async () => {
+    view = createEditor({
+      doc: "line1\nline2",
+      original: "line1\nline2",
+      parent,
+    })
+
+    await sleep(400)
+
+    const decos = getDeletedLineDecorations(view.state)
+    expect(decos.size).toBe(0)
+  })
+
+  test("deleted lines render DOM widgets with the removed text", async () => {
+    view = createEditor({
+      doc: "line1\nline3",
+      original: "line1\nremoved-line\nline3",
+      parent,
+    })
+
+    await sleep(400)
+
+    // The widget should render a DOM element containing the deleted text
+    const widgets = parent.querySelectorAll(".cm-deleted-line-widget")
+    expect(widgets.length).toBeGreaterThan(0)
+    // At least one widget should contain the removed text
+    const texts = Array.from(widgets).map((w) => w.textContent)
+    expect(texts.some((t) => t?.includes("removed-line"))).toBe(true)
+  })
+
+  test("multiple deleted lines show multiple widgets", async () => {
+    view = createEditor({
+      doc: "line1\nline4",
+      original: "line1\nline2\nline3\nline4",
+      parent,
+    })
+
+    await sleep(400)
+
+    const widgets = parent.querySelectorAll(".cm-deleted-line-widget")
+    // Should have widgets for line2 and line3
+    expect(widgets.length).toBeGreaterThan(0)
   })
 })

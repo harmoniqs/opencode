@@ -125,18 +125,20 @@ export function buildThemeExtension(mode: "light" | "dark"): Extension {
         border: "none",
         color: "var(--v2-text-text-faint, var(--text-weaker))",
       },
-      // Diff highlights — use the app's semantic state tokens
+      // Diff highlights — softer backgrounds that read well in both modes.
+      // The v2 state-bg tokens are designed for small badges; for full-line
+      // backgrounds we mix them down to ~40% so they tint without obscuring text.
       ".cm-changedLine": {
-        backgroundColor: "var(--v2-state-bg-warning, var(--surface-warning-weak))",
+        backgroundColor: "color-mix(in srgb, var(--v2-state-bg-warning, var(--surface-warning-weak)) 40%, transparent)",
       },
       ".cm-changedText": {
-        backgroundColor: "var(--v2-state-bg-warning, var(--surface-warning-base))",
+        backgroundColor: "color-mix(in srgb, var(--v2-state-bg-warning, var(--surface-warning-base)) 60%, transparent)",
       },
       ".cm-insertedLine": {
-        backgroundColor: "var(--v2-state-bg-success, var(--surface-success-weak))",
+        backgroundColor: "color-mix(in srgb, var(--v2-state-bg-success, var(--surface-success-weak)) 40%, transparent)",
       },
       ".cm-deletedLine": {
-        backgroundColor: "var(--v2-state-bg-danger, var(--surface-critical-weak))",
+        backgroundColor: "color-mix(in srgb, var(--v2-state-bg-danger, var(--surface-critical-weak)) 30%, transparent)",
       },
     },
     { dark: isDark },
