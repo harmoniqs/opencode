@@ -1011,6 +1011,9 @@ export default function Page() {
     ),
   )
 
+  // Bump diff_version when the watcher reports external changes to files in the
+  // current session's worktree (#743). Debounced: 1s trailing-edge per session.
+  let watcherDebounce: ReturnType<typeof setTimeout> | undefined
   const stopVcs = sdk().event.listen((evt) => {
     const details = evt.details as { type: string; properties?: unknown }
     if (details.type !== "file.watcher.updated" && details.type !== "filesystem.changed") return
@@ -1020,8 +1023,18 @@ export default function Page() {
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
     if (!file || file.startsWith(".git/")) return
+    const id = params.id
+    if (!id) return
+    if (watcherDebounce !== undefined) clearTimeout(watcherDebounce)
+    watcherDebounce = setTimeout(() => {
+      watcherDebounce = undefined
+      sync().set("diff_version", id, (v: number | undefined) => (v ?? 0) + 1)
+    }, 1000)
   })
-  onCleanup(stopVcs)
+  onCleanup(() => {
+    stopVcs()
+    if (watcherDebounce !== undefined) clearTimeout(watcherDebounce)
+  })
 
   createEffect(
     on(
