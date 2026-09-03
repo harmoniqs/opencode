@@ -857,10 +857,13 @@ const layer: Layer.Layer<
           if (part.type === "step-finish" && part.snapshot) {
             lastStepFinish = part.snapshot
           }
-          if (part.type === "patch" && part.files) {
-            for (const file of part.files) agentFilesAbsolute.add(file)
-          }
-          // In-flight file tracking: also collect files from completed tool parts with filediff metadata
+          // NOTE: patch-part file lists are intentionally excluded from the
+          // agent filter (#742). They capture all worktree changes between
+          // step-start and step-finish snapshots (including external edits),
+          // which caused cross-session contamination. The filter is now
+          // derived exclusively from tool filediff metadata below.
+
+          // Collect files from completed tool parts with filediff metadata
           if (part.type === "tool") {
             const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown> } }
             if (toolPart.state?.status === "completed") {
@@ -936,7 +939,10 @@ const layer: Layer.Layer<
             results = [...results, ...extDiffs]
           }
 
-          if (results.length > 0) return results
+          // Primary path ran (snapshots + agent files exist): trust its result,
+          // even if empty (all diffs were zero). The fallbacks below are for
+          // legacy sessions without snapshot infrastructure, not supplements.
+          return results
         }
       }
 
