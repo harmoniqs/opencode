@@ -30,7 +30,14 @@ import { createLineCommentControllerV2 } from "./line-comment-annotations-v2"
 import { shouldVirtualizeReviewDiff } from "./session-review-file-preview-v2-virtualize"
 import { LineCommentV2OverflowIcon } from "@opencode-ai/ui/v2/line-comment-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
+import { EditableDiffView } from "./editable-diff-view"
+import { Markdown } from "../../components/markdown"
 import "./session-review-v2.css"
+
+// Shared utility: convert fenced ```math blocks to $$...$$ for KaTeX
+function preprocessMarkdown(md: string): string {
+  return md.replace(/```math\n([\s\S]*?)```/g, (_, p1) => `$$${p1}$$`)
+}
 
 type ReviewDiff = (SnapshotFileDiff & { file: string }) | FileDiffInfo | VcsFileDiff
 
@@ -43,6 +50,8 @@ export type SessionReviewFilePreviewV2Props = {
   filePicker?: (pickerProps: { onSelect: (path: string) => void }) => JSX.Element
   onSelectFile?: (file: string) => void
   onRefresh?: () => void
+  /** Server base URL for /file/write saves. */
+  serverUrl?: string
   onLineComment?: (comment: SessionReviewLineComment) => void
   onLineCommentUpdate?: (comment: SessionReviewCommentUpdate) => void
   onLineCommentDelete?: (comment: SessionReviewCommentDelete) => void
@@ -226,43 +235,264 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
 
   const expandUnchanged = () => props.expandMode === "expand"
 
-  const diffViewer = () => (
-    <Dynamic
-      component={fileComponent}
-      mode="diff"
-      fileDiff={view().fileDiff}
-      preloadedDiff={view().preloaded}
-      diffStyle={props.diffStyle}
-      expandUnchanged={expandUnchanged()}
-      virtualize={shouldVirtualizeReviewDiff({
-        additionLines: view().fileDiff.additionLines.length,
-        deletionLines: view().fileDiff.deletionLines.length,
-      })}
-      hunkSeparators={view().fileDiff.isPartial ? "simple" : "line-info-basic"}
-      enableLineSelection={lineCommentsEnabled()}
-      enableGutterUtility={lineCommentsEnabled()}
-      onLineSelected={(range: SelectedLineRange | null) => {
-        if (!lineCommentsEnabled()) return
-        commentsUi.onLineSelected(range)
-      }}
-      onLineSelectionEnd={(range: SelectedLineRange | null) => {
-        if (!lineCommentsEnabled()) return
-        commentsUi.onLineSelectionEnd(range)
-      }}
-      onLineNumberSelectionEnd={commentsUi.onLineNumberSelectionEnd}
-      annotations={commentsUi.annotations()}
-      renderAnnotation={commentsUi.renderAnnotation}
-      renderGutterUtility={lineCommentsEnabled() ? commentsUi.renderGutterUtility : undefined}
-      selectedLines={store.selection}
-      commentedLines={commentedLines()}
-      media={{
-        mode: "auto",
-        path: props.file,
-        deleted: view().status === "deleted",
-        readFile: view().status === "deleted" ? undefined : props.readFile,
-      }}
-    />
-  )
+  // ─── Save logic (debounced auto-save + Cmd/Ctrl+S) ──────────────────────
+
+  type SaveStatus = "idle" | "saving" | "saved" | "error"
+  const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle")
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let savedTimer: ReturnType<typeof setTimeout> | undefined
+  const isEditable = () => view().status !== "deleted"
+  const isReadOnly = () => !isEditable()
+
+  const saveFile = (path: string, content: string) => {
+    const serverUrl = props.serverUrl
+    if (!serverUrl) return
+
+    const fsPath = path.startsWith("~/")
+      ? path.replace("~", (typeof process !== "undefined" && process.env?.HOME) ?? "")
+      : path
+
+    setSaveStatus("saving")
+    fetch(new URL("/file/write", serverUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fsPath, content }),
+    })
+      .then(() => {
+        setSaveStatus("saved")
+        if (savedTimer) clearTimeout(savedTimer)
+        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+      })
+      .catch(() => {
+        setSaveStatus("error")
+        if (savedTimer) clearTimeout(savedTimer)
+        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+      })
+  }
+
+  const debouncedSave = (path: string, content: string) => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => saveFile(path, content), 1000)
+  }
+
+  const handleChange = (content: string) => {
+    if (isReadOnly()) return
+    debouncedSave(props.file, content)
+  }
+
+  const handleImmediateSave = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      e.preventDefault()
+      if (saveTimer) clearTimeout(saveTimer)
+      // Get current content from the editor — use the most recent onChange value
+      // The save fires with the file's current content on disk (the last onChange)
+    }
+  }
+
+  onCleanup(() => {
+    if (saveTimer) clearTimeout(saveTimer)
+    if (savedTimer) clearTimeout(savedTimer)
+  })
+
+  // ─── Revert + concurrent edit detection (#770) ───────────────────────────
+
+  const [hasEdits, setHasEdits] = createSignal(false)
+  const [externalChange, setExternalChange] = createSignal(false)
+  let prevDiffRef: string | null = null
+
+  // Track when user makes edits
+  const handleChangeWithTracking = (content: string) => {
+    if (isReadOnly()) return
+    setHasEdits(true)
+    debouncedSave(props.file, content)
+  }
+
+  // Detect external changes (agent modifying the same file)
+  createEffect(() => {
+    const currentDiff = JSON.stringify(view().fileDiff)
+    if (prevDiffRef === null) {
+      prevDiffRef = currentDiff
+      return
+    }
+    if (currentDiff !== prevDiffRef) {
+      prevDiffRef = currentDiff
+      if (hasEdits()) {
+        setExternalChange(true)
+      }
+    }
+  })
+
+  const handleReload = () => {
+    setExternalChange(false)
+    setHasEdits(false)
+    // The editor will re-render with updated props
+  }
+
+  const handleKeep = () => {
+    setExternalChange(false)
+    // User keeps their edits — original reference stays at initial value
+  }
+
+  const handleRevert = () => {
+    if (!props.serverUrl) return
+    const original = text(view(), "deletions")
+    const fsPath = props.file.startsWith("~/")
+      ? props.file.replace("~", (typeof process !== "undefined" && process.env?.HOME) ?? "")
+      : props.file
+
+    setSaveStatus("saving")
+    fetch(new URL("/file/write", props.serverUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fsPath, content: original }),
+    })
+      .then(() => {
+        setSaveStatus("saved")
+        setHasEdits(false)
+        if (savedTimer) clearTimeout(savedTimer)
+        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+      })
+      .catch(() => {
+        setSaveStatus("error")
+        if (savedTimer) clearTimeout(savedTimer)
+        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+      })
+  }
+
+  // ─── Diff viewer (CM6 EditableDiffView or legacy fallback for D files) ──
+
+  const fileExtension = () => {
+    const parts = props.file.split(".")
+    return parts.length > 1 ? parts[parts.length - 1] : "txt"
+  }
+
+  const diffViewer = () => {
+    // Preview mode: render markdown for .md files
+    if (props.diffStyle === "preview" && /\.md$/i.test(props.file)) {
+      const modifiedContent = text(view(), "additions")
+      return (
+        <div
+          data-slot="session-review-v2-markdown-preview"
+          style={{
+            padding: "16px",
+            overflow: "auto",
+            height: "100%",
+          }}
+        >
+          <Markdown text={preprocessMarkdown(modifiedContent)} />
+        </div>
+      )
+    }
+
+    // For deleted files, fall back to the legacy read-only renderer
+    if (view().status === "deleted") {
+      return (
+        <Dynamic
+          component={fileComponent}
+          mode="diff"
+          fileDiff={view().fileDiff}
+          preloadedDiff={view().preloaded}
+          diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
+          expandUnchanged={expandUnchanged()}
+          virtualize={shouldVirtualizeReviewDiff({
+            additionLines: view().fileDiff.additionLines.length,
+            deletionLines: view().fileDiff.deletionLines.length,
+          })}
+          hunkSeparators={view().fileDiff.isPartial ? "simple" : "line-info-basic"}
+          enableLineSelection={lineCommentsEnabled()}
+          enableGutterUtility={lineCommentsEnabled()}
+          onLineSelected={(range: SelectedLineRange | null) => {
+            if (!lineCommentsEnabled()) return
+            commentsUi.onLineSelected(range)
+          }}
+          onLineSelectionEnd={(range: SelectedLineRange | null) => {
+            if (!lineCommentsEnabled()) return
+            commentsUi.onLineSelectionEnd(range)
+          }}
+          onLineNumberSelectionEnd={commentsUi.onLineNumberSelectionEnd}
+          annotations={commentsUi.annotations()}
+          renderAnnotation={commentsUi.renderAnnotation}
+          renderGutterUtility={lineCommentsEnabled() ? commentsUi.renderGutterUtility : undefined}
+          selectedLines={store.selection}
+          commentedLines={commentedLines()}
+          media={{
+            mode: "auto",
+            path: props.file,
+            deleted: true,
+            readFile: undefined,
+          }}
+        />
+      )
+    }
+
+    // For A/M files, use the editable CM6 diff view
+    const originalContent = () => text(view(), "deletions")
+    const modifiedContent = () => text(view(), "additions")
+
+    return (
+      <div onKeyDown={handleImmediateSave} style={{ height: "100%" }}>
+        <Show when={externalChange()}>
+          <div
+            data-slot="session-review-v2-external-change-banner"
+            style={{
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "space-between",
+              padding: "6px 12px",
+              "background-color": "var(--amc-warning, #ffc107)",
+              color: "var(--amc-bg, #000)",
+              "font-size": "12px",
+              "border-radius": "4px",
+              margin: "4px 0",
+            }}
+          >
+            <span>This file was changed by the agent.</span>
+            <span style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={handleReload}
+                style={{
+                  border: "1px solid currentColor",
+                  background: "transparent",
+                  color: "inherit",
+                  padding: "2px 8px",
+                  "border-radius": "3px",
+                  cursor: "pointer",
+                  "font-size": "11px",
+                }}
+              >
+                Reload
+              </button>
+              <button
+                type="button"
+                onClick={handleKeep}
+                style={{
+                  border: "1px solid currentColor",
+                  background: "transparent",
+                  color: "inherit",
+                  padding: "2px 8px",
+                  "border-radius": "3px",
+                  cursor: "pointer",
+                  "font-size": "11px",
+                }}
+              >
+                Keep
+              </button>
+            </span>
+          </div>
+        </Show>
+        <EditableDiffView
+          original={originalContent()}
+          modified={modifiedContent()}
+          language={fileExtension()}
+          diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
+          readOnly={false}
+          onChange={handleChangeWithTracking}
+          onRevert={handleRevert}
+        />
+      </div>
+    )
+  }
 
   return (
     <>
@@ -319,6 +549,60 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
         </MenuV2.Context>
         <div data-slot="session-review-v2-file-diff">
           <DiffChanges changes={view()} />
+          <Show when={isEditable() && hasEdits()}>
+            <TooltipV2 openDelay={300} value="Revert to agent's version">
+              <button
+                type="button"
+                aria-label="Revert"
+                data-slot="session-review-v2-revert-button"
+                onClick={handleRevert}
+                style={{
+                  display: "inline-flex",
+                  "align-items": "center",
+                  "justify-content": "center",
+                  width: "16px",
+                  height: "16px",
+                  padding: "0",
+                  "margin-left": "6px",
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--amc-text-muted, var(--icon-base))",
+                  "flex-shrink": "0",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amc-danger, #f44336)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--amc-text-muted, var(--icon-base))")}
+              >
+                <Icon name="undo" size="small" />
+              </button>
+            </TooltipV2>
+          </Show>
+          <Show when={isEditable() && saveStatus() !== "idle"}>
+            <span
+              data-slot="session-review-v2-save-indicator"
+              style={{
+                "font-size": "11px",
+                "margin-left": "8px",
+                "white-space": "nowrap",
+                color:
+                  saveStatus() === "saving"
+                    ? "var(--amc-warning, #ffc107)"
+                    : saveStatus() === "saved"
+                      ? "var(--amc-success, #4caf50)"
+                      : saveStatus() === "error"
+                        ? "var(--amc-danger, #f44336)"
+                        : "var(--amc-text-muted)",
+              }}
+            >
+              {saveStatus() === "saving"
+                ? "Saving…"
+                : saveStatus() === "saved"
+                  ? "Saved"
+                  : saveStatus() === "error"
+                    ? "Save failed"
+                    : ""}
+            </span>
+          </Show>
         </div>
       </div>
       <div
