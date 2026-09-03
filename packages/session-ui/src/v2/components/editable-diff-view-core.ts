@@ -17,6 +17,7 @@ import {
   highlightSpecialChars,
 } from "@codemirror/view"
 import { MergeView, unifiedMergeView } from "@codemirror/merge"
+import { diffGutterExtension } from "./diff-gutter-extension"
 import { type LanguageSupport } from "@codemirror/language"
 import {
   defaultHighlightStyle,
@@ -257,8 +258,8 @@ export function createDiffEditor(opts: {
       },
     })
   } else {
-    // Unified mode fallback using unifiedMergeView (replaced by custom
-    // gutter extension in #769)
+    // Unified mode: single editable editor with custom diff gutter markers
+    // (#769 — replaces the unifiedMergeView fallback)
     const extensions: Extension[] = [
       ...baseExtensions({
         readOnly: opts.readOnly,
@@ -266,9 +267,7 @@ export function createDiffEditor(opts: {
         language: opts.language,
         onChange: opts.readOnly ? undefined : opts.onChange,
       }),
-      unifiedMergeView({
-        original: EditorState.create({ doc: opts.original }).doc,
-      }),
+      diffGutterExtension(opts.original),
     ]
 
     editorView = new EditorView({
