@@ -17,7 +17,6 @@ import {
   highlightSpecialChars,
 } from "@codemirror/view"
 import { MergeView, unifiedMergeView } from "@codemirror/merge"
-import { diffGutterExtension } from "./diff-gutter-extension"
 import { type LanguageSupport } from "@codemirror/language"
 import {
   HighlightStyle,
@@ -301,8 +300,8 @@ export function createDiffEditor(opts: {
     mergeView.dom.style.height = "100%"
     mergeView.dom.style.overflow = "auto"
   } else {
-    // Unified mode: single editable editor with custom diff gutter markers
-    // (#769 — replaces the unifiedMergeView fallback)
+    // Unified mode: @codemirror/merge's unifiedMergeView — the standard CM6
+    // inline diff that interleaves deleted lines with the editable document.
     const extensions: Extension[] = [
       ...baseExtensions({
         readOnly: opts.readOnly,
@@ -310,7 +309,9 @@ export function createDiffEditor(opts: {
         language: opts.language,
         onChange: opts.readOnly ? undefined : opts.onChange,
       }),
-      diffGutterExtension(opts.original),
+      unifiedMergeView({
+        original: EditorState.create({ doc: opts.original }).doc,
+      }),
     ]
 
     editorView = new EditorView({

@@ -308,9 +308,30 @@ describe("createDiffEditor (unified mode)", () => {
     })
 
     expect(handle.editorView).not.toBeNull()
-    // In unified mode, mergeView should be null
+    // Unified mode uses unifiedMergeView (single EditorView, not MergeView)
     expect(handle.mergeView).toBeNull()
     expect(parent.children.length).toBeGreaterThan(0)
+  })
+
+  test("unified mode shows deleted lines via unifiedMergeView", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "line1\ndeleted-line\nline3",
+      modified: "line1\nline3",
+      diffStyle: "unified",
+      readOnly: false,
+      theme,
+    })
+
+    // unifiedMergeView interleaves deleted lines in the document
+    // The editor content should include the deleted text
+    const view = handle.editorView!
+    const dom = view.dom
+    // CM6 merge view renders deleted chunks with specific CSS classes
+    const hasDeletedContent = dom.querySelector(".cm-deletedChunk") !== null
+      || dom.textContent?.includes("deleted-line")
+    expect(hasDeletedContent).toBe(true)
   })
 
   test("onChange fires on content changes in unified mode", () => {
