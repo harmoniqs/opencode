@@ -8,6 +8,12 @@ on:
   push:
     tags:
       - "v*-amicode.*"
+  # Cross-repo door: amicode's release.yml dispatches this (rebuild_docs.yml
+  # pattern) with client_payload {tag, channel} so a promoted amicode release
+  # provisions its OWN fork binary at the right channel — the workflow_dispatch
+  # `channel` default (dev) is for hand-run internal builds only.
+  repository_dispatch:
+    types: [amicode-release]
   workflow_dispatch:
     inputs:
       tag:
@@ -20,7 +26,7 @@ on:
         type: choice
         options: [dev, beta]
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency: ${{ github.workflow }}-${{ inputs.tag || github.event.client_payload.tag || github.ref }}
 
 permissions:
   contents: write
@@ -31,14 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ inputs.tag || github.event.client_payload.tag || github.ref_name }}
 
       - uses: ./.github/actions/setup-bun
 
       - name: Derive base version from tag
         id: v
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
+          TAG="${{ inputs.tag || github.event.client_payload.tag || github.ref_name }}"
           VERSION="${TAG#v}"; VERSION="${VERSION%%-amicode.*}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -51,7 +57,10 @@ jobs:
           # defaulting newLayoutDesigns OFF and hiding every amicode surface
           # (gotcha 2 in AMICODE-PATCHES.md; bit releases amicode.1/.2).
           # dev → DEV badge (internal alpha), beta → BETA badge (store clean) — see titlebar-channel.ts:8
-          OPENCODE_CHANNEL: ${{ inputs.channel || 'dev' }}
+          # repository_dispatch carries the channel in client_payload (amicode's
+          # release passes beta); workflow_dispatch keeps the dev default for
+          # hand-run internal builds.
+          OPENCODE_CHANNEL: ${{ inputs.channel || github.event.client_payload.channel || 'dev' }}
           # linux-arm64 serves devcontainers on Apple Silicon (amicode ships it as
           # a third lean .vsix target). Bun cross-compiles it from this x64 runner,
           # same as darwin-arm64.
@@ -137,7 +146,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ steps.v.outputs.tag }}"
-          CHANNEL="${{ inputs.channel || 'dev' }}"
+          CHANNEL="${{ inputs.channel || github.event.client_payload.channel || 'dev' }}"
           BADGE=$([ "$CHANNEL" = beta ] && echo BETA || echo DEV)
           NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=$CHANNEL (UI gate verified ON in every binary). Badge: $BADGE.
 
