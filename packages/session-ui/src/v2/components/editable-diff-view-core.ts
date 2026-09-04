@@ -251,6 +251,8 @@ export interface DiffEditorHandle {
   editorView: EditorView | null
   /** The MergeView instance (split mode only). */
   mergeView: MergeView | null
+  /** The scrollable DOM element (split: mergeView.dom, unified: editorView.scrollDOM). */
+  scrollDOM: HTMLElement | null
   /** Destroy all editor instances. */
   destroy: () => void
   /** Revert to original: replace content, clear undo history. */
@@ -341,6 +343,13 @@ export function createDiffEditor(opts: {
     },
     get mergeView() {
       return mergeView
+    },
+    get scrollDOM(): HTMLElement | null {
+      // Split mode: mergeView.dom is the scrollable container (overflow: auto)
+      if (mergeView) return mergeView.dom
+      // Unified mode: EditorView.scrollDOM is the CM6 scroll element
+      if (editorView) return editorView.scrollDOM
+      return null
     },
     destroy() {
       mergeView?.destroy()

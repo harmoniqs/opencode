@@ -47,6 +47,7 @@ export type ReviewPanelV2Props = {
   onDiffStyleChange?: (style: SessionReviewDiffStyle) => void
   serverUrl?: string
   state: ReviewPanelV2State
+  isAgentBusy?: boolean
   onRefresh?: () => void
   onLineComment?: (comment: SessionReviewLineComment) => void
   onLineCommentUpdate?: (comment: SessionReviewCommentUpdate) => void
@@ -155,6 +156,7 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
                   expandMode={props.state.expandMode()}
                   readFile={readFile}
                   serverUrl={props.serverUrl}
+                  isAgentBusy={props.isAgentBusy}
                   onRefresh={props.onRefresh}
                   filePicker={({ onSelect }) => {
                     const files = filteredFiles()

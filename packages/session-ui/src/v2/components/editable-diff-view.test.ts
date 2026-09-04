@@ -438,6 +438,70 @@ describe("scroll behavior", () => {
 })
 
 // ---------------------------------------------------------------------------
+// scrollDOM accessor
+// ---------------------------------------------------------------------------
+
+describe("scrollDOM accessor", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("split mode: scrollDOM returns mergeView.dom", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a\nb",
+      modified: "a\nc",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    expect(handle.scrollDOM).not.toBeNull()
+    expect(handle.scrollDOM).toBe(handle.mergeView!.dom)
+  })
+
+  test("unified mode: scrollDOM returns editorView.scrollDOM", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a\nb",
+      modified: "a\nc",
+      diffStyle: "unified",
+      readOnly: false,
+      theme,
+    })
+
+    expect(handle.scrollDOM).not.toBeNull()
+    expect(handle.scrollDOM).toBe(handle.editorView!.scrollDOM)
+  })
+
+  test("scrollDOM is null after destroy", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a",
+      modified: "b",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    handle.destroy()
+    expect(handle.scrollDOM).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Syntax highlight style
 // ---------------------------------------------------------------------------
 

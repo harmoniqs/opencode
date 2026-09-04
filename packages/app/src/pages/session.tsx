@@ -1356,6 +1356,10 @@ export default function Page() {
       return serverSDK().url
     },
     state: reviewV2State,
+    get isAgentBusy() {
+      const id = params.id
+      return id ? sync().data.session_working(id) : false
+    },
     onRefresh: () => {
       const id = params.id
       if (id) sync().set("diff_version", id, (v: number | undefined) => (v ?? 0) + 1)

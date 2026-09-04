@@ -86,6 +86,9 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
     const theme = buildThemeExtension(mode)
     const onChange = props.onChange
 
+    // Save scroll position before teardown
+    const savedScrollTop = handle?.scrollDOM?.scrollTop ?? 0
+
     // Tear down previous
     if (handle) {
       handle.destroy()
@@ -105,6 +108,14 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
       language: lang,
       onChange: readOnly ? undefined : onChange,
     })
+
+    // Restore scroll position after the new editor has laid out
+    if (savedScrollTop > 0) {
+      requestAnimationFrame(() => {
+        const scrollEl = handle?.scrollDOM
+        if (scrollEl) scrollEl.scrollTop = savedScrollTop
+      })
+    }
   })
 
   onCleanup(() => {

@@ -52,6 +52,8 @@ export type SessionReviewFilePreviewV2Props = {
   onRefresh?: () => void
   /** Server base URL for /file/write saves. */
   serverUrl?: string
+  /** Whether the agent is currently busy (locks editing). */
+  isAgentBusy?: boolean
   onLineComment?: (comment: SessionReviewLineComment) => void
   onLineCommentUpdate?: (comment: SessionReviewCommentUpdate) => void
   onLineCommentDelete?: (comment: SessionReviewCommentDelete) => void
@@ -486,7 +488,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
           modified={modifiedContent()}
           language={fileExtension()}
           diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
-          readOnly={false}
+          readOnly={!!props.isAgentBusy}
           onChange={handleChangeWithTracking}
           onRevert={handleRevert}
         />
@@ -605,6 +607,13 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
           </Show>
         </div>
       </div>
+      <Show when={props.isAgentBusy}>
+        <div style={{ position: "relative", height: 0, "z-index": 10 }}>
+          <div data-slot="session-review-v2-lock-indicator">
+            <Icon name="lock" />
+          </div>
+        </div>
+      </Show>
       <div
         ref={(el) => {
           scrollRef = el
