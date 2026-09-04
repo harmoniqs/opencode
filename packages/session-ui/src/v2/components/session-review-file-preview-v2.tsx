@@ -695,7 +695,16 @@ function FileNameWithPicker(props: {
           </TooltipV2>
         </Show>
         <Show when={open()}>
-          <div class="session-review-v2-file-picker-dropdown">
+          <div
+            ref={(el) => {
+              requestAnimationFrame(() => {
+                const left = el.getBoundingClientRect().left
+                const available = window.innerWidth - left - 8
+                el.style.maxWidth = `${Math.max(200, available)}px`
+              })
+            }}
+            class="session-review-v2-file-picker-dropdown"
+          >
             <div class="session-review-v2-file-picker-scroll-inner">
               {props.filePicker!({ onSelect })}
             </div>

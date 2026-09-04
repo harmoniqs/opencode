@@ -570,7 +570,6 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
   z-index: var(--z-overlay, 100);
   padding: 4px;
   max-height: 320px;

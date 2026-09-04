@@ -94,6 +94,13 @@ function FileNameWithPicker(props: {
 
         dropdown.appendChild(scrollInner)
         dropdownContainer.appendChild(dropdown)
+
+        // Cap max-width to remaining panel space (mirrors real component's ref callback)
+        requestAnimationFrame(() => {
+          const left = dropdown.getBoundingClientRect().left
+          const available = window.innerWidth - left - 8
+          dropdown.style.maxWidth = `${Math.max(200, available)}px`
+        })
       })
 
       return wrapper
@@ -200,6 +207,41 @@ describe("FileNameWithPicker (render prop)", () => {
     const tree = scrollInner!.querySelector("[data-testid='mock-tree']")
     expect(tree).not.toBeNull()
     expect(tree!.textContent).toBe("tree content")
+
+    cleanup()
+  })
+
+  test("dropdown max-width is capped to remaining panel width", async () => {
+    Object.defineProperty(window, "innerWidth", { value: 450, configurable: true })
+
+    const { host, cleanup } = mount({
+      file: "src/foo.ts",
+      filePicker: ({ onSelect }) => {
+        const div = document.createElement("div")
+        div.setAttribute("data-testid", "mock-tree")
+        return div
+      },
+      onSelectFile: () => {},
+    })
+
+    const trigger = host.querySelector("[data-testid='file-picker-trigger']") as HTMLButtonElement
+    trigger.click()
+
+    const dropdown = host.querySelector("[data-testid='file-picker-dropdown']") as HTMLElement
+    expect(dropdown).not.toBeNull()
+
+    // Simulate the dropdown sitting at x=120 from the panel's left edge
+    dropdown.getBoundingClientRect = () => ({
+      left: 120, top: 40, right: 520, bottom: 200,
+      width: 400, height: 160, x: 120, y: 40,
+      toJSON() { return this },
+    })
+
+    // Wait for the ref callback's requestAnimationFrame
+    await new Promise((r) => setTimeout(r, 50))
+
+    // Should cap at (450 - 120 - 8) = 322px
+    expect(dropdown.style.maxWidth).toBe("322px")
 
     cleanup()
   })
