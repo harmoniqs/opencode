@@ -699,7 +699,7 @@ function FileNameWithPicker(props: {
             ref={(el) => {
               requestAnimationFrame(() => {
                 const left = el.getBoundingClientRect().left
-                const available = window.innerWidth - left - 8
+                const available = window.innerWidth - left - 16
                 el.style.maxWidth = `${Math.max(200, available)}px`
               })
             }}

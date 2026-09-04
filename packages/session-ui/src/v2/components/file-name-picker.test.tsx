@@ -98,7 +98,7 @@ function FileNameWithPicker(props: {
         // Cap max-width to remaining panel space (mirrors real component's ref callback)
         requestAnimationFrame(() => {
           const left = dropdown.getBoundingClientRect().left
-          const available = window.innerWidth - left - 8
+          const available = window.innerWidth - left - 16
           dropdown.style.maxWidth = `${Math.max(200, available)}px`
         })
       })
@@ -240,8 +240,8 @@ describe("FileNameWithPicker (render prop)", () => {
     // Wait for the ref callback's requestAnimationFrame
     await new Promise((r) => setTimeout(r, 50))
 
-    // Should cap at (450 - 120 - 8) = 322px
-    expect(dropdown.style.maxWidth).toBe("322px")
+    // Should cap at (450 - 120 - 16) = 314px
+    expect(dropdown.style.maxWidth).toBe("314px")
 
     cleanup()
   })
