@@ -344,8 +344,8 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
 }
 
 // Streaming prose lands in whole CHUNKS (Kate 2026-08-25): each settled chunk
-// (message-part-text.ts boundaries — blank lines outside fences, never inside
-// a list) mounts once and plays the entrance the host skins onto
+// (message-part-text.ts boundaries — section transitions: headings, rules,
+// plus a size-cap fallback; never inside a fence or mid-list) mounts once and plays the entrance the host skins onto
 // [data-part-enter]; the still-composing tail stays withheld — the working
 // indicator is the signal while it grows. On completion the remainder lands
 // as the final chunk, with its entrance.
