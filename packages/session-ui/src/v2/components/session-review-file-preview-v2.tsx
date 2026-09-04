@@ -696,7 +696,9 @@ function FileNameWithPicker(props: {
         </Show>
         <Show when={open()}>
           <div class="session-review-v2-file-picker-dropdown">
-            {props.filePicker!({ onSelect })}
+            <div class="session-review-v2-file-picker-scroll-inner">
+              {props.filePicker!({ onSelect })}
+            </div>
           </div>
         </Show>
       </div>
