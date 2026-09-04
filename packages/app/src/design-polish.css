@@ -151,27 +151,29 @@
 }
 
 /* ── prompt bubble ground — per-scheme REALISATION ──
-   On LIGHT the user's words are the INVERSE of the ground — the website's
-   ink bubble, verbatim (the site is light-only, so the inverse grammar is a
-   light-mode truth). On DARK any light bubble read harsh at chat scale:
-   Kate walked the inverse down 100%→85%→70% luminance (7b1ff4e, 1ef7c41)
-   and it still glared — dark wants LOW contrast, not an inverse. The dark
-   bubble is therefore the theme's own quiet elevation: layer-02 on the
-   ground (≈1.5:1, a whisper of lift — stock #2e2e2e on #161616) under full
-   base ink (≈12:1, unchanged readability). */
+   The user's words are a SOLID YELLOW chip (Aaron 2026-09-03): the brand
+   accent fill in both schemes, black ink on it — the site's chip grammar,
+   black-on-yellow. On LIGHT the yellow cannot define its own edge on the
+   near-white ground, so it takes the site's ink border (--brand-yellow-border
+   rule); on DARK the solid yellow reads loud against the deep ground and
+   needs no edge — the border token goes transparent (width kept, so the
+   bubble's geometry never shifts between schemes). */
 :root,
 [data-color-scheme="light"] {
-  --prompt-bubble-bg: var(--v2-background-bg-inverse);
-  --prompt-bubble-ink: var(--v2-text-text-inverse);
+  --prompt-bubble-bg: var(--accent);
+  --prompt-bubble-ink: var(--accent-ink);
+  --prompt-bubble-edge: var(--accent-edge-ink);
 }
 [data-color-scheme="dark"] {
-  --prompt-bubble-bg: var(--v2-background-bg-layer-02);
-  --prompt-bubble-ink: var(--v2-text-text-base);
+  --prompt-bubble-bg: var(--accent);
+  --prompt-bubble-ink: var(--accent-ink);
+  --prompt-bubble-edge: transparent;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
-    --prompt-bubble-bg: var(--v2-background-bg-layer-02);
-    --prompt-bubble-ink: var(--v2-text-text-base);
+    --prompt-bubble-bg: var(--accent);
+    --prompt-bubble-ink: var(--accent-ink);
+    --prompt-bubble-edge: transparent;
   }
 }
 
