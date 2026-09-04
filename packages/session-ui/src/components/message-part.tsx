@@ -74,6 +74,8 @@ import { patchFiles } from "./apply-patch-file"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText, splitSettledChunks } from "./message-part-text"
+import { shouldShowUserMessageText } from "./message-part-user"
+import { buildTrace } from "./build-trace"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 
 const reducedMotion = () =>
@@ -220,14 +222,16 @@ function MessageActionButton(
     icon: "check" | "copy" | "reset"
     label: JSX.Element
     useV2?: boolean
+    placement?: "top" | "bottom"
   },
 ) {
   const icon = () => (props.icon === "copy" ? "outline-copy" : props.icon)
+  const placement = () => props.placement ?? "top"
   return (
     <Show
       when={props.useV2}
       fallback={
-        <Tooltip value={props.label} placement="top" gutter={4}>
+        <Tooltip value={props.label} placement={placement()} gutter={4}>
           <IconButton
             icon={props.icon}
             size="normal"
@@ -240,7 +244,7 @@ function MessageActionButton(
         </Tooltip>
       }
     >
-      <TooltipV2 value={props.label} placement="top" gutter={4}>
+      <TooltipV2 value={props.label} placement={placement()} gutter={4}>
         <IconButtonV2
           icon={<IconV2 name={icon()} size="small" />}
           size="normal"
@@ -344,8 +348,8 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
 }
 
 // Streaming prose lands in whole CHUNKS (Kate 2026-08-25): each settled chunk
-// (message-part-text.ts boundaries — section transitions: headings, rules,
-// plus a size-cap fallback; never inside a fence or mid-list) mounts once and plays the entrance the host skins onto
+// (message-part-text.ts boundaries — heading-anchored sections, plus a
+// paragraph-gap fallback past 1500 chars; never inside a fence) mounts once and plays the entrance the host skins onto
 // [data-part-enter]; the still-composing tail stays withheld — the working
 // indicator is the signal while it grows. On completion the remainder lands
 // as the final chunk, with its entrance.
@@ -770,6 +774,7 @@ export function partDefaultOpen(part: PartType, shell = false, edit = false) {
 
 export function AssistantParts(props: {
   messages: AssistantMessage[]
+  userText?: string
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
   useV2Actions?: boolean
@@ -964,10 +969,101 @@ export function AssistantParts(props: {
           <ThinkingLine tokens={turnTokenCount() || undefined} />
         </div>
       </Show>
+      <TurnFooter messages={props.messages} userText={props.userText} turnDurationMs={props.turnDurationMs} working={props.working} />
     </>
   )
 }
 
+function TurnFooter(props: {
+  messages: AssistantMessage[]
+  userText?: string
+  turnDurationMs?: number
+  working?: boolean
+}) {
+  const data = useData()
+  const i18n = useI18n()
+  const numfmt = createMemo(() => new Intl.NumberFormat(i18n.locale()))
+  const [copied, setCopied] = createSignal(false)
+
+  const lastMessage = createMemo(() => props.messages.at(-1))
+
+  const model = createMemo(() => {
+    const message = lastMessage()
+    if (!message) return ""
+    const match = data.store.provider?.all?.get(message.providerID)
+    return match?.models?.[message.modelID]?.name ?? message.modelID
+  })
+
+  const duration = createMemo(() => {
+    const message = lastMessage()
+    if (!message) return ""
+    const completed = message.time.completed
+    const ms =
+      typeof props.turnDurationMs === "number"
+        ? props.turnDurationMs
+        : typeof completed === "number"
+          ? completed - message.time.created
+          : -1
+    if (!(ms >= 0)) return ""
+    const total = Math.round(ms / 1000)
+    if (total < 60) return i18n.t("ui.message.duration.seconds", { count: numfmt().format(total) })
+    const minutes = Math.floor(total / 60)
+    const seconds = total % 60
+    return i18n.t("ui.message.duration.minutesSeconds", {
+      minutes: numfmt().format(minutes),
+      seconds: numfmt().format(seconds),
+    })
+  })
+
+  const interrupted = createMemo(() => {
+    const message = lastMessage()
+    return !!message?.error?.name && message.error.name === "MessageAbortedError"
+  })
+
+  const meta = createMemo(() => {
+    const message = lastMessage()
+    if (!message) return ""
+    const agent = message.agent
+    const items = [
+      agent ? agent[0]?.toUpperCase() + agent.slice(1) : "",
+      model(),
+      duration(),
+      interrupted() ? i18n.t("ui.message.interrupted") : "",
+    ]
+    return items.filter((x) => !!x).join(" \u00B7 ")
+  })
+
+  const handleCopyTrace = async () => {
+    const emptyParts: PartType[] = []
+    const content = buildTrace(props.messages, (id) => list(data.store.part?.[id], emptyParts), props.userText)
+    if (!content) return
+    if (await writeClipboard(content)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  return (
+    <Show when={!props.working && lastMessage()}>
+      <div data-slot="turn-footer">
+        <MessageActionButton
+          icon={copied() ? "check" : "copy"}
+          label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyTrace")}
+          placement="bottom"
+          useV2={true}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={handleCopyTrace}
+          aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyTrace")}
+        />
+        <Show when={meta()}>
+          <span data-slot="turn-footer-meta" class="text-12-regular text-text-weak cursor-default">
+            {meta()}
+          </span>
+        </Show>
+      </div>
+    </Show>
+  )
+}
 // One-line command for a bash part's row in the shell group. Logic lives in
 // ../amicode/shell-row.ts so the fallback chain is testable — it shipped a bug
 // where a pending part rendered the model's prose description as if it were the
@@ -1760,12 +1856,14 @@ export function UserMessageDisplay(props: {
               </BasicTool>
             )}
           </For>
-          <div data-slot="user-message-text" data-comments={messageComments().length > 0 ? "true" : undefined}>
-            <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
-            <Show when={messageComments().length > 0}>
-              <UserMessageComments comments={messageComments()} bounded />
-            </Show>
-          </div>
+          <Show when={shouldShowUserMessageText(text(), messageComments().length)}>
+            <div data-slot="user-message-text" data-comments={messageComments().length > 0 ? "true" : undefined}>
+              <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
+              <Show when={messageComments().length > 0}>
+                <UserMessageComments comments={messageComments()} bounded />
+              </Show>
+            </div>
+          </Show>
         </div>
       </Show>
       <Show when={props.useV2Actions}>{renderAttachments()}</Show>
@@ -2098,80 +2196,22 @@ PART_MAPPING["compaction"] = function CompactionPartDisplay() {
 
 PART_MAPPING["text"] = function TextPartDisplay(props) {
   const data = useData()
-  const i18n = useI18n()
-  const numfmt = createMemo(() => new Intl.NumberFormat(i18n.locale()))
   const part = () => props.part as TextPart
-  const interrupted = createMemo(
-    () =>
-      props.message.role === "assistant" && (props.message as AssistantMessage).error?.name === "MessageAbortedError",
-  )
 
-  const model = createMemo(() => {
-    if (props.message.role !== "assistant") return ""
+  const streaming = createMemo(() => {
+    if (props.message.role !== "assistant") return false
     const message = props.message as AssistantMessage
-    const match = data.store.provider?.all?.get(message.providerID)
-    return match?.models?.[message.modelID]?.name ?? message.modelID
+    // Message is complete → not streaming
+    if (typeof message.time.completed === "number") return false
+    // If subsequent parts exist after this text part, the model has moved on
+    // (e.g. to a tool call) — the text content is finalized, flush the tail
+    // so it renders before the tool row appears (#265).
+    const allParts = data.store.part?.[props.message.id] ?? []
+    const myIndex = allParts.findIndex((p) => p?.id === part().id)
+    if (myIndex >= 0 && myIndex < allParts.length - 1) return false
+    return true
   })
-
-  const duration = createMemo(() => {
-    if (props.message.role !== "assistant") return ""
-    const message = props.message as AssistantMessage
-    const completed = message.time.completed
-    const ms =
-      typeof props.turnDurationMs === "number"
-        ? props.turnDurationMs
-        : typeof completed === "number"
-          ? completed - message.time.created
-          : -1
-    if (!(ms >= 0)) return ""
-    const total = Math.round(ms / 1000)
-    if (total < 60) return i18n.t("ui.message.duration.seconds", { count: numfmt().format(total) })
-    const minutes = Math.floor(total / 60)
-    const seconds = total % 60
-    return i18n.t("ui.message.duration.minutesSeconds", {
-      minutes: numfmt().format(minutes),
-      seconds: numfmt().format(seconds),
-    })
-  })
-
-  const meta = createMemo(() => {
-    if (props.message.role !== "assistant") return ""
-    const agent = (props.message as AssistantMessage).agent
-    const items = [
-      agent ? agent[0]?.toUpperCase() + agent.slice(1) : "",
-      model(),
-      duration(),
-      interrupted() ? i18n.t("ui.message.interrupted") : "",
-    ]
-    return items.filter((x) => !!x).join(" \u00B7 ")
-  })
-
-  const streaming = createMemo(
-    () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
-  )
   const text = () => readPartText(data.store.part_text_accum_delta, part())
-  const isLastTextPart = createMemo(() => {
-    const last = (data.store.part?.[props.message.id] ?? [])
-      .filter((item): item is TextPart => item?.type === "text" && !!item.text?.trim())
-      .at(-1)
-    return last?.id === part().id
-  })
-  const showCopy = createMemo(() => {
-    if (props.message.role !== "assistant") return isLastTextPart()
-    if (props.showAssistantCopyPartID === null) return false
-    if (typeof props.showAssistantCopyPartID === "string") return props.showAssistantCopyPartID === part().id
-    return isLastTextPart()
-  })
-  const [copied, setCopied] = createSignal(false)
-
-  const handleCopy = async () => {
-    const content = text()
-    if (!content) return
-    if (await writeClipboard(content)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
 
   return (
     <Show when={text()}>
@@ -2186,23 +2226,6 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
               so remounts never re-animate. */}
           <ChunkedStreamMarkdown text={text()} done={!streaming()} cacheKey={part().id} />
         </div>
-        <Show when={showCopy()}>
-          <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>
-            <MessageActionButton
-              icon={copied() ? "check" : "copy"}
-              label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
-              useV2={props.useV2Actions}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={handleCopy}
-              aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
-            />
-            <Show when={meta()}>
-              <span data-slot="text-part-meta" class="text-12-regular text-text-weak cursor-default">
-                {meta()}
-              </span>
-            </Show>
-          </div>
-        </Show>
       </div>
     </Show>
   )
@@ -3133,15 +3156,11 @@ ToolRegistry.register({
 
     return (
       <BasicTool icon="brain" status={props.status} trigger={trigger()}>
-        <Show when={body()}>
-          {/* AMICODE: an opened skill is a FILE, not more conversation. tool-output carries no
-              surface of its own, so the instructions flowed as bare prose; amc-skill-file gives
-              them a bounded, tinted panel. The chip above stays flush with the other Amico chips
-              — shared left alignment is the transcript's spine, and indenting the row broke it. */}
+        {body() ? (
           <div class="amc-skill-file" data-component="tool-output" data-scrollable>
             <Markdown text={body()} />
           </div>
-        </Show>
+        ) : undefined}
       </BasicTool>
     )
   },

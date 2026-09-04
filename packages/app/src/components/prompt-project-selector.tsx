@@ -14,6 +14,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { getProjectAvatarVariant } from "@/context/layout"
+import { projectTypeStyle, groupProjectsByType } from "@/utils/project-type-helpers"
 import { useLanguage } from "@/context/language"
 import { displayName, getProjectAvatarSource } from "@/pages/layout/helpers"
 import { inAmicode } from "@/pages/session/use-amicode-commands"
@@ -28,6 +29,7 @@ export type PromptProject = {
   sandboxes?: string[]
   icon?: { color?: string; url?: string; override?: string }
   server?: { key: string; name: string }
+  type?: "research" | "dev"
 }
 
 export type PromptProjectControls = {
@@ -67,7 +69,7 @@ export function createPromptProjectController(input: {
           (pathKey(project.worktree) === key || project.sandboxes?.some((sandbox) => pathKey(sandbox) === key)),
       )
   }
-  const selected = () => current() ?? input.controls().available[0]
+  const selected = () => current()
   const projects = () => {
     const search = store.search.trim().toLowerCase()
     if (!search) return input.controls().available
@@ -102,12 +104,7 @@ export function createPromptProjectController(input: {
     input.onDone()
   }
   const select = (project: PromptProject) => {
-    if (
-      pathKey(project.worktree) !== pathKey(current()?.worktree ?? "") ||
-      project.server?.key !== current()?.server?.key
-    ) {
-      input.controls().select(project.worktree, project.server?.key)
-    }
+    input.controls().select(project.worktree, project.server?.key)
     close()
   }
   const add = (server?: string) => {
@@ -361,13 +358,39 @@ export function PromptProjectSelector(props: {
               <Show
                 when={props.controller.servers().length > 1}
                 fallback={
-                  <DropdownMenu.RadioGroup value={selectedValue()}>
-                    <For each={props.controller.projects()}>
-                      {(project) => (
-                        <ProjectItem project={project} controller={props.controller} onSelect={selectProject} />
+                  <Show
+                    when={groupProjectsByType(props.controller.projects()).length > 0}
+                    fallback={
+                      <DropdownMenu.RadioGroup value={selectedValue()}>
+                        <For each={props.controller.projects()}>
+                          {(project) => (
+                            <ProjectItem project={project} controller={props.controller} onSelect={selectProject} />
+                          )}
+                        </For>
+                      </DropdownMenu.RadioGroup>
+                    }
+                  >
+                    <For each={groupProjectsByType(props.controller.projects())}>
+                      {(group) => (
+                        <div>
+                          <div class="flex h-7 select-none items-center pl-1.5 pr-3 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-faint">
+                            {group.label}
+                          </div>
+                          <DropdownMenu.RadioGroup value={selectedValue()}>
+                            <For each={group.projects}>
+                              {(project) => (
+                                <ProjectItem
+                                  project={project}
+                                  controller={props.controller}
+                                  onSelect={selectProject}
+                                />
+                              )}
+                            </For>
+                          </DropdownMenu.RadioGroup>
+                        </div>
                       )}
                     </For>
-                  </DropdownMenu.RadioGroup>
+                  </Show>
                 }
               >
                 <For
@@ -433,8 +456,8 @@ export function PromptProjectSelector(props: {
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
-            </Show>
-          </div>
+              </Show>
+            </div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu>
@@ -486,23 +509,64 @@ function ProjectTrigger(props: ComponentProps<"button"> & { controller: PromptPr
         fallback={<Icon name="folder-add-left" size="small" class="shrink-0 text-v2-icon-icon-muted" />}
       >
         {(item) => (
-          <ProjectAvatar
-            fallback={displayName(item())}
-            src={getProjectAvatarSource(item().id, item().icon)}
-            variant={getProjectAvatarVariant(item().icon?.color)}
-          />
+          <Show
+            when={item().type}
+            fallback={
+              <ProjectAvatar
+                fallback={displayName(item())}
+                src={getProjectAvatarSource(item().id, item().icon)}
+                variant={getProjectAvatarVariant(item().icon?.color)}
+              />
+            }
+          >
+            {(type) => {
+              const style = projectTypeStyle(type())
+              return <ProjectTypeIcon icon={style.icon} variant={style.variant} />
+            }}
+          </Show>
         )}
       </Show>
-      {/* amicode#203 (Kate): don't show the project name in the chat — the folder
-          icon + chevron keep the switcher reachable without naming the project.
-          Only suppressed inside the amicode webview. */}
+      {/* amicode#663: inside the amicode webview show a short truncated name
+          (first 5 chars + ellipsis) so the user sees which project is active;
+          the full name lives in the dropdown.  Outside amicode: full name.
+          amicode#673: when no project matches the draft directory, show
+          "Pick a project" instead of silently falling back to available[0]. */}
       <Show when={!inAmicode()}>
         <span class="min-w-0 truncate leading-5">
-          {project() ? displayName(project()!) : local.controller.labels.new()}
+          {project() ? displayName(project()!) : "Pick a project"}
+        </span>
+      </Show>
+      <Show when={inAmicode()}>
+        <span class="min-w-0 truncate leading-5 text-[13px] text-v2-text-text-faint">
+          {(() => {
+            const p = project()
+            if (!p) return "Pick a project"
+            const name = displayName(p)
+            return name.length > 5 ? name.slice(0, 5) + "\u2026" : name
+          })()}
         </span>
       </Show>
       <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
     </button>
+  )
+}
+
+// amicode#663: bare colored icon for typed projects — no box, just the glyph
+// with its stroke in the type's accent color.
+// research: brand yellow (icon-icon-accent) — the Harmoniqs lemon.
+// dev: VS Code blue (#007acc).
+const typeColorVar: Record<string, string> = {
+  blue: "#007acc",
+  yellow: "var(--v2-icon-icon-accent)",
+}
+function ProjectTypeIcon(props: { icon: "flask" | "code-brackets"; variant: string }) {
+  return (
+    <IconV2
+      name={props.icon}
+      size="small"
+      class="shrink-0"
+      style={{ color: typeColorVar[props.variant] ?? "currentColor" }}
+    />
   )
 }
 
@@ -535,11 +599,21 @@ function ProjectItem(props: {
       }}
       onSelect={() => props.onSelect(props.project)}
     >
-      <ProjectAvatar
-        fallback={displayName(props.project)}
-        src={getProjectAvatarSource(props.project.id, props.project.icon)}
-        variant={getProjectAvatarVariant(props.project.icon?.color)}
-      />
+      <Show
+        when={props.project.type}
+        fallback={
+          <ProjectAvatar
+            fallback={displayName(props.project)}
+            src={getProjectAvatarSource(props.project.id, props.project.icon)}
+            variant={getProjectAvatarVariant(props.project.icon?.color)}
+          />
+        }
+      >
+        {(type) => {
+          const style = projectTypeStyle(type())
+          return <ProjectTypeIcon icon={style.icon} variant={style.variant} />
+        }}
+      </Show>
       <DropdownMenu.ItemLabel class="min-w-0 truncate leading-5">{displayName(props.project)}</DropdownMenu.ItemLabel>
       <DropdownMenu.ItemIndicator style={{ width: "14px", height: "14px", right: "12px" }}>
         <IconV2 name="check" size="small" class="shrink-0 text-v2-icon-icon-base" />

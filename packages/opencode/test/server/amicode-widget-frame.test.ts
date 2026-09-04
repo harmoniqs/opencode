@@ -39,7 +39,7 @@ describe("widgetFrameHtml", () => {
   test("serves a frame for a builtin; bad/unknown ids get inert documents", () => {
     dir = mkdtempSync(path.join(tmpdir(), "amc-frame-"))
     process.env.AMICODE_WIDGETS_DIR = dir
-    const ok = widgetFrameHtml("meet-amico")
+    const ok = widgetFrameHtml("jump-back-in")
     expect(ok.ok).toBe(true)
     expect(ok.html).toContain("__amcWidgetCode")
     expect(widgetFrameHtml("../etc").ok).toBe(false)

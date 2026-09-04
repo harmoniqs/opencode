@@ -314,7 +314,7 @@ jobs:
         working-directory: packages/desktop
         env:
           OPENCODE_VERSION: ${{ needs.version.outputs.version }}
-          OPENCODE_CHANNEL: ${{ (github.ref_name == 'beta' && 'beta') || 'prod' }}
+          OPENCODE_CHANNEL: ${{ github.ref_name == 'beta' && 'beta' || github.ref_name == 'dev' && 'dev' || 'prod' }}
           RUST_TARGET: ${{ matrix.settings.target }}
 
       - name: Build
@@ -322,13 +322,13 @@ jobs:
         working-directory: packages/desktop
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-          OPENCODE_CHANNEL: ${{ (github.ref_name == 'beta' && 'beta') || 'prod' }}
+          OPENCODE_CHANNEL: ${{ github.ref_name == 'beta' && 'beta' || github.ref_name == 'dev' && 'dev' || 'prod' }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.WEB_SENTRY_PROJECT }}
           SENTRY_RELEASE: desktop@${{ needs.version.outputs.version }}
           VITE_SENTRY_DSN: ${{ vars.WEB_SENTRY_DSN }}
-          VITE_SENTRY_ENVIRONMENT: ${{ (github.ref_name == 'beta' && 'beta') || 'production' }}
+          VITE_SENTRY_ENVIRONMENT: ${{ github.ref_name == 'beta' && 'beta' || github.ref_name == 'dev' && 'dev' || 'production' }}
           VITE_SENTRY_RELEASE: desktop@${{ needs.version.outputs.version }}
 
       - name: Package
@@ -337,7 +337,7 @@ jobs:
         working-directory: packages/desktop
         timeout-minutes: 60
         env:
-          OPENCODE_CHANNEL: ${{ (github.ref_name == 'beta' && 'beta') || 'prod' }}
+          OPENCODE_CHANNEL: ${{ github.ref_name == 'beta' && 'beta' || github.ref_name == 'dev' && 'dev' || 'prod' }}
           GH_TOKEN: ${{ steps.committer.outputs.token }}
           CSC_KEYCHAIN: build.keychain
           APPLE_API_KEY: ${{ runner.temp }}/apple-api-key.p8
@@ -350,7 +350,7 @@ jobs:
         working-directory: packages/desktop
         timeout-minutes: 60
         env:
-          OPENCODE_CHANNEL: ${{ (github.ref_name == 'beta' && 'beta') || 'prod' }}
+          OPENCODE_CHANNEL: ${{ github.ref_name == 'beta' && 'beta' || github.ref_name == 'dev' && 'dev' || 'prod' }}
 
       - name: Create macOS .app.tar.gz
         if: runner.os == 'macOS' && needs.version.outputs.release

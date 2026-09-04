@@ -38,7 +38,7 @@ import { statusTriggerVisibility } from "../status-popover-model"
 import { useServerSync } from "@/context/server-sync"
 import { useGlobal } from "@/context/global"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { sortedRootSessions } from "@/pages/layout/helpers"
+import { sessionListDirectories, sortedRootSessions } from "@/pages/layout/helpers"
 import { useNavigate } from "@solidjs/router"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
@@ -54,7 +54,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
-import { useTitlebarRightMount } from "../titlebar"
+import { useTitlebarRightMount, useTitlebarControlMount } from "../titlebar"
 
 const OPEN_APPS = [
   "vscode",
@@ -315,6 +315,9 @@ export function SessionHeader() {
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
   const rightMount = useTitlebarRightMount()
+  const sessionsMount = useTitlebarControlMount("sessions")
+  const statusMount = useTitlebarControlMount("status")
+  const sidePanelMount = useTitlebarControlMount("side-panel")
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
   })
@@ -553,10 +556,70 @@ export function SessionHeader() {
                  </div>
                }
             >
-              <SessionHeaderV2Actions state={v2ActionsState()} />
+              {/* V2 is now handled by per-button portals below; render nothing here. */}
+              <></>
             </Show>
           </Portal>
         )}
+      </Show>
+      {/* V2 per-button portals — each session-scoped control portals to its own mount point */}
+      <Show when={isV2}>
+        <Show when={sessionsMount()} keyed>
+          {(mount) => (
+            <Portal mount={mount}>
+              <span class="flex shrink-0" data-tour-target="sessions">
+                <SessionChatsDropdown currentSessionID={v2ActionsState().currentSessionID} />
+              </span>
+            </Portal>
+          )}
+        </Show>
+        <Show when={!AMICODE_HIDE_STATUS_POPOVER}>
+          <Show when={statusMount()} keyed>
+            {(mount) => (
+              <Portal mount={mount}>
+                <span class="flex shrink-0" data-tour-target="status">
+                  <TooltipV2 placement="bottom" value={v2ActionsState().statusLabel} class="shrink-0">
+                    <StatusPopoverV2 healthDot={v2ActionsState().statusDotVisible} />
+                  </TooltipV2>
+                </span>
+              </Portal>
+            )}
+          </Show>
+        </Show>
+        <Show when={v2ActionsState().reviewVisible}>
+          <Show when={sidePanelMount()} keyed>
+            {(mount) => (
+              <Portal mount={mount}>
+                <TooltipV2
+                  class="shrink-0"
+                  placement="bottom"
+                  value={
+                    <>
+                      {v2ActionsState().reviewLabel}
+                      <Show when={v2ActionsState().reviewKeybind.length > 0}>
+                        <KeybindV2 keys={v2ActionsState().reviewKeybind} variant="neutral" />
+                      </Show>
+                    </>
+                  }
+                >
+                  <span class="flex shrink-0" data-tour-target="side-panel">
+                    <IconButtonV2
+                      type="button"
+                      variant="ghost-muted"
+                      size="large"
+                      class="!w-9 shrink-0"
+                      state={v2ActionsState().reviewOpened ? "pressed" : undefined}
+                      onClick={v2ActionsState().onReviewToggle}
+                      aria-label={v2ActionsState().reviewLabel}
+                      aria-controls="review-panel"
+                      icon={<IconV2 name="sidebar-right" />}
+                    />
+                  </span>
+                </TooltipV2>
+              </Portal>
+            )}
+          </Show>
+        </Show>
       </Show>
     </>
   )
@@ -664,8 +727,7 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
       if (!conn) return []
       const ctx = globalCtx.ensureServerCtx(conn)
       if (!ctx) return []
-      const projects = ctx.projects.list()
-      const directories = projects.flatMap((p) => [p.worktree, ...(p.sandboxes ?? [])])
+      const directories = sessionListDirectories(ctx.projects.list(), ctx.sync.data?.project ?? [])
       const seen = new Set<string>()
       const sessions: Session[] = []
       for (const dir of directories) {
@@ -679,6 +741,21 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
       return sessions.sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     } catch {
       return []
+    }
+  })
+
+  // Fresh clients have no bootstrapped child stores for the fallback
+  // directories (the dropdown reads with bootstrap: false) — kick the loads
+  // once per open. Converges: re-runs find the stores populated and skip.
+  createEffect(() => {
+    if (!open()) return
+    const conn = server.current
+    if (!conn) return
+    const ctx = globalCtx.ensureServerCtx(conn)
+    if (!ctx) return
+    for (const dir of sessionListDirectories(ctx.projects.list(), ctx.sync.data?.project ?? [])) {
+      const [store] = ctx.sync.child(dir, { bootstrap: false })
+      if ((store.session?.length ?? 0) === 0) ctx.sync.project.loadSessions(dir, { limit: 50 })
     }
   })
 
@@ -891,7 +968,7 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
           ref={triggerRef}
           type="button"
           data-action="session-chats-toggle-flyout"
-          class="flex shrink-0 items-center justify-center rounded-sm border-none bg-transparent p-1.5 cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
+          class="flex w-9 h-7 shrink-0 items-center justify-center rounded-sm border-none bg-transparent cursor-pointer text-v2-icon-icon-muted hover:text-v2-icon-icon-base hover:bg-v2-overlay-simple-overlay-hover transition-colors"
           aria-label="Sessions"
           onClick={() => setOpen(!open())}
         >

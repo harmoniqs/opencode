@@ -13,6 +13,12 @@ on:
       tag:
         description: "Existing tag to build and release (e.g. v1.17.3-amicode.4)"
         required: true
+      channel:
+        description: "Channel for embedded web UI — dev (internal/alpha, DEV badge) or beta (store/clean, BETA badge)"
+        required: false
+        default: "dev"
+        type: choice
+        options: [dev, beta]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -44,7 +50,8 @@ jobs:
           # NOT "latest": that compiles the web UI with VITE_OPENCODE_CHANNEL=prod,
           # defaulting newLayoutDesigns OFF and hiding every amicode surface
           # (gotcha 2 in AMICODE-PATCHES.md; bit releases amicode.1/.2).
-          OPENCODE_CHANNEL: dev
+          # dev → DEV badge (internal alpha), beta → BETA badge (store clean) — see titlebar-channel.ts:8
+          OPENCODE_CHANNEL: ${{ inputs.channel || 'dev' }}
           # linux-arm64 serves devcontainers on Apple Silicon (amicode ships it as
           # a third lean .vsix target). Bun cross-compiles it from this x64 runner,
           # same as darwin-arm64.
@@ -112,6 +119,7 @@ jobs:
           GOT=$("$LIN" --version)
           [ "$GOT" = "${{ steps.v.outputs.version }}" ] || { echo "FAIL: --version=$GOT expected ${{ steps.v.outputs.version }}"; exit 1; }
 
+
       - name: Package assets (flat 'opencode' inside, per amicode fetcher contract)
         run: |
           set -euo pipefail
@@ -129,7 +137,9 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ steps.v.outputs.tag }}"
-          NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=dev (UI gate verified ON in every binary).
+          CHANNEL="${{ inputs.channel || 'dev' }}"
+          BADGE=$([ "$CHANNEL" = beta ] && echo BETA || echo DEV)
+          NOTES="opencode fork binary for amicode bundling. Built by the amicode-release workflow from \`$TAG\` @ $GITHUB_SHA; base opencode ${{ steps.v.outputs.version }}; OPENCODE_CHANNEL=$CHANNEL (UI gate verified ON in every binary). Badge: $BADGE.
 
           Assets: linux-x64 (native, smoke-tested), linux-arm64 and darwin-arm64 (cross-compiled from Linux — not smoke-tested here; amicode's boot-smoke covers linux-arm64 natively).
 

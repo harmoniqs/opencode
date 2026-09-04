@@ -3,7 +3,7 @@ import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { AssistantMessage, Part, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
 import { groupParts, renderable, type PartGroup } from "@opencode-ai/session-ui/message-part"
 import { TimelineRow, type SummaryDiff } from "./timeline-row"
-import { uniqueSummaryDiffs } from "./summary-diffs"
+// import { uniqueSummaryDiffs } from "./summary-diffs"  // suppressed (harmoniqs/amicode#733)
 
 export { TimelineRow, type SummaryDiff } from "./timeline-row"
 
@@ -220,8 +220,38 @@ export namespace Timeline {
       if (part?.type === "reasoning") return "Reasoning"
       return undefined
     }
+
+    // Thinking row renders FIRST — it's the top of the rail, like Shell/Edit.
+    // Shows just "Thinking" label. Always present once a turn has assistant content.
+    if (assistantPartRefs.length > 0 || turnIsRunning) {
+      const heading = assistantMessages
+        .flatMap((message) => getMessageParts(message.id))
+        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
+        .find((value): value is string => !!value)
+
+      rows.push(
+        new TimelineRow.Thinking({
+          userMessageID: userMessage.id,
+          reasoningHeading: heading,
+          turnRunning: turnIsRunning,
+          turnStartedAt: userMessage.time.created,
+        }),
+      )
+    }
+
     assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
+        // ThinkingMeta attaches to the last output BEFORE the interruption —
+        // it summarises the work that was interrupted, not the post-interrupt tail.
+        if (assistantPartRefs.length > 0 && !turnIsRunning) {
+          rows.push(
+            new TimelineRow.ThinkingMeta({
+              userMessageID: userMessage.id,
+              turnRunning: false,
+              turnDurationMs: computeTurnDuration(userMessage, assistantMessages),
+            }),
+          )
+        }
         rows.push(
           new TimelineRow.TurnDivider({
             userMessageID: userMessage.id,
@@ -238,40 +268,31 @@ export namespace Timeline {
           previousAssistantPart: assistantGroupIndex > 0,
           lastAssistantPart: itemIndex === lastRenderableIndex,
           turnRunning: turnIsRunning,
+          turnStartedAt: userMessage.time.created,
           railLabel: railLabel(item.group),
         }),
       )
       assistantGroupIndex += 1
     })
 
-    // In showReasoning mode the reasoning rows themselves carry the working
-    // signal — except while the tail is withheld (streaming), when Thinking
-    // must stand in for it or the turn would show nothing at all.
-    if (isActive && status === "busy" && !error && (showReasoning ? settledPartRefs.length === 0 || tailStreaming : true)) {
-      const heading = assistantMessages
-        .flatMap((message) => getMessageParts(message.id))
-        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
-        .find((value): value is string => !!value)
-
+    // ThinkingMeta row renders LAST — duration + tokens as a historical record.
+    // Hidden while streaming (the harmonic dot signals "working"); appears only
+    // after the turn completes. Skipped when interrupted — already emitted above.
+    if (assistantPartRefs.length > 0 && !turnIsRunning && !interrupted) {
       rows.push(
-        new TimelineRow.Thinking({
+        new TimelineRow.ThinkingMeta({
           userMessageID: userMessage.id,
-          reasoningHeading: heading,
+          turnRunning: false,
+          turnDurationMs: computeTurnDuration(userMessage, assistantMessages),
         }),
       )
     }
 
     if (isActive && status === "retry") rows.push(new TimelineRow.Retry({ userMessageID: userMessage.id }))
 
-    const diffs = uniqueSummaryDiffs(userMessage.summary?.diffs)
-    if (diffs.length > 0 && (status === "idle" || !isActive)) {
-      rows.push(
-        new TimelineRow.DiffSummary({
-          userMessageID: userMessage.id,
-          diffs,
-        }),
-      )
-    }
+    // Per-message "Changed files" section suppressed (harmoniqs/amicode#733):
+    // redundant with the side-panel Files Changed tab, and the unfiltered
+    // snapshot diff leaks cross-session file changes during concurrent turns.
 
     if (error) {
       const data = error.data?.message
@@ -400,4 +421,16 @@ export namespace MessageComment {
         : undefined,
     }
   }
+}
+
+function computeTurnDuration(userMessage: UserMessage, assistantMessages: AssistantMessage[]): number | undefined {
+  const end = assistantMessages.reduce<number | undefined>((max, msg) => {
+    const completed = msg.time.completed
+    if (typeof completed !== "number") return max
+    if (max === undefined) return completed
+    return Math.max(max, completed)
+  }, undefined)
+  if (typeof end !== "number") return
+  if (end < userMessage.time.created) return
+  return end - userMessage.time.created
 }

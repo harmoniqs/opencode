@@ -131,7 +131,7 @@ function providerMeta(metadata: Record<string, any> | undefined) {
 export const toModelMessagesEffect = Effect.fnUntraced(function* (
   input: WithParts[],
   model: Provider.Model,
-  options?: { stripMedia?: boolean; toolOutputMaxChars?: number },
+  options?: { stripMedia?: boolean; toolOutputMaxChars?: number; forCompaction?: boolean },
 ) {
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
@@ -368,7 +368,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
             })
         }
         if (part.type === "reasoning") {
-          if (differentModel) {
+          if (differentModel || options?.forCompaction) {
             if (part.text.trim().length > 0)
               assistantMessage.parts.push({
                 type: "text",
@@ -425,7 +425,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
 export function toModelMessages(
   input: WithParts[],
   model: Provider.Model,
-  options?: { stripMedia?: boolean; toolOutputMaxChars?: number },
+  options?: { stripMedia?: boolean; toolOutputMaxChars?: number; forCompaction?: boolean },
 ): Promise<ModelMessage[]> {
   return Effect.runPromise(toModelMessagesEffect(input, model, options))
 }
@@ -565,6 +565,7 @@ export function filterCompacted(msgs: Iterable<WithParts>) {
           index > compactionIndex &&
           msg.info.role === "assistant" &&
           msg.info.summary &&
+          !msg.info.error &&
           msg.info.parentID === compaction.info.id,
       )
     : -1

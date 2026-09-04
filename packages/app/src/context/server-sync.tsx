@@ -427,10 +427,14 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
                 .filter((s) => !!s?.id)
                 .filter((s) => !s.time?.archived)
                 .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-              const limit = Math.max(store.limit, options?.limit ?? 0, sessionMeta.get(key)?.limit ?? 0)
+              // amicode#288: the fetch limit must be the floor here. Re-deriving
+              // it from a fresh store (limit 0) trimmed everything older than
+              // SESSION_RECENT_WINDOW out of the store — the dropdown and home
+              // list then showed only the last few hours of history.
+              const retained = Math.max(limit, store.limit, options?.limit ?? 0, sessionMeta.get(key)?.limit ?? 0)
               const childSessions = store.session.filter((s) => !!s.parentID)
               const next = trimSessions([...nonArchived, ...childSessions], {
-                limit,
+                limit: retained,
                 permission: session.data.permission,
               })
               batch(() => {
@@ -445,7 +449,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
                 )
                 setStore("session", reconcile(next, { key: "id" }))
               })
-              sessionMeta.set(key, { limit })
+              sessionMeta.set(key, { limit: retained })
             })
             .catch((err) => {
               console.error("Failed to load sessions", err)

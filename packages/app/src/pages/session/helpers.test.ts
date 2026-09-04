@@ -305,7 +305,7 @@ describe("createSessionTabs", () => {
         normalizeTab: (tab) => tab,
       })
       expect(result.pulseInspectorOpen()).toBe(false)
-      expect(result.activeTab()).toBe("empty")
+      expect(result.activeTab()).toBe("home")
       dispose()
     })
 

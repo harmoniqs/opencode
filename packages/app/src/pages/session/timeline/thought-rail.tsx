@@ -2,6 +2,10 @@
 // ported from the website's /amicode animation (harmoniqs-ai
 // app/components/demo/parts.jsx, `Step`).
 //
+// The active (running) dot is a spherical-harmonic morphing indicator
+// (HarmonicDot) that replaces the old breathing box-shadow ring. It grows
+// from 7px (done size) to 13px when in flight, centered on LINE_X.
+//
 // Six geometry rules — keep them together, they are the whole rail. A
 // standalone, framework-agnostic snippet is at the bottom of this header.
 //
@@ -80,18 +84,23 @@
 //   // tail: { top: first ? "0px" : NEG, height: first ? "0px" : `calc(${STEP_GAP} + ${dotCentre}px)` }
 
 
+import { createSignal, onCleanup } from "solid-js"
+import { HarmonicDot, HARMONIC_SIZE } from "@opencode-ai/ui/amicode-harmonic-dot"
+import { formatElapsed, formatTokens } from "@opencode-ai/ui/amicode-thinking"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
+export { DEFAULT_DOT_CENTRE, dotCentreForGroup, shouldRenderRail } from "./thought-rail-pure"
+
 const NODE = 7 // dot diameter, px — matches the site's Step
 
-/** Where a row's dot centre sits when nothing measures it: 11px — the centre
- *  of a 22px first text line starting at the row's top, which is what prose
- *  and rail-label rows produce. Rows whose content opens with a CARD (a tool
- *  chip, a group header, a widget preview) start their first text line lower
- *  — measured 16px for a chip row, 26.5px for a widget preview — so
- *  TimelineRowFrame measures the actual first line and passes `dotCentre`
- *  (Kate 2026-08-24: dots must line up with the text they coincide with).
- *  Segment caps derive from the same value, so alignment can never detach
- *  the spine from its dots. */
-export const DEFAULT_DOT_CENTRE = 11
+// The bottom-anchored dot on prose rows sits with its centre at the last
+// text line's vertical centre — approximately: card bottom-padding (10px) +
+// half body line-height (~11px) = 21px from the row's bottom edge. This is
+// a fixed offset, so the dot never jumps — it just rides down as the row grows.
+const PROSE_DOT_BOTTOM_INSET = 21
+
+// DEFAULT_DOT_CENTRE, dotCentreForGroup, shouldRenderRail are re-exported
+// from ./thought-rail-pure (extracted for test isolation from Kobalte SSR).
+import { DEFAULT_DOT_CENTRE } from "./thought-rail-pure"
 
 // The rail sits in a gutter carved out of the row's own left inset, NOT flush
 // against the row edge. Flush was wrong: below the md breakpoint the message
@@ -119,9 +128,16 @@ export function ThoughtRail(props: {
   last: boolean
   /** the turn is still working, so this tail step is in flight */
   running: boolean
+  /** true for prose/text rows (growing content) — dot bottom-anchors.
+   *  false for Thinking/tool/shell rows (status cards) — dot at dotCentre. */
+  prose: boolean
   /** measured centre of the row's first text line (px from the row's top);
-   *  defaults to DEFAULT_DOT_CENTRE for unmeasured/prose rows */
+   *  used for done-dot alignment and status-row running dot */
   dotCentre?: number
+  /** epoch-ms when the user message was created — anchors the tooltip timer */
+  turnStartedAt?: number
+  /** streamed token count for this turn — shown in the tooltip */
+  tokens?: number
 }) {
   // Only the tail of a still-running turn is hollow. Everything above it has,
   // by definition, been succeeded. (Rule 4 — adjacency.)
@@ -130,15 +146,14 @@ export function ThoughtRail(props: {
   const dotCentre = () => props.dotCentre ?? DEFAULT_DOT_CENTRE
   const dotTop = () => dotCentre() - NODE / 2
   // A lone running step is a single dot with no spine — every line must end
-  // AT a dot at both ends, like Claude Code. A lone dot has no line, so a
-  // one-step completion is just "dot fills" with no dangling half-spine
-  // above or below. The widget lab showed both dangles (dot→bottom, 0→dot)
-  // still leave one open end. (The Thinking row no longer rails at all —
-  // its squiggle is the working signal — so this is only ever a turn's
-  // first assistant part still in flight.)
+  // AT a dot at both ends. A lone dot has no line, so a one-step completion
+  // is just "dot fills" with no dangling half-spine above or below. The
+  // morphing harmonic dot is the turn's only "working" signal.
   const isLoneRunning = () => props.first && props.last && props.running
   return (
     <>
+      {/* Rail line BEHIND the dot — the SVG's internal background circle
+          masks the line within the ring's interior. */}
       <span
         aria-hidden="true"
         data-slot="thought-rail-line"
@@ -152,49 +167,127 @@ export function ThoughtRail(props: {
           ...(isLoneRunning()
             ? // lone running step — no line, just the breathing dot (0px, like PR 242)
               { top: "0px", height: "0px" }
-            : props.last
-              ? // tail: capped at the dot centre, never below (Rule 3) — +1px overlap guarantees no 12px dash on subpixel rounding
+            : props.last && isRunning() && props.prose
+              ? // running prose tail: line extends to the dot's vertical centre
                 {
                   top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
-                  height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
+                  bottom: `${PROSE_DOT_BOTTOM_INSET}px`,
                 }
-              : // mid-run: from dot centre (first) or gap (others) down to row bottom — 1px upward overlap closes the pt-3 seam
-                { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
+              : props.last
+                ? // completed tail OR running status row: capped at the dot centre
+                  {
+                    top: props.first ? "0px" : `calc(${NEG_STEP_GAP} - 1px)`,
+                    height: props.first ? "0px" : `calc(${STEP_GAP} + ${dotCentre()}px + 1px)`,
+                  }
+                : // mid-run: from dot centre (first) or gap (others) down to row bottom
+                  { top: props.first ? `${dotCentre()}px` : `calc(${NEG_STEP_GAP} - 1px)`, bottom: "0px" }),
         }}
       />
-      <span
-        aria-hidden="true"
-        data-slot="thought-rail-dot"
-        data-state={isRunning() ? "running" : "done"}
-        classList={{
-          "pointer-events-none absolute rounded-full": true,
-          // hollow + pulsing while in flight, solid once succeeded
-          "thought-rail-dot--running": isRunning(),
-        }}
-        style={{
-          top: `${dotTop()}px`,
-          left: `${GUTTER}px`,
-          width: `${NODE}px`,
-          height: `${NODE}px`,
-          // LIVE is the brand yellow; DONE is icon weight, not border weight.
-          //
-          // --accent-edge is doing real work on the live node: it resolves to ink
-          // on light and to a yellow mix on dark, which is exactly the rule the
-          // accent system states — #FFE614 is ~1.2:1 on a light ground, so on
-          // light the dot is *defined* by its ink ring, never by the fill. On dark
-          // the fill carries it and the edge just tightens the shape.
-          //
-          // Done dots take icon-icon-muted rather than border-border-strong: the
-          // Done dots take text-base — the fg, full strength — matching the
-          // line so the rail is one ink stroke, the way the site's Step draws
-          // its dots (border-fg + bg-fg). Never border-border-strong: that is
-          // white at 20% on the dark ground, compositing to #4C4C4C = 1.92:1,
-          // under the 3:1 a UI mark needs. (Rule 5)
-          border: isRunning() ? "1px solid var(--accent-edge)" : "1px solid var(--v2-text-text-base)",
-          background: isRunning() ? "var(--accent)" : "var(--v2-text-text-base)",
-        }}
-      />
+      {isRunning() ? (
+        // RUNNING: spherical-harmonic morphing dot.
+        // - Prose rows (growing text content): bottom-anchored. As content
+        //   grows above it, the row's height increases and the dot rides down
+        //   passively — no transitions, no re-renders.
+        // - Status rows (Thinking, Shell, Edit, etc.): centred on dotCentre
+        //   so the dot aligns with the label text.
+        // Tooltip on hover shows elapsed time + token count (#625).
+        <DotWithTooltip
+          bottomAnchored={props.prose}
+          dotCentre={dotCentre()}
+          turnStartedAt={props.turnStartedAt}
+          tokens={props.tokens}
+        />
+      ) : (
+        // DONE: 7px ink circle — the rail is one ink stroke (Rule 5).
+        // text-base is the fg: literal black on light, near-white on dark,
+        // matching the line so dot + spine read as a single mark.
+        // Never border-border-strong: white@20% on dark composites to
+        // #4C4C4C = 1.92:1, under the 3:1 a UI mark needs.
+        <span
+          aria-hidden="true"
+          data-slot="thought-rail-dot"
+          data-state="done"
+          class="pointer-events-none absolute rounded-full"
+          style={{
+            top: `${dotTop()}px`,
+            left: `${GUTTER}px`,
+            width: `${NODE}px`,
+            height: `${NODE}px`,
+            border: "1px solid var(--v2-text-text-base)",
+             background: "var(--v2-text-text-base)",
+          }}
+        />
+      )}
     </>
+  )
+}
+
+/** Running dot with a hover tooltip showing elapsed time + tokens (#625).
+ *  Two positioning modes:
+ *  - bottomAnchored=true: sits at the bottom edge of the row, rides down as
+ *    content grows above it. Used for AssistantPart content rows.
+ *  - bottomAnchored=false: sits at dotCentre (first-line aligned). Used for
+ *    the Thinking row and status rows where the dot signals "working" beside
+ *    a fixed label, not below growing content.
+ *  Uses TooltipV2 (placement="bottom") so the popup renders below the dot and
+ *  never occludes the rail or chat content above. The timer ticks from
+ *  `turnStartedAt` (the user message's `time.created`), so it survives
+ *  component remount across session switches. */
+function DotWithTooltip(props: {
+  bottomAnchored: boolean
+  dotCentre: number
+  turnStartedAt?: number
+  tokens?: number
+}) {
+  // Tick elapsed time every second while this component is mounted.
+  // Only one running dot exists at a time, so the cost is trivial.
+  const [elapsedMs, setElapsedMs] = createSignal(
+    props.turnStartedAt != null ? Date.now() - props.turnStartedAt : 0,
+  )
+  const clock = setInterval(() => {
+    if (props.turnStartedAt != null) setElapsedMs(Date.now() - props.turnStartedAt)
+  }, 1000)
+  onCleanup(() => clearInterval(clock))
+
+  const tooltipValue = () => {
+    if (props.turnStartedAt == null) return undefined
+    return (
+      <span class="whitespace-nowrap tabular-nums">
+        {formatElapsed(elapsedMs())}
+        {props.tokens != null && (
+          <>
+            <span class="mx-1 opacity-55">{"\u00B7"}</span>
+            {"\u2191"} {formatTokens(props.tokens!)} tokens
+          </>
+        )}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      class="absolute"
+      data-slot="thought-rail-dot"
+      data-state="running"
+      style={{
+        top: props.bottomAnchored ? undefined : `${props.dotCentre - HARMONIC_SIZE / 2}px`,
+        bottom: props.bottomAnchored ? `${PROSE_DOT_BOTTOM_INSET - HARMONIC_SIZE / 2}px` : undefined,
+        left: `${GUTTER + NODE / 2 - HARMONIC_SIZE / 2}px`,
+        width: `${HARMONIC_SIZE}px`,
+        height: `${HARMONIC_SIZE}px`,
+      }}
+    >
+      <TooltipV2
+        placement="bottom"
+        value={tooltipValue()}
+        inactive={props.turnStartedAt == null}
+        openDelay={200}
+      >
+        <HarmonicDot
+          class="thought-rail-dot--harmonic"
+        />
+      </TooltipV2>
+    </span>
   )
 }
 
@@ -220,21 +313,3 @@ export function ThoughtRailLabel(props: { label: string }) {
  *  15px; pl-6 (24px) leaves the same ~9px dot-to-content breath the website's
  *  Step has — pl-4 left a 1px gap and labels read as glued to their dots. (Rule 5) */
 export const THOUGHT_RAIL_INSET = "pl-6"
-
-/**
- * Rule 6 — lone COMPLETED steps render nothing (one dot is decoration). A
- * RUNNING turn rails from its very first step, though — the live dot is the
- * timeline's only "working" mark (the card's pulsing sig and Livedot are
- * gone), and a turn's first step is often its longest, so waiting for step
- * two meant the whole opening had no status signal. The lone live dot draws
- * no line — every line must end at a dot at both ends, so a single dot has
- * no dangling half — and a one-step completion still reads as "dot fills".
- */
-export function shouldRenderRail(input: {
-  previousAssistantPart: boolean
-  lastAssistantPart: boolean
-  turnRunning: boolean
-}) {
-  const isOnlyStep = !input.previousAssistantPart && input.lastAssistantPart
-  return !isOnlyStep || input.turnRunning
-}

@@ -211,6 +211,7 @@
 [data-part-enter] {
   animation: timeline-enter var(--motion-enter-duration) var(--motion-enter-ease) backwards;
 }
+
 /* The open cascade holds at frame 0 (opacity 0, risen, blurred) until the
    timeline has settled at the bottom — released by removing
    [data-entrance-pending] (message-timeline.tsx entranceReady). Also keeps

@@ -27,6 +27,8 @@ export namespace TimelineRow {
     lastAssistantPart: boolean
     /** the turn is still working, so the tail step is in flight rather than done */
     turnRunning: boolean
+    /** epoch-ms when the user message was created — anchors the dot tooltip timer */
+    turnStartedAt: number
     /** eyebrow naming the action for steps whose content doesn't already open
      *  with its own title — reasoning ("Reasoning") only. Prose carries no
      *  caption (the words are the step), and tool cards and the Explored /
@@ -36,6 +38,17 @@ export namespace TimelineRow {
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string
     reasoningHeading?: string
+    /** the turn is still actively streaming */
+    turnRunning: boolean
+    /** epoch-ms when the user message was created — anchors the dot tooltip timer */
+    turnStartedAt: number
+  }> {}
+  export class ThinkingMeta extends Data.TaggedClass("ThinkingMeta")<{
+    userMessageID: string
+    /** the turn is still actively streaming */
+    turnRunning: boolean
+    /** total turn duration in ms (set only for completed turns) */
+    turnDurationMs?: number
   }> {}
   export class DiffSummary extends Data.TaggedClass("DiffSummary")<{
     userMessageID: string
@@ -56,6 +69,7 @@ export namespace TimelineRow {
     | TurnDivider
     | AssistantPart
     | Thinking
+    | ThinkingMeta
     | DiffSummary
     | Error
     | Retry
@@ -74,6 +88,8 @@ export namespace TimelineRow {
         return `assistant-part:${row.userMessageID}:${row.group.key}`
       case "Thinking":
         return `thinking:${row.userMessageID}`
+      case "ThinkingMeta":
+        return `thinking-meta:${row.userMessageID}`
       case "DiffSummary":
         return `diff-summary:${row.userMessageID}`
       case "Error":
