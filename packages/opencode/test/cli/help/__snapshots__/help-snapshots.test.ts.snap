@@ -286,6 +286,11 @@ exports[`opencode CLI help-text snapshots every documented command emits stable 
 
 export session data as JSON
 
+Commands:
+  opencode export session [sessions..]  export sessions as a portable JSONL bundle (session metadata
+                                        first, then messages and parts in order, IDs and timestamps
+                                        preserved)
+
 Positionals:
   sessionID  session id to export                                                           [string]
 
@@ -299,12 +304,17 @@ Options:
 `;
 
 exports[`opencode CLI help-text snapshots every documented command emits stable help text: opencode import --help 1`] = `
-"opencode import <file>
+"opencode import [file]
 
 import session data from JSON file or URL
 
+Commands:
+  opencode import session <bundle>  import sessions from a portable JSONL bundle (idempotent by
+                                    session id; single-writer — do not run concurrent imports
+                                    against one store)
+
 Positionals:
-  file  path to JSON file or share URL                                           [string] [required]
+  file  path to JSON file or share URL                                                      [string]
 
 Options:
   -h, --help        show help                                                              [boolean]
