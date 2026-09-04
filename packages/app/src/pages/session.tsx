@@ -707,6 +707,13 @@ export default function Page() {
         next.set(oldNorm, newNorm)
         return next
       })
+      // Force a server refetch so in-project files at their new location
+      // appear immediately — without this, the stale server response (which
+      // doesn't include the file) persists until the file watcher's 1s debounce.
+      const sessionID = params.id
+      if (sessionID) {
+        sync().set("diff_version", sessionID, (v: number | undefined) => (v ?? 0) + 1)
+      }
     }
   }
   window.addEventListener("message", onFileOpNotify)

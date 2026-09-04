@@ -250,3 +250,81 @@ describe("applyRenames", () => {
     expect(result[1].file).toBe("~/d/two.ts")
   })
 })
+
+// --- move-back-to-project: full round-trip scenario ---
+
+describe("round-trip move: project → cross-project → back to project", () => {
+  test("file moved out then back is visible when server includes it after refetch", () => {
+    // Step 1: file created in-project, server has it
+    const step1 = mergeServerAndToolDiffs({
+      serverDiffs: [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      toolDiffs: [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(step1).toHaveLength(1)
+    expect(step1[0].file).toBe("~/harmoniqs/amicode/test.md")
+
+    // Step 2: file moved to opencode — rename map transforms tool diff
+    const renames1 = new Map([["~/harmoniqs/amicode/test.md", "~/harmoniqs/opencode/test.md"]])
+    const toolDiffsStep2 = applyRenames(
+      [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      renames1,
+    )
+    const step2 = mergeServerAndToolDiffs({
+      serverDiffs: [],  // server no longer has it (moved away)
+      toolDiffs: toolDiffsStep2,
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(step2).toHaveLength(1)
+    expect(step2[0].file).toBe("~/harmoniqs/opencode/test.md")
+
+    // Step 3: file moved back — rename chain resolves to original path
+    // After chain resolution: amicode/test.md → amicode/test.md (identity)
+    const renames2 = new Map([
+      ["~/harmoniqs/amicode/test.md", "~/harmoniqs/amicode/test.md"],
+      ["~/harmoniqs/opencode/test.md", "~/harmoniqs/amicode/test.md"],
+    ])
+    const toolDiffsStep3 = applyRenames(
+      [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      renames2,
+    )
+    // Tool diff is back at the in-project path
+    expect(toolDiffsStep3[0].file).toBe("~/harmoniqs/amicode/test.md")
+
+    // With server refetch (diff_version bumped), server includes the file again
+    const step3 = mergeServerAndToolDiffs({
+      serverDiffs: [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      toolDiffs: toolDiffsStep3,
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    expect(step3).toHaveLength(1)
+    expect(step3[0].file).toBe("~/harmoniqs/amicode/test.md")
+  })
+
+  test("file moved back DISAPPEARS when server has NOT refetched (the bug this fix addresses)", () => {
+    // Rename map resolves to in-project, but server still has stale empty response
+    const renames = new Map([
+      ["~/harmoniqs/amicode/test.md", "~/harmoniqs/amicode/test.md"],
+    ])
+    const toolDiffs = applyRenames(
+      [diff("~/harmoniqs/amicode/test.md", "patch", 2, 0, "added")],
+      renames,
+    )
+    // Server hasn't refetched — stale empty response
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs,
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+    // Without the diff_version bump, the file is gone (server is authoritative for in-project)
+    expect(result).toHaveLength(0)
+  })
+})
