@@ -691,10 +691,13 @@ export default function Page() {
     const d = e.data as { source?: string; kind?: string; op?: string; oldPath?: string; newPath?: string; home?: string } | undefined
     if (d?.source !== "amicode" || d?.kind !== "file-op-notify") return
     if ((d.op === "move" || d.op === "rename") && d.oldPath && d.newPath) {
-      // Use home from the message (extension has os.homedir()) since the
-      // browser iframe has no process.env.HOME for path normalization.
+      // Use the SAME home as the reviewDiffs memo (globalThis.process.env.HOME,
+      // which is undefined in the browser). This ensures rename map keys match
+      // tool-diff paths — both end up as absolute paths in the browser iframe.
+      // Do NOT use d.home here: that produces ~/... keys while the memo produces
+      // /Users/... paths, and they never match.
       const dir = sdk().directory
-      const home = d.home ?? (typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined)
+      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
       const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
       const oldNorm = toHomePath(d.oldPath, home, prefix)
       const newNorm = toHomePath(d.newPath, home, prefix)
