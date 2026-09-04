@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { accumulateDiffs, mergeServerAndToolDiffs, type ToolEditPart } from "./accumulate-diffs"
+import { accumulateDiffs, applyRenames, mergeServerAndToolDiffs, type ToolEditPart } from "./accumulate-diffs"
 
 const edit = (file: string, overrides: Partial<ToolEditPart> = {}): ToolEditPart => ({
   file,
@@ -201,5 +201,52 @@ describe("mergeServerAndToolDiffs", () => {
       home: HOME,
     })
     expect(result).toHaveLength(1)
+  })
+})
+
+// --- applyRenames ---
+
+describe("applyRenames", () => {
+  test("renames a file path when it appears in the rename map", () => {
+    const diffs = [diff("~/harmoniqs/amicode/test.md")]
+    const renames = new Map([["~/harmoniqs/amicode/test.md", "~/harmoniqs/opencode/test.md"]])
+    const result = applyRenames(diffs, renames)
+    expect(result).toHaveLength(1)
+    expect(result[0].file).toBe("~/harmoniqs/opencode/test.md")
+  })
+
+  test("leaves files unchanged when not in the rename map", () => {
+    const diffs = [diff("~/harmoniqs/amicode/src/foo.ts")]
+    const renames = new Map([["~/harmoniqs/amicode/test.md", "~/harmoniqs/opencode/test.md"]])
+    const result = applyRenames(diffs, renames)
+    expect(result[0].file).toBe("~/harmoniqs/amicode/src/foo.ts")
+  })
+
+  test("returns diffs unchanged when rename map is empty", () => {
+    const diffs = [diff("~/harmoniqs/amicode/test.md"), diff("~/other/bar.ts")]
+    const result = applyRenames(diffs, new Map())
+    expect(result).toEqual(diffs)
+  })
+
+  test("preserves all other diff fields (patch, additions, deletions, status)", () => {
+    const diffs = [diff("~/old/path.ts", "the-patch", 5, 3, "modified")]
+    const renames = new Map([["~/old/path.ts", "~/new/path.ts"]])
+    const result = applyRenames(diffs, renames)
+    expect(result[0].file).toBe("~/new/path.ts")
+    expect(result[0].patch).toBe("the-patch")
+    expect(result[0].additions).toBe(5)
+    expect(result[0].deletions).toBe(3)
+    expect(result[0].status).toBe("modified")
+  })
+
+  test("handles multiple renames in one pass", () => {
+    const diffs = [diff("~/a/one.ts"), diff("~/b/two.ts")]
+    const renames = new Map([
+      ["~/a/one.ts", "~/c/one.ts"],
+      ["~/b/two.ts", "~/d/two.ts"],
+    ])
+    const result = applyRenames(diffs, renames)
+    expect(result[0].file).toBe("~/c/one.ts")
+    expect(result[1].file).toBe("~/d/two.ts")
   })
 })

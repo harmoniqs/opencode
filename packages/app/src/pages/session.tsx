@@ -88,7 +88,7 @@ import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
-import { accumulateDiffs, mergeServerAndToolDiffs, toHomePath } from "@/pages/session/v2/accumulate-diffs"
+import { accumulateDiffs, applyRenames, mergeServerAndToolDiffs, toHomePath } from "@/pages/session/v2/accumulate-diffs"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
@@ -681,6 +681,36 @@ export default function Page() {
 
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+
+  // --- File rename tracking (sidebar move/rename → Files Changed update) ---
+  // When the sidebar moves or renames a file, the extension posts a
+  // file-op-notify message. We track the rename so the tool-metadata diffs
+  // (which still have the old path) are displayed at the new location.
+  const [fileRenames, setFileRenames] = createSignal(new Map<string, string>())
+  const onFileOpNotify = (e: MessageEvent) => {
+    const d = e.data as { source?: string; kind?: string; op?: string; oldPath?: string; newPath?: string } | undefined
+    if (d?.source !== "amicode" || d?.kind !== "file-op-notify") return
+    if ((d.op === "move" || d.op === "rename") && d.oldPath && d.newPath) {
+      // Normalize paths to ~/... form for consistent matching with tool diffs
+      const dir = sdk().directory
+      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+      const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
+      const oldNorm = toHomePath(d.oldPath, home, prefix)
+      const newNorm = toHomePath(d.newPath, home, prefix)
+      setFileRenames((prev) => {
+        const next = new Map(prev)
+        // Chain resolution: if anything pointed to oldPath, update it to newPath
+        for (const [k, v] of next) {
+          if (v === oldNorm) next.set(k, newNorm)
+        }
+        next.set(oldNorm, newNorm)
+        return next
+      })
+    }
+  }
+  window.addEventListener("message", onFileOpNotify)
+  onCleanup(() => window.removeEventListener("message", onFileOpNotify))
+
   // Refetch when the session transitions to idle (assistant finished, snapshot taken)
   // or when a file-editing tool completes mid-turn (diff_version bumps)
   const sessionDiffVersion = () => {
@@ -736,7 +766,7 @@ export default function Page() {
         }
       }
     }
-    const toolDiffs = accumulateDiffs(editParts)
+    const toolDiffs = applyRenames(accumulateDiffs(editParts), fileRenames())
 
     // --- Server diffs (authoritative for in-project files) ---
     const serverDiffs = sessionDiffQuery.data ?? []

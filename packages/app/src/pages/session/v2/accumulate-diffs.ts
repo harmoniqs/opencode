@@ -117,3 +117,20 @@ export function accumulateDiffs(parts: ToolEditPart[]): Array<SnapshotFileDiff &
     status: entry.status,
   }))
 }
+
+/**
+ * Apply a rename map to file diffs — replaces paths that have been moved/renamed.
+ *
+ * Used so that Files Changed reflects the current location of a file after a
+ * sidebar move/rename, even though the tool-metadata still records the old path.
+ */
+export function applyRenames(
+  diffs: Array<SnapshotFileDiff & { file: string }>,
+  renames: Map<string, string>,
+): Array<SnapshotFileDiff & { file: string }> {
+  if (renames.size === 0) return diffs
+  return diffs.map((d) => {
+    const newPath = renames.get(d.file)
+    return newPath ? { ...d, file: newPath } : d
+  })
+}
