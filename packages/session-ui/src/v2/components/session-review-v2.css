@@ -577,21 +577,19 @@
   max-width: min(400px, calc(100vw - 16px));
   overflow-x: auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: var(--radius-md, 8px);
   background-color: var(--surface-raised-stronger-non-alpha, var(--v2-background-bg-layer-01));
   border: 1px solid color-mix(in oklch, var(--border-base, var(--v2-border-border-base)) 50%, transparent);
   box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15));
 }
 
-/* Scroll-inner wrapper: sizes to the widest item (max-content) but at least
-   as wide as the dropdown (min-width: 100%).  Flex-column children stretch
-   to fill, so all rows align.  The dropdown's overflow-x: auto provides
-   the horizontal scrollbar when the widest item exceeds the dropdown. */
+/* Scroll-inner wrapper: min-width: max-content ensures the wrapper is at
+   least as wide as its widest child.  When that exceeds the dropdown's
+   capped width, overflow-x: auto on the dropdown provides horizontal
+   scrolling.  Block items inside fill the wrapper width naturally. */
 .session-review-v2-file-picker-scroll-inner {
-  display: flex;
-  flex-direction: column;
-  width: max-content;
-  min-width: 100%;
+  min-width: max-content;
 }
 
 /* File picker popover content (legacy, kept for compat) */
