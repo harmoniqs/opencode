@@ -570,11 +570,10 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
+  right: 0;
   z-index: var(--z-overlay, 100);
   padding: 4px;
   max-height: 320px;
-  min-width: 200px;
-  max-width: min(400px, calc(100vw - 16px));
   overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
