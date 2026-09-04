@@ -124,6 +124,28 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const fileComponent = useFileComponent()
   let scrollRef: HTMLDivElement | undefined
   let focusToken = 0
+  let lastScrollTop = 0
+  let lastScrollFile = props.file
+
+  // Reset saved scroll position when the file changes
+  createEffect(() => {
+    const file = props.file
+    if (file !== lastScrollFile) {
+      lastScrollTop = 0
+      lastScrollFile = file
+    }
+  })
+
+  // Restore scroll position after diff content changes (e.g. agent tool completions)
+  createEffect(() => {
+    const _ = view() // re-run when diff data changes
+    if (lastScrollTop > 0 && scrollRef) {
+      const target = lastScrollTop
+      requestAnimationFrame(() => {
+        if (scrollRef) scrollRef.scrollTop = target
+      })
+    }
+  })
 
   const [store, setStore] = createStore({
     selection: null as SelectedLineRange | null,
@@ -617,6 +639,9 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
       <div
         ref={(el) => {
           scrollRef = el
+        }}
+        onScroll={(e) => {
+          lastScrollTop = (e.currentTarget as HTMLElement).scrollTop
         }}
         data-slot="session-review-v2-diff-scroll"
       >
