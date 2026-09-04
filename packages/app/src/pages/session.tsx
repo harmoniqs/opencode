@@ -688,12 +688,13 @@ export default function Page() {
   // (which still have the old path) are displayed at the new location.
   const [fileRenames, setFileRenames] = createSignal(new Map<string, string>())
   const onFileOpNotify = (e: MessageEvent) => {
-    const d = e.data as { source?: string; kind?: string; op?: string; oldPath?: string; newPath?: string } | undefined
+    const d = e.data as { source?: string; kind?: string; op?: string; oldPath?: string; newPath?: string; home?: string } | undefined
     if (d?.source !== "amicode" || d?.kind !== "file-op-notify") return
     if ((d.op === "move" || d.op === "rename") && d.oldPath && d.newPath) {
-      // Normalize paths to ~/... form for consistent matching with tool diffs
+      // Use home from the message (extension has os.homedir()) since the
+      // browser iframe has no process.env.HOME for path normalization.
       const dir = sdk().directory
-      const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
+      const home = d.home ?? (typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined)
       const prefix = home && dir.startsWith(home) ? "~" + dir.slice(home.length) : dir
       const oldNorm = toHomePath(d.oldPath, home, prefix)
       const newNorm = toHomePath(d.newPath, home, prefix)
