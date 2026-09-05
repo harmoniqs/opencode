@@ -18,6 +18,14 @@ describe("sessionListState (D2: honest states)", () => {
   test("a search never shows the unfetched state (results are filtered, not loading)", () => {
     expect(sessionListState({ fetched: false, count: 0, searching: true })).toBe("empty")
   })
+
+  test("home contract: the index query's isSuccess is the fetched source", () => {
+    // Boot: the home session-index query is pending and has never succeeded.
+    expect(sessionListState({ fetched: false, count: 0 })).toBe("unfetched")
+    // After the first successful fetch (even a refetch with data present),
+    // an empty projection is genuinely empty.
+    expect(sessionListState({ fetched: true, count: 0 })).toBe("empty")
+  })
 })
 
 describe("panel reset scope (D2: clears session caches only)", () => {
