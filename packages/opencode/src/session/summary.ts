@@ -82,6 +82,9 @@ const layer = Layer.effect(
     const computeDiff = Effect.fn("SessionSummary.computeDiff")(function* (input: { messages: SessionV1.WithParts[] }) {
       let from: string | undefined
       let to: string | undefined
+      const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+      const agentFiles = new Set<string>()
+      let hasAnyTool = false
       for (const item of input.messages) {
         if (!from) {
           for (const part of item.parts) {
@@ -93,9 +96,43 @@ const layer = Layer.effect(
         }
         for (const part of item.parts) {
           if (part.type === "step-finish" && part.snapshot) to = part.snapshot
+          if (part.type === "tool") {
+            hasAnyTool = true
+            // Collect agent-touched files from completed edit tools (#733 follow-up).
+            // Without this filter, diffFull captures ALL worktree changes between
+            // the two tree hashes — including edits from concurrent sessions.
+            const toolPart = part as { tool?: string; state?: { status?: string; metadata?: Record<string, unknown> } }
+            if (toolPart.tool && EDIT_TOOLS.has(toolPart.tool) && toolPart.state?.status === "completed") {
+              const filediff = toolPart.state?.metadata?.filediff as { file?: string } | undefined
+              if (filediff?.file) agentFiles.add(filediff.file)
+            }
+          }
         }
       }
-      if (from && to) return yield* snapshot.diffFull(from, to)
+      if (from && to) {
+        const allDiffs = yield* snapshot.diffFull(from, to)
+        // If filediff-tracked agent files exist, filter the diff to only
+        // those files (prevents cross-session contamination).
+        if (agentFiles.size > 0) {
+          // Agent files are absolute paths (from tool filediff metadata);
+          // diff files are relative to the worktree. Match by suffix.
+          return allDiffs.filter((d: Snapshot.FileDiff) => {
+            if (!d.file) return false
+            const suffix = "/" + d.file
+            for (const af of agentFiles) {
+              if (af.endsWith(suffix) || af === d.file) return true
+            }
+            return false
+          })
+        }
+        // Tools ran but none had filediff metadata (e.g. bash creating
+        // files) — return the full diff since we can't determine which
+        // files the agent touched.
+        if (hasAnyTool) return allDiffs
+        // No tools at all (plan-only session) — the diff is entirely
+        // from external sources (other sessions). Return empty.
+        return [] as Snapshot.FileDiff[]
+      }
       return []
     })
 
