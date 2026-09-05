@@ -20,6 +20,7 @@ import { open } from "node:fs/promises"
 import { Effect } from "effect"
 import { UI } from "../ui"
 import { effectCmd } from "../effect-cmd"
+import { Parity } from "../../installation/parity"
 import { EOL } from "os"
 import { Filesystem } from "@/util/filesystem"
 import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
@@ -261,6 +262,10 @@ export const RunCommand = effectCmd({
         describe: "enable direct interactive demo slash commands; pass one as the message to run it immediately",
       }),
   handler: Effect.fn("Cli.run")(function* (args) {
+    // D3: the client asserts its build against the release channel at boot
+    // and records the parity outcome — fail-open, bounded so the prompt never
+    // waits on a hung channel.
+    yield* Effect.promise(() => Parity.assertBoot({ timeout: "2 seconds" }))
     const { Agent } = yield* Effect.promise(() => import("@/agent/agent"))
     const { RuntimeFlags } = yield* Effect.promise(() => import("@/effect/runtime-flags"))
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
