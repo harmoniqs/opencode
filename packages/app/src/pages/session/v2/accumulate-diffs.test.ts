@@ -328,3 +328,43 @@ describe("round-trip move: project → cross-project → back to project", () =>
     expect(result).toHaveLength(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// latchWhileBusy — prevent brief falsy gaps from unmounting components
+// ---------------------------------------------------------------------------
+
+describe("latchWhileBusy", () => {
+  // Pure-function version of the latching memo used in ReviewPanelV2.
+  // The real code uses createMemo with a prev accumulator; we test the
+  // underlying logic here as a plain function.
+  function latchWhileBusy<T>(current: T | undefined, prev: T | undefined, isBusy: boolean): T | undefined {
+    if (!current && prev && isBusy) return prev
+    return current
+  }
+
+  test("returns current value when it is truthy", () => {
+    expect(latchWhileBusy("foo.ts", undefined, true)).toBe("foo.ts")
+    expect(latchWhileBusy("foo.ts", "bar.ts", true)).toBe("foo.ts")
+    expect(latchWhileBusy("foo.ts", undefined, false)).toBe("foo.ts")
+  })
+
+  test("latches previous value when current goes falsy and agent is busy", () => {
+    expect(latchWhileBusy(undefined, "foo.ts", true)).toBe("foo.ts")
+  })
+
+  test("does NOT latch when agent is idle (allows real empty state)", () => {
+    expect(latchWhileBusy(undefined, "foo.ts", false)).toBeUndefined()
+  })
+
+  test("does NOT latch when there is no previous value", () => {
+    expect(latchWhileBusy(undefined, undefined, true)).toBeUndefined()
+  })
+
+  test("latches object values the same way", () => {
+    const prevDiff = { file: "foo.ts", additions: 5, deletions: 2 }
+    expect(latchWhileBusy(undefined, prevDiff, true)).toBe(prevDiff)
+    expect(latchWhileBusy(undefined, prevDiff, false)).toBeUndefined()
+    const newDiff = { file: "foo.ts", additions: 6, deletions: 3 }
+    expect(latchWhileBusy(newDiff, prevDiff, true)).toBe(newDiff)
+  })
+})

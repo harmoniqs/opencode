@@ -124,28 +124,6 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const fileComponent = useFileComponent()
   let scrollRef: HTMLDivElement | undefined
   let focusToken = 0
-  let lastScrollTop = 0
-  let lastScrollFile = props.file
-
-  // Reset saved scroll position when the file changes
-  createEffect(() => {
-    const file = props.file
-    if (file !== lastScrollFile) {
-      lastScrollTop = 0
-      lastScrollFile = file
-    }
-  })
-
-  // Restore scroll position after diff content changes (e.g. agent tool completions)
-  createEffect(() => {
-    const _ = view() // re-run when diff data changes
-    if (lastScrollTop > 0 && scrollRef) {
-      const target = lastScrollTop
-      requestAnimationFrame(() => {
-        if (scrollRef) scrollRef.scrollTop = target
-      })
-    }
-  })
 
   const [store, setStore] = createStore({
     selection: null as SelectedLineRange | null,
@@ -265,15 +243,18 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle")
   let saveTimer: ReturnType<typeof setTimeout> | undefined
   let savedTimer: ReturnType<typeof setTimeout> | undefined
-  const isEditable = () => view().status !== "deleted"
+  const isPreviewMd = () => props.diffStyle === "preview" && /\.md$/i.test(props.file)
+  const isDeleted = () => view().status === "deleted"
+  const isEditable = () => !isPreviewMd() && !isDeleted()
   const isReadOnly = () => !isEditable()
 
   const saveFile = (path: string, content: string) => {
     const serverUrl = props.serverUrl
     if (!serverUrl) return
 
+    const home = typeof process !== "undefined" ? process.env?.HOME ?? "" : ""
     const fsPath = path.startsWith("~/")
-      ? path.replace("~", (typeof process !== "undefined" && process.env?.HOME) ?? "")
+      ? path.replace("~", home)
       : path
 
     setSaveStatus("saving")
@@ -360,8 +341,9 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const handleRevert = () => {
     if (!props.serverUrl) return
     const original = text(view(), "deletions")
+    const homeDir = typeof process !== "undefined" ? process.env?.HOME ?? "" : ""
     const fsPath = props.file.startsWith("~/")
-      ? props.file.replace("~", (typeof process !== "undefined" && process.env?.HOME) ?? "")
+      ? props.file.replace("~", homeDir)
       : props.file
 
     setSaveStatus("saving")
@@ -384,6 +366,18 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   }
 
   // ─── Diff viewer (CM6 EditableDiffView or legacy fallback for D files) ──
+  //
+  // IMPORTANT: diffViewer is called as {diffViewer()} inside a <Show>, which
+  // makes it a reactive computation in SolidJS. If the function body reads
+  // signals directly (view(), props.diffStyle), any change to those signals
+  // re-runs the ENTIRE function, destroying and recreating the DOM tree —
+  // including EditableDiffView, which loses scroll position and editor state.
+  //
+  // To prevent this, all branching uses declarative <Show> instead of
+  // imperative if/else. The function runs ONCE, returns a single JSX tree,
+  // and SolidJS patches it in-place when reactive values update. The
+  // EditableDiffView stays mounted across view() changes; its internal
+  // createEffect only fires when the actual text content changes.
 
   const fileExtension = () => {
     const parts = props.file.split(".")
@@ -391,130 +385,128 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   }
 
   const diffViewer = () => {
-    // Preview mode: render markdown for .md files
-    if (props.diffStyle === "preview" && /\.md$/i.test(props.file)) {
-      const modifiedContent = text(view(), "additions")
-      return (
-        <div
-          data-slot="session-review-v2-markdown-preview"
-          style={{
-            padding: "16px",
-            overflow: "auto",
-            height: "100%",
-          }}
-        >
-          <Markdown text={preprocessMarkdown(modifiedContent)} />
-        </div>
-      )
-    }
-
-    // For deleted files, fall back to the legacy read-only renderer
-    if (view().status === "deleted") {
-      return (
-        <Dynamic
-          component={fileComponent}
-          mode="diff"
-          fileDiff={view().fileDiff}
-          preloadedDiff={view().preloaded}
-          diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
-          expandUnchanged={expandUnchanged()}
-          virtualize={shouldVirtualizeReviewDiff({
-            additionLines: view().fileDiff.additionLines.length,
-            deletionLines: view().fileDiff.deletionLines.length,
-          })}
-          hunkSeparators={view().fileDiff.isPartial ? "simple" : "line-info-basic"}
-          enableLineSelection={lineCommentsEnabled()}
-          enableGutterUtility={lineCommentsEnabled()}
-          onLineSelected={(range: SelectedLineRange | null) => {
-            if (!lineCommentsEnabled()) return
-            commentsUi.onLineSelected(range)
-          }}
-          onLineSelectionEnd={(range: SelectedLineRange | null) => {
-            if (!lineCommentsEnabled()) return
-            commentsUi.onLineSelectionEnd(range)
-          }}
-          onLineNumberSelectionEnd={commentsUi.onLineNumberSelectionEnd}
-          annotations={commentsUi.annotations()}
-          renderAnnotation={commentsUi.renderAnnotation}
-          renderGutterUtility={lineCommentsEnabled() ? commentsUi.renderGutterUtility : undefined}
-          selectedLines={store.selection}
-          commentedLines={commentedLines()}
-          media={{
-            mode: "auto",
-            path: props.file,
-            deleted: true,
-            readFile: undefined,
-          }}
-        />
-      )
-    }
-
-    // For A/M files, use the editable CM6 diff view
-    const originalContent = () => text(view(), "deletions")
-    const modifiedContent = () => text(view(), "additions")
-
     return (
-      <div onKeyDown={handleImmediateSave} style={{ height: "100%" }}>
-        <Show when={externalChange()}>
+      <>
+        {/* Branch 1: Markdown preview mode for .md files */}
+        <Show when={isPreviewMd()}>
           <div
-            data-slot="session-review-v2-external-change-banner"
+            data-slot="session-review-v2-markdown-preview"
             style={{
-              display: "flex",
-              "align-items": "center",
-              "justify-content": "space-between",
-              padding: "6px 12px",
-              "background-color": "var(--amc-warning, #ffc107)",
-              color: "var(--amc-bg, #000)",
-              "font-size": "12px",
-              "border-radius": "4px",
-              margin: "4px 0",
+              padding: "16px",
+              overflow: "auto",
+              height: "100%",
             }}
           >
-            <span>This file was changed by the agent.</span>
-            <span style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={handleReload}
-                style={{
-                  border: "1px solid currentColor",
-                  background: "transparent",
-                  color: "inherit",
-                  padding: "2px 8px",
-                  "border-radius": "3px",
-                  cursor: "pointer",
-                  "font-size": "11px",
-                }}
-              >
-                Reload
-              </button>
-              <button
-                type="button"
-                onClick={handleKeep}
-                style={{
-                  border: "1px solid currentColor",
-                  background: "transparent",
-                  color: "inherit",
-                  padding: "2px 8px",
-                  "border-radius": "3px",
-                  cursor: "pointer",
-                  "font-size": "11px",
-                }}
-              >
-                Keep
-              </button>
-            </span>
+            <Markdown text={preprocessMarkdown(text(view(), "additions"))} />
           </div>
         </Show>
-        <EditableDiffView
-          original={originalContent()}
-          modified={modifiedContent()}
-          language={fileExtension()}
-          diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
-          readOnly={!!props.isAgentBusy}
-          onChange={handleChangeWithTracking}
-          onRevert={handleRevert}
-        />
-      </div>
+
+        {/* Branch 2: Deleted files — legacy read-only renderer */}
+        <Show when={!isPreviewMd() && isDeleted()}>
+          <Dynamic
+            component={fileComponent}
+            mode="diff"
+            fileDiff={view().fileDiff}
+            preloadedDiff={view().preloaded}
+            diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
+            expandUnchanged={expandUnchanged()}
+            virtualize={shouldVirtualizeReviewDiff({
+              additionLines: view().fileDiff.additionLines.length,
+              deletionLines: view().fileDiff.deletionLines.length,
+            })}
+            hunkSeparators={view().fileDiff.isPartial ? "simple" : "line-info-basic"}
+            enableLineSelection={lineCommentsEnabled()}
+            enableGutterUtility={lineCommentsEnabled()}
+            onLineSelected={(range: SelectedLineRange | null) => {
+              if (!lineCommentsEnabled()) return
+              commentsUi.onLineSelected(range)
+            }}
+            onLineSelectionEnd={(range: SelectedLineRange | null) => {
+              if (!lineCommentsEnabled()) return
+              commentsUi.onLineSelectionEnd(range)
+            }}
+            onLineNumberSelectionEnd={commentsUi.onLineNumberSelectionEnd}
+            annotations={commentsUi.annotations()}
+            renderAnnotation={commentsUi.renderAnnotation}
+            renderGutterUtility={lineCommentsEnabled() ? commentsUi.renderGutterUtility : undefined}
+            selectedLines={store.selection}
+            commentedLines={commentedLines()}
+            media={{
+              mode: "auto",
+              path: props.file,
+              deleted: true,
+              readFile: undefined,
+            }}
+          />
+        </Show>
+
+        {/* Branch 3: Added/Modified files — editable CM6 diff view.
+            This <Show> keeps EditableDiffView mounted across view() updates;
+            props update reactively without tearing down the editor. */}
+        <Show when={isEditable()}>
+          <div onKeyDown={handleImmediateSave} style={{ height: "100%" }}>
+            <Show when={externalChange()}>
+              <div
+                data-slot="session-review-v2-external-change-banner"
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  "justify-content": "space-between",
+                  padding: "6px 12px",
+                  "background-color": "var(--amc-warning, #ffc107)",
+                  color: "var(--amc-bg, #000)",
+                  "font-size": "12px",
+                  "border-radius": "4px",
+                  margin: "4px 0",
+                }}
+              >
+                <span>This file was changed by the agent.</span>
+                <span style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={handleReload}
+                    style={{
+                      border: "1px solid currentColor",
+                      background: "transparent",
+                      color: "inherit",
+                      padding: "2px 8px",
+                      "border-radius": "3px",
+                      cursor: "pointer",
+                      "font-size": "11px",
+                    }}
+                  >
+                    Reload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleKeep}
+                    style={{
+                      border: "1px solid currentColor",
+                      background: "transparent",
+                      color: "inherit",
+                      padding: "2px 8px",
+                      "border-radius": "3px",
+                      cursor: "pointer",
+                      "font-size": "11px",
+                    }}
+                  >
+                    Keep
+                  </button>
+                </span>
+              </div>
+            </Show>
+            <EditableDiffView
+              original={text(view(), "deletions")}
+              modified={text(view(), "additions")}
+              language={fileExtension()}
+              diffStyle={props.diffStyle === "preview" ? "split" : props.diffStyle}
+              readOnly={!!props.isAgentBusy}
+              onChange={handleChangeWithTracking}
+              onRevert={handleRevert}
+            />
+          </div>
+        </Show>
+      </>
     )
   }
 
@@ -639,9 +631,6 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
       <div
         ref={(el) => {
           scrollRef = el
-        }}
-        onScroll={(e) => {
-          lastScrollTop = (e.currentTarget as HTMLElement).scrollTop
         }}
         data-slot="session-review-v2-diff-scroll"
       >

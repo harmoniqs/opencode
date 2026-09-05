@@ -12,6 +12,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  untrack,
   type JSX,
 } from "solid-js"
 import type { LanguageSupport } from "@codemirror/language"
@@ -20,6 +21,7 @@ import {
   buildThemeExtension,
   createDiffEditor,
   detectMode,
+  findScrollParent,
   type DiffEditorHandle,
 } from "./editable-diff-view-core"
 
@@ -29,6 +31,7 @@ export {
   buildThemeExtension,
   createDiffEditor,
   detectMode,
+  findScrollParent,
   type DiffEditorHandle,
 } from "./editable-diff-view-core"
 
@@ -75,21 +78,26 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
     setLangSupport(lang)
   })
 
-  // Create/recreate editors when key props change
+  // -----------------------------------------------------------------------
+  // CREATION EFFECT — runs only on structural changes that require a new
+  // editor: diffStyle (split ↔ unified) and language grammar.
+  // Content and readOnly changes are handled in-place by effects below.
+  // -----------------------------------------------------------------------
   createEffect(() => {
-    const original = props.original
-    const modified = props.modified
+    // Track only the structural dependencies
     const diffStyle = props.diffStyle
-    const readOnly = props.readOnly
     const lang = langSupport()
     const mode = detectMode()
     const theme = buildThemeExtension(mode)
-    const onChange = props.onChange
 
-    // Save scroll position before teardown
-    const savedScrollTop = handle?.scrollDOM?.scrollTop ?? 0
+    // Read content and readOnly WITHOUT tracking — we don't want these
+    // changes to re-run this effect and destroy the editor.
+    const original = untrack(() => props.original)
+    const modified = untrack(() => props.modified)
+    const readOnly = untrack(() => props.readOnly)
+    const onChange = untrack(() => props.onChange)
 
-    // Tear down previous
+    // Tear down previous editor
     if (handle) {
       handle.destroy()
       handle = null
@@ -108,14 +116,36 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
       language: lang,
       onChange: readOnly ? undefined : onChange,
     })
+  })
 
-    // Restore scroll position after the new editor has laid out
-    if (savedScrollTop > 0) {
-      requestAnimationFrame(() => {
-        const scrollEl = handle?.scrollDOM
-        if (scrollEl) scrollEl.scrollTop = savedScrollTop
-      })
-    }
+  // -----------------------------------------------------------------------
+  // CONTENT EFFECT — runs when props.original or props.modified change.
+  // Dispatches in-place CM6 transactions via minimalChanges — no editor
+  // teardown, no DOM disruption, no scroll displacement.
+  // -----------------------------------------------------------------------
+  createEffect(() => {
+    // Track the content dependencies
+    const original = props.original
+    const modified = props.modified
+
+    // Only dispatch if the editor exists (creation effect ran first)
+    if (!handle) return
+
+    handle.updateOriginal(original)
+    handle.updateModified(modified)
+  })
+
+  // -----------------------------------------------------------------------
+  // READONLY EFFECT — runs when props.readOnly changes.
+  // Reconfigures the Compartment in-place — no editor teardown, no scroll
+  // displacement. Passes onChange when switching to editable.
+  // -----------------------------------------------------------------------
+  createEffect(() => {
+    const readOnly = props.readOnly
+
+    if (!handle) return
+
+    handle.setReadOnly(readOnly, readOnly ? undefined : untrack(() => props.onChange))
   })
 
   onCleanup(() => {

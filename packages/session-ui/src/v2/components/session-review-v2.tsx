@@ -151,7 +151,8 @@ export function SessionReviewV2(props: SessionReviewV2Props) {
   const i18n = useI18n()
 
   createEffect(() => {
-    getWorkerPool(props.diffStyle)
+    const style = props.diffStyle
+    getWorkerPool(style === "preview" ? undefined : style)
   })
 
   const fileIndex = () => {

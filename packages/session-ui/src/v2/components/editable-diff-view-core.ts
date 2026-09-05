@@ -8,7 +8,7 @@
  * @module
  */
 
-import { EditorState, type Extension } from "@codemirror/state"
+import { Compartment, EditorState, Transaction, ChangeSet, type Extension } from "@codemirror/state"
 import {
   EditorView,
   lineNumbers,
@@ -16,7 +16,12 @@ import {
   highlightActiveLine,
   highlightSpecialChars,
 } from "@codemirror/view"
-import { MergeView, unifiedMergeView } from "@codemirror/merge"
+import {
+  MergeView,
+  unifiedMergeView,
+  originalDocChangeEffect,
+  getOriginalDoc,
+} from "@codemirror/merge"
 import { type LanguageSupport } from "@codemirror/language"
 import {
   HighlightStyle,
@@ -196,38 +201,18 @@ export function buildSyntaxHighlightStyle(): Extension {
 // Shared extensions — base setup shared by all editor instances.
 // ---------------------------------------------------------------------------
 
-export function baseExtensions(opts: {
+/**
+ * Build the mutable extensions that live inside a Compartment and can be
+ * swapped via `setReadOnly()` without re-creating the editor.
+ */
+export function editableExtensions(opts: {
   readOnly: boolean
-  theme: Extension
-  language?: LanguageSupport | null
   onChange?: (content: string) => void
 }): Extension[] {
   const exts: Extension[] = [
-    lineNumbers(),
-    highlightActiveLine(),
-    highlightSpecialChars(),
-    drawSelection(),
-    EditorView.lineWrapping,
-    buildSyntaxHighlightStyle(),
-    opts.theme,
     EditorView.editable.of(!opts.readOnly),
     EditorState.readOnly.of(opts.readOnly),
   ]
-
-  // CM6's readOnly facet only filters user-generated transactions.
-  // Add a transactionFilter that blocks ALL document changes when readOnly.
-  if (opts.readOnly) {
-    exts.push(
-      EditorState.transactionFilter.of((tr) => {
-        if (tr.docChanged) return []
-        return tr
-      }),
-    )
-  }
-
-  if (opts.language) {
-    exts.push(opts.language)
-  }
 
   if (opts.onChange && !opts.readOnly) {
     exts.push(
@@ -240,6 +225,22 @@ export function baseExtensions(opts: {
   }
 
   return exts
+}
+
+export function baseExtensions(opts: {
+  theme: Extension
+  language?: LanguageSupport | null
+}): Extension[] {
+  return [
+    lineNumbers(),
+    highlightActiveLine(),
+    highlightSpecialChars(),
+    drawSelection(),
+    EditorView.lineWrapping,
+    buildSyntaxHighlightStyle(),
+    opts.theme,
+    ...(opts.language ? [opts.language] : []),
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +260,22 @@ export interface DiffEditorHandle {
   revert: (original: string) => void
   /** Get the current document content. */
   getContent: () => string
+  /**
+   * Update the original (left/before) document in place via CM6 dispatch.
+   * No editor re-creation. No-op if text is unchanged.
+   */
+  updateOriginal: (text: string) => void
+  /**
+   * Update the modified (right/after) document in place via CM6 dispatch.
+   * No editor re-creation. No-op if text is unchanged.
+   */
+  updateModified: (text: string) => void
+  /**
+   * Toggle readOnly state in place via Compartment reconfigure.
+   * No editor re-creation, no scroll displacement.
+   * Pass `onChange` when switching to editable to re-attach the listener.
+   */
+  setReadOnly: (readOnly: boolean, onChange?: (content: string) => void) => void
 }
 
 export function createDiffEditor(opts: {
@@ -274,25 +291,38 @@ export function createDiffEditor(opts: {
   let mergeView: MergeView | null = null
   let editorView: EditorView | null = null
 
+  // Compartment for the mutable readOnly/onChange extensions on the
+  // modifiable pane. Reconfigured in-place by setReadOnly() — no editor
+  // teardown, no scroll displacement.
+  const editableCompartment = new Compartment()
+
+  const base = baseExtensions({
+    theme: opts.theme,
+    language: opts.language,
+  })
+
   if (opts.diffStyle === "split") {
     mergeView = new MergeView({
       parent: opts.parent,
       a: {
         doc: opts.original,
-        extensions: baseExtensions({
-          readOnly: true,
-          theme: opts.theme,
-          language: opts.language,
-        }),
+        extensions: [
+          ...base,
+          // Original pane is always readOnly, no compartment needed
+          ...editableExtensions({ readOnly: true }),
+        ],
       },
       b: {
         doc: opts.modified,
-        extensions: baseExtensions({
-          readOnly: opts.readOnly,
-          theme: opts.theme,
-          language: opts.language,
-          onChange: opts.readOnly ? undefined : opts.onChange,
-        }),
+        extensions: [
+          ...base,
+          editableCompartment.of(
+            editableExtensions({
+              readOnly: opts.readOnly,
+              onChange: opts.readOnly ? undefined : opts.onChange,
+            }),
+          ),
+        ],
       },
     })
 
@@ -305,12 +335,13 @@ export function createDiffEditor(opts: {
     // Unified mode: @codemirror/merge's unifiedMergeView — the standard CM6
     // inline diff that interleaves deleted lines with the editable document.
     const extensions: Extension[] = [
-      ...baseExtensions({
-        readOnly: opts.readOnly,
-        theme: opts.theme,
-        language: opts.language,
-        onChange: opts.readOnly ? undefined : opts.onChange,
-      }),
+      ...base,
+      editableCompartment.of(
+        editableExtensions({
+          readOnly: opts.readOnly,
+          onChange: opts.readOnly ? undefined : opts.onChange,
+        }),
+      ),
       unifiedMergeView({
         original: EditorState.create({ doc: opts.original }).doc,
         mergeControls: false,
@@ -374,6 +405,52 @@ export function createDiffEditor(opts: {
       const view = getActiveView()
       return view?.state.doc.toString() ?? ""
     },
+    updateOriginal(text: string) {
+      if (mergeView) {
+        // Split mode: dispatch minimal change to the A (original) pane
+        const aView = mergeView.a
+        const current = aView.state.doc.toString()
+        const change = minimalChanges(current, text)
+        if (!change) return
+        aView.dispatch({
+          changes: change,
+          annotations: Transaction.addToHistory.of(false),
+        })
+      } else if (editorView) {
+        // Unified mode: update via originalDocChangeEffect
+        const origDoc = getOriginalDoc(editorView.state)
+        const currentText = origDoc.toString()
+        if (currentText === text) return
+        const changes = ChangeSet.of(
+          { from: 0, to: origDoc.length, insert: text },
+          origDoc.length,
+        )
+        editorView.dispatch({
+          effects: originalDocChangeEffect(editorView.state, changes),
+          annotations: Transaction.addToHistory.of(false),
+        })
+      }
+    },
+    updateModified(text: string) {
+      const view = getActiveView()
+      if (!view) return
+      const current = view.state.doc.toString()
+      const change = minimalChanges(current, text)
+      if (!change) return
+      view.dispatch({
+        changes: change,
+        annotations: Transaction.addToHistory.of(false),
+      })
+    },
+    setReadOnly(readOnly: boolean, onChange?: (content: string) => void) {
+      const view = getActiveView()
+      if (!view) return
+      view.dispatch({
+        effects: editableCompartment.reconfigure(
+          editableExtensions({ readOnly, onChange }),
+        ),
+      })
+    },
   }
 }
 
@@ -397,4 +474,72 @@ export function detectMode(): "light" | "dark" {
   )
     return "dark"
   return "light"
+}
+
+// ---------------------------------------------------------------------------
+// Minimal change computation — shared by updateOriginal / updateModified
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the smallest `{from, to, insert}` that transforms `oldText` into
+ * `newText`, via common-prefix / common-suffix scan.  Returns `null` when the
+ * two strings are identical (no change needed).
+ *
+ * This gives CM6 a focused change description so its internal scroll mapping
+ * adjusts the viewport correctly — a full-document replace (`{from: 0,
+ * to: doc.length, insert: newText}`) would reset scroll to the top.
+ */
+export function minimalChanges(
+  oldText: string,
+  newText: string,
+): { from: number; to: number; insert: string } | null {
+  if (oldText === newText) return null
+
+  // Find common prefix length
+  let prefix = 0
+  const minLen = Math.min(oldText.length, newText.length)
+  while (prefix < minLen && oldText[prefix] === newText[prefix]) prefix++
+
+  // Find common suffix length (must not overlap with prefix)
+  let oldSuffix = oldText.length
+  let newSuffix = newText.length
+  while (
+    oldSuffix > prefix &&
+    newSuffix > prefix &&
+    oldText[oldSuffix - 1] === newText[newSuffix - 1]
+  ) {
+    oldSuffix--
+    newSuffix--
+  }
+
+  return {
+    from: prefix,
+    to: oldSuffix,
+    insert: newText.slice(prefix, newSuffix),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scroll preservation helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk up from `el` to find the nearest ancestor with a non-zero scrollTop.
+ * Returns the element and its scrollTop, or null if nothing is scrolled.
+ *
+ * Used by the SolidJS wrapper to save/restore the parent scroll container's
+ * position across CM6 teardown/recreate cycles — the container's innerHTML
+ * clear resets the parent's scrollTop before any async event can capture it.
+ */
+export function findScrollParent(
+  el: HTMLElement,
+): { element: HTMLElement; scrollTop: number } | null {
+  let node: HTMLElement | null = el.parentElement
+  while (node) {
+    if (node.scrollTop > 0) {
+      return { element: node, scrollTop: node.scrollTop }
+    }
+    node = node.parentElement
+  }
+  return null
 }
