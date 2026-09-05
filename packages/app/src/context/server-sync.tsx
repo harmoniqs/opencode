@@ -404,9 +404,14 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         limit: retainedLimit,
         permission: session.data.permission,
       })
-      if (next.length !== store.session.length) {
-        setStore("session", reconcile(next, { key: "id" }))
-      }
+      batch(() => {
+        // D2 honest states: a completed list fetch means the UI may render
+        // "genuinely empty" — never "not yet fetched".
+        if (!store.sessions_fetched) setStore("sessions_fetched", true)
+        if (next.length !== store.session.length) {
+          setStore("session", reconcile(next, { key: "id" }))
+        }
+      })
       children.unpin(key)
       return
     }
@@ -447,6 +452,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
                     limited: x.limited,
                   }),
                 )
+                // D2 honest states: the fetch resolved (even to empty) — the
+                // UI may now distinguish "genuinely empty" from "not yet
+                // fetched".
+                setStore("sessions_fetched", true)
                 setStore("session", reconcile(next, { key: "id" }))
               })
               sessionMeta.set(key, { limit: retained })
@@ -658,6 +667,29 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     },
     icon(directory: string, value: string | undefined) {
       children.projectIcon(directory, value)
+    },
+    // D2 in-product reset: clears session caches ONLY — in-memory session
+    // state plus the session-list query keys. Persisted workspace preferences
+    // (settings, archive cutoff, posture config) live in stores this never
+    // touches, so recovery never destroys configuration and never requires
+    // filesystem surgery (#293).
+    resetSessionCaches() {
+      sessionMeta.clear()
+      for (const child of Object.values(children.children)) {
+        const [store, setStore] = child
+        batch(() => {
+          if (store.sessions_fetched) setStore("sessions_fetched", false)
+          if (store.sessionTotal !== 0) setStore("sessionTotal", 0)
+          setStore("session", reconcile([], { key: "id" }))
+          setStore("session_status", reconcile({}))
+        })
+      }
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const name = (query.queryKey as readonly unknown[])[2]
+          return name === "loadSessions" || name === "activeSessions"
+        },
+      })
     },
   }
 

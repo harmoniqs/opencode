@@ -23,6 +23,7 @@ export const dict = {
 
   "command.sidebar.toggle": "สลับแถบข้าง",
   "command.project.open": "เปิดโปรเจกต์",
+  "command.panel.reset": "รีเซ็ตสถานะแผง",
   "command.project.previous": "โปรเจกต์ก่อนหน้า",
   "command.project.next": "โปรเจกต์ถัดไป",
   "command.project.index": "สลับไปยังโปรเจกต์ {{index}}",
