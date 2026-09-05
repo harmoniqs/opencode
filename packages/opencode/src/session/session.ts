@@ -946,6 +946,12 @@ const layer: Layer.Layer<
         }
       }
 
+      // Snapshots exist but the agent touched no files (e.g. plan-only session).
+      // Return empty — do NOT fall through to the legacy fallbacks, whose
+      // summary.diffs are unfiltered snapshot diffs that include cross-session
+      // changes (the computeDiff contamination vector from #733).
+      if (from) return [] as Snapshot.FileDiff[]
+
       // Fallback 1: aggregate stored per-message summary diffs across the session.
       const seen = new Map<string, Snapshot.FileDiff>()
       for (const msg of all) {

@@ -456,4 +456,88 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )
+
+  it.instance(
+    "returns [] for session with snapshots but no tool edits (plan-mode cross-session leak fix)",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "plan-mode-leak" })
+        const snapshotSvc = yield* Snapshot.Service
+        const fs = yield* FSUtil.Service
+
+        // Take the session-start snapshot (before any external edits)
+        const startHash = yield* snapshotSvc.track()
+        expect(startHash).toBeTruthy()
+
+        // Create a user message
+        const userMsgID = MessageID.ascending()
+        yield* Session.use.updateMessage({
+          id: userMsgID,
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "plan",
+          model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("model") },
+        } satisfies SessionV1.User)
+
+        // Attach step-start part (records session-start snapshot)
+        yield* Session.use.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: userMsgID,
+          type: "step-start",
+          snapshot: startHash!,
+        })
+
+        // Simulate an external change (another session editing a file)
+        yield* fs.writeWithDirs(path.join(test.directory, "foreign-edit.ts"), "edited by another session")
+
+        // Take the step-finish snapshot (captures the foreign edit)
+        const endHash = yield* snapshotSvc.track()
+        expect(endHash).toBeTruthy()
+        expect(endHash).not.toBe(startHash)
+
+        // Attach step-finish part
+        yield* Session.use.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: userMsgID,
+          type: "step-finish",
+          snapshot: endHash!,
+          reason: "done",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        } as any)
+
+        // Store contaminated summary.diffs (simulating what computeDiff produces)
+        // This is what summarize() does after step-finish — unfiltered snapshot diff
+        yield* Session.use.updateMessage({
+          id: userMsgID,
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "plan",
+          model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("model") },
+          summary: {
+            diffs: [
+              { file: "foreign-edit.ts", additions: 1, deletions: 0, status: "added" as const },
+            ],
+          },
+        } satisfies SessionV1.User)
+
+        // NO tool parts with filediff — this is a plan-mode session
+
+        // The diff should be empty: snapshots exist, so Fallback 1 should NOT
+        // serve contaminated summary.diffs from computeDiff
+        const response = yield* requestInDirectory(
+          pathFor(SessionPaths.diff, { sessionID: session.id }),
+          test.directory,
+        )
+        expect(response.status).toBe(200)
+        const diffs = (yield* response.json) as Array<{ file: string }>
+        expect(diffs).toEqual([])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
 })
