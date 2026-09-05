@@ -28,6 +28,7 @@ import {
 import { createChildStoreManager } from "./global-sync/child-store"
 import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
 import { estimateRootSessionTotal, loadRootSessions, loadRootSessionsV1 } from "./global-sync/session-load"
+import { bootCurrencyDecision, toSnapshot } from "./global-sync/session-snapshot"
 import { trimSessions } from "./global-sync/session-trim"
 import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
@@ -459,6 +460,15 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
                 setStore("session", reconcile(next, { key: "id" }))
               })
               sessionMeta.set(key, { limit: retained })
+              // D2: verify the persisted snapshot against the server's
+              // derived currency token — a stale or tokenless snapshot is
+              // invalidated by this overwrite, so the #293 shape self-heals
+              // on boot with zero manual action.
+              const decision = bootCurrencyDecision({
+                snapshot: children.sessionSnapshot(directory),
+                response: { sessions: next, currency: x.currency },
+              })
+              children.writeSessionSnapshot(directory, toSnapshot(next, decision.currency))
             })
             .catch((err) => {
               console.error("Failed to load sessions", err)
@@ -675,6 +685,9 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     // filesystem surgery (#293).
     resetSessionCaches() {
       sessionMeta.clear()
+      // D2: the persisted snapshots are session caches — the reset invalidates
+      // every one of them (they re-prime from the next fetch).
+      children.resetSessionSnapshots()
       for (const child of Object.values(children.children)) {
         const [store, setStore] = child
         batch(() => {

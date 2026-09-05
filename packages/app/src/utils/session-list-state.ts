@@ -36,6 +36,7 @@ export function panelResetTouches(): readonly string[] {
     "sessionTotal",
     "session_diff",
     "diff_version",
+    "session:snapshot",
     "loadSessions",
     "activeSessions",
   ]
