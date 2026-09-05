@@ -28,6 +28,7 @@ export const dict = {
   "command.sidebar.toggle": "切换侧边栏",
 
   "command.project.open": "打开项目",
+  "command.panel.reset": "重置面板状态",
   "command.project.previous": "上一个项目",
   "command.project.next": "下一个项目",
   "command.project.index": "切换到项目 {{index}}",

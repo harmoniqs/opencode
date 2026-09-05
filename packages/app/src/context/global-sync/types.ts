@@ -16,6 +16,7 @@ import type {
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import type { CommandInfo, McpResource, McpServer, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionSnapshot } from "./session-snapshot"
 import type { Accessor } from "solid-js"
 import type { SetStoreFunction, Store } from "solid-js/store"
 
@@ -44,6 +45,10 @@ export type State = {
   path: Path
   session: Session[]
   sessionTotal: number
+  // D2 honest states: has a session-list fetch completed for this directory?
+  // A persisted snapshot is a render accelerator, never an authority — until a
+  // fetch resolves, the UI renders "not yet fetched", never "empty".
+  sessions_fetched?: boolean
   session_status: {
     [sessionID: string]: SessionStatus
   }
@@ -91,6 +96,12 @@ export type State = {
 export type VcsCache = {
   store: Store<{ value: VcsInfo | undefined }>
   setStore: SetStoreFunction<{ value: VcsInfo | undefined }>
+  ready: Accessor<boolean>
+}
+
+export type SessionSnapshotCache = {
+  store: Store<{ value: SessionSnapshot | undefined }>
+  setStore: SetStoreFunction<{ value: SessionSnapshot | undefined }>
   ready: Accessor<boolean>
 }
 
