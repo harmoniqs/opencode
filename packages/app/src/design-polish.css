@@ -151,13 +151,12 @@
 }
 
 /* ── prompt bubble ground — per-scheme REALISATION ──
-   The user's words are a SOLID YELLOW chip (Aaron 2026-09-03): the brand
-   accent fill in both schemes, black ink on it — the site's chip grammar,
-   black-on-yellow. On LIGHT the yellow cannot define its own edge on the
-   near-white ground, so it takes the site's ink border (--brand-yellow-border
-   rule); on DARK the solid yellow reads loud against the deep ground and
-   needs no edge — the border token goes transparent (width kept, so the
-   bubble's geometry never shifts between schemes). */
+   The user's words, both schemes (Aaron 2026-09-05): on LIGHT the site's
+   solid yellow chip — --accent fill, --accent-ink, the ink border (--accent-
+   edge-ink; yellow can't define itself on the near-white ground). On DARK
+   the chip inverts into a dark box with the FULL-strength yellow border —
+   the loud yellow outline is the user's signature, one step louder than the
+   assistant fragments' --accent-edge (45%) hairline — under base ink. */
 :root,
 [data-color-scheme="light"] {
   --prompt-bubble-bg: var(--accent);
@@ -165,15 +164,15 @@
   --prompt-bubble-edge: var(--accent-edge-ink);
 }
 [data-color-scheme="dark"] {
-  --prompt-bubble-bg: var(--accent);
-  --prompt-bubble-ink: var(--accent-ink);
-  --prompt-bubble-edge: transparent;
+  --prompt-bubble-bg: var(--v2-background-bg-layer-01);
+  --prompt-bubble-ink: var(--v2-text-text-base);
+  --prompt-bubble-edge: var(--accent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
-    --prompt-bubble-bg: var(--accent);
-    --prompt-bubble-ink: var(--accent-ink);
-    --prompt-bubble-edge: transparent;
+    --prompt-bubble-bg: var(--v2-background-bg-layer-01);
+    --prompt-bubble-ink: var(--v2-text-text-base);
+    --prompt-bubble-edge: var(--accent);
   }
 }
 
