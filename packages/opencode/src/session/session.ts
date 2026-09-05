@@ -28,6 +28,7 @@ import { or } from "drizzle-orm"
 import type { SQL } from "drizzle-orm"
 import { PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
+import { AbsolutePath } from "@opencode-ai/core/schema"
 import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
 import { InstanceState } from "@/effect/instance-state"
@@ -488,7 +489,7 @@ export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" 
 const layer: Layer.Layer<
   Service,
   never,
-  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | Snapshot.Service
+  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | Snapshot.Service | ProjectV2.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -498,6 +499,7 @@ const layer: Layer.Layer<
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
     const snapshot = yield* Snapshot.Service
+    const projectV2 = yield* ProjectV2.Service
 
     const createNext = Effect.fn("Session.createNext")(function* (input: {
       id?: SessionID
@@ -760,13 +762,31 @@ const layer: Layer.Layer<
 
     const setArchived = Effect.fn("Session.setArchived")(function* (input: { sessionID: SessionID; time?: number }) {
       const current = yield* get(input.sessionID).pipe(Effect.orDie)
+      // D1: restoring re-resolves the session's home by worktree, so archive
+      // never strands a session on a retired project row — the row the
+      // directory resolves to now wins, in the row AND in the published event
+      // (the projector rewrites the whole session row from the event).
+      let projectID = current.projectID
+      if (input.time === undefined) {
+        const resolved = yield* projectV2.resolve(AbsolutePath.make(current.directory))
+        if (resolved.id !== current.projectID) {
+          yield* db
+            .insert(ProjectTable)
+            .values({ id: resolved.id, worktree: resolved.directory, vcs: resolved.vcs?.type ?? null, sandboxes: [] })
+            .onConflictDoNothing()
+            .run()
+            .pipe(Effect.orDie)
+          projectID = resolved.id
+        }
+      }
       const next = {
         ...current,
+        projectID,
         time: { ...current.time, archived: input.time, updated: Date.now() },
       } as Info
       yield* db
         .update(SessionTable)
-        .set({ time_archived: input.time ?? null, time_updated: next.time.updated })
+        .set({ time_archived: input.time ?? null, time_updated: next.time.updated, project_id: projectID })
         .where(eq(SessionTable.id, input.sessionID))
         .run()
         .pipe(Effect.orDie)
@@ -1188,7 +1208,7 @@ function listByProject(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node, Snapshot.node],
+  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node, Snapshot.node, ProjectV2.node],
 })
 
 export * as Session from "./session"
