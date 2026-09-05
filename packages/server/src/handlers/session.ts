@@ -1,4 +1,6 @@
 import { SessionV2 } from "@opencode-ai/core/session"
+import { SessionCurrency } from "@opencode-ai/core/session/currency"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
@@ -39,6 +41,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
           const last = sessions.at(-1)
           return {
             data: sessions,
+            // D2: recomputed from the rendered rows on every response — the
+            // token is derived, never hand-bumped.
+            currency: SessionCurrency.token(SessionCurrency.projection(sessions), InstallationVersion),
             cursor: {
               previous: first
                 ? SessionsCursor.make({
