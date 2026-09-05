@@ -28,6 +28,7 @@ type MessageApi = ServerApi["message"]
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const cmpMessage = (a: Message, b: Message) => a.time.created - b.time.created || cmp(a.id, b.id)
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
 const initialMessagePageSize = 20
 const historyMessagePageSize = 200
 const sessionInfoLimit = 2_048
@@ -1149,6 +1150,17 @@ export function createServerSession(
             next.splice(result.index, 0, part)
             return next
           })
+        // Bump diff_version when a file-editing tool completes so the diff
+        // query refetches mid-turn. The equivalent logic in event-reducer.ts
+        // is unreachable because the SSE path skips SESSION_CONTENT_EVENTS.
+        if (
+          part.type === "tool" &&
+          EDIT_TOOLS.has(part.tool) &&
+          part.state.status === "completed" &&
+          (part.state as { metadata?: Record<string, unknown> }).metadata?.filediff
+        ) {
+          setData("diff_version", part.sessionID, (v = 0) => v + 1)
+        }
         return
       }
       case "message.part.removed": {

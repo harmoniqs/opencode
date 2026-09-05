@@ -29,7 +29,7 @@ import { normalize, text, type ViewDiff } from "./session-diff"
 const MAX_DIFF_CHANGED_LINES = 500
 const REVIEW_MOUNT_MARGIN = 300
 
-export type SessionReviewDiffStyle = "unified" | "split"
+export type SessionReviewDiffStyle = "unified" | "split" | "preview"
 
 export type SessionReviewComment = {
   id: string
