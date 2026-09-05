@@ -236,14 +236,36 @@
    one-container-per-reply segment). Each chunk of a streamed reply arrives
    as its own card with its own entrance; history splits identically so the
    cards persist. Chips/receipts keep their borderless chip grammar. The
-   hairline is the theme's default border, the radius the brand 4px. */
+   hairline is the theme's default border, the radius the brand 4px.
+
+   Ground seated per scheme (Aaron 2026-09-05): DARK lifts the fragment onto
+   layer-01 with the brand's yellow edge — --accent-edge, the yellow-on-dark
+   definition token (45% yellow over the border base; full --accent if you
+   want it louder). LIGHT keeps the original hairline on the near-white
+   ground — yellow cannot define an edge on light. */
+:root,
+[data-color-scheme="light"] {
+  --prose-fragment-bg: transparent;
+  --prose-fragment-edge: var(--v2-border-border-base);
+}
+[data-color-scheme="dark"] {
+  --prose-fragment-bg: var(--v2-background-bg-layer-01);
+  --prose-fragment-edge: var(--accent-edge);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --prose-fragment-bg: var(--v2-background-bg-layer-01);
+    --prose-fragment-edge: var(--accent-edge);
+  }
+}
 [data-slot="text-part-body"]:has([data-prose-fragment]) {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 [data-prose-fragment] {
-  border: var(--border-width) solid var(--v2-border-border-base);
+  background: var(--prose-fragment-bg);
+  border: var(--border-width) solid var(--prose-fragment-edge);
   border-radius: var(--radius-lg);
   padding: 10px 14px;
 }
