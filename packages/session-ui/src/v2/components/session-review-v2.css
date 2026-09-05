@@ -435,7 +435,8 @@
 [data-component="session-review-v2"] [data-slot="session-review-v2-lock-indicator"] {
   position: absolute;
   top: 8px;
-  right: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
