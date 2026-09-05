@@ -5,6 +5,7 @@ import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
 import { SessionsCursor } from "@opencode-ai/protocol/groups/session"
+import { SessionListSemantics } from "@opencode-ai/protocol/groups/session-list-semantics"
 import {
   ConflictError,
   InvalidCursorError,
@@ -15,7 +16,9 @@ import {
 } from "@opencode-ai/protocol/errors"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 
-const DefaultSessionsLimit = 50
+// D6: the default rides the frozen session-list semantics manifest — changing
+// it means changing the manifest in the same PR, or the drift gate goes red.
+const DefaultSessionsLimit = SessionListSemantics.defaults.limit
 const DefaultSessionHistoryLimit = 50
 
 export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handlers) =>
