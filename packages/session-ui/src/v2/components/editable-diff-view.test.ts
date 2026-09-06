@@ -1226,6 +1226,49 @@ describe("undo/redo (history extension)", () => {
     redo(view)
     expect(handle.getContent()).toBe("hello world")
   })
+
+  test("undo does NOT undo external updateModified", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "initial",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // External update (server push)
+    handle.updateModified("server pushed")
+    expect(handle.getContent()).toBe("server pushed")
+
+    // Undo should NOT reverse the external update
+    const view = handle.editorView!
+    undo(view)
+    expect(handle.getContent()).toBe("server pushed")
+  })
+
+  test("undo does NOT undo external updateOriginal (split mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "old original",
+      modified: "modified",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    handle.updateOriginal("new original")
+    const origView = handle.mergeView!.a
+    expect(origView.state.doc.toString()).toBe("new original")
+
+    // Undo on the original pane should not reverse the external update
+    undo(origView)
+    expect(origView.state.doc.toString()).toBe("new original")
+  })
 })
 
 // ---------------------------------------------------------------------------
