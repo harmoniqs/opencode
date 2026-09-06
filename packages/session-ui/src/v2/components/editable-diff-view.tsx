@@ -168,6 +168,7 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
         props.ref?.(el)
       }}
       class="editable-diff-view"
+      data-amc-clipboard="codemirror"
       data-diff-style={props.diffStyle}
       data-read-only={props.readOnly ? "" : undefined}
       style={{
