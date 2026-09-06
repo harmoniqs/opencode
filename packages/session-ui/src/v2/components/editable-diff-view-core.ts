@@ -17,7 +17,7 @@ import {
   highlightActiveLine,
   highlightSpecialChars,
 } from "@codemirror/view"
-import { history, defaultKeymap, historyKeymap } from "@codemirror/commands"
+import { history, isolateHistory, defaultKeymap, historyKeymap } from "@codemirror/commands"
 import {
   MergeView,
   unifiedMergeView,
@@ -278,7 +278,7 @@ export interface DiffEditorHandle {
   scrollDOM: HTMLElement | null
   /** Destroy all editor instances. */
   destroy: () => void
-  /** Revert to original: replace content, clear undo history. */
+  /** Revert to original: replace content (the revert itself is undoable via Cmd+Z). */
   revert: (original: string) => void
   /** Get the current document content. */
   getContent: () => string
@@ -416,13 +416,18 @@ export function createDiffEditor(opts: {
 
       // Replace entire document with original — mark as external so
       // the onChange listener does not fire (the caller handles state).
+      // isolateHistory ensures the revert is its own undo group so
+      // Cmd+Z after revert restores the pre-revert edits (D7).
       view.dispatch({
         changes: {
           from: 0,
           to: view.state.doc.length,
           insert: original,
         },
-        annotations: externalUpdate.of(true),
+        annotations: [
+          externalUpdate.of(true),
+          isolateHistory.of("full"),
+        ],
       })
     },
     getContent() {

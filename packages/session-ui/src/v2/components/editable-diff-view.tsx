@@ -54,7 +54,7 @@ export type EditableDiffViewProps = {
   onChange: (content: string) => void
   /**
    * Called when the user reverts — the component replaces the document with
-   * `original` and clears the undo history before invoking this callback.
+   * `original` (the revert is undoable via Cmd+Z) before invoking this callback.
    */
   onRevert: () => void
   /** Optional ref callback for the container element. */

@@ -1269,6 +1269,37 @@ describe("undo/redo (history extension)", () => {
     undo(origView)
     expect(origView.state.doc.toString()).toBe("new original")
   })
+
+  test("revert is undoable — Cmd+Z restores pre-revert edits (D7)", async () => {
+    const { undo, undoDepth } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original text",
+      modified: "original text",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+
+    // User makes an edit
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: "user edits here" },
+    })
+    expect(handle.getContent()).toBe("user edits here")
+    // History should have recorded the user edit
+    expect(undoDepth(view.state)).toBeGreaterThan(0)
+
+    // Revert to original
+    handle.revert("original text")
+    expect(handle.getContent()).toBe("original text")
+
+    // Undo the revert — should restore user edits
+    undo(view)
+    expect(handle.getContent()).toBe("user edits here")
+  })
 })
 
 // ---------------------------------------------------------------------------
