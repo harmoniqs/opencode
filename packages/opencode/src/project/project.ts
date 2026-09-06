@@ -15,6 +15,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { AppProcess } from "@opencode-ai/core/process"
 import { ProjectV2 } from "@opencode-ai/core/project"
+import { ProjectBackfill } from "@opencode-ai/core/project/backfill"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
@@ -109,6 +110,7 @@ const layer = Layer.effect(
     const fs = yield* FSUtil.Service
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const projectV2 = yield* ProjectV2.Service
+    const backfill = yield* ProjectBackfill.Service
     const projectDirectories = yield* ProjectDirectories.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
@@ -397,6 +399,13 @@ const layer = Layer.effect(
 
     const init = Effect.fn("Project.init")(function* () {
       yield* InstanceState.get(initState)
+      // D1: every instance boot also reconciles every session home in the
+      // table — backfill for pre-existing non-git homes and re-key when a
+      // home became a git repo. Idempotent, so forking it here is safe.
+      yield* backfill.run.pipe(
+        Effect.catchCause((cause) => Effect.logWarning("project backfill failed", { cause })),
+        Effect.forkIn(scope),
+      )
     })
 
     const sandboxes = Effect.fn("Project.sandboxes")(function* (id: ProjectV2.ID) {
@@ -474,6 +483,7 @@ export const node = LayerNode.make({
     CrossSpawnSpawner.node,
     ProjectV2.node,
     ProjectDirectories.node,
+    ProjectBackfill.node,
     EventV2Bridge.node,
     RuntimeFlags.node,
     Database.node,

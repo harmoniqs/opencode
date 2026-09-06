@@ -23,6 +23,7 @@ export const dict = {
 
   "command.sidebar.toggle": "Перемкнути бічну панель",
   "command.project.open": "Відкрити проєкт",
+  "command.panel.reset": "Скинути стан панелі",
   "command.project.previous": "Попередній проєкт",
   "command.project.next": "Наступний проєкт",
   "command.project.index": "Перемкнути на проєкт {{index}}",

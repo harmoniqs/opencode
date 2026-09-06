@@ -27,6 +27,7 @@ export const dict = {
 
   "command.sidebar.toggle": "Kenar çubuğunu aç/kapat",
   "command.project.open": "Proje aç",
+  "command.panel.reset": "Panel durumunu sıfırla",
   "command.project.previous": "Önceki proje",
   "command.project.next": "Sonraki proje",
   "command.project.index": "{{index}} numaralı projeye geç",

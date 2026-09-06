@@ -17,6 +17,16 @@ export type ID = ProjectSchema.ID
 export const Vcs = ProjectSchema.Vcs
 export type Vcs = ProjectSchema.Vcs
 
+/**
+ * Directory-keyed project identity for non-git homes (D1, spec
+ * spec-20260905-045114-session-device-lifecycle): every directory a session
+ * opens is a first-class home, keyed on the resolved worktree path — never
+ * collapsed into the global project.
+ */
+export function dirKey(directory: AbsolutePath): ID {
+  return ID.make(Hash.fast(`dir:${directory}`))
+}
+
 export class Info extends Schema.Class<Info>("Project.Info")({
   id: ID,
 }) {}
@@ -109,7 +119,12 @@ const layer = Layer.effect(
 
     const resolve = Effect.fn("Project.resolve")(function* (input: AbsolutePath) {
       const repo = yield* git.repo.discover(input)
-      if (!repo) return { id: ID.global, directory: AbsolutePath.make(path.parse(input).root), vcs: undefined }
+      if (!repo) {
+        // D1: a non-git directory is a first-class home keyed on its own
+        // resolved path — never the global project, never the filesystem root.
+        const directory = AbsolutePath.make(yield* fs.resolve(input))
+        return { id: dirKey(directory), directory, vcs: undefined }
+      }
 
       const previous = yield* cached(repo.commonDirectory)
       const id = (yield* remote(repo)) ?? previous ?? (yield* root(repo))

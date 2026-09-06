@@ -21,6 +21,7 @@ export const dict = {
   "theme.scheme.dark": "ダーク",
   "command.sidebar.toggle": "サイドバーの切り替え",
   "command.project.open": "プロジェクトを開く",
+  "command.panel.reset": "パネル状態をリセット",
   "command.project.previous": "前のプロジェクト",
   "command.project.next": "次のプロジェクト",
   "command.project.index": "プロジェクト{{index}}に切り替え",

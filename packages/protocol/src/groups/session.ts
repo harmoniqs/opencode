@@ -110,6 +110,10 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         query: SessionsQuery,
         success: Schema.Struct({
           data: Schema.Array(Session.Info),
+          // D2: derived list-currency token over the returned rows plus hub
+          // build id. Additive optional field with base default (absent) —
+          // registered in the session-list semantics manifest.
+          currency: Schema.optional(Schema.String),
           cursor: Schema.Struct({
             previous: SessionsCursor.pipe(Schema.optional),
             next: SessionsCursor.pipe(Schema.optional),

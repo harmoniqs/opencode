@@ -45,8 +45,11 @@ export async function loadHomeSessionIndex(
     )
     const page = response.data!
     data.push(...page.data)
-    if (page.data.length < HOME_V2_SESSION_PAGE_LIMIT || !page.cursor.next)
-      return { sessions: parseHomeSessionIndex(data), eventSequence }
+    // The cursor is the only exhaustion signal: a page shorter than the
+    // requested limit does NOT mean the store ended — a hub that caps page
+    // size below the request would otherwise silently drop everything past
+    // its first short page.
+    if (!page.cursor.next) return { sessions: parseHomeSessionIndex(data), eventSequence }
     cursor = page.cursor.next
   }
 }

@@ -25,6 +25,7 @@ export const dict = {
   "theme.scheme.dark": "Dunkel",
   "command.sidebar.toggle": "Seitenleiste umschalten",
   "command.project.open": "Projekt öffnen",
+  "command.panel.reset": "Panel-Zustand zurücksetzen",
   "command.project.previous": "Vorheriges Projekt",
   "command.project.next": "Nächstes Projekt",
   "command.project.index": "Zu Projekt {{index}} wechseln",
