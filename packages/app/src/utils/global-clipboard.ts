@@ -175,8 +175,18 @@ export function extractSelection(el: HTMLElement, opts: { cut?: boolean } = {}):
   const text = selection.toString()
   if (!text) return ""
   if (opts.cut) {
-    range.deleteContents() // leaves the selection collapsed at the cut point
-    dispatchInput(el, "deleteByCut")
+    if (el.closest(CLIPBOARD_EDITOR_SELECTOR)) {
+      // CM6 manages its own document model — execCommand("delete") fires a
+      // beforeinput event that CM6's mutation observer catches, creating a
+      // proper undo-tracked transaction. range.deleteContents() would bypass it.
+      const doc = el.ownerDocument
+      if (typeof doc.execCommand === "function") {
+        doc.execCommand("delete")
+      }
+    } else {
+      range.deleteContents() // leaves the selection collapsed at the cut point
+      dispatchInput(el, "deleteByCut")
+    }
   }
   return text
 }

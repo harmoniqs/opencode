@@ -919,4 +919,36 @@ describe("installGlobalClipboardFallback", () => {
     expect(event.defaultPrevented).toBe(true)
     expect(bridge.posted.some((m) => m.kind === "clipboard-request")).toBe(true)
   })
+
+  test('cut on a CM6 target uses execCommand("delete") — no manual deleteByCut dispatch', () => {
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "hello world"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+    selectWithin(cmContent, 0, 5)
+
+    // Observe input events — CM6 targets should NOT get a manual deleteByCut
+    const seen = observeInput()
+
+    const text = extractSelection(cmContent, { cut: true })
+
+    expect(text).toBe("hello")
+    // No manual deleteByCut event — CM6's execCommand("delete") fires its own beforeinput
+    expect(seen.filter((e) => e.inputType === "deleteByCut")).toHaveLength(0)
+  })
+
+  test("cut on a non-CM6 contenteditable still dispatches deleteByCut", () => {
+    const el = editableDiv("hello world")
+    selectWithin(el, 0, 6)
+    const seen = observeInput()
+
+    const text = extractSelection(el, { cut: true })
+
+    expect(text).toBe("hello ")
+    // Non-CM6 targets still get the manual deleteByCut
+    expect(seen.filter((e) => e.inputType === "deleteByCut")).toHaveLength(1)
+  })
 })
