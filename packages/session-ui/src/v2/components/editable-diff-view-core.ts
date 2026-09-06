@@ -395,6 +395,28 @@ export function createDiffEditor(opts: {
     return editorView
   }
 
+  // Stash a lightweight bridge on the parent element so the global clipboard
+  // handler can read/cut the CM6 model selection without importing @codemirror/*.
+  ;(opts.parent as any).__amcEditor = {
+    getSelectedText(): string {
+      const view = getActiveView()
+      if (!view) return ""
+      const { from, to } = view.state.selection.main
+      return from < to ? view.state.sliceDoc(from, to) : ""
+    },
+    cutSelectedText(): string {
+      const view = getActiveView()
+      if (!view) return ""
+      const { from, to } = view.state.selection.main
+      if (from >= to) return ""
+      const text = view.state.sliceDoc(from, to)
+      if (!view.state.readOnly) {
+        view.dispatch({ changes: { from, to }, userEvent: "delete.cut" })
+      }
+      return text
+    },
+  }
+
   return {
     get editorView() {
       return getActiveView()
@@ -414,6 +436,7 @@ export function createDiffEditor(opts: {
       editorView?.destroy()
       mergeView = null
       editorView = null
+      delete (opts.parent as any).__amcEditor
     },
     revert(original: string) {
       const view = getActiveView()

@@ -1357,6 +1357,134 @@ describe("selection highlight visibility", () => {
 })
 
 // ---------------------------------------------------------------------------
+// __amcEditor bridge — DOM function stash for clipboard handler
+// ---------------------------------------------------------------------------
+
+describe("__amcEditor bridge", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("createDiffEditor stashes __amcEditor on the parent element", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const bridge = (parent as any).__amcEditor
+    expect(bridge).toBeDefined()
+    expect(typeof bridge.getSelectedText).toBe("function")
+    expect(typeof bridge.cutSelectedText).toBe("function")
+  })
+
+  test("getSelectedText returns CM6 model selection text", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    // Select "hello" (positions 0-5)
+    view.dispatch({ selection: { anchor: 0, head: 5 } })
+
+    const bridge = (parent as any).__amcEditor
+    expect(bridge.getSelectedText()).toBe("hello")
+  })
+
+  test("getSelectedText returns empty when no selection", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // Collapsed cursor at position 0
+    const bridge = (parent as any).__amcEditor
+    expect(bridge.getSelectedText()).toBe("")
+  })
+
+  test("cutSelectedText returns text and removes it from the document", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({ selection: { anchor: 0, head: 6 } })
+
+    const bridge = (parent as any).__amcEditor
+    const text = bridge.cutSelectedText()
+    expect(text).toBe("hello ")
+    expect(handle.getContent()).toBe("world")
+  })
+
+  test("cutSelectedText is a no-op on readOnly editor", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: true,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({ selection: { anchor: 0, head: 5 } })
+
+    const bridge = (parent as any).__amcEditor
+    const text = bridge.cutSelectedText()
+    expect(text).toBe("hello")
+    // Content unchanged — readOnly prevents the cut dispatch
+    expect(handle.getContent()).toBe("hello world")
+  })
+
+  test("destroy cleans up __amcEditor from the parent", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a",
+      modified: "b",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    expect((parent as any).__amcEditor).toBeDefined()
+    handle.destroy()
+    expect((parent as any).__amcEditor).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Syntax highlight style
 // ---------------------------------------------------------------------------
 
