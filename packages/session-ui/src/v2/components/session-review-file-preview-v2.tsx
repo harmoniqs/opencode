@@ -31,6 +31,7 @@ import { shouldVirtualizeReviewDiff } from "./session-review-file-preview-v2-vir
 import { LineCommentV2OverflowIcon } from "@opencode-ai/ui/v2/line-comment-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { EditableDiffView } from "./editable-diff-view"
+import type { DiffEditorHandle } from "./editable-diff-view-core"
 import { Markdown } from "../../components/markdown"
 import "./session-review-v2.css"
 
@@ -52,6 +53,8 @@ export type SessionReviewFilePreviewV2Props = {
   onRefresh?: () => void
   /** Server base URL for /file/write saves. */
   serverUrl?: string
+  /** Write a file to disk via the SDK (handles auth). */
+  writeFile?: (path: string, content: string) => Promise<void>
   /** Whether the agent is currently busy (locks editing). */
   isAgentBusy?: boolean
   onLineComment?: (comment: SessionReviewLineComment) => void
@@ -123,6 +126,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const i18n = useI18n()
   const fileComponent = useFileComponent()
   let scrollRef: HTMLDivElement | undefined
+  let editorHandle: DiffEditorHandle | null = null
   let focusToken = 0
 
   const [store, setStore] = createStore({
@@ -237,66 +241,55 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
 
   const expandUnchanged = () => props.expandMode === "expand"
 
-  // ─── Save logic (debounced auto-save + Cmd/Ctrl+S) ──────────────────────
+  // ─── Save logic (explicit Cmd/Ctrl+S only, no autosave — #837) ───────────
 
-  type SaveStatus = "idle" | "saving" | "saved" | "error"
+  type SaveStatus = "idle" | "saving" | "error"
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle")
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let savedTimer: ReturnType<typeof setTimeout> | undefined
+  let errorTimer: ReturnType<typeof setTimeout> | undefined
+  let latestContent: string | null = null
+  let contentAtSaveTime: string | null = null
   const isPreviewMd = () => props.diffStyle === "preview" && /\.md$/i.test(props.file)
   const isDeleted = () => view().status === "deleted"
   const isEditable = () => !isPreviewMd() && !isDeleted()
   const isReadOnly = () => !isEditable()
 
+  /** Write a file to disk via the SDK-based writeFile prop. */
   const saveFile = (path: string, content: string) => {
-    const serverUrl = props.serverUrl
-    if (!serverUrl) return
-
-    const home = typeof process !== "undefined" ? process.env?.HOME ?? "" : ""
-    const fsPath = path.startsWith("~/")
-      ? path.replace("~", home)
-      : path
+    if (!props.writeFile) return
 
     setSaveStatus("saving")
-    fetch(new URL("/file/write", serverUrl), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: fsPath, content }),
-    })
+    props.writeFile(path, content)
       .then(() => {
-        setSaveStatus("saved")
-        if (savedTimer) clearTimeout(savedTimer)
-        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+        // Race guard: only clear dirty state if no edits arrived during the save
+        if (latestContent === contentAtSaveTime) {
+          setHasEdits(false)
+        }
+        setSaveStatus("idle")
+        props.onRefresh?.()
       })
       .catch(() => {
         setSaveStatus("error")
-        if (savedTimer) clearTimeout(savedTimer)
-        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+        if (errorTimer) clearTimeout(errorTimer)
+        errorTimer = setTimeout(() => setSaveStatus("idle"), 2000)
       })
   }
 
-  const debouncedSave = (path: string, content: string) => {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => saveFile(path, content), 1000)
-  }
-
-  const handleChange = (content: string) => {
-    if (isReadOnly()) return
-    debouncedSave(props.file, content)
-  }
-
+  /** Cmd/Ctrl+S handler — explicit save with race guard. */
   const handleImmediateSave = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "s") {
       e.preventDefault()
-      if (saveTimer) clearTimeout(saveTimer)
-      // Get current content from the editor — use the most recent onChange value
-      // The save fires with the file's current content on disk (the last onChange)
+      if (!hasEdits() || latestContent === null) return
+      contentAtSaveTime = latestContent
+      saveFile(props.file, contentAtSaveTime)
     }
   }
 
   onCleanup(() => {
-    if (saveTimer) clearTimeout(saveTimer)
-    if (savedTimer) clearTimeout(savedTimer)
+    if (errorTimer) clearTimeout(errorTimer)
+    // Safety net: save on unmount if the user has unsaved edits (file switch)
+    if (hasEdits() && latestContent !== null) {
+      props.writeFile?.(props.file, latestContent).catch(() => {})
+    }
   })
 
   // ─── Revert + concurrent edit detection (#770) ───────────────────────────
@@ -305,11 +298,11 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const [externalChange, setExternalChange] = createSignal(false)
   let prevDiffRef: string | null = null
 
-  // Track when user makes edits
+  // Track when user makes edits — updates dirty state only, no save trigger
   const handleChangeWithTracking = (content: string) => {
     if (isReadOnly()) return
     setHasEdits(true)
-    debouncedSave(props.file, content)
+    latestContent = content
   }
 
   // Detect external changes (agent modifying the same file)
@@ -339,29 +332,22 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   }
 
   const handleRevert = () => {
-    if (!props.serverUrl) return
-    const original = text(view(), "deletions")
-    const homeDir = typeof process !== "undefined" ? process.env?.HOME ?? "" : ""
-    const fsPath = props.file.startsWith("~/")
-      ? props.file.replace("~", homeDir)
-      : props.file
+    if (!props.writeFile) return
+    const original = text(view(), "additions")
 
     setSaveStatus("saving")
-    fetch(new URL("/file/write", props.serverUrl), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: fsPath, content: original }),
-    })
+    props.writeFile(props.file, original)
       .then(() => {
-        setSaveStatus("saved")
+        editorHandle?.revert(original)
+        setSaveStatus("idle")
         setHasEdits(false)
-        if (savedTimer) clearTimeout(savedTimer)
-        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+        latestContent = null
+        props.onRefresh?.()
       })
       .catch(() => {
         setSaveStatus("error")
-        if (savedTimer) clearTimeout(savedTimer)
-        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+        if (errorTimer) clearTimeout(errorTimer)
+        errorTimer = setTimeout(() => setSaveStatus("idle"), 2000)
       })
   }
 
@@ -503,6 +489,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
               readOnly={!!props.isAgentBusy}
               onChange={handleChangeWithTracking}
               onRevert={handleRevert}
+              editorRef={(h) => { editorHandle = h }}
             />
           </div>
         </Show>
@@ -543,7 +530,17 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
           )}
         </Show>
         <MenuV2.Context>
-          <MenuV2.Context.Trigger as="div" data-slot="session-review-v2-file-title">
+          <MenuV2.Context.Trigger
+            as="div"
+            data-slot="session-review-v2-file-title"
+            style={{
+              display: "flex",
+              "align-items": "center",
+              gap: "6px",
+              "min-width": "0",
+              flex: "1 1 0",
+            }}
+          >
             <TooltipV2 openDelay={500} value={statusTooltip(view().status)}>
               <div data-slot="session-review-v2-file-status" data-type={statusType(view().status)}>
                 {statusLabel(view().status)}
@@ -554,6 +551,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
               file={props.file}
               filePicker={props.filePicker}
               onSelectFile={props.onSelectFile}
+              dirty={isEditable() && hasEdits()}
             />
           </MenuV2.Context.Trigger>
           <MenuV2.Context.Portal>
@@ -563,7 +561,14 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
             </MenuV2.Context.Content>
           </MenuV2.Context.Portal>
         </MenuV2.Context>
-        <div data-slot="session-review-v2-file-diff">
+        <div
+          data-slot="session-review-v2-file-diff"
+          style={{
+            display: "flex",
+            "align-items": "center",
+            "flex-shrink": "0",
+          }}
+        >
           <DiffChanges changes={view()} />
           <Show when={isEditable() && hasEdits()}>
             <TooltipV2 openDelay={300} value="Revert to agent's version">
@@ -589,34 +594,23 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amc-danger, #f44336)")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--amc-text-muted, var(--icon-base))")}
               >
-                <Icon name="undo" size="small" />
+                <Icon name="reset" size="small" />
               </button>
             </TooltipV2>
           </Show>
-          <Show when={isEditable() && saveStatus() !== "idle"}>
+          {/* Error-only save feedback — shown for 2s on save failure.
+              Uses position: relative + z-index: 1 (via CSS) to escape the ::after occlusion. */}
+          <Show when={isEditable() && saveStatus() === "error"}>
             <span
-              data-slot="session-review-v2-save-indicator"
+              data-slot="session-review-v2-save-error"
               style={{
                 "font-size": "11px",
                 "margin-left": "8px",
                 "white-space": "nowrap",
-                color:
-                  saveStatus() === "saving"
-                    ? "var(--amc-warning, #ffc107)"
-                    : saveStatus() === "saved"
-                      ? "var(--amc-success, #4caf50)"
-                      : saveStatus() === "error"
-                        ? "var(--amc-danger, #f44336)"
-                        : "var(--amc-text-muted)",
+                color: "var(--amc-danger, #f44336)",
               }}
             >
-              {saveStatus() === "saving"
-                ? "Saving…"
-                : saveStatus() === "saved"
-                  ? "Saved"
-                  : saveStatus() === "error"
-                    ? "Save failed"
-                    : ""}
+              Save failed
             </span>
           </Show>
         </div>
@@ -655,6 +649,8 @@ function FileNameWithPicker(props: {
   file: string
   filePicker?: (pickerProps: { onSelect: (path: string) => void }) => JSX.Element
   onSelectFile?: (file: string) => void
+  /** Show the dirty dot (●) between filename and path. */
+  dirty?: boolean
 }) {
   const [open, setOpen] = createSignal(false)
   let triggerRef: HTMLButtonElement | undefined
@@ -691,6 +687,22 @@ function FileNameWithPicker(props: {
           <TooltipV2 value={props.file}>
             <span data-slot="session-review-v2-file-name">{getFilename(props.file)}</span>
           </TooltipV2>
+          <Show when={props.dirty}>
+            <TooltipV2 openDelay={300} value="Unsaved changes (Cmd+S to save)">
+              <span
+                data-slot="session-review-v2-dirty-dot"
+                style={{
+                  "flex-shrink": "0",
+                  "font-size": "14px",
+                  "line-height": "1",
+                  color: "var(--v2-text-text-muted, var(--amc-text-muted))",
+                }}
+                aria-label="Unsaved changes"
+              >
+                ●
+              </span>
+            </TooltipV2>
+          </Show>
           <Show when={props.file.includes("/")}>
             <TooltipV2 value={props.file}>
               <span data-slot="session-review-v2-file-path">{getDirectory(props.file)}</span>
@@ -710,6 +722,22 @@ function FileNameWithPicker(props: {
             {getFilename(props.file)}
           </span>
         </button>
+        <Show when={props.dirty}>
+          <TooltipV2 openDelay={300} value="Unsaved changes (Cmd+S to save)">
+            <span
+              data-slot="session-review-v2-dirty-dot"
+              style={{
+                "flex-shrink": "0",
+                "font-size": "14px",
+                "line-height": "1",
+                color: "var(--v2-text-text-muted, var(--amc-text-muted))",
+              }}
+              aria-label="Unsaved changes"
+            >
+              ●
+            </span>
+          </TooltipV2>
+        </Show>
         <Show when={props.file.includes("/")}>
           <TooltipV2 value={props.file}>
             <span data-slot="session-review-v2-file-path">
