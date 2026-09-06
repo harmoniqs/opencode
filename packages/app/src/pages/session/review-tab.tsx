@@ -7,13 +7,14 @@ import type {
   SessionReviewCommentActions,
   SessionReviewCommentDelete,
   SessionReviewCommentUpdate,
+  SessionReviewDiffStyle,
 } from "@opencode-ai/session-ui/session-review"
 import type { SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useLayout } from "@/context/layout"
 import type { LineComment } from "@/context/comments"
 
-export type DiffStyle = "unified" | "split"
+export type DiffStyle = SessionReviewDiffStyle
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
 

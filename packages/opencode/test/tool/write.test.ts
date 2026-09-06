@@ -27,6 +27,21 @@ const ctx = {
   ask: () => Effect.void,
 }
 
+// A ctx variant that captures metadata calls for filediff assertions
+function ctxWithMetadataCapture() {
+  const calls: Array<Record<string, unknown>> = []
+  return {
+    ctx: {
+      ...ctx,
+      metadata: (arg: { metadata: Record<string, unknown> }) => {
+        calls.push(arg.metadata)
+        return Effect.void
+      },
+    },
+    calls,
+  }
+}
+
 afterEach(async () => {
   await disposeAllInstances()
 })
@@ -168,6 +183,50 @@ describe("tool.write", () => {
 
         expect(result.metadata).toHaveProperty("filepath", filepath)
         expect(result.metadata).toHaveProperty("exists", true)
+      }),
+    )
+
+    it.instance("returns filediff metadata with file, patch, additions, deletions when overwriting", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(test.directory, "filediff-test.txt")
+        yield* Effect.promise(() => fs.writeFile(filepath, "line1\nline2\n", "utf-8"))
+        const result = yield* run({ filePath: filepath, content: "line1\nline2\nline3\n" })
+
+        const filediff = (result.metadata as any).filediff
+        expect(filediff).toBeDefined()
+        expect(filediff.file).toBe(filepath)
+        expect(filediff.patch).toBeDefined()
+        expect(filediff.additions).toBe(1)
+        expect(filediff.deletions).toBe(0)
+      }),
+    )
+
+    it.instance("returns filediff metadata for new file creation", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(test.directory, "brand-new.txt")
+        const result = yield* run({ filePath: filepath, content: "hello\nworld\n" })
+
+        const filediff = (result.metadata as any).filediff
+        expect(filediff).toBeDefined()
+        expect(filediff.file).toBe(filepath)
+        expect(filediff.additions).toBe(2)
+        expect(filediff.deletions).toBe(0)
+      }),
+    )
+
+    it.instance("pushes filediff via ctx.metadata() mid-execution so the UI updates before completion", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(test.directory, "mid-push.txt")
+        yield* Effect.promise(() => fs.writeFile(filepath, "old\n", "utf-8"))
+        const capture = ctxWithMetadataCapture()
+        yield* run({ filePath: filepath, content: "new\n" }, capture.ctx)
+
+        const filediffPush = capture.calls.find((c) => c.filediff)
+        expect(filediffPush).toBeDefined()
+        expect((filediffPush!.filediff as any).file).toBe(filepath)
       }),
     )
   })
