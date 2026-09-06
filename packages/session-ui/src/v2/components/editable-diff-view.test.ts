@@ -1141,6 +1141,94 @@ describe("minimalChanges", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Undo / redo — history() extension
+// ---------------------------------------------------------------------------
+
+describe("undo/redo (history extension)", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("undo reverses a user edit (split mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    // Simulate a user edit
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    expect(handle.getContent()).toBe("hello world")
+
+    // Undo should reverse it
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+  })
+
+  test("undo reverses a user edit (unified mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "unified",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    expect(handle.getContent()).toBe("hello world")
+
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+  })
+
+  test("redo re-applies an undone edit", async () => {
+    const { undo, redo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+
+    redo(view)
+    expect(handle.getContent()).toBe("hello world")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Syntax highlight style
 // ---------------------------------------------------------------------------
 

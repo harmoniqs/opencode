@@ -11,18 +11,20 @@
 import { Annotation, Compartment, EditorState, Transaction, ChangeSet, type Extension } from "@codemirror/state"
 import {
   EditorView,
+  keymap,
   lineNumbers,
   drawSelection,
   highlightActiveLine,
   highlightSpecialChars,
 } from "@codemirror/view"
+import { history, defaultKeymap, historyKeymap } from "@codemirror/commands"
 import {
   MergeView,
   unifiedMergeView,
   originalDocChangeEffect,
   getOriginalDoc,
 } from "@codemirror/merge"
-import { type LanguageSupport } from "@codemirror/language"
+import { type LanguageSupport, bracketMatching } from "@codemirror/language"
 import {
   HighlightStyle,
   syntaxHighlighting,
@@ -228,6 +230,10 @@ export function editableExtensions(opts: {
     EditorState.readOnly.of(opts.readOnly),
   ]
 
+  if (!opts.readOnly) {
+    exts.push(history())
+  }
+
   if (opts.onChange && !opts.readOnly) {
     exts.push(
       EditorView.updateListener.of((update) => {
@@ -250,6 +256,8 @@ export function baseExtensions(opts: {
     highlightActiveLine(),
     highlightSpecialChars(),
     drawSelection(),
+    bracketMatching(),
+    keymap.of([...defaultKeymap, ...historyKeymap]),
     EditorView.lineWrapping,
     buildSyntaxHighlightStyle(),
     opts.theme,
