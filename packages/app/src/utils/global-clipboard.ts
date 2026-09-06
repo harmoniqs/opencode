@@ -306,6 +306,20 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
     const insideEditor = target instanceof Element && target.closest(CLIPBOARD_EDITOR_SELECTOR)
     if (insideEditor && (key === "z" || key === "y" || key === "a")) return
 
+    // CM6 copy/cut: read from the model bridge (not the DOM — unified mode
+    // DOM includes deleted-line decoration widgets that contaminate the text).
+    if (insideEditor && (key === "c" || key === "x")) {
+      const bridge = (insideEditor as any).__amcEditor
+      if (bridge) {
+        const text = key === "x" ? bridge.cutSelectedText() : bridge.getSelectedText()
+        if (text) {
+          event.preventDefault()
+          writeClipboardViaBridge(text, win)
+        }
+        return
+      }
+    }
+
     // --- Select all ---
     if (key === "a") {
       event.preventDefault()

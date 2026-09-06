@@ -951,4 +951,78 @@ describe("installGlobalClipboardFallback", () => {
     // Non-CM6 targets still get the manual deleteByCut
     expect(seen.filter((e) => e.inputType === "deleteByCut")).toHaveLength(1)
   })
+
+  // --- CM6 copy/cut via __amcEditor bridge ---
+
+  test('mod+C on a CM6 target reads from __amcEditor bridge, not DOM selection', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    // Stash a mock __amcEditor bridge that returns model text
+    ;(container as any).__amcEditor = {
+      getSelectedText: () => "model selection text",
+      cutSelectedText: () => "",
+    }
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    // DOM text is garbled (simulates unified mode with decoration widgets)
+    cmContent.textContent = "garbled deleted original modified mixed"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "c")
+
+    // The bridge should use the model text, not the DOM selection
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "model selection text" },
+    ])
+  })
+
+  test('mod+X on a CM6 target calls cutSelectedText on the bridge', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    let cutCalled = false
+    ;(container as any).__amcEditor = {
+      getSelectedText: () => "should not be called",
+      cutSelectedText: () => { cutCalled = true; return "cut text" },
+    }
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "hello world"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "x", { metaKey: true })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(cutCalled).toBe(true)
+    expect(bridge.posted).toEqual([
+      { source: "amicode", kind: "clipboard-write", text: "cut text" },
+    ])
+  })
+
+  test('mod+C on a CM6 target with no selection is a no-op', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    ;(container as any).__amcEditor = {
+      getSelectedText: () => "",
+      cutSelectedText: () => "",
+    }
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "hello"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "c")
+
+    // No text selected — no bridge post, no preventDefault
+    expect(bridge.posted).toHaveLength(0)
+  })
 })
