@@ -121,10 +121,15 @@ export function buildThemeExtension(mode: "light" | "dark"): Extension {
       ".cm-cursor, .cm-dropCursor": {
         borderLeftColor: "var(--v2-text-text-base, var(--text-strong))",
       },
-      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-        {
-          backgroundColor: "var(--v2-background-bg-layer-03, var(--background-weak))",
-        },
+      // Selection highlight — override CM6's built-in defaults (#d7d4f0 light,
+      // #233 dark) with our theme tokens. The child-combinator selector matches
+      // CM6's internal specificity so our rule wins.
+      "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+        background: "var(--v2-background-bg-layer-03, var(--background-weak))",
+      },
+      ".cm-selectionBackground": {
+        backgroundColor: "var(--v2-background-bg-layer-03, var(--background-weak))",
+      },
       ".cm-panels": {
         backgroundColor: "var(--v2-background-bg-base, var(--background-base))",
         color: "var(--v2-text-text-base, var(--text-strong))",

@@ -1303,6 +1303,60 @@ describe("undo/redo (history extension)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Selection highlight visibility — theme specificity
+// ---------------------------------------------------------------------------
+
+describe("selection highlight visibility", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("theme injects a high-specificity .cm-selectionBackground rule that beats CM6 defaults", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a",
+      modified: "b",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // Extract individual CSS rules from all <style> elements
+    const allCss = Array.from(document.querySelectorAll("style"))
+      .map((s) => s.textContent ?? "")
+      .join("\n")
+    const ruleRegex = /([^{}]+)\{([^{}]+)\}/g
+    let match: RegExpExecArray | null
+    let foundCustomHighSpecRule = false
+    while ((match = ruleRegex.exec(allCss))) {
+      const selector = match[1]!.trim()
+      const declarations = match[2]!.trim()
+      // Look for a rule that has BOTH the high-specificity selector (child combinators)
+      // AND our CSS variable — proving our theme overrides CM6's hardcoded #233.
+      if (
+        selector.includes("> .cm-scroller > .cm-selectionLayer .cm-selectionBackground") &&
+        declarations.includes("--v2-background-bg-layer-03")
+      ) {
+        foundCustomHighSpecRule = true
+        break
+      }
+    }
+
+    expect(foundCustomHighSpecRule).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Syntax highlight style
 // ---------------------------------------------------------------------------
 
