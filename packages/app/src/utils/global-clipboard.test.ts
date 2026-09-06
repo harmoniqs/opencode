@@ -808,4 +808,115 @@ describe("installGlobalClipboardFallback", () => {
     expect(received[0].type).toBe("image/png")
     expect(el.value).toBe("") // text was NOT inserted
   })
+
+  // --- CM6 editor delegation (data-amc-clipboard="codemirror") ---
+
+  test('mod+Z on a CM6 target is NOT intercepted — CM6 history handles undo', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    // Simulate CM6 DOM: container[data-amc-clipboard="codemirror"] > .cm-editor > .cm-scroller > .cm-content[contenteditable]
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmEditor = document.createElement("div")
+    cmEditor.className = "cm-editor"
+    const cmScroller = document.createElement("div")
+    cmScroller.className = "cm-scroller"
+    const cmContent = document.createElement("div")
+    cmContent.className = "cm-content"
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "hello world"
+    cmScroller.appendChild(cmContent)
+    cmEditor.appendChild(cmScroller)
+    container.appendChild(cmEditor)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "z")
+
+    // NOT prevented — CM6's own history keymap handles undo
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test('mod+Shift+Z (redo) on a CM6 target is NOT intercepted', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "z", { shiftKey: true })
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test('mod+Y (redo) on a CM6 target is NOT intercepted', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "y")
+
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test('mod+A on a CM6 target is NOT intercepted — CM6 selectAll handles it', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "code content"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "a")
+
+    // NOT prevented — CM6's defaultKeymap handles select-all (editor-scoped, not panel-wide)
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  test('mod+C on a CM6 target STILL bridges — clipboard needs the OS bridge in iframe', () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "selected text"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+    selectWithin(cmContent, 0, 8)
+
+    const event = keydown(cmContent, "c")
+
+    // C/X/V still go through the bridge — only Z/Y/A are delegated to CM6
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted).toEqual([{ source: "amicode", kind: "clipboard-write", text: "selected" }])
+  })
+
+  test('mod+V on a CM6 target STILL bridges — paste needs the OS bridge in iframe', async () => {
+    const bridge = framedWindow()
+    install(bridge.win)
+    const container = document.createElement("div")
+    container.setAttribute("data-amc-clipboard", "codemirror")
+    const cmContent = document.createElement("div")
+    cmContent.setAttribute("contenteditable", "true")
+    cmContent.textContent = "hello"
+    container.appendChild(cmContent)
+    document.body.appendChild(container)
+
+    const event = keydown(cmContent, "v")
+
+    // V is still intercepted — paste goes through the bridge
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.posted.some((m) => m.kind === "clipboard-request")).toBe(true)
+  })
 })

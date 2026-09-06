@@ -51,6 +51,12 @@ let fullSessionCopyPending = false
 // copying from the prompt would paste stale content.
 export const CLIPBOARD_SELF_SELECTOR = '[data-amc-clipboard="self"]'
 
+// CodeMirror 6 editors manage their own document model, history, and selection.
+// Undo/redo/select-all must NOT be intercepted (CM6's keymap handles them);
+// clipboard chords (C/X/V) still bridge through this handler because the
+// VS Code iframe can't reach the OS clipboard natively.
+const CLIPBOARD_EDITOR_SELECTOR = '[data-amc-clipboard="codemirror"]'
+
 // When a file is copied in Finder, the clipboard carries both the image data
 // AND the filename as plain text. Detect this so we prefer the image.
 const IMAGE_FILENAME_RE = /^[^\n]{1,255}\.(png|jpe?g|gif|webp|avif|tiff?|bmp|svg|ico|heic)$/i
@@ -285,6 +291,10 @@ export function installGlobalClipboardFallback(win: Window = window): () => void
       }
       return
     }
+
+    // --- Managed editor (CodeMirror 6) — delegate undo/redo/select-all, bridge clipboard ---
+    const insideEditor = target instanceof Element && target.closest(CLIPBOARD_EDITOR_SELECTOR)
+    if (insideEditor && (key === "z" || key === "y" || key === "a")) return
 
     // --- Select all ---
     if (key === "a") {
