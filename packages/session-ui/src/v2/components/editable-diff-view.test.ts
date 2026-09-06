@@ -1141,6 +1141,350 @@ describe("minimalChanges", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Undo / redo — history() extension
+// ---------------------------------------------------------------------------
+
+describe("undo/redo (history extension)", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("undo reverses a user edit (split mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    // Simulate a user edit
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    expect(handle.getContent()).toBe("hello world")
+
+    // Undo should reverse it
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+  })
+
+  test("undo reverses a user edit (unified mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "unified",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    expect(handle.getContent()).toBe("hello world")
+
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+  })
+
+  test("redo re-applies an undone edit", async () => {
+    const { undo, redo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({
+      changes: { from: 5, insert: " world" },
+    })
+    undo(view)
+    expect(handle.getContent()).toBe("hello")
+
+    redo(view)
+    expect(handle.getContent()).toBe("hello world")
+  })
+
+  test("undo does NOT undo external updateModified", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "initial",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // External update (server push)
+    handle.updateModified("server pushed")
+    expect(handle.getContent()).toBe("server pushed")
+
+    // Undo should NOT reverse the external update
+    const view = handle.editorView!
+    undo(view)
+    expect(handle.getContent()).toBe("server pushed")
+  })
+
+  test("undo does NOT undo external updateOriginal (split mode)", async () => {
+    const { undo } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "old original",
+      modified: "modified",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    handle.updateOriginal("new original")
+    const origView = handle.mergeView!.a
+    expect(origView.state.doc.toString()).toBe("new original")
+
+    // Undo on the original pane should not reverse the external update
+    undo(origView)
+    expect(origView.state.doc.toString()).toBe("new original")
+  })
+
+  test("revert is undoable — Cmd+Z restores pre-revert edits (D7)", async () => {
+    const { undo, undoDepth } = await import("@codemirror/commands")
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original text",
+      modified: "original text",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+
+    // User makes an edit
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: "user edits here" },
+    })
+    expect(handle.getContent()).toBe("user edits here")
+    // History should have recorded the user edit
+    expect(undoDepth(view.state)).toBeGreaterThan(0)
+
+    // Revert to original
+    handle.revert("original text")
+    expect(handle.getContent()).toBe("original text")
+
+    // Undo the revert — should restore user edits
+    undo(view)
+    expect(handle.getContent()).toBe("user edits here")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Selection highlight visibility — theme specificity
+// ---------------------------------------------------------------------------
+
+describe("selection highlight visibility", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("theme injects a high-specificity .cm-selectionBackground rule that beats CM6 defaults", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a",
+      modified: "b",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // Extract individual CSS rules from all <style> elements
+    const allCss = Array.from(document.querySelectorAll("style"))
+      .map((s) => s.textContent ?? "")
+      .join("\n")
+    const ruleRegex = /([^{}]+)\{([^{}]+)\}/g
+    let match: RegExpExecArray | null
+    let foundCustomHighSpecRule = false
+    while ((match = ruleRegex.exec(allCss))) {
+      const selector = match[1]!.trim()
+      const declarations = match[2]!.trim()
+      // Look for a rule that has BOTH the high-specificity selector (child combinators)
+      // AND our CSS variable — proving our theme overrides CM6's hardcoded #233.
+      if (
+        selector.includes("> .cm-scroller > .cm-selectionLayer .cm-selectionBackground") &&
+        declarations.includes("--v2-background-bg-layer-03")
+      ) {
+        foundCustomHighSpecRule = true
+        break
+      }
+    }
+
+    expect(foundCustomHighSpecRule).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// __amcEditor bridge — DOM function stash for clipboard handler
+// ---------------------------------------------------------------------------
+
+describe("__amcEditor bridge", () => {
+  let parent: HTMLDivElement
+  let handle: DiffEditorHandle
+
+  beforeEach(() => {
+    parent = document.createElement("div")
+    document.body.appendChild(parent)
+  })
+
+  afterEach(() => {
+    handle?.destroy()
+    parent.remove()
+  })
+
+  test("createDiffEditor stashes __amcEditor on the parent element", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const bridge = (parent as any).__amcEditor
+    expect(bridge).toBeDefined()
+    expect(typeof bridge.getSelectedText).toBe("function")
+    expect(typeof bridge.cutSelectedText).toBe("function")
+  })
+
+  test("getSelectedText returns CM6 model selection text", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    // Select "hello" (positions 0-5)
+    view.dispatch({ selection: { anchor: 0, head: 5 } })
+
+    const bridge = (parent as any).__amcEditor
+    expect(bridge.getSelectedText()).toBe("hello")
+  })
+
+  test("getSelectedText returns empty when no selection", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    // Collapsed cursor at position 0
+    const bridge = (parent as any).__amcEditor
+    expect(bridge.getSelectedText()).toBe("")
+  })
+
+  test("cutSelectedText returns text and removes it from the document", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({ selection: { anchor: 0, head: 6 } })
+
+    const bridge = (parent as any).__amcEditor
+    const text = bridge.cutSelectedText()
+    expect(text).toBe("hello ")
+    expect(handle.getContent()).toBe("world")
+  })
+
+  test("cutSelectedText is a no-op on readOnly editor", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "original",
+      modified: "hello world",
+      diffStyle: "split",
+      readOnly: true,
+      theme,
+    })
+
+    const view = handle.editorView!
+    view.dispatch({ selection: { anchor: 0, head: 5 } })
+
+    const bridge = (parent as any).__amcEditor
+    const text = bridge.cutSelectedText()
+    expect(text).toBe("hello")
+    // Content unchanged — readOnly prevents the cut dispatch
+    expect(handle.getContent()).toBe("hello world")
+  })
+
+  test("destroy cleans up __amcEditor from the parent", () => {
+    const theme = buildThemeExtension("dark")
+    handle = createDiffEditor({
+      parent,
+      original: "a",
+      modified: "b",
+      diffStyle: "split",
+      readOnly: false,
+      theme,
+    })
+
+    expect((parent as any).__amcEditor).toBeDefined()
+    handle.destroy()
+    expect((parent as any).__amcEditor).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Syntax highlight style
 // ---------------------------------------------------------------------------
 
