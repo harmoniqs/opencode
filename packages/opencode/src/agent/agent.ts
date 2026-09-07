@@ -315,10 +315,18 @@ const layer = Layer.effect(
 
         const list = Effect.fnUntraced(function* () {
           const cfg = yield* config.get()
+          const order = cfg.agent_order ?? []
           return pipe(
             agents,
             values(),
             sortBy(
+              [
+                (x) => {
+                  const index = order.indexOf(x.name)
+                  return index === -1 ? Number.MAX_SAFE_INTEGER : index
+                },
+                "asc",
+              ],
               [(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"],
               [(x) => x.name, "asc"],
             ),
