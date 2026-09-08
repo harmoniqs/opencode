@@ -3,10 +3,10 @@
    unlayered too, and imported AFTER the v2 theme in index.css. */
 
 /* ============================================================
-   AMICODE DESIGN SYSTEM — SKINS
+   AMICODE DESIGN SYSTEM — COMPONENTS
    Every rule that applies the tokens to a named surface: the timeline
    entrance, prose fragments, inline code, control feedback, the composer, the
-   send button, the solver banner, the tour spotlight, the dock morph. A skin
+   send button, the solver banner, the tour spotlight, the dock morph. Each rule is a skin, in the glossary's word: it
    consumes tokens.css and never defines a token. Gated like any component —
    no literals, one corner, hairlines only, no shadows, on the unit. Laws and
    reasons: DESIGN.md.

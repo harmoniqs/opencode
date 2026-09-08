@@ -9,7 +9,7 @@
    this file; the vocabulary is packages/app/CONTEXT.md (Brand); the
    amicode-design-system skill is generated from those two and this file.
    Components consume tokens and never carry literals; every rule that styles
-   a named surface is a skin and lives in skins.css. There are no exceptions.
+   a named surface is a skin and lives in components.css. There are no exceptions.
    Enforced by script/check-design-tokens.mjs (`npm run check:design`) and the
    rendered conformance spec.
    ============================================================ */

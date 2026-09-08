@@ -1,10 +1,10 @@
 import { For } from "solid-js"
 import { oc2Theme, resolveThemeVariantV2 } from "@opencode-ai/ui/theme"
 import { BugDockView } from "@/pages/session/composer/session-bug-dock"
-// The app entry loads design-system/tokens.css and skins.css globally; stories must pull it
+// The app entry loads design-system/tokens.css and components.css globally; stories must pull it
 // themselves (it owns the tokens the dock surface consumes).
 import "@/design-system/tokens.css"
-import "@/design-system/skins.css"
+import "@/design-system/components.css"
 
 // amicode/opencode#117: the bug-report dock — the composer dock family's
 // bug-session surface. The interaction contract (expand/collapse animation,

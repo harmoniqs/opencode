@@ -4,10 +4,10 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { PromptInputV2SubmitButton } from "@opencode-ai/session-ui/v2/prompt-input"
 import { oc2Theme, resolveThemeVariantV2 } from "@opencode-ai/ui/theme"
 import { ReportBugButton } from "@/components/report-bug-button"
-// The app entry loads design-system/tokens.css and skins.css globally (it owns --radius-md, which
+// The app entry loads design-system/tokens.css and components.css globally (it owns --radius-md, which
 // the button's css consumes); stories must pull it themselves.
 import "@/design-system/tokens.css"
-import "@/design-system/skins.css"
+import "@/design-system/components.css"
 
 // amicode/opencode#116: the report-a-bug button for the v2 composer. The
 // interaction-state contract (default / hover / active / focus-visible /
