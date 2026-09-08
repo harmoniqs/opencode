@@ -1,6 +1,6 @@
 # 0003 — The knowledge graph moves to a top panel as the agent's context tree; the vault gets a first-class surface
 
-Superseded in part by ADR 0006 (2026-09-08), consequence 1 only: the engines are not exempt from the accent law and no yellow marks the live position — they paint from the data-viz palette and the live marker is neutral.
+Superseded in part by the design system (`packages/app/src/design-system/DESIGN.md`, Law 1; 2026-09-08), consequence 1 only: the engines are not exempt from the accent law and no yellow marks the live position — they paint from the data-viz palette and the live marker is neutral.
 
 
 - Status: Accepted
