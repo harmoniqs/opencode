@@ -14,11 +14,11 @@ import { expectAppVisible } from "../utils/waits"
 //
 // Rules (skill section → check):
 //   geometry   radius corners ∈ {--radius-*} ∪ {0};  border sides ∈ {0, 1px}
-//   shadows    no shadow-as-border (inset / zero-blur ring); SHADOW_POLICY=none
-//              bans every box-shadow
+//   shadows    nothing casts a shadow — no box-shadow, text-shadow, or
+//              drop-shadow() filter, with no switch (Law 2)
 //   colour     gold ramp never rendered;  yellow ONLY as black-on-yellow or
 //              yellow-on-dark — never a yellow foreground on a light surface
-//   type       font-size ∈ {--font-size-*};  font-weight ∈ {400,500,600,650,700}
+//   type       font-size ∈ the size tokens;  font-weight ∈ {440, 530, 600} (Law 5)
 //   a11y       icon-only buttons carry a label;  no interactive control nested
 //              inside another (the titlebar drag-wrapper regression);
 //              a visible focus ring on every Tab stop;  reduced motion honoured
@@ -32,7 +32,6 @@ const routes = {
   session: `/${base64Encode(fixture.directory)}/session/${fixture.sourceID}`,
 } as const
 
-const SHADOW_POLICY = process.env.SHADOW_POLICY ?? "no-border-shadows"
 
 async function bootApp(page: Page, scheme: Scheme, route: string) {
   await page.emulateMedia({ colorScheme: scheme })
@@ -65,8 +64,8 @@ async function bootApp(page: Page, scheme: Scheme, route: string) {
 type Violation = { rule: string; el: string; detail: string }
 type Sweep = { tokens: Record<string, string>; counts: Record<string, number>; sample: Violation[]; scanned: number }
 
-function sweep(page: Page, policy: string): Promise<Sweep> {
-  return page.evaluate((policy) => {
+function sweep(page: Page): Promise<Sweep> {
+  return page.evaluate(() => {
     const root = document.documentElement
     const rootStyle = getComputedStyle(root)
 
@@ -82,7 +81,7 @@ function sweep(page: Page, policy: string): Promise<Sweep> {
       for (const rule of Array.from(rules)) {
         if (!(rule instanceof CSSStyleRule) || !/:root/.test(rule.selectorText)) continue
         for (const name of Array.from(rule.style)) {
-          if (/^--(radius|font-size|space|border-width|accent)/.test(name)) {
+          if (/^--(radius|font-size|text-(2xs|xs|sm|md|lg|xl|2xl|3xl)$|space|spacing|border-width|accent|focus-ring|font-weight|motion|measure)/.test(name)) {
             tokens[name] = rootStyle.getPropertyValue(name).trim()
           }
         }
@@ -97,11 +96,11 @@ function sweep(page: Page, policy: string): Promise<Sweep> {
     )
     const sizes = new Set(
       Object.entries(tokens)
-        .filter(([k]) => k.startsWith("--font-size-"))
+        .filter(([k]) => k.startsWith("--font-size-") || /^--text-(2xs|xs|sm|md|lg|xl|2xl|3xl)$/.test(k))
         .map(([, v]) => px(v))
         .filter((n) => !Number.isNaN(n)),
     )
-    const weights = new Set([400, 500, 600, 650, 700])
+    const weights = new Set([440, 530, 600])
 
     // ---- colour helpers -------------------------------------------------------
     const parse = (c: string): [number, number, number, number] | null => {
@@ -207,23 +206,21 @@ function sweep(page: Page, policy: string): Promise<Sweep> {
           break
         }
       }
-      // shadows
-      const sh = cs.boxShadow
-      if (sh && sh !== "none") {
-        // a shadow is a border when it is inset or a zero-blur ring — but only if
-        // it actually paints: Tailwind's ring reset leaves transparent 0-spread
-        // layers (`rgba(0,0,0,0) 0px 0px 0px 0px`) on many elements
-        const layers = sh.split(/,(?![^(]*\))/).map((l) => l.trim())
-        const isBorderShadow = layers.some((l) => {
+      // shadows — Law 2: nothing casts a shadow (no switch)
+      if (cs.boxShadow && cs.boxShadow !== "none") {
+        // Tailwind's transparent zero-spread ring-reset layers paint nothing
+        const layers = cs.boxShadow.split(/,(?![^(]*\))/).map((l) => l.trim())
+        const paints = layers.some((l) => {
           const c = parse(l)
           if (!c || c[3] < 0.02) return false
           const nums = (l.replace(/rgba?\([^)]*\)|color\([^)]*\)/, "").match(/-?\d*\.?\d+px/g) ?? []).map(parseFloat)
           const [x = 0, y = 0, blur = 0, spread = 0] = nums
-          return /\binset\b/.test(l) ? spread > 0 || blur > 0 : x === 0 && y === 0 && blur === 0 && spread > 0
+          return x !== 0 || y !== 0 || blur > 0 || spread > 0
         })
-        if (policy === "none") hit("box-shadow", el, sh.slice(0, 90))
-        else if (isBorderShadow) hit("shadow-as-border", el, sh.slice(0, 90))
+        if (paints) hit("box-shadow", el, cs.boxShadow.slice(0, 90))
       }
+      if (cs.textShadow && cs.textShadow !== "none") hit("text-shadow", el, cs.textShadow.slice(0, 60))
+      if (/drop-shadow\(/.test(cs.filter)) hit("drop-shadow", el, cs.filter.slice(0, 60))
       // type
       const text = (el.childNodes.length && Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent!.trim())) || false
       if (text) {
@@ -244,7 +241,7 @@ function sweep(page: Page, policy: string): Promise<Sweep> {
       }
     }
     return { tokens, counts, sample, scanned }
-  }, policy)
+  })
 }
 
 function report(s: Sweep) {
@@ -261,7 +258,7 @@ for (const scheme of schemes) {
   for (const [name, route] of Object.entries(routes)) {
     test(`design-system conformance — ${name} · ${scheme}`, async ({ page }, testInfo) => {
       await bootApp(page, scheme, route)
-      const s = await sweep(page, SHADOW_POLICY)
+      const s = await sweep(page)
       await testInfo.attach(`conformance-${name}-${scheme}.json`, { body: JSON.stringify(s, null, 2), contentType: "application/json" })
       expect(Object.keys(s.tokens).length, "brand tokens must be readable at runtime (design-system/tokens.css loaded)").toBeGreaterThan(5)
       expect(s.counts, `\n${report(s)}\n`).toEqual({})
