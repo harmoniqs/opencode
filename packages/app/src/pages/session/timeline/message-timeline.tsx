@@ -424,7 +424,7 @@ export function MessageTimeline(props: {
   const [scrollReady, setScrollReady] = createSignal(!coldBottomMount)
   // The open cascade holds until the virtualizer has settled at the bottom —
   // entering rows sit paused at opacity 0 (see [data-entrance-pending] in
-  // design-polish.css) so the entrance never plays behind the opacity veil or
+  // design-system/skins.css) so the entrance never plays behind the opacity veil or
   // during the initial scroll jump. Flipped one frame after the mount scroll.
   const [entranceReady, setEntranceReady] = createSignal(false)
   const platform = usePlatform()
@@ -2590,7 +2590,7 @@ export function MessageTimeline(props: {
                       // the ghost of the prompt bubble keeps the bubble's own
                       // ground, translucent — one grammar for the user's
                       // words on every surface (--prompt-bubble-*: the
-                      // inverse, seated per scheme in design-polish.css)
+                      // inverse, seated per scheme in design-system/tokens.css)
                       background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
                       color: "var(--prompt-bubble-ink)",
                       "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",
@@ -2623,7 +2623,7 @@ export function MessageTimeline(props: {
                     // the ghost of the prompt bubble keeps the bubble's own
                     // ground, translucent — one grammar for the user's
                     // words on every surface (--prompt-bubble-*: the
-                    // inverse, seated per scheme in design-polish.css)
+                    // inverse, seated per scheme in design-system/tokens.css)
                     background: "color-mix(in srgb, var(--prompt-bubble-bg) 90%, transparent)",
                     color: "var(--prompt-bubble-ink)",
                     "box-shadow": "0 1px 3px color-mix(in srgb, var(--v2-background-bg-base) 40%, transparent)",

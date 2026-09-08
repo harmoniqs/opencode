@@ -1,0 +1,178 @@
+/* UNLAYERED on purpose: the v2 theme (v2/styles/tailwind.css) is imported
+   unlayered, and unlayered CSS beats every @layer — so this skin must be
+   unlayered too, and imported AFTER the v2 theme in index.css. */
+
+/* ============================================================
+   AMICODE DESIGN SYSTEM — TOKENS (the brand sheet)
+   The single source of every design-system VALUE — hue, corner, unit, type,
+   hairline, focus, motion. The LAWS and their reasons are DESIGN.md beside
+   this file; the vocabulary is packages/app/CONTEXT.md (Brand); the
+   amicode-design-system skill is generated from those two and this file.
+   Components consume tokens and never carry literals; every rule that styles
+   a named surface is a skin and lives in skins.css. There are no exceptions.
+   Enforced by script/check-design-tokens.mjs (`npm run check:design`) and the
+   rendered conformance spec.
+   ============================================================ */
+
+:root {
+  /* ── the one accent ── */
+  /* Brand yellow, from harmoniqs-ai/app/globals.css (--brand-yellow). The
+     website is the reference; an earlier pass read a different repo and landed
+     on #fff676, which was never the site's colour. */
+  --accent: #FFE614;         /* brand hue — chip / CTA / fill, both schemes */
+  --accent-hover: #F0D600;   /* --brand-yellow-hover */
+  --accent-ink: #000000;     /* text/icon ON a yellow fill — always ink */
+  --accent-edge-ink: #000000;/* --brand-yellow-border: every yellow fill takes an ink edge */
+
+  /* ── radius ──
+     The site sets ONE radius for everything — buttons, cards, chips, inputs,
+     the nav pill (--radius-brand: 4px); only decorative dots stay circular.
+     The scale names are kept so the ~140 call sites don't churn, and so a
+     future hierarchy change stays a one-file edit. */
+  --radius-xs: 4px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-full: 999px;   /* dots and round pills only */
+
+  /* ── spacing (4px grid) ── */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+
+  /* ── type ──
+     Faces mirror harmoniqs.ai: DM Sans carries display AND body (the site
+     aliases --font-display to --font-body), JuliaMono carries data, code and
+     labels. FBS Machro is retired — the site's copy gate blocks its return. */
+  --font-body: var(--font-family-text);
+  --font-display: var(--font-body);
+  --font-mono: "JuliaMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-julia: "JuliaMono", monospace;
+
+  --font-size-2xs: 10px; --font-size-xs: 11px; --font-size-sm: 12px; --font-size-md: 13px;
+  --font-size-x-small: var(--font-size-xs);   /* fix dangling ref */
+  --font-weight-emphasis: 600; --font-weight-strong: 650;
+
+  /* Content sitting on a FIXED dark scrim (media overlays, poster art) does not
+     flip with the scheme — the ground under it is always dark. Mirrors the
+     site's --fg-on-dark. Cream rather than pure white keeps it in the family. */
+  --fg-on-dark: #EFEDCD;
+  --fg-on-dark-muted: #C9C7A6;
+
+  --border-width: 1px;
+
+  /* ── elevation ── the one float shadow, for transient overlays that sit above
+     the app ground (toasts, the solver-switch banner). Named so it stops being
+     re-invented as a scattered rgba() literal. */
+  --elev-float: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+/* ── session status dots ──
+   Four states: green (done, unread), grey (done, seen), yellow (running),
+   red (error). Colour is never the only signal: each dot carries
+   role="img" + aria-label. */
+:root,
+[data-color-scheme="light"] {
+  --status-idle: #a1a1aa;        /* grey — done and seen */
+  --status-running: #ca8a04;     /* yellow-600 — working */
+  --status-done: #16a34a;        /* green-600 — done, unread */
+  --status-error: #dc2626;       /* red-600 */
+}
+[data-color-scheme="dark"] {
+  --status-idle: #71717a;        /* grey */
+  --status-running: #eab308;     /* yellow-500 */
+  --status-done: #4ade80;        /* green-400 */
+  --status-error: #ef4444;       /* red-500 */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --status-idle: #71717a;
+    --status-running: #eab308;
+    --status-done: #4ade80;
+    --status-error: #ef4444;
+  }
+}
+
+/* ── accent role tokens — per-scheme OPACITY, same hue ──
+   fill = yellow warmth (both); selected edge = neutral on light (yellow can't
+   define on white), yellow on dark. */
+:root,
+[data-color-scheme="light"] {
+  --accent-fill-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  /* one step past soft — the hover of an already-soft-filled control */
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 26%, transparent);
+  /* INK, not a neutral. #FFE614 is 1.27:1 on white — it cannot define its own
+     edge on a light ground, so every yellow surface takes an ink border. This
+     is the site's --brand-yellow-border rule, and it holds on white too. */
+  --accent-edge: var(--accent-edge-ink);
+}
+[data-color-scheme="dark"] {
+  --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--v2-border-border-base));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+    --accent-fill-hover: color-mix(in srgb, var(--accent) 16%, transparent);
+    --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--v2-border-border-base));
+  }
+}
+
+/* ── prompt bubble ground — per-scheme REALISATION ──
+   On LIGHT the user's words are the INVERSE of the ground — the website's
+   ink bubble, verbatim (the site is light-only, so the inverse grammar is a
+   light-mode truth). On DARK any light bubble read harsh at chat scale:
+   Kate walked the inverse down 100%→85%→70% luminance (7b1ff4e, 1ef7c41)
+   and it still glared — dark wants LOW contrast, not an inverse. The dark
+   bubble is therefore the theme's own quiet elevation: layer-02 on the
+   ground (≈1.5:1, a whisper of lift — stock #2e2e2e on #161616) under full
+   base ink (≈12:1, unchanged readability). */
+:root,
+[data-color-scheme="light"] {
+  --prompt-bubble-bg: var(--v2-background-bg-inverse);
+  --prompt-bubble-ink: var(--v2-text-text-inverse);
+}
+[data-color-scheme="dark"] {
+  --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+  --prompt-bubble-ink: var(--v2-text-text-base);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --prompt-bubble-bg: var(--v2-background-bg-layer-02);
+    --prompt-bubble-ink: var(--v2-text-text-base);
+  }
+}
+
+/* ── entrance motion — timeline blocks land whole ──
+   New timeline rows (Kate 2026-08-24) enter as complete blocks: a small rise
+   and fade, fast and crisp, decided per row-key exactly once (the timeline
+   guards against virtual-row remount replays). Opacity+transform only — the
+   virtualizer owns row position and measured height, so entrance motion must
+   never touch layout. Reduced motion keeps the fade, drops the rise. */
+:root {
+  /* IDENTICAL to the website's chat grammar (harmoniqs-ai demo/parts.jsx,
+     verified against the production chunk): enter from below and slightly
+     blurred — HIDDEN {opacity:0, y:8, blur(8px)} → SHOWN over 0.3s on
+     [.2,0,.2,1] (soft attack, soft landing); leave UPWARD and re-blurred
+     over 0.2s on [.4,0,1,1] (exits shorter than entrances — the direction
+     says "arriving" vs "being cleared"). */
+  --motion-enter-duration: 0.3s;
+  --motion-enter-rise: 8px;
+  --motion-enter-blur: 8px;
+  --motion-enter-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --motion-exit-duration: 0.2s;
+  --motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* No exit animation. The site's GONE grammar (up + re-blur) was tried as a
+   positioned ghost clone and misfired — a body-appended clone escapes the
+   theme scope and the virtualizer relayouts under the captured rect. The
+   --motion-exit-* tokens above stay as the documented grammar should a real
+   FLIP-based exit ever be built. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-enter-rise: 0px;
+    --motion-enter-blur: 0px;
+  }
+}

@@ -729,7 +729,7 @@
 }
 
 /* Permissions tab
-   Geometry/colour via the design-system tokens (design-polish.css). The
+   Geometry/colour via the design-system tokens (design-system/tokens.css). The
    directory × action matrix is responsive: the tier card is an inline-size
    container; the DEFAULT layout is stacked (pattern line, then a 2×2 of
    labelled selects) because the settings dialog gives a tier card ~390px at

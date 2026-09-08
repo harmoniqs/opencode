@@ -2,7 +2,7 @@
 /**
  * Design-token gate for the amicode UI.
  *
- * The brand is defined in ONE place — packages/app/src/design-polish.css, plus
+ * The brand is defined in ONE place — packages/app/src/design-system/tokens.css, plus
  * the theme JSON it documents. Components consume tokens; they never carry
  * literals. This script fails the moment a raw literal reappears, so the rule
  * survives contact with future edits instead of decaying quietly.
@@ -16,7 +16,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs"
 import { join, relative } from "node:path"
 
 const root = process.cwd()
-const BRAND_SHEET = "packages/app/src/design-polish.css"
+const BRAND_SHEET = "packages/app/src/design-system/tokens.css"
 
 // Directories whose components must be fully token-driven.
 // Includes the theme loader and the pre-paint script: both write colours
@@ -41,7 +41,8 @@ const EXEMPT = [
   /packages\/ui\/src\/amicode\/brain-engine\.ts$/, // data-viz categorical palette
   /packages\/ui\/src\/amicode\/context-tree-engine\.ts$/, // data-viz categorical palette
   /packages\/app\/src\/components\/terminal\.tsx$/, // no-theme fallbacks, kept in brand
-  /packages\/app\/src\/design-polish\.css$/, // the brand sheet itself
+  /packages\/session-ui\/src\/pierre\//, // vendored diff engine: inset-9999px shadows are row FILLS, not edges
+  /packages\/app\/src\/design-system\/tokens\.css$/, // the token block: definitions, not literals (skins.css is NOT exempt)
   /packages\/app\/src\/index\.css$/, // @font-face declarations
   /\.stories\.tsx$/, // Storybook fixtures, not shipped UI
   /\.test\.tsx?$/,
@@ -78,6 +79,23 @@ const RAW_FONT = /font-family\s*:\s*["']?(?!var\(|inherit|initial|unset|revert)(
 const ARB_COLOUR = /\b(?:text|bg|border|fill|stroke|from|via|to|shadow|ring|outline|decoration|caret|accent)-\[#[0-9a-fA-F]{3,8}\]/g
 // --- rule 5: no literal painted directly onto an element via inline style ---
 const RAW_INLINE = /(style\.backgroundColor|setAttribute\("content")\s*(=|,)\s*["']#[0-9a-fA-F]{3,8}["']/g
+// --- rule 7: borders are 1px, nothing else (Kate, 2026-09-07) --------------
+// `--border-width: 1px` is the only border width; 0 / none removes one. The
+// 1.5px and 2px "emphasis" borders are exactly the drift this exists to catch.
+// `border-color` / `border-radius` never match: the property must end in a
+// side, `-width`, or nothing before the colon.
+const RAW_BORDER_WIDTH =
+  /(?<![-\w])border(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end))?(?:-width)?\s*:(?!\s*["']?(?:0(?:px)?\b|1px\b|none\b|var\(|inherit|initial|unset|revert))\s*["']?(\d*\.?\d+)(px|rem|em)\b/g
+const ARB_BORDER_WIDTH = /(?<![-\w])border(?:-[trblxyse])?-(?:2|4|8|\[\d*\.?\d+(?:px|rem|em)\])\b/g
+// --- rule 8: no shadow-as-border (Kate, 2026-09-07) -------------------------
+// A border is a --v2-border-* token, never an inset or zero-blur ring shadow
+// and never a Tailwind ring utility. Elevation shadows on floating surfaces
+// pass by default; SHADOW_POLICY=none widens the ban to EVERY box-shadow.
+const SHADOW_POLICY = process.env.SHADOW_POLICY ?? "no-border-shadows"
+const SHADOW_AS_BORDER = /box-shadow\s*:\s*[^;}]*?(?:\binset\b|(?:^|[\s,])0(?:px)?\s+0(?:px)?\s+0(?:px)?\s+\d*\.?\d+px)/g
+const ARB_RING = /(?<![-\w])(?:ring-(?:\d+|\[[^\]]+\])|shadow-\[[^\]]*inset[^\]]*\])/g
+const ANY_SHADOW = /box-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
+const TW_SHADOW = /(?<![-\w])shadow-(?:sm|md|lg|xl|2xl|inner)\b/g
 
 for (const dir of SCAN) {
   for (const file of walk(join(root, dir))) {
@@ -96,6 +114,16 @@ for (const dir of SCAN) {
         [RAW_FONT, "hardcoded font stack — use var(--font-family-text) or var(--font-mono)"],
         [RAW_INLINE, "literal painted onto an element — derive it from the active theme"],
         [ARB_COLOUR, "Tailwind arbitrary colour — use a token, e.g. text-[var(--fg-on-dark)]"],
+        [RAW_BORDER_WIDTH, "border width is 1px only — use var(--border-width), or 0 to remove"],
+        [ARB_BORDER_WIDTH, "Tailwind border width — borders are 1px only (`border`, never border-2/4/8)"],
+        [SHADOW_AS_BORDER, "shadow used as a border — use a --v2-border-* token, never inset/ring shadows"],
+        [ARB_RING, "Tailwind ring / inset shadow — borders are border tokens, never shadows"],
+        ...(SHADOW_POLICY === "none"
+          ? [
+              [ANY_SHADOW, "box-shadow is banned (SHADOW_POLICY=none)"],
+              [TW_SHADOW, "Tailwind shadow-* is banned (SHADOW_POLICY=none)"],
+            ]
+          : []),
       ]) {
         re.lastIndex = 0
         let m
@@ -115,6 +143,7 @@ for (const token of [
   "--accent-edge:",
   "--radius-sm:",
   "--radius-full:",
+  "--border-width:",
   "--font-body:",
   "--font-mono:",
 ]) {

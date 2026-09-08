@@ -7,7 +7,9 @@ import { resolve } from "node:path"
 // transitions needed, content grows above it.
 
 const indexCss = readFileSync(resolve(__dirname, "../../../index.css"), "utf8")
-const polishCss = readFileSync(resolve(__dirname, "../../../design-polish.css"), "utf8")
+const polishCss =
+  readFileSync(resolve(__dirname, "../../../design-system/tokens.css"), "utf8") +
+  readFileSync(resolve(__dirname, "../../../design-system/skins.css"), "utf8")
 
 describe("bottom-anchored harmonic dot", () => {
   test("harmonic dot class has display:block (kills SVG baseline gap)", () => {
