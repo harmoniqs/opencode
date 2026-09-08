@@ -301,7 +301,7 @@ test("prefers-reduced-motion stops running animations (except those the brand sh
   const animated = await page.evaluate(() => {
     // An animation may keep running under reduced motion ONLY if the brand
     // sheet says so explicitly: a rule inside an `@media (prefers-reduced-motion:
-    // reduce)` block that sets a non-zero animation-duration (design-system/skins.css
+    // reduce)` block that sets a non-zero animation-duration (design-system/components.css
     // does this for the timeline-enter FADE — rise and blur are zeroed, and a
     // withheld block popping in with no signal is worse than a fade).
     const kept: string[] = []

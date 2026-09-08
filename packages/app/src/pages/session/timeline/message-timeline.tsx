@@ -424,7 +424,7 @@ export function MessageTimeline(props: {
   const [scrollReady, setScrollReady] = createSignal(!coldBottomMount)
   // The open cascade holds until the virtualizer has settled at the bottom —
   // entering rows sit paused at opacity 0 (see [data-entrance-pending] in
-  // design-system/skins.css) so the entrance never plays behind the opacity veil or
+  // design-system/components.css) so the entrance never plays behind the opacity veil or
   // during the initial scroll jump. Flipped one frame after the mount scroll.
   const [entranceReady, setEntranceReady] = createSignal(false)
   const platform = usePlatform()

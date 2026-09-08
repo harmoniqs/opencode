@@ -42,7 +42,7 @@ const EXEMPT = [
   /packages\/ui\/src\/amicode\/context-tree-engine\.ts$/, // data-viz categorical palette
   /packages\/app\/src\/components\/terminal\.tsx$/, // no-theme fallbacks, kept in brand
   /packages\/session-ui\/src\/pierre\//, // vendored diff engine: inset-9999px shadows are row FILLS, not edges
-  /packages\/app\/src\/design-system\/tokens\.css$/, // the token block: definitions, not literals (skins.css is NOT exempt)
+  /packages\/app\/src\/design-system\/tokens\.css$/, // the token block: definitions, not literals (components.css is NOT exempt)
   /packages\/app\/src\/index\.css$/, // @font-face declarations
   /\.stories\.tsx$/, // Storybook fixtures, not shipped UI
   /\.test\.tsx?$/,
