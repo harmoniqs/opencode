@@ -163,6 +163,14 @@
   --motion-enter-ease: cubic-bezier(0.2, 0, 0.2, 1);
   --motion-exit-duration: 0.2s;
   --motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
+  /* feedback (hover, press, focus, state): colour, border, opacity only, 0.16s —
+     was a literal repeated on every control; the value is unchanged. */
+  --motion-feedback: 0.16s;
+  --motion-feedback-ease: ease;
+  /* glide (a marker following attention — the tour ring): today's curve; the
+     landing change unifies it with --motion-enter-ease per DESIGN.md Law 6. */
+  --motion-glide: 0.22s;
+  --motion-glide-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* No exit animation. The site's GONE grammar (up + re-blur) was tried as a

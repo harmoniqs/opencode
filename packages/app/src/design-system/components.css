@@ -85,11 +85,11 @@
 /* ── motion: quick, quiet, consistent (honors reduced-motion) ── */
 button, [role="button"], a, input, textarea, [data-slot="card"] {
   transition:
-    background-color 0.16s ease,
-    border-color 0.16s ease,
-    color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
+    background-color var(--motion-feedback) var(--motion-feedback-ease),
+    border-color var(--motion-feedback) var(--motion-feedback-ease),
+    color var(--motion-feedback) var(--motion-feedback-ease),
+    box-shadow var(--motion-feedback) var(--motion-feedback-ease),
+    transform var(--motion-feedback) var(--motion-feedback-ease);
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -122,7 +122,7 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
      visibly thicker than the sides. The site differentiates with borders, not
      bevels, so the composer takes the border alone. */
   box-shadow: none !important;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color var(--motion-feedback) var(--motion-feedback-ease), box-shadow var(--motion-feedback) var(--motion-feedback-ease);
 }
 [data-component="session-new-composer"] { min-height: 88px !important; }
 [data-component="session-new-composer"]:focus-within,
@@ -145,7 +145,7 @@ button, [role="button"], a, input, textarea, [data-slot="card"] {
   color: var(--accent-ink) !important;
   border: var(--border-width) solid var(--accent-edge-ink) !important;
   box-shadow: none !important;
-  transition: transform 0.16s ease, filter 0.16s ease;
+  transition: transform var(--motion-feedback) var(--motion-feedback-ease), filter var(--motion-feedback) var(--motion-feedback-ease);
 }
 [data-action="prompt-submit"] svg { color: var(--accent-ink) !important; }
 [data-action="prompt-submit"]:hover { filter: brightness(1.06); transform: translateY(-1px); }
@@ -200,7 +200,7 @@ span[data-component="tag"][data-variant="accent"] {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-emphasis);
   box-shadow: var(--elev-float);
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  transition: background-color var(--motion-feedback) var(--motion-feedback-ease), border-color var(--motion-feedback) var(--motion-feedback-ease), color var(--motion-feedback) var(--motion-feedback-ease);
 }
 [data-component="amicode-solver-switch"][data-phase="ready"] {
   background: var(--accent);
@@ -260,8 +260,8 @@ span[data-component="tag"][data-variant="accent"] {
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
   /* Eases between elements rather than teleporting. */
-  transition: top 0.22s cubic-bezier(0.2, 0, 0, 1), left 0.22s cubic-bezier(0.2, 0, 0, 1),
-    width 0.22s cubic-bezier(0.2, 0, 0, 1), height 0.22s cubic-bezier(0.2, 0, 0, 1);
+  transition: top var(--motion-glide) var(--motion-glide-ease), left var(--motion-glide) var(--motion-glide-ease),
+    width var(--motion-glide) var(--motion-glide-ease), height var(--motion-glide) var(--motion-glide-ease);
   /* Fades in once as the highlight lands. Keyed on the stop, so it plays per
      stop and not on the measure tick. */
   animation: amc-tour-arrive 0.25s ease-out both;
@@ -287,7 +287,7 @@ span[data-component="tag"][data-variant="accent"] {
    two components replacing each other. Motion-reduced users get the swap with
    no movement, which is the honest fallback for a positional animation. */
 [data-component="session-prompt-dock"] [data-component="session-question-dock"] {
-  animation: amc-dock-morph-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+  animation: amc-dock-morph-in var(--motion-glide) var(--motion-glide-ease) both;
 }
 @keyframes amc-dock-morph-in {
   from {
@@ -300,7 +300,7 @@ span[data-component="tag"][data-variant="accent"] {
   }
 }
 [data-component="session-prompt-dock"] [data-component="prompt-input-v2"] {
-  animation: amc-dock-morph-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+  animation: amc-dock-morph-in var(--motion-glide) var(--motion-glide-ease) both;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-component="session-prompt-dock"] [data-component="session-question-dock"],
