@@ -2,7 +2,7 @@
 
 The design system's laws and their reasons — the document a designer or an agent reads before touching the interface. It is the single home of the **laws**; the **values** live in `tokens.css` beside it (the brand sheet, formerly `design-polish.css`); the **vocabulary** lives in the app glossary (`CONTEXT.md`, *Brand*); the `amicode-design-system` skill is **generated** from this document and the token file and is never hand-edited. Moved here from ADR 0006 on 2026-09-08, losing nothing; ADR 0003's consequence 1 is superseded by Law 1.
 
-Tracking: (landing issue to follow)
+Tracking: harmoniqs/opencode#312 (the folder); the landing change and one follow-up per law follow it.
 
 ## Why one home
 
