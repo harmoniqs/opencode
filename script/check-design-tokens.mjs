@@ -87,15 +87,17 @@ const RAW_INLINE = /(style\.backgroundColor|setAttribute\("content")\s*(=|,)\s*[
 const RAW_BORDER_WIDTH =
   /(?<![-\w])border(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end))?(?:-width)?\s*:(?!\s*["']?(?:0(?:px)?\b|1px\b|none\b|var\(|inherit|initial|unset|revert))\s*["']?(\d*\.?\d+)(px|rem|em)\b/g
 const ARB_BORDER_WIDTH = /(?<![-\w])border(?:-[trblxyse])?-(?:2|4|8|\[\d*\.?\d+(?:px|rem|em)\])\b/g
-// --- rule 8: no shadow-as-border (Kate, 2026-09-07) -------------------------
-// A border is a --v2-border-* token, never an inset or zero-blur ring shadow
-// and never a Tailwind ring utility. Elevation shadows on floating surfaces
-// pass by default; SHADOW_POLICY=none widens the ban to EVERY box-shadow.
-const SHADOW_POLICY = process.env.SHADOW_POLICY ?? "no-border-shadows"
-const SHADOW_AS_BORDER = /box-shadow\s*:\s*[^;}]*?(?:\binset\b|(?:^|[\s,])0(?:px)?\s+0(?:px)?\s+0(?:px)?\s+\d*\.?\d+px)/g
-const ARB_RING = /(?<![-\w])(?:ring-(?:\d+|\[[^\]]+\])|shadow-\[[^\]]*inset[^\]]*\])/g
+// --- rule 8: no shadows, ever (Law 2) -------------------------------------
+// Nothing in the interface casts a shadow: no box-shadow, no text-shadow, no
+// drop-shadow() filter, no shadow-*/ring-* utility. A floating surface is a
+// hairline-bordered surface on its own ground layer. There is no policy
+// switch: a gate that can be weakened by an environment variable is an
+// exception, and the system has none.
 const ANY_SHADOW = /box-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
-const TW_SHADOW = /(?<![-\w])shadow-(?:sm|md|lg|xl|2xl|inner)\b/g
+const TEXT_SHADOW = /text-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
+const DROP_SHADOW = /drop-shadow\(/g
+const TW_SHADOW = /(?<![-\w])shadow-(?:sm|md|lg|xl|2xl|inner|\[[^\]]+\])\b/g
+const TW_RING = /(?<![-\w])ring-(?:\d+|\[[^\]]+\])/g
 
 for (const dir of SCAN) {
   for (const file of walk(join(root, dir))) {
@@ -116,14 +118,11 @@ for (const dir of SCAN) {
         [ARB_COLOUR, "Tailwind arbitrary colour — use a token, e.g. text-[var(--fg-on-dark)]"],
         [RAW_BORDER_WIDTH, "border width is 1px only — use var(--border-width), or 0 to remove"],
         [ARB_BORDER_WIDTH, "Tailwind border width — borders are 1px only (`border`, never border-2/4/8)"],
-        [SHADOW_AS_BORDER, "shadow used as a border — use a --v2-border-* token, never inset/ring shadows"],
-        [ARB_RING, "Tailwind ring / inset shadow — borders are border tokens, never shadows"],
-        ...(SHADOW_POLICY === "none"
-          ? [
-              [ANY_SHADOW, "box-shadow is banned (SHADOW_POLICY=none)"],
-              [TW_SHADOW, "Tailwind shadow-* is banned (SHADOW_POLICY=none)"],
-            ]
-          : []),
+        [ANY_SHADOW, "shadows are banned (Law 2) — separate with a hairline and a ground layer"],
+        [TEXT_SHADOW, "text-shadow is banned (Law 2)"],
+        [DROP_SHADOW, "drop-shadow() filter is banned (Law 2)"],
+        [TW_SHADOW, "Tailwind shadow-* is banned (Law 2)"],
+        [TW_RING, "Tailwind ring-* is banned (Law 2) — a ring is a shadow; use a hairline or the focus ring"],
       ]) {
         re.lastIndex = 0
         let m
