@@ -96,7 +96,7 @@ const ARB_BORDER_WIDTH = /(?<![-\w])border(?:-[trblxyse])?-(?:2|4|8|\[\d*\.?\d+(
 const ANY_SHADOW = /box-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
 const TEXT_SHADOW = /text-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
 const DROP_SHADOW = /drop-shadow\(/g
-const TW_SHADOW = /(?<![-\w])shadow-(?:sm|md|lg|xl|2xl|inner|\[[^\]]+\])\b/g
+const TW_SHADOW = /(?<![-\w])shadow-(?:(?:sm|md|lg|xl|2xl|inner)\b|\[[^\]]+\])/g
 const TW_RING = /(?<![-\w])ring-(?:\d+|\[[^\]]+\])/g
 
 for (const dir of SCAN) {
