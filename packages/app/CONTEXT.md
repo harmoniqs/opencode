@@ -76,6 +76,88 @@ Connections, solver/model Defaults, and Settings. These are set-and-forget surfa
 not places a researcher browses.
 _Avoid_: Settings menu (the zone is broader), footer
 
+### Brand
+
+**Brand sheet**:
+The one token file, canonical for every design-system value — hue, corner, unit, type, hairline, focus, motion — and holding nothing else. A value that disagrees with it is wrong; a value not in it is not part of the system; a rule that styles a surface is a **Skin**. See ADR 0006.
+_Avoid_: theme (that is the **Theme palette**), stylesheet, design tokens file, polish
+
+**Skin**:
+A rule that applies the **Brand sheet** to a named surface — the composer, the send button, the solver banner. Skins live in their own stylesheet, are gated exactly like any component, and never define a token or force themselves over the sheet. See ADR 0006, Law 9.
+_Avoid_: polish, override, theme tweak, component style (as something exempt)
+
+**Design law**:
+A rule of the brand that no token can express — how the accent may be paired, what a border is, what may move. Laws live in ADR 0006 with their reasons and are enforced by the **Design gate**.
+_Avoid_: guideline, style rule, convention, best practice
+
+**Design gate**:
+The checks that fail a build when code disagrees with the **Brand sheet** or a **Design law**: the static gate reads the source for literals, the rendered gate reads the running app in both schemes. A law without a gate is not yet a law.
+_Avoid_: lint, style check, visual test
+
+**Brand accent**:
+The one yellow the interface carries, and it carries it for one reason: it is the **Call to action**. Paired only as black-on-yellow or yellow-on-dark, never as a yellow foreground on a light surface, and never for selection, emphasis, or status. See ADR 0006, Law 1.
+_Avoid_: highlight colour, primary colour, gold, "the yellow" (unqualified), second accent, selected colour
+
+**Call to action**:
+The one control on a surface that prompts the researcher's immediate next action — send, connect, approve, begin — and the only thing that carries the **Brand accent**. A surface has at most one; a state is never one; yellow prompts and never points. See ADR 0006, Law 1.
+_Avoid_: primary button (generic), accent button, yellow button, highlight, active state
+
+**Semantic state**:
+The colours that mean something — success, warning, danger, and the session status dots — and the only chromatic hues besides the **Brand accent**. Never decorative, never an accent, never an edge; the meaning is always also carried by text or an icon. See ADR 0006, Laws 1 and 3.
+_Avoid_: status colours (as a design category), alert colours, accent (for these), error border
+
+**Data-viz palette**:
+The defined set of categorical colours the context tree and brain engines paint from — one hue per category, chosen under the accent law. The canvas is inside the system: its live marker is a pointer and is neutral. See ADR 0006, Law 1.
+_Avoid_: chart theme, secondary palette, accent set, exemption
+
+**Principle**:
+A behavioural rule of the interface — reduce choices, show progress, end flows well — that a designer checks in review rather than a gate checks in a build. Principles guide decisions; **Design laws** bind them. See ADR 0006, Principles.
+_Avoid_: law (for these), heuristic (as the canonical word), guideline, rule of thumb
+
+**Theme palette**:
+The surfaces, text, borders, and **Semantic state** colours the theme owns per scheme. The **Brand sheet** consumes it and never redefines it; the palette's accent is the **Brand accent** by reference. See ADR 0006, Law 8.
+_Avoid_: theme (as the whole design system), skin, colour scheme (that is light / dark), palette (unqualified)
+
+**Hairline**:
+The only edge the interface draws: one width, solid, in a neutral tone — or the call-to-action edge, ink on the armed fill and the scheme's own ink or cream on the idle outline. A state is never an edge; a floating surface is a hairline-bordered surface on its own ground layer; nothing casts a shadow. See ADR 0006, Laws 2 and 3.
+_Avoid_: emphasis border, ring, inset shadow, bevel, elevation, divider (as a distinct thing), error border
+
+**Corner**:
+The one rounding every control and surface shares; dots and round pills are circles. Nothing is rounded more or less than anything else, and hierarchy never comes from corner size. See ADR 0006, Law 4.
+_Avoid_: radius scale, size-tiered corners, pill (for a non-round control), soft corner
+
+**Unit**:
+The one spacing measure every padding, margin, and gap is a multiple of. A half-unit exists only as an inset beside a **Hairline**. See ADR 0006, Law 10.
+_Avoid_: spacing scale, half-step, tight padding, off-grid (say "off the unit")
+
+**UI type**:
+The size at which the interface describes itself — labels, controls, chrome, panels. Everything the interface says about itself is UI type; what the agent and researcher write is **Content type**. See ADR 0006, Law 5.
+_Avoid_: body text, small text, chrome text (as a size), base size
+
+**Content type**:
+The size at which what the agent and the researcher write — message prose and tool output — renders, one step above **UI type**. See ADR 0006, Law 5.
+_Avoid_: body text (ambiguous between the two), base size, base text, prose size
+
+**Focus ring**:
+The thin outline, set off from the control, that marks keyboard focus — ink on light, cream on dark, never the **Brand accent**, because yellow prompts and never points. Present on every interactive element and never removed. See ADR 0006, Laws 1 and 7.
+_Avoid_: focus outline (generic), focus state (broader), blue ring, yellow ring, glow
+
+**Arrival**:
+The first of three movements the interface makes: a block entering the timeline, or a card swapping into the dock, rises and un-blurs into place; nothing moves on hover, press, or state change. Under reduced motion an arrival is a fade. See ADR 0006, Law 6.
+_Avoid_: animation (generic), hover lift, micro-interaction, bounce, transition (for the movement itself)
+
+**Glide**:
+The second movement: a marker that follows attention — the tour spotlight — moving between positions, position only. Under reduced motion a glide is a jump-cut with a fade. See ADR 0006, Law 6.
+_Avoid_: slide, tween, animated highlight, teleport (that is the reduced-motion fallback, not the behaviour)
+
+**Working**:
+The third and last movement: an indeterminate indicator — a loader, a pulse, a shimmer — running continuously within its own bounds, never travelling or scaling. Under reduced motion it holds a still frame. See ADR 0006, Law 6.
+_Avoid_: spinner (as the concept), loading animation, busy state (broader), determinate progress (shares the marker; it is not a movement)
+
+**Quiet control**:
+A control that is visually muted until hovered or focused but always exists — in the tab order, named, and fully visible on focus. Hover changes its emphasis, never its presence. See ADR 0006, Law 7.
+_Avoid_: hover-reveal (as the concept), hidden control, hover-only action, ghost button (that is a variant, not a behaviour)
+
 ### Ambient surfaces
 
 **Live-solve indicator**:
@@ -114,6 +196,18 @@ only surfaces its state), setup wall
 These were real surfaces before the chat-first redesign and are intentionally gone. A
 reader meeting them in older code or notes should map them forward:
 
+- **Exemptions** (files and surfaces outside the design laws — logos, the poster, the
+  engines, the diff engine, the sheet itself) → gone under ADR 0006. Every surface is
+  inside the system; what was exempt is now defined, or is a delta.
+- **State edges** (a red, amber, or green border carrying success / warning / danger) → gone
+  under ADR 0006 Law 3. A state is shown by fill, text, or icon; the edge stays a **Hairline**.
+- **Yellow selection** (the soft-yellow fill and yellow edge on a selected or active row) → gone
+  under ADR 0006 Law 1. Selection is neutral — a ground layer and a strong hairline; the
+  **Brand accent** marks only the **Call to action**.
+- **Elevation / float shadow** (the named float shadow, the theme's elevation tiers, the
+  utility shadows) → gone under ADR 0006 Law 2. A dialog, popover, palette, or toast is a
+  **Hairline**-bordered surface on its own ground layer; nothing in the interface casts a
+  shadow.
 - **Home / Dashboard** (the aggregate widget page) → dissolved. Its widgets became
   **Rail surfaces**, **Account zone** entries, in-Chat context, or first-run affordances.
 - **Home top chrome strip** (the Home page's brand mark + defaults capsule + projects
