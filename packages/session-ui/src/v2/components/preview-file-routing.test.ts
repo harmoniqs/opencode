@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { isRenderable, RENDERABLE_EXTENSIONS } from "./markdown-utils"
+import * as fs from "node:fs"
+import * as path from "node:path"
 
 /**
  * Tests for file-type routing, view-mode visibility, and file-type
@@ -27,20 +29,30 @@ function shouldShowModeToggle(path: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// File type signal — async classification after file.read() (#925)
+// File type signal — async classification after file.read() (#925, #934)
 // ---------------------------------------------------------------------------
 
 type FileType = "text" | "binary" | "error" | "too-large" | null
 
 const MAX_FILE_SIZE = 1_000_000
 
+/**
+ * Classify a file.read() result. When the category is image/pdf and the server
+ * returns "binary", this is a RENDERABLE binary — return "text" (the pass-through
+ * signal) so the category-based renderer handles it.
+ */
 function classifyFileType(
-  readResult: { type: string; content: string; length?: number } | null,
+  readResult: { type: string; content: string; length?: number; encoding?: string; mimeType?: string } | null,
   readError: boolean,
+  category?: FileCategory,
 ): FileType {
   if (readError) return "error"
   if (!readResult) return null
-  if (readResult.type !== "text") return "binary"
+  if (readResult.type !== "text") {
+    // Image/PDF binaries are rendered by the category branch, not the binary guard
+    if (category === "image" || category === "pdf") return "text"
+    return "binary"
+  }
   const size = readResult.length ?? readResult.content.length
   if (size > MAX_FILE_SIZE) return "too-large"
   return "text"
@@ -139,7 +151,7 @@ describe("classifyFileType", () => {
     expect(classifyFileType({ type: "text", content: "short" }, false)).toBe("text")
   })
 
-  test("returns 'binary' when type is not text", () => {
+  test("returns 'binary' when type is not text (generic file)", () => {
     expect(classifyFileType({ type: "binary", content: "" }, false)).toBe("binary")
     expect(classifyFileType({ type: "base64", content: "AA==" }, false)).toBe("binary")
   })
@@ -156,6 +168,25 @@ describe("classifyFileType", () => {
 
   test("returns 'text' for text content at exactly 1 MB", () => {
     expect(classifyFileType({ type: "text", content: "", length: 1_000_000 }, false)).toBe("text")
+  })
+
+  test("returns 'text' (not 'binary') for image binary — renderable (#934)", () => {
+    const result = { type: "binary", content: "iVBOR...", encoding: "base64", mimeType: "image/png" }
+    expect(classifyFileType(result, false, "image")).toBe("text")
+  })
+
+  test("returns 'text' (not 'binary') for PDF binary — renderable (#934)", () => {
+    const result = { type: "binary", content: "JVBER...", encoding: "base64", mimeType: "application/pdf" }
+    expect(classifyFileType(result, false, "pdf")).toBe("text")
+  })
+
+  test("still returns 'binary' for non-renderable binary even with category", () => {
+    const result = { type: "binary", content: "", encoding: "base64", mimeType: "application/octet-stream" }
+    expect(classifyFileType(result, false, "text")).toBe("binary")
+  })
+
+  test("error still takes precedence over renderable category", () => {
+    expect(classifyFileType(null, true, "image")).toBe("error")
   })
 })
 
@@ -179,5 +210,49 @@ describe("no-project fallback filtering", () => {
   test("handles empty touchedFiles", () => {
     const renderable = ([] as string[]).filter(isRenderable)
     expect(renderable).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Toolbar layout structural assertions (#934)
+// ---------------------------------------------------------------------------
+
+describe("toolbar layout (#934)", () => {
+  const previewTabSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/session-preview-tab.tsx"),
+    "utf8",
+  )
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  test("zoom controls live in PreviewFileView, not SessionPreviewTab", () => {
+    // SessionPreviewTab must NOT render the zoom buttons/input (aria-label)
+    expect(previewTabSrc).not.toContain("Zoom out")
+    expect(previewTabSrc).not.toContain("Zoom in")
+    // But it must define and pass zoom/zoomIn/zoomOut as props
+    expect(previewTabSrc).toContain("zoom={zoom}")
+
+    // PreviewFileView MUST render the zoom widget
+    expect(fileViewSrc).toContain("Zoom out")
+    expect(fileViewSrc).toContain("Zoom in")
+  })
+
+  test("save status dot lives in SessionPreviewTab next to filename", () => {
+    // The parent should render the save dot (aria-label pattern)
+    expect(previewTabSrc).toMatch(/aria-label.*Sav(ing|ed)/)
+
+    // PreviewFileView should NOT render the save dot anymore
+    expect(fileViewSrc).not.toMatch(/aria-label.*Sav(ing|ed)"/)
+  })
+
+  test("PreviewFileView accepts onSaveStatusChange prop", () => {
+    expect(fileViewSrc).toContain("onSaveStatusChange")
+  })
+
+  test("SessionPreviewTab passes zoomIn and zoomOut to PreviewFileView", () => {
+    expect(previewTabSrc).toContain("zoomIn={zoomIn}")
+    expect(previewTabSrc).toContain("zoomOut={zoomOut}")
   })
 })

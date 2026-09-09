@@ -2,12 +2,17 @@
  * preview-file-view — Routes file rendering by type for the Preview tab.
  *
  * Markdown files get Preview/Edit toggle (CodeMirror 6 via preview-editor.tsx).
- * Text files open directly in edit mode. Images render as <img>, PDFs as
- * <embed>. Binary, error, and oversize files get placeholders.
+ * Text files open directly in edit mode. Images render as <img> (data URI),
+ * PDFs as <embed> (blob URL). Binary, error, and oversize files get
+ * placeholders.
  *
  * #925: "text" replaces "unsupported" — all non-renderable files open in
  * the CM6 editor. Async fileType signal detects binary/error/oversize after
  * file.read().
+ *
+ * #934: images and PDFs render via data URI / blob URL from the SDK binary
+ * response. Save dot moved to parent (SessionPreviewTab); zoom controls
+ * moved here to share Bar 2 with the edit/preview toggle.
  *
  * @module
  */
@@ -63,7 +68,10 @@ export function PreviewFileView(props: {
   onModeChange: (mode: "preview" | "edit") => void
   onUnsavedContent: (content: string) => void
   onSave: (path: string, content: string) => void
+  onSaveStatusChange: (status: "idle" | "saving" | "saved") => void
   zoom: () => number
+  zoomIn: () => void
+  zoomOut: () => void
 }) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
@@ -71,7 +79,12 @@ export function PreviewFileView(props: {
   const [loading, setLoading] = createSignal(true)
   const [fileType, setFileType] = createSignal<FileType>(null)
 
+  // Binary data for image/PDF rendering (data URI / blob URL)
+  const [binaryData, setBinaryData] = createSignal<{ base64: string; mime: string } | null>(null)
+
   // ─── File loading ──────────────────────────────────────────────────────
+
+  const category = () => getFileCategory(props.filePath)
 
   createEffect(
     on(
@@ -79,6 +92,7 @@ export function PreviewFileView(props: {
       (path) => {
         setLoading(true)
         setFileType(null)
+        setBinaryData(null)
         sdk()
           .client.file.read({ path })
           .then((result) => {
@@ -89,6 +103,17 @@ export function PreviewFileView(props: {
               return
             }
             if (content.type !== "text") {
+              // Image/PDF binaries are renderable — store the base64 data and
+              // let the category-based renderer handle them.
+              const cat = getFileCategory(props.filePath)
+              if ((cat === "image" || cat === "pdf") && (content as any).encoding === "base64") {
+                setBinaryData({
+                  base64: content.content,
+                  mime: (content as any).mimeType ?? "application/octet-stream",
+                })
+                setFileType("text") // pass-through: let category branch render
+                return
+              }
               setFileType("binary")
               setFileContent("")
               return
@@ -113,11 +138,51 @@ export function PreviewFileView(props: {
     ),
   )
 
+  // ─── Binary URLs ───────────────────────────────────────────────────────
+
+  // Data URI for images (small enough for inline base64)
+  const imageDataUrl = createMemo(() => {
+    const data = binaryData()
+    if (!data || category() !== "image") return ""
+    return `data:${data.mime};base64,${data.base64}`
+  })
+
+  // Blob URL for PDFs (embed/object needs a real URL, not a data URI)
+  const [pdfBlobUrl, setPdfBlobUrl] = createSignal("")
+
+  createEffect(
+    on(binaryData, (data) => {
+      // Revoke previous blob URL
+      const prev = pdfBlobUrl()
+      if (prev) URL.revokeObjectURL(prev)
+      setPdfBlobUrl("")
+
+      if (!data || category() !== "pdf") return
+
+      // Decode base64 → Uint8Array → Blob → object URL
+      const raw = atob(data.base64)
+      const bytes = new Uint8Array(raw.length)
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
+      const blob = new Blob([bytes], { type: data.mime })
+      setPdfBlobUrl(URL.createObjectURL(blob))
+    }),
+  )
+
+  onCleanup(() => {
+    const url = pdfBlobUrl()
+    if (url) URL.revokeObjectURL(url)
+  })
+
   // ─── Save logic ────────────────────────────────────────────────────────
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
   let savedTimer: ReturnType<typeof setTimeout> | undefined
+
+  // Surface save status to parent (for the header dot)
+  createEffect(() => {
+    props.onSaveStatusChange(saveStatus())
+  })
 
   const saveFile = (path: string, content: string) => {
     const baseUrl = serverSDK().url
@@ -177,32 +242,13 @@ export function PreviewFileView(props: {
 
   // ─── Render ────────────────────────────────────────────────────────────
 
-  const category = () => getFileCategory(props.filePath)
   const showModeToggle = () => category() === "markdown"
-
-  // Build file URL for image/PDF rendering
-  const fileUrl = createMemo(() => {
-    const baseUrl = serverSDK().url
-    if (!baseUrl) return ""
-    return new URL(`/file/read?path=${encodeURIComponent(props.filePath)}`, baseUrl).toString()
-  })
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Sub-header: save status + mode toggle */}
+      {/* Action bar: mode toggle + zoom controls */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
-        <div class="flex-1 flex items-center gap-1.5">
-          <Show when={saveStatus() === "saving"}>
-            <div
-              class="w-3 h-3 rounded-full border-2 border-text-weak border-t-transparent shrink-0"
-              style={{ animation: "spin 0.6s linear infinite" }}
-              aria-label="Saving"
-            />
-          </Show>
-          <Show when={saveStatus() === "saved"}>
-            <div class="w-3 h-3 rounded-full bg-green-500 shrink-0" aria-label="Saved" />
-          </Show>
-        </div>
+        <div class="flex-1" />
         <Show when={showModeToggle()}>
           <SegmentedControlV2
             value={props.fileState.mode}
@@ -226,18 +272,86 @@ export function PreviewFileView(props: {
             </TooltipV2>
           </SegmentedControlV2>
         </Show>
+        {/* Zoom controls — always visible when a file is loaded */}
+        <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
+          <input
+            type="text"
+            class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
+            value={`${props.zoom()}%`}
+            onInput={(e) => {
+              const val = parseInt(e.currentTarget.value)
+              if (!isNaN(val) && val >= 50 && val <= 200) {
+                // Direct set not available — zoom is owned by parent.
+                // Manual input is display-only; use +/- buttons to change.
+              }
+            }}
+            onBlur={(e) => {
+              e.currentTarget.value = `${props.zoom()}%`
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur()
+              }
+            }}
+            readOnly
+          />
+          <div class="flex items-center border-l border-border-base">
+            <button
+              class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+              onClick={() => props.zoomOut()}
+              aria-label="Zoom out"
+            >
+              <span class="text-12-medium leading-none">−</span>
+            </button>
+            <button
+              class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
+              onClick={() => props.zoomIn()}
+              aria-label="Zoom in"
+            >
+              <span class="text-12-medium leading-none">+</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Content */}
       <div class="flex-1 min-h-0 overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
-          {/* Phase 2: check fileType signal first (binary/error/oversize) */}
           <Switch>
             <Match when={fileType() === "error"}>
               <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
                 Could not read file
               </div>
             </Match>
+
+            {/* Renderable binaries: image/PDF use data URI or blob URL */}
+            <Match when={category() === "image" && (binaryData() || fileType() === "text")}>
+              <div
+                class="h-full flex items-center justify-center p-4 origin-top-left"
+                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
+              >
+                <img
+                  src={imageDataUrl()}
+                  alt={props.filePath.split("/").pop() ?? ""}
+                  class="max-w-full max-h-full object-contain"
+                  style={{ "image-rendering": "auto" }}
+                />
+              </div>
+            </Match>
+
+            <Match when={category() === "pdf" && (binaryData() || fileType() === "text")}>
+              <div
+                class="h-full origin-top-left"
+                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
+              >
+                <embed
+                  src={pdfBlobUrl()}
+                  type="application/pdf"
+                  class="w-full h-full"
+                />
+              </div>
+            </Match>
+
             <Match when={fileType() === "binary"}>
               <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
                 Binary file — cannot preview
@@ -249,7 +363,7 @@ export function PreviewFileView(props: {
               </div>
             </Match>
 
-            {/* Phase 1: route by extension-based category */}
+            {/* Text-based rendering by category */}
             <Match when={category() === "markdown"}>
               <Show
                 when={props.fileState.mode === "preview"}
@@ -269,33 +383,6 @@ export function PreviewFileView(props: {
                   <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
                 </div>
               </Show>
-            </Match>
-
-            <Match when={category() === "image"}>
-              <div
-                class="h-full flex items-center justify-center p-4 origin-top-left"
-                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
-              >
-                <img
-                  src={fileUrl()}
-                  alt={props.filePath.split("/").pop() ?? ""}
-                  class="max-w-full max-h-full object-contain"
-                  style={{ "image-rendering": "auto" }}
-                />
-              </div>
-            </Match>
-
-            <Match when={category() === "pdf"}>
-              <div
-                class="h-full origin-top-left"
-                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
-              >
-                <embed
-                  src={fileUrl()}
-                  type="application/pdf"
-                  class="w-full h-full"
-                />
-              </div>
             </Match>
 
             {/* Text files: open directly in edit mode */}

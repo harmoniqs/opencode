@@ -52,6 +52,10 @@ export function SessionPreviewTab(props: {
     }))
   }
 
+  // ─── Save status (surfaced from PreviewFileView via callback) ───────────
+
+  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
+
   // ─── Header Display ─────────────────────────────────────────────────────
 
   const headerTitle = createMemo(() => {
@@ -67,49 +71,23 @@ export function SessionPreviewTab(props: {
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Header */}
+      {/* Header: filename + save dot */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
-        <div class="flex-1 min-w-0 text-12-regular text-text-base truncate">
-          {headerTitle()}
-        </div>
-        {/* Zoom control — only shown when a file is selected */}
-        <Show when={props.previewFile()}>
-          <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
-            <input
-              type="text"
-              class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
-              value={`${zoom()}%`}
-              onInput={(e) => {
-                const val = parseInt(e.currentTarget.value)
-                if (!isNaN(val) && val >= 50 && val <= 200) setZoom(val)
-              }}
-              onBlur={(e) => {
-                e.currentTarget.value = `${zoom()}%`
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur()
-                }
-              }}
+        <div class="flex-1 min-w-0 flex items-center gap-1.5">
+          <span class="text-12-regular text-text-base truncate">
+            {headerTitle()}
+          </span>
+          <Show when={saveStatus() === "saving"}>
+            <div
+              class="w-2.5 h-2.5 rounded-full border-[1.5px] border-text-weak border-t-transparent shrink-0"
+              style={{ animation: "spin 0.6s linear infinite" }}
+              aria-label="Saving"
             />
-            <div class="flex items-center border-l border-border-base">
-              <button
-                class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                onClick={zoomOut}
-                aria-label="Zoom out"
-              >
-                <span class="text-12-medium leading-none">−</span>
-              </button>
-              <button
-                class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
-                onClick={zoomIn}
-                aria-label="Zoom in"
-              >
-                <span class="text-12-medium leading-none">+</span>
-              </button>
-            </div>
-          </div>
-        </Show>
+          </Show>
+          <Show when={saveStatus() === "saved"}>
+            <div class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-label="Saved" />
+          </Show>
+        </div>
       </div>
 
       {/* Main content */}
@@ -131,7 +109,10 @@ export function SessionPreviewTab(props: {
               onModeChange={(mode) => setFileState(filePath(), { mode })}
               onUnsavedContent={(content) => setFileState(filePath(), { unsavedContent: content })}
               onSave={() => {/* handled by PreviewFileView internally */}}
+              onSaveStatusChange={setSaveStatus}
               zoom={zoom}
+              zoomIn={zoomIn}
+              zoomOut={zoomOut}
             />
           )}
         </Show>
