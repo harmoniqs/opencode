@@ -354,6 +354,7 @@ describe("HttpApi UI fallback", () => {
       expect(csp).toContain("connect-src * data: blob:")
       expect(csp).toContain("img-src 'self' data: https: blob:")
       expect(csp).toContain("media-src 'self' data: blob:")
+      expect(csp).toContain("object-src 'self' blob:")
     }),
   )
 
