@@ -536,36 +536,95 @@ describe("zoom layout redesign (#937)", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Left-aligned toolbar (#937)
+// Preview tab: floating overlay controls (#937)
 // ---------------------------------------------------------------------------
 
-describe("toolbar left-alignment (#937)", () => {
+describe("preview tab: floating overlay controls (#937)", () => {
   const fileViewSrc = fs.readFileSync(
     path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
     "utf8",
   )
 
-  test("action bar does not start with a flex-1 spacer pushing controls right", () => {
-    // Find the action bar container line
-    const barLine = fileViewSrc.split("\n").find(
-      (l) => l.includes("Action bar") || (l.includes("border-border-weaker-base") && l.includes("py-1")),
-    )
-    expect(barLine).toBeDefined()
-    // The NEXT non-empty element must NOT be a bare flex-1 spacer div
-    const barStart = fileViewSrc.indexOf(barLine!)
-    const barContent = fileViewSrc.slice(barStart, barStart + 300)
-    // A bare spacer is `<div class="flex-1" />` — must not appear as the first child
-    expect(barContent).not.toMatch(/border-border-weaker-base[\s\S]{0,40}<div class="flex-1"/)
+  test("no action bar exists (removed entirely)", () => {
+    // The old action bar had border-border-weaker-base + py-1 — must be gone
+    expect(fileViewSrc).not.toContain("border-border-weaker-base")
   })
 
-  test("zoom controls appear before the edit/preview mode toggle", () => {
-    // The zoom pill (marked by "Zoom controls" comment) must come before
-    // the mode toggle (<Show when={showModeToggle()}>)
-    const zoomIdx = fileViewSrc.indexOf("Zoom controls")
-    const toggleIdx = fileViewSrc.indexOf("showModeToggle()")
-    expect(zoomIdx).toBeGreaterThan(-1)
-    expect(toggleIdx).toBeGreaterThan(-1)
+  test("floating controls container with absolute positioning", () => {
+    // A single container holds both controls, positioned top-right
+    expect(fileViewSrc).toContain("Floating controls")
+    const ctrlIdx = fileViewSrc.indexOf("Floating controls")
+    const ctrlBlock = fileViewSrc.slice(ctrlIdx, ctrlIdx + 500)
+    expect(ctrlBlock).toContain("absolute")
+    expect(ctrlBlock).toContain("right")
+    expect(ctrlBlock).toContain("z-index")
+  })
+
+  test("zoom pill inside Show gated on !isEditing()", () => {
+    // Zoom pill disappears entirely in edit mode (DOM-removed, not opacity-gated)
+    expect(fileViewSrc).toMatch(/Show when=\{!isEditing\(\)\}/)
+  })
+
+  test("mode toggle inside Show gated on showModeToggle()", () => {
+    expect(fileViewSrc).toMatch(/Show when=\{showModeToggle\(\)\}/)
+  })
+
+  test("zoom pill appears before mode toggle in the flex container", () => {
+    const ctrlIdx = fileViewSrc.indexOf("Floating controls")
+    const afterCtrl = fileViewSrc.slice(ctrlIdx)
+    const zoomIdx = afterCtrl.indexOf("!isEditing()")
+    const toggleIdx = afterCtrl.indexOf("showModeToggle()")
     expect(zoomIdx).toBeLessThan(toggleIdx)
+  })
+
+  test("showControls signal + 2s idle timer", () => {
+    expect(fileViewSrc).toContain("showControls")
+    expect(fileViewSrc).toContain("setShowControls")
+    expect(fileViewSrc).toMatch(/2000/)
+  })
+
+  test("controls container opacity driven by showControls signal", () => {
+    const ctrlIdx = fileViewSrc.indexOf("Floating controls")
+    const ctrlBlock = fileViewSrc.slice(ctrlIdx, ctrlIdx + 800)
+    expect(ctrlBlock).toContain("showControls()")
+    expect(ctrlBlock).toContain("opacity")
+    expect(ctrlBlock).toContain("transition")
+  })
+
+  test("relative wrapper has mouse event handlers for show/hide", () => {
+    expect(fileViewSrc).toContain("onMouseEnter")
+    expect(fileViewSrc).toContain("onMouseMove")
+    expect(fileViewSrc).toContain("onMouseLeave")
+  })
+
+  test("controls stay visible while hovering (pause idle timer)", () => {
+    const ctrlIdx = fileViewSrc.indexOf("Floating controls")
+    const ctrlBlock = fileViewSrc.slice(ctrlIdx, ctrlIdx + 500)
+    expect(ctrlBlock).toContain("onMouseEnter")
+    expect(ctrlBlock).toContain("onMouseLeave")
+  })
+
+  test("pinch/wheel zoom reveals controls", () => {
+    const wheelIdx = fileViewSrc.indexOf("handleWheelZoom")
+    const wheelBlock = fileViewSrc.slice(wheelIdx, wheelIdx + 600)
+    expect(wheelBlock).toContain("setShowControls(true)")
+    expect(wheelBlock).toContain("startIdleTimer")
+  })
+
+  test("isEditing signal exists with correct category logic", () => {
+    expect(fileViewSrc).toContain("isEditing")
+    expect(fileViewSrc).toMatch(/category\(\)[\s\S]*markdown[\s\S]*mode.*edit|mode.*edit[\s\S]*markdown/)
+    expect(fileViewSrc).toMatch(/return true/)
+  })
+
+  test("PreviewEditor call sites do not pass zoom prop", () => {
+    const editorInstances = fileViewSrc.split("<PreviewEditor").slice(1)
+    expect(editorInstances.length).toBeGreaterThanOrEqual(2)
+    for (const instance of editorInstances) {
+      const closingTag = instance.indexOf("/>")
+      const propsBlock = instance.slice(0, closingTag)
+      expect(propsBlock).not.toContain("zoom={")
+    }
   })
 })
 
@@ -746,43 +805,6 @@ describe("no autosave — save only on Cmd+S (#937)", () => {
 
   test("handleImmediateSave still exists for Cmd+S", () => {
     expect(fileViewSrc).toContain("handleImmediateSave")
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Preview tab: zoom pill grayed out in edit mode (#937)
-// ---------------------------------------------------------------------------
-
-describe("preview tab: zoom pill grayed out in edit mode (#937)", () => {
-  const fileViewSrc = fs.readFileSync(
-    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
-    "utf8",
-  )
-
-  test("isEditing signal exists with correct category logic", () => {
-    expect(fileViewSrc).toContain("isEditing")
-    // Must check for markdown edit mode
-    expect(fileViewSrc).toMatch(/category\(\)[\s\S]*markdown[\s\S]*mode.*edit|mode.*edit[\s\S]*markdown/)
-    // Text/code should return true (always editing)
-    expect(fileViewSrc).toMatch(/return true/)
-  })
-
-  test("zoom pill has conditional opacity and pointer-events for edit mode", () => {
-    // The zoom controls container must apply disabled styling when editing
-    expect(fileViewSrc).toContain("isEditing()")
-    expect(fileViewSrc).toContain("opacity-40")
-    expect(fileViewSrc).toContain("pointer-events-none")
-  })
-
-  test("PreviewEditor call sites do not pass zoom prop", () => {
-    // Extract both PreviewEditor instances
-    const editorInstances = fileViewSrc.split("<PreviewEditor").slice(1)
-    expect(editorInstances.length).toBeGreaterThanOrEqual(2)
-    for (const instance of editorInstances) {
-      const closingTag = instance.indexOf("/>")
-      const propsBlock = instance.slice(0, closingTag)
-      expect(propsBlock).not.toContain("zoom={")
-    }
   })
 })
 

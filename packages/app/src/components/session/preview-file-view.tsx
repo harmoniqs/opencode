@@ -203,13 +203,49 @@ export function PreviewFileView(props: {
 
   const showModeToggle = () => category() === "markdown"
 
-  // Zoom is disabled in edit mode — gray out the pill
+  // Zoom is disabled in edit mode — pill disappears entirely
   const isEditing = () => {
     const cat = category()
     if (cat === "markdown") return props.fileState.mode === "edit"
     if (cat === "image" || cat === "pdf") return false
     return true // text/code files are always in edit mode
   }
+
+  // ─── Auto-hide floating controls on idle ─────────────────────────────
+  const [showControls, setShowControls] = createSignal(true)
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  let controlsHovered = false
+
+  const startIdleTimer = () => {
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      if (!controlsHovered) setShowControls(false)
+    }, 2000)
+  }
+
+  const handleWrapperMouseEnter = () => {
+    setShowControls(true)
+    startIdleTimer()
+  }
+  const handleWrapperMouseMove = () => {
+    if (!showControls()) setShowControls(true)
+    startIdleTimer()
+  }
+  const handleWrapperMouseLeave = () => {
+    if (idleTimer) clearTimeout(idleTimer)
+    if (!controlsHovered) setShowControls(false)
+  }
+  const handleControlsMouseEnter = () => {
+    controlsHovered = true
+    if (idleTimer) clearTimeout(idleTimer)
+  }
+  const handleControlsMouseLeave = () => {
+    controlsHovered = false
+    startIdleTimer()
+  }
+
+  // Start the initial auto-hide timer
+  startIdleTimer()
 
   // Image/PDF: zoom floor at 100% (never shrink below panel fit).
   // Markdown/text: floor stays at the global 50%.
@@ -291,6 +327,8 @@ export function PreviewFileView(props: {
     if (next === oldZoom) return
     props.onZoomChange(next)
     adjustScrollForZoom(oldZoom, next)
+    setShowControls(true)
+    startIdleTimer()
   }
 
   createEffect(() => {
@@ -301,108 +339,127 @@ export function PreviewFileView(props: {
   })
 
   return (
-    <div class="h-full flex flex-col overflow-hidden">
-      {/* Action bar: zoom controls + mode toggle — left-aligned */}
-      <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
-        {/* Zoom controls: [editable %] [reset] [+ over -] */}
-        <div
-          class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden"
-          classList={{ "opacity-40 pointer-events-none": isEditing() }}
-        >
-          {/* Editable zoom percentage input */}
-          <input
-            type="text"
-            class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
-            value={`${props.zoom()}%`}
-            onFocus={(e) => {
-              // Select just the number, not the % sign
-              e.currentTarget.value = `${props.zoom()}`
-              e.currentTarget.select()
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur()
-              } else if (e.key === "Escape") {
-                // Revert to current zoom without committing
+    <div
+      class="h-full relative overflow-hidden"
+      onMouseEnter={handleWrapperMouseEnter}
+      onMouseMove={handleWrapperMouseMove}
+      onMouseLeave={handleWrapperMouseLeave}
+    >
+      {/* Floating controls — top-right overlay */}
+      <div
+        onMouseEnter={handleControlsMouseEnter}
+        onMouseLeave={handleControlsMouseLeave}
+        style={{
+          position: "absolute",
+          top: "8px",
+          right: "8px",
+          "z-index": "20",
+          display: "flex",
+          gap: "6px",
+          "align-items": "center",
+          opacity: showControls() ? "1" : "0",
+          "pointer-events": showControls() ? "auto" : "none",
+          transition: "opacity 200ms ease",
+        }}
+      >
+        <Show when={!isEditing()}>
+          {/* Zoom controls: [editable %] [reset] [+ over -] */}
+          <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
+            {/* Editable zoom percentage input */}
+            <input
+              type="text"
+              class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
+              value={`${props.zoom()}%`}
+              onFocus={(e) => {
                 e.currentTarget.value = `${props.zoom()}`
-                e.currentTarget.blur()
-              }
-            }}
-            onBlur={(e) => {
-              const val = parseInt(e.currentTarget.value)
-              if (!isNaN(val) && props.onZoomChange) {
-                const clamped = Math.min(Math.max(val, zoomFloor()), 500)
-                const before = props.zoom()
-                props.onZoomChange(clamped)
-                adjustScrollForZoom(before, clamped)
-              }
-              e.currentTarget.value = `${props.zoom()}%`
-            }}
-          />
-          {/* Reset to 100% */}
-          <button
-            class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-            onClick={() => {
-              const before = props.zoom()
-              props.onZoomChange?.(100)
-              adjustScrollForZoom(before, 100)
-            }}
-            aria-label="Reset zoom"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
-          {/* Vertical +/- stepper */}
-          <div class="flex flex-col border-l border-border-base">
+                e.currentTarget.select()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur()
+                } else if (e.key === "Escape") {
+                  e.currentTarget.value = `${props.zoom()}`
+                  e.currentTarget.blur()
+                }
+              }}
+              onBlur={(e) => {
+                const val = parseInt(e.currentTarget.value)
+                if (!isNaN(val) && props.onZoomChange) {
+                  const clamped = Math.min(Math.max(val, zoomFloor()), 500)
+                  const before = props.zoom()
+                  props.onZoomChange(clamped)
+                  adjustScrollForZoom(before, clamped)
+                }
+                e.currentTarget.value = `${props.zoom()}%`
+              }}
+            />
+            {/* Reset to 100% */}
             <button
-              class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+              class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
               onClick={() => {
                 const before = props.zoom()
-                props.zoomIn()
-                adjustScrollForZoom(before, props.zoom())
+                props.onZoomChange?.(100)
+                adjustScrollForZoom(before, 100)
               }}
-              aria-label="Zoom in"
+              aria-label="Reset zoom"
             >
-              <span class="text-[10px] font-medium leading-none">+</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
             </button>
-            <button
-              class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base"
-              onClick={() => handleZoomOut()}
-              aria-label="Zoom out"
-            >
-              <span class="text-[10px] font-medium leading-none">−</span>
-            </button>
+            {/* Vertical +/- stepper */}
+            <div class="flex flex-col border-l border-border-base">
+              <button
+                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                onClick={() => {
+                  const before = props.zoom()
+                  props.zoomIn()
+                  adjustScrollForZoom(before, props.zoom())
+                }}
+                aria-label="Zoom in"
+              >
+                <span class="text-[10px] font-medium leading-none">+</span>
+              </button>
+              <button
+                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base"
+                onClick={() => handleZoomOut()}
+                aria-label="Zoom out"
+              >
+                <span class="text-[10px] font-medium leading-none">−</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </Show>
         <Show when={showModeToggle()}>
-          <SegmentedControlV2
-            value={props.fileState.mode}
-            onChange={(value) => {
-              if (value === "preview" || value === "edit") {
-                props.onModeChange(value)
-              }
-            }}
-            class="!w-auto"
-            aria-label="View mode"
-          >
-            <TooltipV2 openDelay={400} value="Preview">
-              <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
-                <Icon name="eye" size="small" />
-              </SegmentedControlItemV2>
-            </TooltipV2>
-            <TooltipV2 openDelay={400} value="Edit">
-              <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
-                <Icon name="edit" size="small" />
-              </SegmentedControlItemV2>
-            </TooltipV2>
-          </SegmentedControlV2>
+          <div class="rounded-md border border-border-base shadow-sm overflow-hidden" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
+            <SegmentedControlV2
+              value={props.fileState.mode}
+              onChange={(value) => {
+                if (value === "preview" || value === "edit") {
+                  props.onModeChange(value)
+                }
+              }}
+              class="!w-auto"
+              aria-label="View mode"
+            >
+              <TooltipV2 openDelay={400} value="Preview">
+                <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
+                  <Icon name="eye" size="small" />
+                </SegmentedControlItemV2>
+              </TooltipV2>
+              <TooltipV2 openDelay={400} value="Edit">
+                <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
+                  <Icon name="edit" size="small" />
+                </SegmentedControlItemV2>
+              </TooltipV2>
+            </SegmentedControlV2>
+          </div>
         </Show>
       </div>
 
       {/* Content */}
-      <div ref={scrollRef} class="flex-1 min-h-0 overflow-auto">
+      <div ref={scrollRef} class="h-full overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
           <Switch>
             <Match when={fileType() === "error"}>
