@@ -243,9 +243,9 @@ describe("toolbar layout (#934)", () => {
     expect(fileViewSrc).toContain("Zoom in")
   })
 
-  test("save status dot lives in SessionPreviewTab next to filename", () => {
-    // The parent should render the save dot (aria-label pattern)
-    expect(previewTabSrc).toMatch(/aria-label.*Sav(ing|ed)/)
+  test("unsaved dot lives in SessionPreviewTab next to filename", () => {
+    // The parent should render the unsaved dot (aria-label pattern)
+    expect(previewTabSrc).toMatch(/aria-label.*[Uu]nsaved/)
 
     // PreviewFileView should NOT render the save dot anymore
     expect(fileViewSrc).not.toMatch(/aria-label.*Sav(ing|ed)"/)
@@ -407,4 +407,151 @@ describe("toolbar layout (#934)", () => {
     expect(fileViewSrc).toContain("requestAnimationFrame")
   })
 
+})
+
+// ---------------------------------------------------------------------------
+// Editor zoom — CM6 font-size scaling (#937)
+// ---------------------------------------------------------------------------
+
+describe("editor zoom via CM6 font-size (#937)", () => {
+  const editorSrc = fs.readFileSync(
+    path.resolve(__dirname, "preview-editor.tsx"),
+    "utf8",
+  )
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  test("PreviewEditor accepts a zoom prop", () => {
+    // The props type must include zoom as an optional accessor
+    expect(editorSrc).toMatch(/zoom\??\s*:\s*\(\)\s*=>\s*number/)
+  })
+
+  test("PreviewEditor uses a Compartment for zoom font-size reconfiguration", () => {
+    // Must create a Compartment for the zoom theme (separate from editable)
+    expect(editorSrc).toContain("zoomCompartment")
+    expect(editorSrc).toContain("Compartment")
+  })
+
+  test("PreviewEditor applies fontSize derived from zoom", () => {
+    // The zoom theme must set fontSize as a function of the zoom value
+    expect(editorSrc).toContain("fontSize")
+    // Must reference zoom in the font-size computation
+    expect(editorSrc).toMatch(/fontSize.*zoom|zoom.*fontSize/)
+  })
+
+  test("PreviewEditor reactively reconfigures zoom on prop change", () => {
+    // Must dispatch a reconfigure effect when zoom changes
+    expect(editorSrc).toContain("reconfigure")
+  })
+
+  test("both PreviewEditor call sites pass zoom prop", () => {
+    // Markdown edit mode (inside the <Match when=... "markdown"> block)
+    const mdMatchTag = 'Match when={category() === "markdown"}'
+    const mdStart = fileViewSrc.indexOf(mdMatchTag)
+    const mdEnd = fileViewSrc.indexOf("</Match>", mdStart)
+    const markdownMatch = fileViewSrc.slice(mdStart, mdEnd)
+    expect(markdownMatch).toContain("zoom={")
+
+    // Text/code file rendering
+    const txtMatchTag = 'Match when={category() === "text"}'
+    const txtStart = fileViewSrc.indexOf(txtMatchTag)
+    const txtEnd = fileViewSrc.indexOf("</Match>", txtStart)
+    const textMatch = fileViewSrc.slice(txtStart, txtEnd)
+    expect(textMatch).toContain("zoom={")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Zoom layout redesign — editable input + reset + vertical stepper (#937)
+// ---------------------------------------------------------------------------
+
+describe("zoom layout redesign (#937)", () => {
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  test("zoom input is editable (not readOnly)", () => {
+    // Extract the zoom controls section
+    const zoomSection = fileViewSrc.slice(
+      fileViewSrc.indexOf("Zoom out"),
+      fileViewSrc.indexOf("</div>", fileViewSrc.lastIndexOf("Zoom in")) + 10,
+    )
+    // The zoom input must NOT be readOnly
+    expect(zoomSection).not.toContain("readOnly")
+  })
+
+  test("zoom input commits value via onZoomChange", () => {
+    // Must call onZoomChange when the user enters a value
+    expect(fileViewSrc).toContain("onZoomChange")
+  })
+
+  test("has a reset-to-100% button", () => {
+    expect(fileViewSrc).toContain('aria-label="Reset zoom"')
+  })
+
+  test("+/- stepper is vertical (flex-col)", () => {
+    // The stepper container must use flex-col for vertical stacking
+    // Find the region between "Zoom in" and "Zoom out" buttons
+    const zoomInIdx = fileViewSrc.indexOf('"Zoom in"')
+    const zoomOutIdx = fileViewSrc.indexOf('"Zoom out"')
+    // Their shared container must use flex-col — search 500 chars back
+    // to include the parent div
+    const start = Math.max(0, Math.min(zoomInIdx, zoomOutIdx) - 500)
+    const end = Math.max(zoomInIdx, zoomOutIdx) + 100
+    const stepperRegion = fileViewSrc.slice(start, end)
+    expect(stepperRegion).toContain("flex-col")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Left-aligned toolbar (#937)
+// ---------------------------------------------------------------------------
+
+describe("toolbar left-alignment (#937)", () => {
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  test("action bar does not start with a flex-1 spacer pushing controls right", () => {
+    // Find the action bar container line
+    const barLine = fileViewSrc.split("\n").find(
+      (l) => l.includes("Action bar") || (l.includes("border-border-weaker-base") && l.includes("py-1")),
+    )
+    expect(barLine).toBeDefined()
+    // The NEXT non-empty element must NOT be a bare flex-1 spacer div
+    const barStart = fileViewSrc.indexOf(barLine!)
+    const barContent = fileViewSrc.slice(barStart, barStart + 300)
+    // A bare spacer is `<div class="flex-1" />` — must not appear as the first child
+    expect(barContent).not.toMatch(/border-border-weaker-base[\s\S]{0,40}<div class="flex-1"/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Dirty dot indicator — VS Code style (#937)
+// ---------------------------------------------------------------------------
+
+describe("dirty dot indicator (#937)", () => {
+  const previewTabSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/session-preview-tab.tsx"),
+    "utf8",
+  )
+
+  test("shows an unsaved dot based on file state unsavedContent", () => {
+    // Must reference unsavedContent to determine dot visibility
+    expect(previewTabSrc).toContain("unsavedContent")
+  })
+
+  test("unsaved dot has aria-label for accessibility", () => {
+    expect(previewTabSrc).toMatch(/aria-label.*[Uu]nsaved/)
+  })
+
+  test("does not show transient saving/saved status dots", () => {
+    // The old saving spinner and saved green dot should be removed
+    expect(previewTabSrc).not.toMatch(/aria-label="Saving"/)
+    expect(previewTabSrc).not.toMatch(/aria-label="Saved"/)
+  })
 })

@@ -73,7 +73,7 @@ export function PreviewFileView(props: {
   onModeChange: (mode: "preview" | "edit") => void
   onUnsavedContent: (content: string) => void
   onSave: (path: string, content: string) => void
-  onSaveStatusChange: (status: "idle" | "saving" | "saved") => void
+  onSaveStatusChange?: (status: "idle" | "saving" | "saved") => void
   zoom: () => number
   zoomIn: () => void
   zoomOut: () => void
@@ -167,9 +167,9 @@ export function PreviewFileView(props: {
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
   let savedTimer: ReturnType<typeof setTimeout> | undefined
 
-  // Surface save status to parent (for the header dot)
+  // Surface save status to parent (for the header dot) if callback provided
   createEffect(() => {
-    props.onSaveStatusChange(saveStatus())
+    props.onSaveStatusChange?.(saveStatus())
   })
 
   const saveFile = (path: string, content: string) => {
@@ -323,9 +323,8 @@ export function PreviewFileView(props: {
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Action bar: mode toggle + zoom controls */}
+      {/* Action bar: mode toggle + zoom controls — left-aligned */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
-        <div class="flex-1" />
         <Show when={showModeToggle()}>
           <SegmentedControlV2
             value={props.fileState.mode}
@@ -349,17 +348,22 @@ export function PreviewFileView(props: {
             </TooltipV2>
           </SegmentedControlV2>
         </Show>
-        {/* Zoom controls — always visible when a file is loaded */}
+        {/* Zoom controls: [editable %] [reset] [+ over -] */}
         <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
+          {/* Editable zoom percentage input */}
           <input
             type="text"
             class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
             value={`${props.zoom()}%`}
+            onFocus={(e) => {
+              // Select just the number, not the % sign
+              e.currentTarget.value = `${props.zoom()}`
+              e.currentTarget.select()
+            }}
             onInput={(e) => {
               const val = parseInt(e.currentTarget.value)
-              if (!isNaN(val) && val >= 50 && val <= 500) {
-                // Direct set not available — zoom is owned by parent.
-                // Manual input is display-only; use +/- buttons to change.
+              if (!isNaN(val) && props.onZoomChange) {
+                props.onZoomChange(val)
               }
             }}
             onBlur={(e) => {
@@ -370,18 +374,26 @@ export function PreviewFileView(props: {
                 e.currentTarget.blur()
               }
             }}
-            readOnly
           />
-          <div class="flex items-center border-l border-border-base">
+          {/* Reset to 100% */}
+          <button
+            class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+            onClick={() => {
+              const before = props.zoom()
+              props.onZoomChange?.(100)
+              adjustScrollForZoom(before, 100)
+            }}
+            aria-label="Reset zoom"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
+          {/* Vertical +/- stepper */}
+          <div class="flex flex-col border-l border-border-base">
             <button
-              class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-              onClick={() => handleZoomOut()}
-              aria-label="Zoom out"
-            >
-              <span class="text-12-medium leading-none">−</span>
-            </button>
-            <button
-              class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
+              class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
               onClick={() => {
                 const before = props.zoom()
                 props.zoomIn()
@@ -389,7 +401,14 @@ export function PreviewFileView(props: {
               }}
               aria-label="Zoom in"
             >
-              <span class="text-12-medium leading-none">+</span>
+              <span class="text-[10px] font-medium leading-none">+</span>
+            </button>
+            <button
+              class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base"
+              onClick={() => handleZoomOut()}
+              aria-label="Zoom out"
+            >
+              <span class="text-[10px] font-medium leading-none">−</span>
             </button>
           </div>
         </div>
@@ -447,6 +466,7 @@ export function PreviewFileView(props: {
                     filePath={props.filePath}
                     onChange={handleEdit}
                     onSave={handleImmediateSave}
+                    zoom={props.zoom}
                   />
                 }
               >
@@ -466,6 +486,7 @@ export function PreviewFileView(props: {
                 filePath={props.filePath}
                 onChange={handleEdit}
                 onSave={handleImmediateSave}
+                zoom={props.zoom}
               />
             </Match>
           </Switch>

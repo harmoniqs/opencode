@@ -53,10 +53,6 @@ export function SessionPreviewTab(props: {
     }))
   }
 
-  // ─── Save status (surfaced from PreviewFileView via callback) ───────────
-
-  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
-
   // ─── Header Display ─────────────────────────────────────────────────────
 
   const headerTitle = createMemo(() => {
@@ -70,23 +66,23 @@ export function SessionPreviewTab(props: {
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
+  // Dirty state: true when the current file has unsaved edits
+  const isUnsaved = createMemo(() => {
+    const file = props.previewFile()
+    if (!file) return false
+    return fileStates[file]?.unsavedContent != null
+  })
+
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Header: filename + save dot */}
+      {/* Header: filename + unsaved dot */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
         <div class="flex-1 min-w-0 flex items-center gap-1.5">
           <span class="text-12-regular text-text-base truncate">
             {headerTitle()}
           </span>
-          <Show when={saveStatus() === "saving"}>
-            <div
-              class="w-2.5 h-2.5 rounded-full border-[1.5px] border-text-weak border-t-transparent shrink-0"
-              style={{ animation: "spin 0.6s linear infinite" }}
-              aria-label="Saving"
-            />
-          </Show>
-          <Show when={saveStatus() === "saved"}>
-            <div class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-label="Saved" />
+          <Show when={isUnsaved()}>
+            <div class="w-2 h-2 rounded-full bg-text-faint shrink-0" aria-label="Unsaved changes" />
           </Show>
         </div>
       </div>
@@ -110,7 +106,6 @@ export function SessionPreviewTab(props: {
               onModeChange={(mode) => setFileState(filePath(), { mode })}
               onUnsavedContent={(content) => setFileState(filePath(), { unsavedContent: content })}
               onSave={() => {/* handled by PreviewFileView internally */}}
-              onSaveStatusChange={setSaveStatus}
               zoom={zoom}
               zoomIn={zoomIn}
               zoomOut={zoomOut}

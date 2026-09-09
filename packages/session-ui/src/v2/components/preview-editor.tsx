@@ -29,11 +29,22 @@ export function PreviewEditor(props: {
   filePath: string
   onChange: (content: string) => void
   onSave: () => void
+  zoom?: () => number
 }) {
   let containerRef!: HTMLDivElement
   let editorView: EditorView | null = null
   const [langSupport, setLangSupport] = createSignal<LanguageSupport | null>(null)
   const editableCompartment = new Compartment()
+  const zoomCompartment = new Compartment()
+
+  // Base editor font size (matches editor-core.ts buildThemeExtension "&" fontSize)
+  const BASE_FONT_SIZE = 13
+
+  /** Build a CM6 theme extension that scales fontSize by zoom level. */
+  const buildZoomTheme = (zoomPercent: number) =>
+    EditorView.theme({
+      "&": { fontSize: `${BASE_FONT_SIZE * zoomPercent / 100}px` },
+    })
 
   // Load language support
   onMount(async () => {
@@ -82,6 +93,7 @@ export function PreviewEditor(props: {
               onChange,
             }),
           ),
+          zoomCompartment.of(buildZoomTheme(props.zoom?.() ?? 100)),
           saveKeymap,
         ],
       }),
@@ -122,6 +134,15 @@ export function PreviewEditor(props: {
     editorView.dispatch({
       changes: { from: 0, to: editorView.state.doc.length, insert: content },
       annotations: [externalUpdate.of(true)],
+    })
+  })
+
+  // Reactively reconfigure zoom font-size when the zoom prop changes
+  createEffect(() => {
+    const zoomValue = props.zoom?.() ?? 100
+    if (!editorView) return
+    editorView.dispatch({
+      effects: zoomCompartment.reconfigure(buildZoomTheme(zoomValue)),
     })
   })
 
