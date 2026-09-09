@@ -488,6 +488,35 @@ describe("zoom layout redesign (#937)", () => {
     expect(fileViewSrc).toContain("onZoomChange")
   })
 
+  test("zoom input does NOT fire onZoomChange on every keystroke (no onInput handler)", () => {
+    // Extract the <input> element block for the zoom percentage
+    const inputStart = fileViewSrc.indexOf("Editable zoom percentage input")
+    const inputEnd = fileViewSrc.indexOf("/>", inputStart)
+    const inputBlock = fileViewSrc.slice(inputStart, inputEnd)
+    // Must NOT have an onInput handler — zoom commits on blur/Enter only
+    expect(inputBlock).not.toContain("onInput")
+  })
+
+  test("zoom input commits on blur with clamping to [zoomFloor, 500]", () => {
+    const inputStart = fileViewSrc.indexOf("Editable zoom percentage input")
+    const inputEnd = fileViewSrc.indexOf("/>", inputStart)
+    const inputBlock = fileViewSrc.slice(inputStart, inputEnd)
+    // The onBlur handler must parse, clamp, and apply
+    expect(inputBlock).toContain("onBlur")
+    // Must clamp the parsed value to the valid range
+    expect(inputBlock).toContain("zoomFloor()")
+    expect(inputBlock).toContain("500")
+    expect(inputBlock).toContain("Math.min")
+    expect(inputBlock).toContain("Math.max")
+  })
+
+  test("zoom input supports Escape to revert without committing", () => {
+    const inputStart = fileViewSrc.indexOf("Editable zoom percentage input")
+    const inputEnd = fileViewSrc.indexOf("/>", inputStart)
+    const inputBlock = fileViewSrc.slice(inputStart, inputEnd)
+    expect(inputBlock).toContain("Escape")
+  })
+
   test("has a reset-to-100% button", () => {
     expect(fileViewSrc).toContain('aria-label="Reset zoom"')
   })

@@ -360,19 +360,24 @@ export function PreviewFileView(props: {
               e.currentTarget.value = `${props.zoom()}`
               e.currentTarget.select()
             }}
-            onInput={(e) => {
-              const val = parseInt(e.currentTarget.value)
-              if (!isNaN(val) && props.onZoomChange) {
-                props.onZoomChange(val)
-              }
-            }}
-            onBlur={(e) => {
-              e.currentTarget.value = `${props.zoom()}%`
-            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.currentTarget.blur()
+              } else if (e.key === "Escape") {
+                // Revert to current zoom without committing
+                e.currentTarget.value = `${props.zoom()}`
+                e.currentTarget.blur()
               }
+            }}
+            onBlur={(e) => {
+              const val = parseInt(e.currentTarget.value)
+              if (!isNaN(val) && props.onZoomChange) {
+                const clamped = Math.min(Math.max(val, zoomFloor()), 500)
+                const before = props.zoom()
+                props.onZoomChange(clamped)
+                adjustScrollForZoom(before, clamped)
+              }
+              e.currentTarget.value = `${props.zoom()}%`
             }}
           />
           {/* Reset to 100% */}
