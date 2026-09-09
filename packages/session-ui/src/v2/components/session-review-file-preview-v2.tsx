@@ -457,7 +457,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
               style={{
                 position: "absolute",
                 top: "8px",
-                right: "8px",
+                right: "14px",
                 "z-index": "20",
                 display: "flex",
                 "align-items": "center",

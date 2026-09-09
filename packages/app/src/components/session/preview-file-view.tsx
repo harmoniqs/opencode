@@ -352,7 +352,7 @@ export function PreviewFileView(props: {
         style={{
           position: "absolute",
           top: "8px",
-          right: "8px",
+          right: "14px",
           "z-index": "20",
           display: "flex",
           gap: "6px",
