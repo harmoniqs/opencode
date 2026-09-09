@@ -33,12 +33,8 @@ import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { EditableDiffView } from "./editable-diff-view"
 import type { DiffEditorHandle } from "./editable-diff-view-core"
 import { Markdown } from "../../components/markdown"
+import { preprocessMarkdown } from "./markdown-utils"
 import "./session-review-v2.css"
-
-// Shared utility: convert fenced ```math blocks to $$...$$ for KaTeX
-function preprocessMarkdown(md: string): string {
-  return md.replace(/```math\n([\s\S]*?)```/g, (_, p1) => `$$${p1}$$`)
-}
 
 type ReviewDiff = (SnapshotFileDiff & { file: string }) | FileDiffInfo | VcsFileDiff
 

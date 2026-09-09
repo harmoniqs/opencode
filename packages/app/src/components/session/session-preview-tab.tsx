@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
+import { preprocessMarkdown } from "@opencode-ai/session-ui/v2/markdown-utils"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
@@ -27,14 +28,6 @@ interface PreviewFileState {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-
-/**
- * Convert ```math fenced code blocks (GitHub-flavored) to $$...$$ display math
- * blocks that the Markdown component's KaTeX extension understands.
- */
-function preprocessMarkdown(text: string): string {
-  return text.replace(/```math\n([\s\S]*?)```/g, (_match, body: string) => `$$\n${body.trim()}\n$$`)
-}
 
 export function SessionPreviewTab(props: {
   diffs: () => Array<{ file: string; status?: string }>
