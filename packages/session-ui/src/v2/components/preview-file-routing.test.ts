@@ -882,3 +882,41 @@ describe("files changed tab: auto-hide zoom pill on idle (#937)", () => {
     expect(reviewSrc).toMatch(/showZoomPill.*createSignal\(true\)|createSignal\(true\)[\s\S]*showZoomPill/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Files Changed tab: pinch/wheel zoom in markdown preview (#937)
+// ---------------------------------------------------------------------------
+
+describe("files changed tab: pinch/wheel zoom in markdown preview (#937)", () => {
+  const reviewSrc = fs.readFileSync(
+    path.resolve(__dirname, "./session-review-file-preview-v2.tsx"),
+    "utf8",
+  )
+
+  test("handleWheelZoom exists and checks ctrlKey/shiftKey", () => {
+    expect(reviewSrc).toContain("handleWheelZoom")
+    expect(reviewSrc).toContain("ctrlKey")
+    expect(reviewSrc).toContain("shiftKey")
+  })
+
+  test("wheel listener attached with passive: false", () => {
+    expect(reviewSrc).toMatch(/addEventListener\("wheel"/)
+    expect(reviewSrc).toContain("passive: false")
+  })
+
+  test("wheel zoom reveals the pill and resets idle timer", () => {
+    // The handler should show the pill during pinch gestures
+    const handlerStart = reviewSrc.indexOf("handleWheelZoom")
+    const handlerBlock = reviewSrc.slice(handlerStart, handlerStart + 600)
+    expect(handlerBlock).toContain("setShowZoomPill(true)")
+    expect(handlerBlock).toContain("startZoomIdleTimer")
+  })
+
+  test("wheel zoom calls onZoomChange with clamped value", () => {
+    const handlerStart = reviewSrc.indexOf("handleWheelZoom")
+    const handlerBlock = reviewSrc.slice(handlerStart, handlerStart + 600)
+    expect(handlerBlock).toContain("onZoomChange")
+    expect(handlerBlock).toContain("Math.min")
+    expect(handlerBlock).toContain("Math.max")
+  })
+})

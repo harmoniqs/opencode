@@ -294,6 +294,33 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   // Start the initial auto-hide timer
   startZoomIdleTimer()
 
+  // ─── Pinch / wheel zoom ──────────────────────────────────────────────
+  // Trackpad pinch fires as WheelEvent with ctrlKey: true in Chromium.
+  // Shift+scroll is the mouse-wheel equivalent. Both trigger continuous
+  // zoom. Must use addEventListener with passive: false to preventDefault.
+  let previewWrapperRef: HTMLDivElement | undefined
+
+  const handleWheelZoom = (e: WheelEvent) => {
+    if (!e.ctrlKey && !e.shiftKey) return   // normal scroll — pass through
+    e.preventDefault()
+    const delta = e.deltaY || e.deltaX
+    if (delta === 0) return
+    const oldZoom = zoom()
+    const factor = Math.exp(-delta * 0.003)
+    const next = Math.round(Math.min(Math.max(oldZoom * factor, 50), 500))
+    if (next === oldZoom) return
+    onZoomChange(next)
+    setShowZoomPill(true)
+    startZoomIdleTimer()
+  }
+
+  createEffect(() => {
+    const el = previewWrapperRef
+    if (!el) return
+    el.addEventListener("wheel", handleWheelZoom, { passive: false })
+    onCleanup(() => el.removeEventListener("wheel", handleWheelZoom))
+  })
+
   /** Write a file to disk via the SDK-based writeFile prop. */
   const saveFile = (path: string, content: string) => {
     if (!props.writeFile) return
@@ -417,6 +444,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
         {/* Branch 1: Markdown preview mode for .md files */}
         <Show when={isPreviewMd()}>
           <div
+            ref={previewWrapperRef}
             style={{ position: "relative", height: "100%" }}
             onMouseEnter={handlePreviewMouseEnter}
             onMouseMove={handlePreviewMouseMove}
