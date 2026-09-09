@@ -226,6 +226,10 @@ describe("toolbar layout (#934)", () => {
     path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
     "utf8",
   )
+  const pdfCanvasViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/pdf-canvas-view.tsx"),
+    "utf8",
+  )
 
   test("zoom controls live in PreviewFileView, not SessionPreviewTab", () => {
     // SessionPreviewTab must NOT render the zoom buttons/input (aria-label)
@@ -278,16 +282,31 @@ describe("toolbar layout (#934)", () => {
     expect(imageBlock).toContain("shrink-0")
   })
 
-  test("PDF renders a placeholder with open-in-editor action, not an iframe (#934)", () => {
+  test("PDF renders via canvas (PDF.js), not iframe/embed/placeholder (#934)", () => {
     const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
     const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)
     const pdfBlock = fileViewSrc.slice(pdfMatchStart, pdfMatchEnd)
 
-    // Must NOT try to render a PDF inline (Chromium PDF viewer unavailable in VS Code webviews)
+    // Must NOT use iframe/embed (Chromium PDF viewer unavailable in VS Code webviews)
     expect(pdfBlock).not.toContain("<iframe")
     expect(pdfBlock).not.toContain("<embed")
-    // Must have an open-in-editor action
-    expect(pdfBlock).toContain("open-file")
+    // Must NOT show a "not available" placeholder
+    expect(pdfBlock).not.toContain("not available")
+    // Must render using a canvas-based PDF renderer
+    expect(pdfBlock).toContain("PdfCanvasView")
+  })
+
+  test("PDF.js is imported and configured without a worker", () => {
+    // pdfjs-dist must be imported in the canvas renderer
+    expect(pdfCanvasViewSrc).toContain("pdfjs-dist")
+    // Worker must be disabled (main-thread parsing — fine for a preview panel)
+    expect(pdfCanvasViewSrc).toContain("workerSrc")
+  })
+
+  test("PDF keeps open-in-editor as secondary action", () => {
+    // The open-in-editor action lives inside PdfCanvasView
+    expect(pdfCanvasViewSrc).toContain("open-file")
+    expect(pdfCanvasViewSrc).toContain("Open in editor")
   })
 
   test("zoom floor is category-aware: 100% for image/pdf, 50% for markdown/text (#934)", () => {

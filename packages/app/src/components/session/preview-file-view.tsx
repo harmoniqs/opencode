@@ -2,17 +2,18 @@
  * preview-file-view — Routes file rendering by type for the Preview tab.
  *
  * Markdown files get Preview/Edit toggle (CodeMirror 6 via preview-editor.tsx).
- * Text files open directly in edit mode. Images render as <img> (data URI),
- * PDFs as <embed> (blob URL). Binary, error, and oversize files get
- * placeholders.
+ * Text files open directly in edit mode. Images render as <img> (data URI).
+ * PDFs render via PDF.js canvas rendering (pdfjs-dist). Binary, error, and
+ * oversize files get placeholders.
  *
  * #925: "text" replaces "unsupported" — all non-renderable files open in
  * the CM6 editor. Async fileType signal detects binary/error/oversize after
  * file.read().
  *
- * #934: images and PDFs render via data URI / blob URL from the SDK binary
- * response. Save dot moved to parent (SessionPreviewTab); zoom controls
- * moved here to share Bar 2 with the edit/preview toggle.
+ * #934: images render via data URI from the SDK binary response. PDFs render
+ * via PDF.js (pdfjs-dist) to canvas — no iframe, no browser plugin. Save dot
+ * moved to parent (SessionPreviewTab); zoom controls moved here to share
+ * Bar 2 with the edit/preview toggle.
  *
  * @module
  */
@@ -28,6 +29,7 @@ import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import type { PreviewFileState } from "@opencode-ai/session-ui/v2/preview-nav-state"
 import { PreviewEditor } from "@opencode-ai/session-ui/v2/preview-editor"
+import { PdfCanvasView } from "./pdf-canvas-view"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -322,29 +324,13 @@ export function PreviewFileView(props: {
               </div>
             </Match>
 
-            <Match when={category() === "pdf"}>
-              <div class="h-full flex flex-col items-center justify-center gap-3 p-6">
-                <Icon name="open-file" class="w-10 h-10 text-text-faint" />
-                <p class="text-13-regular text-text-weak text-center">
-                  {props.filePath.split("/").pop()}
-                </p>
-                <button
-                  class="text-12-medium text-text-base px-3 py-1.5 rounded-md border border-border-base hover:bg-background-stronger transition-colors"
-                  onClick={() => {
-                    // Post open-file with path to the extension host, which
-                    // opens in a native VS Code tab via vscode.open (#934).
-                    window.parent.postMessage(
-                      { source: "amicode", kind: "open-file", path: props.filePath },
-                      "*",
-                    )
-                  }}
-                >
-                  Open in editor
-                </button>
-                <p class="text-11-regular text-text-faint text-center">
-                  PDF preview is not available in this context
-                </p>
-              </div>
+            <Match when={category() === "pdf" && binaryData()}>
+              <PdfCanvasView
+                base64={binaryData()!.base64}
+                mime={binaryData()!.mime}
+                zoom={props.zoom()}
+                filePath={props.filePath}
+              />
             </Match>
 
             <Match when={fileType() === "binary"}>
