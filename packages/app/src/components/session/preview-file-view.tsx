@@ -1,14 +1,18 @@
 /**
  * preview-file-view — Routes file rendering by type for the Preview tab.
  *
- * Slice 4: handles markdown files with Preview mode (<Markdown>) and Edit
- * mode (CodeMirror 6 via preview-editor.tsx). Mode renamed from "raw" to "edit".
- * Slice 5 adds image and PDF rendering branches.
+ * Markdown files get Preview/Edit toggle (CodeMirror 6 via preview-editor.tsx).
+ * Text files open directly in edit mode. Images render as <img>, PDFs as
+ * <embed>. Binary, error, and oversize files get placeholders.
+ *
+ * #925: "text" replaces "unsupported" — all non-renderable files open in
+ * the CM6 editor. Async fileType signal detects binary/error/oversize after
+ * file.read().
  *
  * @module
  */
 
-import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, on, onCleanup, Show, Switch, Match } from "solid-js"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
@@ -29,15 +33,25 @@ function getExtension(path: string): string {
   return dot > 0 ? path.slice(dot).toLowerCase() : ""
 }
 
-type FileCategory = "markdown" | "image" | "pdf" | "unsupported"
+type FileCategory = "markdown" | "image" | "pdf" | "text"
 
+/**
+ * Sync, extension-based file classification (phase 1).
+ * Extensionless files (Makefile, Dockerfile, LICENSE) → "text".
+ */
 function getFileCategory(path: string): FileCategory {
   const ext = getExtension(path)
+  if (!ext) return "text" // extensionless → plain text
   if ((RENDERABLE_EXTENSIONS.markdown as readonly string[]).includes(ext)) return "markdown"
   if ((RENDERABLE_EXTENSIONS.images as readonly string[]).includes(ext)) return "image"
   if ((RENDERABLE_EXTENSIONS.pdf as readonly string[]).includes(ext)) return "pdf"
-  return "unsupported"
+  return "text"
 }
+
+/** Async file-type classification after file.read() (phase 2). */
+type FileType = "text" | "binary" | "error" | "too-large" | null
+
+const MAX_FILE_SIZE = 1_000_000
 
 // ---------------------------------------------------------------------------
 // Component
@@ -55,6 +69,7 @@ export function PreviewFileView(props: {
   const serverSDK = useServerSDK()
   const [fileContent, setFileContent] = createSignal("")
   const [loading, setLoading] = createSignal(true)
+  const [fileType, setFileType] = createSignal<FileType>(null)
 
   // ─── File loading ──────────────────────────────────────────────────────
 
@@ -63,15 +78,32 @@ export function PreviewFileView(props: {
       () => props.filePath,
       (path) => {
         setLoading(true)
+        setFileType(null)
         sdk()
           .client.file.read({ path })
           .then((result) => {
             const content = result.data
-            if (content && content.type === "text") {
-              setFileContent(content.content)
+            if (!content) {
+              setFileType("error")
+              setFileContent("")
+              return
             }
+            if (content.type !== "text") {
+              setFileType("binary")
+              setFileContent("")
+              return
+            }
+            const size = (content as any).length ?? content.content.length
+            if (size > MAX_FILE_SIZE) {
+              setFileType("too-large")
+              setFileContent("")
+              return
+            }
+            setFileType("text")
+            setFileContent(content.content)
           })
           .catch(() => {
+            setFileType("error")
             setFileContent("")
           })
           .finally(() => {
@@ -199,63 +231,83 @@ export function PreviewFileView(props: {
       {/* Content */}
       <div class="flex-1 min-h-0 overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
-          {/* Markdown */}
-          <Show when={category() === "markdown"}>
-            <Show
-              when={props.fileState.mode === "preview"}
-              fallback={
-                <PreviewEditor
-                  content={fileContent()}
-                  filePath={props.filePath}
-                  onChange={handleEdit}
-                  onSave={handleImmediateSave}
-                />
-              }
-            >
+          {/* Phase 2: check fileType signal first (binary/error/oversize) */}
+          <Switch>
+            <Match when={fileType() === "error"}>
+              <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+                Could not read file
+              </div>
+            </Match>
+            <Match when={fileType() === "binary"}>
+              <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+                Binary file — cannot preview
+              </div>
+            </Match>
+            <Match when={fileType() === "too-large"}>
+              <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+                File too large to preview in this tab
+              </div>
+            </Match>
+
+            {/* Phase 1: route by extension-based category */}
+            <Match when={category() === "markdown"}>
+              <Show
+                when={props.fileState.mode === "preview"}
+                fallback={
+                  <PreviewEditor
+                    content={fileContent()}
+                    filePath={props.filePath}
+                    onChange={handleEdit}
+                    onSave={handleImmediateSave}
+                  />
+                }
+              >
+                <div
+                  class="p-4 origin-top-left [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:max-w-full [&_.katex]:text-[0.9em]"
+                  style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
+                >
+                  <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
+                </div>
+              </Show>
+            </Match>
+
+            <Match when={category() === "image"}>
               <div
-                class="p-4 origin-top-left [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:max-w-full [&_.katex]:text-[0.9em]"
+                class="h-full flex items-center justify-center p-4 origin-top-left"
                 style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
               >
-                <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
+                <img
+                  src={fileUrl()}
+                  alt={props.filePath.split("/").pop() ?? ""}
+                  class="max-w-full max-h-full object-contain"
+                  style={{ "image-rendering": "auto" }}
+                />
               </div>
-            </Show>
-          </Show>
+            </Match>
 
-          {/* Images */}
-          <Show when={category() === "image"}>
-            <div
-              class="h-full flex items-center justify-center p-4 origin-top-left"
-              style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
-            >
-              <img
-                src={fileUrl()}
-                alt={props.filePath.split("/").pop() ?? ""}
-                class="max-w-full max-h-full object-contain"
-                style={{ "image-rendering": "auto" }}
+            <Match when={category() === "pdf"}>
+              <div
+                class="h-full origin-top-left"
+                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
+              >
+                <embed
+                  src={fileUrl()}
+                  type="application/pdf"
+                  class="w-full h-full"
+                />
+              </div>
+            </Match>
+
+            {/* Text files: open directly in edit mode */}
+            <Match when={category() === "text"}>
+              <PreviewEditor
+                content={fileContent()}
+                filePath={props.filePath}
+                onChange={handleEdit}
+                onSave={handleImmediateSave}
               />
-            </div>
-          </Show>
-
-          {/* PDF */}
-          <Show when={category() === "pdf"}>
-            <div
-              class="h-full origin-top-left"
-              style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
-            >
-              <embed
-                src={fileUrl()}
-                type="application/pdf"
-                class="w-full h-full"
-              />
-            </div>
-          </Show>
-
-          {/* Unsupported */}
-          <Show when={category() === "unsupported"}>
-            <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
-              Preview not available for this file type
-            </div>
-          </Show>
+            </Match>
+          </Switch>
         </Show>
       </div>
     </div>
