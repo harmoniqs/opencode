@@ -255,4 +255,25 @@ describe("toolbar layout (#934)", () => {
     expect(previewTabSrc).toContain("zoomIn={zoomIn}")
     expect(previewTabSrc).toContain("zoomOut={zoomOut}")
   })
+
+  test("image zoom uses direct CSS sizing, not transform: scale (#934)", () => {
+    // Extract the image Match block (from category() === "image" to its closing </Match>)
+    const imageMatchStart = fileViewSrc.indexOf('category() === "image"')
+    const imageMatchEnd = fileViewSrc.indexOf("</Match>", imageMatchStart)
+    const imageBlock = fileViewSrc.slice(imageMatchStart, imageMatchEnd)
+
+    // Must NOT use transform: scale on the image wrapper
+    expect(imageBlock).not.toContain("transform:")
+    expect(imageBlock).not.toContain("origin-top-left")
+  })
+
+  test("PDF uses iframe with blob URL, not embed (#934)", () => {
+    // PDFs should render via <iframe> for better webview compatibility
+    const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
+    const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)
+    const pdfBlock = fileViewSrc.slice(pdfMatchStart, pdfMatchEnd)
+
+    expect(pdfBlock).toContain("<iframe")
+    expect(pdfBlock).not.toContain("<embed")
+  })
 })

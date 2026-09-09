@@ -326,30 +326,22 @@ export function PreviewFileView(props: {
 
             {/* Renderable binaries: image/PDF use data URI or blob URL */}
             <Match when={category() === "image" && (binaryData() || fileType() === "text")}>
-              <div
-                class="h-full flex items-center justify-center p-4 origin-top-left"
-                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
-              >
+              <div class="min-h-full flex items-center justify-center p-4">
                 <img
                   src={imageDataUrl()}
                   alt={props.filePath.split("/").pop() ?? ""}
-                  class="max-w-full max-h-full object-contain"
-                  style={{ "image-rendering": "auto" }}
+                  class="object-contain"
+                  style={{ width: `${props.zoom()}%`, "image-rendering": "auto" }}
                 />
               </div>
             </Match>
 
             <Match when={category() === "pdf" && (binaryData() || fileType() === "text")}>
-              <div
-                class="h-full origin-top-left"
-                style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
-              >
-                <embed
-                  src={pdfBlobUrl()}
-                  type="application/pdf"
-                  class="w-full h-full"
-                />
-              </div>
+              <iframe
+                src={pdfBlobUrl()}
+                class="w-full h-full border-0"
+                title={props.filePath.split("/").pop() ?? "PDF"}
+              />
             </Match>
 
             <Match when={fileType() === "binary"}>
