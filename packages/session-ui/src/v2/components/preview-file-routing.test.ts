@@ -370,4 +370,15 @@ describe("toolbar layout (#934)", () => {
     expect(fileViewSrc).toContain("Math.exp")
   })
 
+  test("zoom anchors to viewport center, not top-left (#934)", () => {
+    // Must have a scroll-adjustment helper that keeps the viewport center
+    // stable after a zoom change (adjusts scrollLeft/scrollTop by the ratio)
+    expect(fileViewSrc).toContain("adjustScrollForZoom")
+    // Must compute the center point from scrollLeft + clientWidth/2
+    expect(fileViewSrc).toContain("clientWidth")
+    expect(fileViewSrc).toContain("clientHeight")
+    // Must use rAF so the DOM (image CSS + PDF canvas microtask) updates first
+    expect(fileViewSrc).toContain("requestAnimationFrame")
+  })
+
 })

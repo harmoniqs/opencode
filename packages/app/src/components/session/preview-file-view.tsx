@@ -230,7 +230,29 @@ export function PreviewFileView(props: {
 
   const handleZoomOut = () => {
     if (props.zoom() <= zoomFloor()) return
+    const before = props.zoom()
     props.zoomOut()
+    adjustScrollForZoom(before, props.zoom())
+  }
+
+  // ─── Scroll-centered zoom ────────────────────────────────────────────
+  // After a zoom change, adjust scroll so the viewport center stays fixed.
+  // Uses rAF to let the DOM update first: image CSS reflows synchronously,
+  // PDF canvas dimensions settle as a microtask (getPage().then()), and
+  // rAF fires after both — so scrollWidth/scrollHeight are correct.
+
+  let scrollRef: HTMLDivElement | undefined
+
+  const adjustScrollForZoom = (oldZoom: number, newZoom: number) => {
+    const el = scrollRef
+    if (!el || oldZoom === newZoom || oldZoom === 0) return
+    const ratio = newZoom / oldZoom
+    const centerX = el.scrollLeft + el.clientWidth / 2
+    const centerY = el.scrollTop + el.clientHeight / 2
+    requestAnimationFrame(() => {
+      el.scrollLeft = centerX * ratio - el.clientWidth / 2
+      el.scrollTop = centerY * ratio - el.clientHeight / 2
+    })
   }
 
   // ─── Pinch / wheel zoom ──────────────────────────────────────────────
@@ -239,19 +261,20 @@ export function PreviewFileView(props: {
   // zoom via onZoomChange. Must use addEventListener with passive: false
   // — Solid's onWheel is passive by default and can't preventDefault.
 
-  let scrollRef: HTMLDivElement | undefined
-
   const handleWheelZoom = (e: WheelEvent) => {
     if (!e.ctrlKey && !e.shiftKey) return   // normal scroll — pass through
     e.preventDefault()
     if (!props.onZoomChange) return
     const delta = e.deltaY || e.deltaX      // shift+scroll may swap axes
     if (delta === 0) return
+    const oldZoom = props.zoom()
     const factor = Math.exp(-delta * 0.003)
     const next = Math.round(
-      Math.min(Math.max(props.zoom() * factor, zoomFloor()), 200),
+      Math.min(Math.max(oldZoom * factor, zoomFloor()), 200),
     )
-    if (next !== props.zoom()) props.onZoomChange(next)
+    if (next === oldZoom) return
+    props.onZoomChange(next)
+    adjustScrollForZoom(oldZoom, next)
   }
 
   createEffect(() => {
@@ -322,7 +345,11 @@ export function PreviewFileView(props: {
             </button>
             <button
               class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors -ml-0.5"
-              onClick={() => props.zoomIn()}
+              onClick={() => {
+                const before = props.zoom()
+                props.zoomIn()
+                adjustScrollForZoom(before, props.zoom())
+              }}
               aria-label="Zoom in"
             >
               <span class="text-12-medium leading-none">+</span>
