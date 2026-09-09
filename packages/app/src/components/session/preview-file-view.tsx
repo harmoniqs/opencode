@@ -337,11 +337,20 @@ export function PreviewFileView(props: {
             </Match>
 
             <Match when={category() === "pdf" && (binaryData() || fileType() === "text")}>
-              <iframe
-                src={pdfBlobUrl()}
-                class="w-full h-full border-0"
-                title={props.filePath.split("/").pop() ?? "PDF"}
-              />
+              <div
+                class="origin-top-left"
+                style={{
+                  transform: `scale(${props.zoom() / 100})`,
+                  width: `${10000 / props.zoom()}%`,
+                  height: `${10000 / props.zoom()}%`,
+                }}
+              >
+                <iframe
+                  src={pdfBlobUrl()}
+                  class="w-full h-full border-0"
+                  title={props.filePath.split("/").pop() ?? "PDF"}
+                />
+              </div>
             </Match>
 
             <Match when={fileType() === "binary"}>

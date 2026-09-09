@@ -287,4 +287,20 @@ describe("toolbar layout (#934)", () => {
     expect(pdfBlock).toContain("<iframe")
     expect(pdfBlock).not.toContain("<embed")
   })
+
+  test("zoom floor is 100%, not 50% — no zoom-out past panel width (#934)", () => {
+    // The zoomOut function in SessionPreviewTab must clamp at 100
+    expect(previewTabSrc).toContain("Math.max(z - 10, 100)")
+    expect(previewTabSrc).not.toContain("Math.max(z - 10, 50)")
+  })
+
+  test("PDF iframe has zoom scaling via transform (#934)", () => {
+    const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
+    const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)
+    const pdfBlock = fileViewSrc.slice(pdfMatchStart, pdfMatchEnd)
+
+    // PDF zoom uses transform: scale on a wrapper (iframe content can't be resized directly)
+    expect(pdfBlock).toContain("transform:")
+    expect(pdfBlock).toContain("props.zoom()")
+  })
 })
