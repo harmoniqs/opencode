@@ -255,6 +255,45 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
   const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
   const onZoomChange = (value: number) => setZoom(Math.round(Math.min(Math.max(value, 50), 500)))
 
+  // ─── Auto-hide zoom pill on idle ──────────────────────────────────────
+  // Pill starts visible (initial reveal), then fades after 2s of no mouse
+  // activity. Mouse movement/enter on the preview area resets the timer.
+  // Hovering over the pill itself pauses the timer.
+  const [showZoomPill, setShowZoomPill] = createSignal(true)
+  let zoomIdleTimer: ReturnType<typeof setTimeout> | undefined
+  let pillHovered = false
+
+  const startZoomIdleTimer = () => {
+    if (zoomIdleTimer) clearTimeout(zoomIdleTimer)
+    zoomIdleTimer = setTimeout(() => {
+      if (!pillHovered) setShowZoomPill(false)
+    }, 2000)
+  }
+
+  const handlePreviewMouseEnter = () => {
+    setShowZoomPill(true)
+    startZoomIdleTimer()
+  }
+  const handlePreviewMouseMove = () => {
+    if (!showZoomPill()) setShowZoomPill(true)
+    startZoomIdleTimer()
+  }
+  const handlePreviewMouseLeave = () => {
+    if (zoomIdleTimer) clearTimeout(zoomIdleTimer)
+    if (!pillHovered) setShowZoomPill(false)
+  }
+  const handlePillMouseEnter = () => {
+    pillHovered = true
+    if (zoomIdleTimer) clearTimeout(zoomIdleTimer)
+  }
+  const handlePillMouseLeave = () => {
+    pillHovered = false
+    startZoomIdleTimer()
+  }
+
+  // Start the initial auto-hide timer
+  startZoomIdleTimer()
+
   /** Write a file to disk via the SDK-based writeFile prop. */
   const saveFile = (path: string, content: string) => {
     if (!props.writeFile) return
@@ -377,9 +416,16 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
       <>
         {/* Branch 1: Markdown preview mode for .md files */}
         <Show when={isPreviewMd()}>
-          <div style={{ position: "relative", height: "100%" }}>
+          <div
+            style={{ position: "relative", height: "100%" }}
+            onMouseEnter={handlePreviewMouseEnter}
+            onMouseMove={handlePreviewMouseMove}
+            onMouseLeave={handlePreviewMouseLeave}
+          >
             {/* Floating zoom overlay — top-right of content area */}
             <div
+              onMouseEnter={handlePillMouseEnter}
+              onMouseLeave={handlePillMouseLeave}
               style={{
                 position: "absolute",
                 top: "8px",
@@ -395,6 +441,9 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
                 "backdrop-filter": "blur(4px)",
                 overflow: "hidden",
                 "font-size": "12px",
+                opacity: showZoomPill() ? "1" : "0",
+                "pointer-events": showZoomPill() ? "auto" : "none",
+                transition: "opacity 200ms ease",
               }}
             >
               {/* Editable zoom percentage input */}

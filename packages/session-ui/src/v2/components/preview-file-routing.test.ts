@@ -828,3 +828,57 @@ describe("files changed tab: floating zoom overlay in preview mode (#937)", () =
     expect(mdPreviewBlock).toMatch(/scale|zoom/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Files Changed tab: auto-hide zoom pill on idle (#937)
+// ---------------------------------------------------------------------------
+
+describe("files changed tab: auto-hide zoom pill on idle (#937)", () => {
+  const reviewSrc = fs.readFileSync(
+    path.resolve(__dirname, "./session-review-file-preview-v2.tsx"),
+    "utf8",
+  )
+
+  test("showZoomPill signal controls visibility", () => {
+    expect(reviewSrc).toContain("showZoomPill")
+    expect(reviewSrc).toContain("setShowZoomPill")
+  })
+
+  test("pill opacity is driven by showZoomPill signal", () => {
+    // The overlay div should use showZoomPill() to control opacity
+    const overlayStart = reviewSrc.indexOf("Floating zoom overlay")
+    const overlayBlock = reviewSrc.slice(overlayStart, overlayStart + 1500)
+    expect(overlayBlock).toContain("showZoomPill()")
+    expect(overlayBlock).toContain("opacity")
+    expect(overlayBlock).toContain("transition")
+  })
+
+  test("preview wrapper has mouse event handlers for show/hide", () => {
+    // The relative wrapper around the markdown preview must handle
+    // mouseenter, mousemove, and mouseleave
+    const wrapperStart = reviewSrc.indexOf('position: "relative", height: "100%"')
+    const wrapperBlock = reviewSrc.slice(wrapperStart, wrapperStart + 300)
+    expect(wrapperBlock).toContain("onMouseEnter")
+    expect(wrapperBlock).toContain("onMouseMove")
+    expect(wrapperBlock).toContain("onMouseLeave")
+  })
+
+  test("idle timer is 2 seconds", () => {
+    // The idle timeout should be 2000ms
+    expect(reviewSrc).toMatch(/2000/)
+  })
+
+  test("pill stays visible while hovering over it (pause idle timer)", () => {
+    // The pill container must have its own mouseenter/mouseleave
+    // to pause/resume the idle timer
+    const overlayStart = reviewSrc.indexOf("Floating zoom overlay")
+    const overlayBlock = reviewSrc.slice(overlayStart, overlayStart + 300)
+    expect(overlayBlock).toContain("onMouseEnter")
+    expect(overlayBlock).toContain("onMouseLeave")
+  })
+
+  test("pill starts visible initially (true default)", () => {
+    // The signal should initialize to true so the pill shows on first render
+    expect(reviewSrc).toMatch(/showZoomPill.*createSignal\(true\)|createSignal\(true\)[\s\S]*showZoomPill/)
+  })
+})
