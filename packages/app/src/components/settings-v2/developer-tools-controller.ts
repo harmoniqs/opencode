@@ -11,8 +11,6 @@ export interface DevToolsStatus {
   amicodeError?: string
   serverRestarted: boolean
   reloadNeeded: boolean
-  building?: boolean
-  buildError?: string
 }
 
 export type RebuildState = "idle" | "rebuilding" | "rebuilt" | "failed"
@@ -80,8 +78,6 @@ export function createDeveloperToolsController() {
             amicodeError: d.amicodeError,
             serverRestarted: d.serverRestarted ?? false,
             reloadNeeded: d.reloadNeeded ?? false,
-            building: d.building ?? false,
-            buildError: d.buildError,
           },
         },
       )

@@ -783,7 +783,6 @@ export const dict = {
   "settings.general.row.amicodePath.placeholder": "~/harmoniqs/amicode",
   "settings.general.row.amicodePath.error.notFound": "Directory does not exist",
   "settings.general.row.amicodePath.error.buildFailed": "Extension build failed",
-  "settings.general.row.amicodePath.building": "Building extension…",
   "settings.general.row.amicodePath.reloadNeeded": "Reload to apply",
   "settings.general.row.devTools.rebuildLocally": "Rebuild Locally",
   "settings.general.row.devTools.rebuildRemotely": "Rebuild from Main",
