@@ -323,31 +323,8 @@ export function PreviewFileView(props: {
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Action bar: mode toggle + zoom controls — left-aligned */}
+      {/* Action bar: zoom controls + mode toggle — left-aligned */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
-        <Show when={showModeToggle()}>
-          <SegmentedControlV2
-            value={props.fileState.mode}
-            onChange={(value) => {
-              if (value === "preview" || value === "edit") {
-                props.onModeChange(value)
-              }
-            }}
-            class="!w-auto"
-            aria-label="View mode"
-          >
-            <TooltipV2 openDelay={400} value="Preview">
-              <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
-                <Icon name="eye" size="small" />
-              </SegmentedControlItemV2>
-            </TooltipV2>
-            <TooltipV2 openDelay={400} value="Edit">
-              <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
-                <Icon name="edit" size="small" />
-              </SegmentedControlItemV2>
-            </TooltipV2>
-          </SegmentedControlV2>
-        </Show>
         {/* Zoom controls: [editable %] [reset] [+ over -] */}
         <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
           {/* Editable zoom percentage input */}
@@ -417,6 +394,29 @@ export function PreviewFileView(props: {
             </button>
           </div>
         </div>
+        <Show when={showModeToggle()}>
+          <SegmentedControlV2
+            value={props.fileState.mode}
+            onChange={(value) => {
+              if (value === "preview" || value === "edit") {
+                props.onModeChange(value)
+              }
+            }}
+            class="!w-auto"
+            aria-label="View mode"
+          >
+            <TooltipV2 openDelay={400} value="Preview">
+              <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
+                <Icon name="eye" size="small" />
+              </SegmentedControlItemV2>
+            </TooltipV2>
+            <TooltipV2 openDelay={400} value="Edit">
+              <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
+                <Icon name="edit" size="small" />
+              </SegmentedControlItemV2>
+            </TooltipV2>
+          </SegmentedControlV2>
+        </Show>
       </div>
 
       {/* Content */}

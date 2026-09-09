@@ -557,6 +557,16 @@ describe("toolbar left-alignment (#937)", () => {
     // A bare spacer is `<div class="flex-1" />` — must not appear as the first child
     expect(barContent).not.toMatch(/border-border-weaker-base[\s\S]{0,40}<div class="flex-1"/)
   })
+
+  test("zoom controls appear before the edit/preview mode toggle", () => {
+    // The zoom pill (marked by "Zoom controls" comment) must come before
+    // the mode toggle (<Show when={showModeToggle()}>)
+    const zoomIdx = fileViewSrc.indexOf("Zoom controls")
+    const toggleIdx = fileViewSrc.indexOf("showModeToggle()")
+    expect(zoomIdx).toBeGreaterThan(-1)
+    expect(toggleIdx).toBeGreaterThan(-1)
+    expect(zoomIdx).toBeLessThan(toggleIdx)
+  })
 })
 
 // ---------------------------------------------------------------------------
