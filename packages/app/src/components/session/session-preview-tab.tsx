@@ -37,7 +37,7 @@ export function SessionPreviewTab(props: {
   const [zoom, setZoom] = createSignal(100)
 
   const zoomIn = () => setZoom((z) => Math.min(z + 10, 200))
-  const zoomOut = () => setZoom((z) => Math.max(z - 10, 100))
+  const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
 
   const getFileState = (path: string): PreviewFileState => {
     return fileStates[path] ?? { mode: "preview", scrollPosition: 0, unsavedContent: null }

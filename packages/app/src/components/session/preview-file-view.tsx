@@ -244,6 +244,18 @@ export function PreviewFileView(props: {
 
   const showModeToggle = () => category() === "markdown"
 
+  // Image/PDF: zoom floor at 100% (never shrink below panel fit).
+  // Markdown/text: floor stays at the global 50%.
+  const zoomFloor = () => {
+    const cat = category()
+    return cat === "image" || cat === "pdf" ? 100 : 50
+  }
+
+  const handleZoomOut = () => {
+    if (props.zoom() <= zoomFloor()) return
+    props.zoomOut()
+  }
+
   return (
     <div class="h-full flex flex-col overflow-hidden">
       {/* Action bar: mode toggle + zoom controls */}
@@ -298,7 +310,7 @@ export function PreviewFileView(props: {
           <div class="flex items-center border-l border-border-base">
             <button
               class="flex items-center justify-center w-5 h-full text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-              onClick={() => props.zoomOut()}
+              onClick={() => handleZoomOut()}
               aria-label="Zoom out"
             >
               <span class="text-12-medium leading-none">−</span>

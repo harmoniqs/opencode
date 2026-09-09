@@ -288,10 +288,11 @@ describe("toolbar layout (#934)", () => {
     expect(pdfBlock).not.toContain("<embed")
   })
 
-  test("zoom floor is 100%, not 50% — no zoom-out past panel width (#934)", () => {
-    // The zoomOut function in SessionPreviewTab must clamp at 100
-    expect(previewTabSrc).toContain("Math.max(z - 10, 100)")
-    expect(previewTabSrc).not.toContain("Math.max(z - 10, 50)")
+  test("zoom floor is category-aware: 100% for image/pdf, 50% for markdown/text (#934)", () => {
+    // The parent (SessionPreviewTab) keeps the global floor at 50%
+    expect(previewTabSrc).toContain("Math.max(z - 10, 50)")
+    // PreviewFileView applies a higher floor for image/pdf in its zoom-out handler
+    expect(fileViewSrc).toContain("zoomFloor")
   })
 
   test("PDF iframe has zoom scaling via transform (#934)", () => {
