@@ -18,17 +18,20 @@ import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { preprocessMarkdown } from "@opencode-ai/session-ui/v2/markdown-utils"
 import { isRenderable } from "@opencode-ai/session-ui/v2/markdown-utils"
 import { filterDirectoryEntries } from "@opencode-ai/session-ui/v2/preview-nav-state"
+import { searchRenderableFiles } from "@opencode-ai/session-ui/v2/preview-search-utils"
 import type { PreviewFileState, DirectoryEntry } from "@opencode-ai/session-ui/v2/preview-nav-state"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { writeClipboardViaBridge } from "@/components/prompt-input/clipboard-bridge"
+import FileTreeV2 from "@/components/file-tree-v2"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { PreviewDirectoryView } from "./preview-directory-view"
 import { PreviewFileView } from "./preview-file-view"
+import { PreviewBreadcrumb } from "./preview-breadcrumb"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -117,14 +120,18 @@ export function SessionPreviewTab(props: {
   const navigateToFolder = (path: string) => {
     setStore("currentPath", path)
     setStore("selectedFile", null)
+    setStore("searchQuery", "")
   }
 
   const selectFile = (path: string) => {
     setStore("selectedFile", path)
+    setStore("searchQuery", "")
   }
 
   const goBack = () => {
-    if (store.selectedFile) {
+    if (store.searchQuery) {
+      setStore("searchQuery", "")
+    } else if (store.selectedFile) {
       setStore("selectedFile", null)
     } else if (store.currentPath) {
       const parts = store.currentPath.split("/")
@@ -134,8 +141,60 @@ export function SessionPreviewTab(props: {
   }
 
   const canGoBack = createMemo(() => {
-    return !!store.selectedFile || !!store.currentPath
+    return !!store.searchQuery || !!store.selectedFile || !!store.currentPath
   })
+
+  // ─── Recursive File Enumeration + Cache ──────────────────────────────────
+
+  const [cachedPaths, setCachedPaths] = createSignal<string[]>([])
+
+  async function walkTree(dir: string): Promise<string[]> {
+    if (!file) return []
+    try {
+      await file.tree.list(dir)
+    } catch {
+      return []
+    }
+    const children = file.tree.children(dir) as DirectoryEntry[]
+    const paths: string[] = []
+
+    for (const child of children) {
+      if (child.ignored) continue
+      if (child.type === "file" && isRenderable(child.name)) {
+        paths.push(child.path)
+      } else if (child.type === "directory") {
+        const subPaths = await walkTree(child.path)
+        paths.push(...subPaths)
+      }
+    }
+    return paths
+  }
+
+  const refreshCache = () => {
+    if (!file || !hasProject()) return
+    walkTree("").then(setCachedPaths).catch(() => setCachedPaths([]))
+  }
+
+  // Walk on mount (when project becomes ready)
+  createEffect(() => {
+    if (hasProject()) refreshCache()
+  })
+
+  // ─── Search ──────────────────────────────────────────────────────────────
+
+  const searchResults = createMemo(() => {
+    if (!store.searchQuery) return []
+    return searchRenderableFiles(store.searchQuery, cachedPaths())
+  })
+
+  let searchInputRef: HTMLInputElement | undefined
+
+  const handleSearchKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setStore("searchQuery", "")
+      searchInputRef?.blur()
+    }
+  }
 
   // ─── File State Management ───────────────────────────────────────────────
 
@@ -275,7 +334,7 @@ export function SessionPreviewTab(props: {
       </div>
 
       {/* Main content */}
-      <div class="flex-1 min-h-0 overflow-hidden">
+      <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
         <Show
           when={hasProject()}
           fallback={
@@ -292,29 +351,110 @@ export function SessionPreviewTab(props: {
             />
           }
         >
-          {/* Project mode: Finder-style browser */}
-          <Show
-            when={store.selectedFile}
-            fallback={
-              <PreviewDirectoryView
-                entries={directoryEntries}
-                onFolderClick={navigateToFolder}
-                onFileClick={selectFile}
-                loading={dirLoading}
+          {/* Search bar (project mode only) */}
+          <div class="shrink-0 px-3 py-1.5 border-b border-border-weaker-base">
+            <div class="flex items-center gap-2 h-7 px-2 rounded-md bg-background-stronger">
+              <Icon name="magnifying-glass" class="w-3.5 h-3.5 text-text-faint shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                class="flex-1 bg-transparent text-12-regular text-text-base outline-none placeholder:text-text-faint"
+                placeholder="Search files..."
+                value={store.searchQuery}
+                onInput={(e) => setStore("searchQuery", e.currentTarget.value)}
+                onKeyDown={handleSearchKeyDown}
               />
-            }
-          >
-            {(filePath) => (
-              <PreviewFileView
-                filePath={filePath()}
-                fileState={getFileState(filePath())}
-                onModeChange={(mode) => setFileState(filePath(), { mode })}
-                onUnsavedContent={(content) => setFileState(filePath(), { unsavedContent: content })}
-                onSave={(path, content) => {/* handled by PreviewFileView internally */}}
-                zoom={zoom}
+              <Show when={store.searchQuery}>
+                <button
+                  class="w-4 h-4 flex items-center justify-center text-text-weak hover:text-text-base"
+                  onClick={() => setStore("searchQuery", "")}
+                  aria-label="Clear search"
+                >
+                  <Icon name="close" class="w-3 h-3" />
+                </button>
+              </Show>
+            </div>
+          </div>
+
+          {/* Breadcrumb (project mode, not searching, not viewing file) */}
+          <Show when={!store.searchQuery && !store.selectedFile}>
+            <div class="shrink-0 relative">
+              <PreviewBreadcrumb
+                currentPath={store.currentPath}
+                onNavigate={navigateToFolder}
+                onFileSelect={selectFile}
+                cachedPaths={cachedPaths}
+                FileTreeV2={FileTreeV2}
               />
-            )}
+            </div>
           </Show>
+
+          {/* Content area */}
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <Show
+              when={!store.searchQuery}
+              fallback={
+                /* Search results */
+                <div class="h-full overflow-auto">
+                  <Show
+                    when={searchResults().length > 0}
+                    fallback={
+                      <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+                        No matching files
+                      </div>
+                    }
+                  >
+                    <div class="py-1">
+                      <For each={searchResults()}>
+                        {(path) => {
+                          const parts = path.split("/")
+                          const filename = parts[parts.length - 1]
+                          const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : ""
+                          return (
+                            <button
+                              class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-background-stronger transition-colors"
+                              onClick={() => selectFile(path)}
+                            >
+                              <div class="flex-1 min-w-0">
+                                <div class="text-12-regular text-text-base truncate">{filename}</div>
+                                <Show when={dir}>
+                                  <div class="text-11-regular text-text-weak truncate">{dir}</div>
+                                </Show>
+                              </div>
+                            </button>
+                          )
+                        }}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              }
+            >
+              {/* Project mode: Finder-style browser */}
+              <Show
+                when={store.selectedFile}
+                fallback={
+                  <PreviewDirectoryView
+                    entries={directoryEntries}
+                    onFolderClick={navigateToFolder}
+                    onFileClick={selectFile}
+                    loading={dirLoading}
+                  />
+                }
+              >
+                {(filePath) => (
+                  <PreviewFileView
+                    filePath={filePath()}
+                    fileState={getFileState(filePath())}
+                    onModeChange={(mode) => setFileState(filePath(), { mode })}
+                    onUnsavedContent={(content) => setFileState(filePath(), { unsavedContent: content })}
+                    onSave={(path, content) => {/* handled by PreviewFileView internally */}}
+                    zoom={zoom}
+                  />
+                )}
+              </Show>
+            </Show>
+          </div>
         </Show>
       </div>
     </div>
