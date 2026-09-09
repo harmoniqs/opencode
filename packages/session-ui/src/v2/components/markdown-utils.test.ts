@@ -59,10 +59,15 @@ describe("RENDERABLE_EXTENSIONS", () => {
   })
 
   test("has images category with all expected formats", () => {
-    const expected = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"]
-    for (const ext of expected) {
-      expect(RENDERABLE_EXTENSIONS.images).toContain(ext)
-    }
+    const images = RENDERABLE_EXTENSIONS.images as readonly string[]
+    expect(images).toContain(".png")
+    expect(images).toContain(".jpg")
+    expect(images).toContain(".jpeg")
+    expect(images).toContain(".gif")
+    expect(images).toContain(".svg")
+    expect(images).toContain(".webp")
+    expect(images).toContain(".ico")
+    expect(images).toContain(".bmp")
   })
 
   test("has pdf category", () => {

@@ -8,7 +8,7 @@
  * @module
  */
 
-import { createEffect, createSignal, on, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
@@ -29,9 +29,14 @@ function getExtension(path: string): string {
   return dot > 0 ? path.slice(dot).toLowerCase() : ""
 }
 
-function isMarkdown(path: string): boolean {
+type FileCategory = "markdown" | "image" | "pdf" | "unsupported"
+
+function getFileCategory(path: string): FileCategory {
   const ext = getExtension(path)
-  return (RENDERABLE_EXTENSIONS.markdown as readonly string[]).includes(ext)
+  if ((RENDERABLE_EXTENSIONS.markdown as readonly string[]).includes(ext)) return "markdown"
+  if ((RENDERABLE_EXTENSIONS.images as readonly string[]).includes(ext)) return "image"
+  if ((RENDERABLE_EXTENSIONS.pdf as readonly string[]).includes(ext)) return "pdf"
+  return "unsupported"
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +145,15 @@ export function PreviewFileView(props: {
 
   // ─── Render ────────────────────────────────────────────────────────────
 
-  const showModeToggle = () => isMarkdown(props.filePath)
+  const category = () => getFileCategory(props.filePath)
+  const showModeToggle = () => category() === "markdown"
+
+  // Build file URL for image/PDF rendering
+  const fileUrl = createMemo(() => {
+    const baseUrl = serverSDK().url
+    if (!baseUrl) return ""
+    return new URL(`/file/read?path=${encodeURIComponent(props.filePath)}`, baseUrl).toString()
+  })
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
@@ -186,15 +199,8 @@ export function PreviewFileView(props: {
       {/* Content */}
       <div class="flex-1 min-h-0 overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
-          <Show
-            when={isMarkdown(props.filePath)}
-            fallback={
-              <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
-                {/* Stub: Slice 5 adds image/PDF rendering here */}
-                Preview not available for this file type
-              </div>
-            }
-          >
+          {/* Markdown */}
+          <Show when={category() === "markdown"}>
             <Show
               when={props.fileState.mode === "preview"}
               fallback={
@@ -213,6 +219,42 @@ export function PreviewFileView(props: {
                 <Markdown text={preprocessMarkdown(fileContent())} class="text-12-regular" />
               </div>
             </Show>
+          </Show>
+
+          {/* Images */}
+          <Show when={category() === "image"}>
+            <div
+              class="h-full flex items-center justify-center p-4 origin-top-left"
+              style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%` }}
+            >
+              <img
+                src={fileUrl()}
+                alt={props.filePath.split("/").pop() ?? ""}
+                class="max-w-full max-h-full object-contain"
+                style={{ "image-rendering": "auto" }}
+              />
+            </div>
+          </Show>
+
+          {/* PDF */}
+          <Show when={category() === "pdf"}>
+            <div
+              class="h-full origin-top-left"
+              style={{ transform: `scale(${props.zoom() / 100})`, width: `${10000 / props.zoom()}%`, height: `${10000 / props.zoom()}%` }}
+            >
+              <embed
+                src={fileUrl()}
+                type="application/pdf"
+                class="w-full h-full"
+              />
+            </div>
+          </Show>
+
+          {/* Unsupported */}
+          <Show when={category() === "unsupported"}>
+            <div class="h-full flex items-center justify-center text-12-regular text-text-weak p-4">
+              Preview not available for this file type
+            </div>
           </Show>
         </Show>
       </div>
