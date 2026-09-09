@@ -82,7 +82,7 @@ export function SessionPreviewTab(props: {
             {headerTitle()}
           </span>
           <Show when={isUnsaved()}>
-            <div class="w-2 h-2 rounded-full bg-text-faint shrink-0" aria-label="Unsaved changes" />
+            <div class="w-2 h-2 rounded-full bg-v2-text-text-faint shrink-0" aria-label="Unsaved changes" />
           </Show>
         </div>
       </div>
@@ -94,7 +94,7 @@ export function SessionPreviewTab(props: {
           fallback={
             /* Empty state — no file selected */
             <div class="h-full flex flex-col items-center justify-center gap-3 text-text-weak p-6">
-              <Icon name="open-file" class="w-8 h-8 text-text-faint" />
+              <Icon name="open-file" class="w-8 h-8 text-v2-text-text-faint" />
               <p class="text-13-regular text-center">Select a file from the sidebar</p>
             </div>
           }

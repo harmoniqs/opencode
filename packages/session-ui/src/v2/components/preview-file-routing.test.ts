@@ -632,7 +632,7 @@ describe("file save uses SDK client (#937)", () => {
   test("cleanup flush uses SDK client.file.write, not raw fetch", () => {
     expect(cleanupBlock).toContain("file.write")
     expect(cleanupBlock).not.toContain('fetch(new URL("/file/write"')
-  })
+   })
 
   test("clears unsavedContent after successful save", () => {
     // After a successful write, the dirty state must be cleared (null)
@@ -645,5 +645,63 @@ describe("file save uses SDK client (#937)", () => {
     expect(saveFileBody).toContain("catch")
     // Should NOT use .then() on the SDK call (that's the raw-fetch pattern)
     expect(saveFileBody).not.toContain(".then(")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Dirty dot uses valid v2 color tokens (#937)
+// ---------------------------------------------------------------------------
+
+describe("dirty dot uses valid v2 color tokens (#937)", () => {
+  const previewTabSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/session-preview-tab.tsx"),
+    "utf8",
+  )
+
+  test("unsaved dot uses a v2-prefixed background color", () => {
+    // Find the line containing the unsaved dot (aria-label with "Unsaved")
+    const dotLine = previewTabSrc.split("\n").find((l) => /aria-label.*[Uu]nsaved/.test(l))
+    expect(dotLine).toBeDefined()
+    // Must use bg-v2-* (the valid v2 design system token), not bare bg-text-faint
+    expect(dotLine).toMatch(/bg-v2-/)
+    expect(dotLine).not.toMatch(/bg-text-faint[^-]|bg-text-faint"/)
+  })
+
+  test("empty-state icon uses a v2-prefixed text color", () => {
+    // The open-file icon in the empty state should use a valid v2 color token
+    const iconLine = previewTabSrc.split("\n").find((l) => l.includes("open-file"))
+    expect(iconLine).toBeDefined()
+    // Must NOT use bare text-text-faint (without v2- prefix)
+    expect(iconLine).not.toMatch(/(?<!v2-)text-text-faint/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// File content handler must NOT trim text (#937)
+// ---------------------------------------------------------------------------
+
+describe("file content handler does not trim text (#937)", () => {
+  const handlerSrc = fs.readFileSync(
+    path.resolve(
+      __dirname,
+      "../../../../opencode/src/server/routes/instance/httpapi/handlers/file.ts",
+    ),
+    "utf8",
+  )
+
+  test("text content returned from absolute-path branch is not trimmed", () => {
+    // Find the absolute-path branch: "Read directly from disk for absolute paths"
+    const absStart = handlerSrc.indexOf("Read directly from disk for absolute paths")
+    const absEnd = handlerSrc.indexOf("} catch", absStart)
+    const absBlock = handlerSrc.slice(absStart, absEnd)
+    expect(absBlock).not.toContain(".trim()")
+  })
+
+  test("text content returned from in-workspace branch is not trimmed", () => {
+    // Find the in-workspace branch: text.value used in the return
+    // The return statement with type: "text" after Option.isSome(text)
+    const isSomeIdx = handlerSrc.indexOf("Option.isSome(text)")
+    const returnBlock = handlerSrc.slice(isSomeIdx, isSomeIdx + 200)
+    expect(returnBlock).not.toContain(".trim()")
   })
 })

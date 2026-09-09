@@ -109,7 +109,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
         const buf = yield* Effect.tryPromise(() => fs.readFile(file)).pipe(Effect.orDie)
         try {
           const text = new TextDecoder("utf-8", { fatal: true }).decode(buf)
-          return { type: "text" as const, content: text.trim() }
+          return { type: "text" as const, content: text }
         } catch {
           const ext = path.extname(file).toLowerCase()
           const mimeMap: Record<string, string> = {
@@ -146,7 +146,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
         ),
         Effect.map(({ item, text }) =>
           Option.isSome(text)
-            ? { type: "text" as const, content: text.value.trim() }
+            ? { type: "text" as const, content: text.value }
             : {
                 type: "binary" as const,
                 content: Buffer.from(item.content).toString("base64"),
