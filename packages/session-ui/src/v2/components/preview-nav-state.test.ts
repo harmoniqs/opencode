@@ -95,7 +95,7 @@ describe("createPreviewNavState", () => {
 })
 
 // ---------------------------------------------------------------------------
-// filterDirectoryEntries — filter file nodes to renderable entries
+// filterDirectoryEntries — show all non-ignored entries (#925)
 // ---------------------------------------------------------------------------
 
 describe("filterDirectoryEntries", () => {
@@ -117,7 +117,7 @@ describe("filterDirectoryEntries", () => {
     expect(result).toHaveLength(3)
   })
 
-  test("excludes non-renderable files", () => {
+  test("includes non-renderable files (code, config, etc.)", () => {
     const entries = [
       makeEntry("app.ts", "file"),
       makeEntry("style.css", "file"),
@@ -125,8 +125,8 @@ describe("filterDirectoryEntries", () => {
       makeEntry("README.md", "file"),
     ]
     const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(1)
-    expect(result[0].name).toBe("README.md")
+    expect(result).toHaveLength(4)
+    expect(result.map(e => e.name)).toEqual(["app.ts", "data.json", "README.md", "style.css"])
   })
 
   test("includes all non-ignored directories", () => {
@@ -138,35 +138,38 @@ describe("filterDirectoryEntries", () => {
     expect(result).toHaveLength(2)
   })
 
-  test("excludes ignored entries", () => {
+  test("excludes ignored entries (files and directories)", () => {
     const entries = [
       { name: "node_modules", path: "node_modules", absolute: "/project/node_modules", type: "directory" as const, ignored: true },
       { name: ".git", path: ".git", absolute: "/project/.git", type: "directory" as const, ignored: true },
+      { name: "bundle.min.js", path: "bundle.min.js", absolute: "/project/bundle.min.js", type: "file" as const, ignored: true },
       makeEntry("README.md", "file"),
+      makeEntry("app.ts", "file"),
     ]
     const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(1)
-    expect(result[0].name).toBe("README.md")
+    expect(result).toHaveLength(2)
+    expect(result.map(e => e.name)).toEqual(["app.ts", "README.md"])
   })
 
   test("sorts directories before files, then alphabetically", () => {
     const entries = [
-      makeEntry("zebra.md", "file"),
+      makeEntry("zebra.ts", "file"),
       makeEntry("docs", "directory"),
       makeEntry("alpha.md", "file"),
       makeEntry("src", "directory"),
     ]
     const result = filterDirectoryEntries(entries)
-    expect(result.map(e => e.name)).toEqual(["docs", "src", "alpha.md", "zebra.md"])
+    expect(result.map(e => e.name)).toEqual(["docs", "src", "alpha.md", "zebra.ts"])
   })
 
-  test("returns empty array for no renderable entries", () => {
+  test("returns all non-ignored files even without renderable ones", () => {
     const entries = [
       makeEntry("app.ts", "file"),
       makeEntry("index.js", "file"),
     ]
     const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(0)
+    expect(result).toHaveLength(2)
+    expect(result.map(e => e.name)).toEqual(["app.ts", "index.js"])
   })
 
   test("handles empty input", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   parseBreadcrumbSegments,
-  searchRenderableFiles,
+  searchFiles,
   type BreadcrumbSegment,
 } from "./preview-search-utils"
 
@@ -38,10 +38,10 @@ describe("parseBreadcrumbSegments", () => {
 })
 
 // ---------------------------------------------------------------------------
-// searchRenderableFiles — substring filter on renderable paths
+// searchFiles — substring filter on file paths (#925: renamed from searchRenderableFiles)
 // ---------------------------------------------------------------------------
 
-describe("searchRenderableFiles", () => {
+describe("searchFiles", () => {
   const paths = [
     "README.md",
     "src/components/session/README.md",
@@ -49,44 +49,58 @@ describe("searchRenderableFiles", () => {
     "docs/images/diagram.png",
     "docs/api.md",
     "docs/paper.pdf",
+    "src/app.ts",
+    "src/style.css",
   ]
 
   test("empty query returns empty array", () => {
-    expect(searchRenderableFiles("", paths)).toEqual([])
+    expect(searchFiles("", paths)).toEqual([])
   })
 
   test("matches substring case-insensitively", () => {
-    const results = searchRenderableFiles("readme", paths)
+    const results = searchFiles("readme", paths)
     expect(results).toHaveLength(2)
     expect(results).toContain("README.md")
     expect(results).toContain("src/components/session/README.md")
   })
 
   test("matches against full relative path", () => {
-    const results = searchRenderableFiles("components/session", paths)
+    const results = searchFiles("components/session", paths)
     expect(results).toHaveLength(1)
     expect(results[0]).toBe("src/components/session/README.md")
   })
 
   test("matches file extension", () => {
-    const results = searchRenderableFiles(".png", paths)
+    const results = searchFiles(".png", paths)
     expect(results).toHaveLength(1)
     expect(results[0]).toBe("docs/images/diagram.png")
   })
 
   test("matches pdf files", () => {
-    const results = searchRenderableFiles("pdf", paths)
+    const results = searchFiles("pdf", paths)
     expect(results).toHaveLength(1)
     expect(results[0]).toBe("docs/paper.pdf")
   })
 
+  test("matches non-renderable file types", () => {
+    const results = searchFiles(".ts", paths)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toBe("src/app.ts")
+  })
+
+  test("matches css files", () => {
+    const results = searchFiles("style", paths)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toBe("src/style.css")
+  })
+
   test("returns empty for no matches", () => {
-    expect(searchRenderableFiles("nonexistent", paths)).toEqual([])
+    expect(searchFiles("nonexistent", paths)).toEqual([])
   })
 
   test("handles special regex characters in query safely", () => {
     // Should not throw
-    expect(searchRenderableFiles("file(1)", paths)).toEqual([])
-    expect(searchRenderableFiles("[test]", paths)).toEqual([])
+    expect(searchFiles("file(1)", paths)).toEqual([])
+    expect(searchFiles("[test]", paths)).toEqual([])
   })
 })

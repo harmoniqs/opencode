@@ -3,7 +3,7 @@
  *
  * Manages navigation state (directory path, selected file, search query)
  * and routes to either the directory view or the file view. File discovery
- * uses the `useFile()` context. Directory filtering uses `isRenderable()`
+ * uses the `useFile()` context. Directory filtering shows all non-ignored
  * and `filterDirectoryEntries()` from session-ui.
  *
  * Slice 2 of #912 — rewritten from the flat session-touched-files list to
@@ -18,7 +18,7 @@ import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { preprocessMarkdown } from "@opencode-ai/session-ui/v2/markdown-utils"
 import { isRenderable } from "@opencode-ai/session-ui/v2/markdown-utils"
 import { filterDirectoryEntries } from "@opencode-ai/session-ui/v2/preview-nav-state"
-import { searchRenderableFiles } from "@opencode-ai/session-ui/v2/preview-search-utils"
+import { searchFiles } from "@opencode-ai/session-ui/v2/preview-search-utils"
 import type { PreviewFileState, DirectoryEntry } from "@opencode-ai/session-ui/v2/preview-nav-state"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -160,7 +160,7 @@ export function SessionPreviewTab(props: {
 
     for (const child of children) {
       if (child.ignored) continue
-      if (child.type === "file" && isRenderable(child.name)) {
+      if (child.type === "file") {
         paths.push(child.path)
       } else if (child.type === "directory") {
         const subPaths = await walkTree(child.path)
@@ -184,7 +184,7 @@ export function SessionPreviewTab(props: {
 
   const searchResults = createMemo(() => {
     if (!store.searchQuery) return []
-    return searchRenderableFiles(store.searchQuery, cachedPaths())
+    return searchFiles(store.searchQuery, cachedPaths())
   })
 
   let searchInputRef: HTMLInputElement | undefined

@@ -60,11 +60,13 @@ function escapeRegex(str: string): string {
 }
 
 /**
- * Filter renderable file paths by substring match (case-insensitive).
+ * Filter file paths by substring match (case-insensitive).
  * Returns empty array for empty query (intentional — don't show all files
  * when the user hasn't typed anything).
+ *
+ * Renamed from searchRenderableFiles in #925 — now searches all project files.
  */
-export function searchRenderableFiles(query: string, paths: string[]): string[] {
+export function searchFiles(query: string, paths: string[]): string[] {
   if (!query) return []
 
   const escaped = escapeRegex(query)

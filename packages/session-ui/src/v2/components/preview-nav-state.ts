@@ -8,8 +8,6 @@
  * @module
  */
 
-import { isRenderable } from "./markdown-utils"
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -104,19 +102,14 @@ export function createPreviewNavState() {
 // ---------------------------------------------------------------------------
 
 /**
- * Filter a list of directory entries to renderable files and non-ignored
- * directories. Sorts directories first, then files, alphabetically.
+ * Filter a list of directory entries to non-ignored files and directories.
+ * Sorts directories first, then files, alphabetically.
  *
- * Directories are shown optimistically (they may have renderable descendants
- * we haven't loaded yet). The full-tree filtering for the dropdown/search
- * comes in Slice 3.
+ * All non-ignored files are shown (#925) — file-type classification happens
+ * at open time in PreviewFileView, not at listing time.
  */
 export function filterDirectoryEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
-  const filtered = entries.filter((entry) => {
-    if (entry.ignored) return false
-    if (entry.type === "directory") return true
-    return isRenderable(entry.name)
-  })
+  const filtered = entries.filter((entry) => !entry.ignored)
 
   // Sort: directories first, then files, alphabetically within each group
   return filtered.sort((a, b) => {
