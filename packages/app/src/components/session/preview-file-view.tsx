@@ -1,10 +1,9 @@
 /**
  * preview-file-view — Routes file rendering by type for the Preview tab.
  *
- * Slice 2: handles markdown files only (Preview via <Markdown>, edit via
- * the existing textarea RawEditor as placeholder).
- * Slice 4: replaces RawEditor with CodeMirror.
- * Slice 5: adds image and PDF rendering branches.
+ * Slice 4: handles markdown files with Preview mode (<Markdown>) and Edit
+ * mode (CodeMirror 6 via preview-editor.tsx). Mode renamed from "raw" to "edit".
+ * Slice 5 adds image and PDF rendering branches.
  *
  * @module
  */
@@ -19,6 +18,7 @@ import { RENDERABLE_EXTENSIONS } from "@opencode-ai/session-ui/v2/markdown-utils
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import type { PreviewFileState } from "@opencode-ai/session-ui/v2/preview-nav-state"
+import { PreviewEditor } from "@opencode-ai/session-ui/v2/preview-editor"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,7 +41,7 @@ function isMarkdown(path: string): boolean {
 export function PreviewFileView(props: {
   filePath: string
   fileState: PreviewFileState
-  onModeChange: (mode: "preview" | "raw") => void
+  onModeChange: (mode: "preview" | "edit") => void
   onUnsavedContent: (content: string) => void
   onSave: (path: string, content: string) => void
   zoom: () => number
@@ -107,17 +107,16 @@ export function PreviewFileView(props: {
     saveTimer = setTimeout(() => saveFile(path, content), 1000)
   }
 
-  const handleRawEdit = (content: string) => {
+  const handleEdit = (content: string) => {
     props.onUnsavedContent(content)
     setFileContent(content)
     debouncedSave(props.filePath, content)
   }
 
-  const immediateSave = () => {
+  const handleImmediateSave = () => {
     if (props.fileState.unsavedContent !== null) {
       if (saveTimer) clearTimeout(saveTimer)
       saveFile(props.filePath, props.fileState.unsavedContent)
-      props.onUnsavedContent(null as any)
     }
   }
 
@@ -125,7 +124,6 @@ export function PreviewFileView(props: {
   onCleanup(() => {
     if (saveTimer) {
       clearTimeout(saveTimer)
-      // Flush the pending save
       if (props.fileState.unsavedContent !== null) {
         const baseUrl = serverSDK().url
         if (baseUrl) {
@@ -146,25 +144,25 @@ export function PreviewFileView(props: {
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Sub-header: save status + mode toggle + zoom */}
+      {/* Sub-header: save status + mode toggle */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
-        <div class="flex-1" />
-        <Show when={saveStatus() !== "idle"}>
-          <span
-            class="text-11-medium"
-            classList={{
-              "text-green-500": saveStatus() === "saved",
-              "text-text-weak": saveStatus() === "saving",
-            }}
-          >
-            {saveStatus() === "saving" ? "Saving..." : "Saved"}
-          </span>
-        </Show>
+        <div class="flex-1 flex items-center gap-1.5">
+          <Show when={saveStatus() === "saving"}>
+            <div
+              class="w-3 h-3 rounded-full border-2 border-text-weak border-t-transparent shrink-0"
+              style={{ animation: "spin 0.6s linear infinite" }}
+              aria-label="Saving"
+            />
+          </Show>
+          <Show when={saveStatus() === "saved"}>
+            <div class="w-3 h-3 rounded-full bg-green-500 shrink-0" aria-label="Saved" />
+          </Show>
+        </div>
         <Show when={showModeToggle()}>
           <SegmentedControlV2
             value={props.fileState.mode}
             onChange={(value) => {
-              if (value === "preview" || value === "raw") {
+              if (value === "preview" || value === "edit") {
                 props.onModeChange(value)
               }
             }}
@@ -176,8 +174,8 @@ export function PreviewFileView(props: {
                 <Icon name="eye" size="small" />
               </SegmentedControlItemV2>
             </TooltipV2>
-            <TooltipV2 openDelay={400} value="Raw">
-              <SegmentedControlItemV2 value="raw" aria-label="Raw" class="!flex-none !px-2">
+            <TooltipV2 openDelay={400} value="Edit">
+              <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
                 <Icon name="edit" size="small" />
               </SegmentedControlItemV2>
             </TooltipV2>
@@ -200,11 +198,11 @@ export function PreviewFileView(props: {
             <Show
               when={props.fileState.mode === "preview"}
               fallback={
-                <RawEditor
+                <PreviewEditor
                   content={fileContent()}
-                  onEdit={handleRawEdit}
-                  onSave={immediateSave}
-                  zoom={props.zoom()}
+                  filePath={props.filePath}
+                  onChange={handleEdit}
+                  onSave={handleImmediateSave}
                 />
               }
             >
@@ -219,34 +217,5 @@ export function PreviewFileView(props: {
         </Show>
       </div>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Placeholder RawEditor — will be replaced by CodeMirror in Slice 4
-// ---------------------------------------------------------------------------
-
-function RawEditor(props: { content: string; onEdit: (content: string) => void; onSave: () => void; zoom: number }) {
-  return (
-    <textarea
-      ref={(el) => {
-        el.value = props.content
-        el.addEventListener("keydown", (e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-            e.preventDefault()
-            e.stopPropagation()
-            props.onSave()
-            return
-          }
-          if (e.metaKey || e.ctrlKey) {
-            e.stopPropagation()
-          }
-        })
-      }}
-      class="w-full h-full p-4 resize-none bg-transparent text-text-base font-mono outline-none border-none selection:bg-blue-500/30"
-      style={{ "tab-size": "2", "font-size": `${props.zoom * 0.12}px` }}
-      onInput={(e) => props.onEdit(e.currentTarget.value)}
-      spellcheck={false}
-    />
   )
 }

@@ -15,7 +15,7 @@ import { isRenderable } from "./markdown-utils"
 // ---------------------------------------------------------------------------
 
 export interface PreviewFileState {
-  mode: "preview" | "raw"
+  mode: "preview" | "edit"
   scrollPosition: number
   unsavedContent: string | null
 }

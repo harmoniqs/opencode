@@ -68,11 +68,11 @@ describe("createPreviewNavState", () => {
   })
 
   test("fileStates persist across navigation", () => {
-    state.setFileState("README.md", { mode: "raw", scrollPosition: 150, unsavedContent: null })
+    state.setFileState("README.md", { mode: "edit", scrollPosition: 150, unsavedContent: null })
     state.navigateToFolder("src")
     state.navigateToFolder("")
     expect(state.get().fileStates["README.md"]).toEqual({
-      mode: "raw",
+      mode: "edit",
       scrollPosition: 150,
       unsavedContent: null,
     })
@@ -80,8 +80,8 @@ describe("createPreviewNavState", () => {
 
   test("setFileState merges into existing state", () => {
     state.setFileState("README.md", { mode: "preview", scrollPosition: 0, unsavedContent: null })
-    state.setFileState("README.md", { mode: "raw", scrollPosition: 0, unsavedContent: "edited" })
-    expect(state.get().fileStates["README.md"]?.mode).toBe("raw")
+    state.setFileState("README.md", { mode: "edit", scrollPosition: 0, unsavedContent: "edited" })
+    expect(state.get().fileStates["README.md"]?.mode).toBe("edit")
     expect(state.get().fileStates["README.md"]?.unsavedContent).toBe("edited")
   })
 

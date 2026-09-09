@@ -468,7 +468,7 @@ function FallbackFileList(props: {
   onSelect: (path: string) => void
   selectedFile: string | null
   fileState?: PreviewFileState
-  onModeChange: (mode: "preview" | "raw") => void
+  onModeChange: (mode: "preview" | "edit") => void
   onUnsavedContent: (content: string) => void
   zoom: () => number
   goBack: () => void
