@@ -220,7 +220,18 @@ async function startOAuthServer(): Promise<{ port: number; redirectUri: string }
     oauthServer!.listen(OAUTH_PORT, () => {
       resolve()
     })
-    oauthServer!.on("error", reject)
+    oauthServer!.on("error", (error: NodeJS.ErrnoException) => {
+      oauthServer = undefined
+      if (error.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            "Another OpenCode window is already waiting for an OpenAI sign-in. Finish or close the other sign-in, then try again.",
+          ),
+        )
+        return
+      }
+      reject(error)
+    })
   })
 
   return { port: OAUTH_PORT, redirectUri: `http://localhost:${OAUTH_PORT}/auth/callback` }
