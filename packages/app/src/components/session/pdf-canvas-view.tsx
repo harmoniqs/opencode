@@ -58,6 +58,7 @@ function PdfPage(props: {
   containerWidth: number
 }) {
   let canvasRef: HTMLCanvasElement | undefined
+  let activeRender: { cancel(): void } | null = null
 
   // Re-render whenever zoom, container width, or page changes
   createEffect(() => {
@@ -66,6 +67,12 @@ function PdfPage(props: {
     const pageNum = props.pageNum
     const containerWidth = props.containerWidth
     if (!canvasRef || !doc || containerWidth <= 0) return
+
+    // Cancel any in-flight render from a previous reactive cycle
+    if (activeRender) {
+      activeRender.cancel()
+      activeRender = null
+    }
 
     let cancelled = false
 
@@ -92,13 +99,19 @@ function PdfPage(props: {
       const ctx = canvasRef.getContext("2d")
       if (!ctx) return
 
-      page.render({ canvas: null, canvasContext: ctx, viewport }).promise.catch(() => {
-        // Render cancelled or failed — ignore silently
-      })
+      const task = page.render({ canvas: null, canvasContext: ctx, viewport })
+      activeRender = task
+      task.promise
+        .then(() => { activeRender = null })
+        .catch(() => { activeRender = null })
     })
 
     onCleanup(() => {
       cancelled = true
+      if (activeRender) {
+        activeRender.cancel()
+        activeRender = null
+      }
     })
   })
 
@@ -124,19 +137,27 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   let wrapperRef: HTMLDivElement | undefined
 
   // ─── Track container width via ResizeObserver ───────────────────────
+  // Observe the PARENT element (the scroll container), not the wrapper.
+  // The wrapper is inline-flex and grows to fit page canvases — observing
+  // it would create a feedback loop: pages render → wrapper resizes →
+  // observer fires → containerWidth changes → pages re-render → ...
+  // The parent's width is flex-determined and independent of content.
   createEffect(() => {
-    const el = wrapperRef
-    if (!el) return
+    const parent = wrapperRef?.parentElement
+    if (!parent) return
 
-    // Initial measurement
-    setContainerWidth(el.clientWidth - WRAPPER_PADDING)
+    // Initial measurement: parentElement (scroll container) has no padding,
+    // so clientWidth is its full inner width. Subtract the wrapper's p-4.
+    setContainerWidth(parent.clientWidth - WRAPPER_PADDING)
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
+        // contentBoxSize = scroll container's content width (no padding on it).
+        // Subtract the wrapper's padding to get available page width.
         setContainerWidth(entry.contentBoxSize[0].inlineSize - WRAPPER_PADDING)
       }
     })
-    observer.observe(el)
+    observer.observe(parent)
     onCleanup(() => observer.disconnect())
   })
 

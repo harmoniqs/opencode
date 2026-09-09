@@ -334,11 +334,13 @@ describe("toolbar layout (#934)", () => {
   test("PDF pages fit container width at 100% zoom, not intrinsic PDF size (#934)", () => {
     // Must track container width via ResizeObserver for responsive fit-to-width
     expect(pdfCanvasViewSrc).toContain("ResizeObserver")
+    // Must observe the PARENT (scroll container), not the wrapper — observing the
+    // wrapper creates a feedback loop (pages resize wrapper → observer fires →
+    // containerWidth changes → pages re-render → wrapper resizes → ...)
+    expect(pdfCanvasViewSrc).toContain("parentElement")
     // Must compute a base scale from container width / intrinsic page width
     // (getViewport at scale=1 gives intrinsic size, then divide container into it)
     expect(pdfCanvasViewSrc).toContain("containerWidth")
-    // Must NOT use raw zoom/100 as the sole scale factor — that ignores container size
-    // Instead the page renderer must receive containerWidth to compute fit-to-width
     expect(pdfCanvasViewSrc).toContain("getViewport({ scale: 1 })")
   })
 
