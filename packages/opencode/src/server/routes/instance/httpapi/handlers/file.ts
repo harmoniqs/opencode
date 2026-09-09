@@ -103,10 +103,33 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       if (!isAbsolute && !FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
       if (!(yield* FSUtil.Service.use((fs) => fs.existsSafe(file)))) return { type: "text" as const, content: "" }
       if (isAbsolute && !FSUtil.contains(directory, file)) {
-        // Read directly from disk for absolute paths outside the workspace
+        // Read directly from disk for absolute paths outside the workspace.
+        // Binary files (images, PDFs) will fail UTF-8 decoding — return them
+        // as base64 with a guessed MIME type so the client can render them.
         const buf = yield* Effect.tryPromise(() => fs.readFile(file)).pipe(Effect.orDie)
-        const text = new TextDecoder("utf-8", { fatal: true }).decode(buf)
-        return { type: "text" as const, content: text.trim() }
+        try {
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(buf)
+          return { type: "text" as const, content: text }
+        } catch {
+          const ext = path.extname(file).toLowerCase()
+          const mimeMap: Record<string, string> = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".svg": "image/svg+xml",
+            ".webp": "image/webp",
+            ".ico": "image/x-icon",
+            ".bmp": "image/bmp",
+            ".pdf": "application/pdf",
+          }
+          return {
+            type: "binary" as const,
+            content: Buffer.from(buf).toString("base64"),
+            encoding: "base64" as const,
+            mimeType: mimeMap[ext] ?? "application/octet-stream",
+          }
+        }
       }
       return yield* filesystem(
         FileSystem.Service.use((fs) => fs.read({ path: RelativePath.make(ctx.query.path) })),
@@ -123,7 +146,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
         ),
         Effect.map(({ item, text }) =>
           Option.isSome(text)
-            ? { type: "text" as const, content: text.value.trim() }
+            ? { type: "text" as const, content: text.value }
             : {
                 type: "binary" as const,
                 content: Buffer.from(item.content).toString("base64"),
