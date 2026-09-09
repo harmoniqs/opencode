@@ -71,7 +71,7 @@ export function PreviewFileView(props: {
   filePath: string
   fileState: PreviewFileState
   onModeChange: (mode: "preview" | "edit") => void
-  onUnsavedContent: (content: string) => void
+  onUnsavedContent: (content: string | null) => void
   onSave: (path: string, content: string) => void
   onSaveStatusChange?: (status: "idle" | "saving" | "saved") => void
   zoom: () => number
@@ -172,24 +172,17 @@ export function PreviewFileView(props: {
     props.onSaveStatusChange?.(saveStatus())
   })
 
-  const saveFile = (path: string, content: string) => {
-    const baseUrl = serverSDK().url
-    if (!baseUrl) return
-
+  const saveFile = async (filePath: string, content: string) => {
     setSaveStatus("saving")
-    fetch(new URL("/file/write", baseUrl), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path, content }),
-    })
-      .then(() => {
-        setSaveStatus("saved")
-        if (savedTimer) clearTimeout(savedTimer)
-        savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
-      })
-      .catch(() => {
-        setSaveStatus("idle")
-      })
+    try {
+      await serverSDK().client.file.write({ path: filePath, content })
+      setSaveStatus("saved")
+      props.onUnsavedContent(null)
+      if (savedTimer) clearTimeout(savedTimer)
+      savedTimer = setTimeout(() => setSaveStatus("idle"), 2000)
+    } catch {
+      setSaveStatus("idle")
+    }
   }
 
   const debouncedSave = (path: string, content: string) => {
@@ -215,14 +208,10 @@ export function PreviewFileView(props: {
     if (saveTimer) {
       clearTimeout(saveTimer)
       if (props.fileState.unsavedContent !== null) {
-        const baseUrl = serverSDK().url
-        if (baseUrl) {
-          fetch(new URL("/file/write", baseUrl), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: props.filePath, content: props.fileState.unsavedContent }),
-          }).catch(() => {})
-        }
+        serverSDK().client.file.write({
+          path: props.filePath,
+          content: props.fileState.unsavedContent,
+        }).catch(() => {})
       }
     }
     if (savedTimer) clearTimeout(savedTimer)

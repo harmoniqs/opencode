@@ -594,3 +594,56 @@ describe("dirty dot indicator (#937)", () => {
     expect(previewTabSrc).not.toMatch(/aria-label="Saved"/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// File save uses SDK client, not raw fetch (#937)
+// ---------------------------------------------------------------------------
+
+describe("file save uses SDK client (#937)", () => {
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  // Extract the saveFile function body
+  const saveFileStart = fileViewSrc.indexOf("const saveFile =")
+  const saveFileBody = (() => {
+    // Find the matching closing brace by counting braces from the opening {
+    let depth = 0
+    let started = false
+    for (let i = saveFileStart; i < fileViewSrc.length; i++) {
+      if (fileViewSrc[i] === "{") { depth++; started = true }
+      if (fileViewSrc[i] === "}") { depth-- }
+      if (started && depth === 0) return fileViewSrc.slice(saveFileStart, i + 1)
+    }
+    return ""
+  })()
+
+  // Extract the onCleanup block
+  const cleanupStart = fileViewSrc.indexOf("Flush pending save on navigation away")
+  const cleanupEnd = fileViewSrc.indexOf("savedTimer) clearTimeout(savedTimer)", cleanupStart)
+  const cleanupBlock = fileViewSrc.slice(cleanupStart, cleanupEnd + 50)
+
+  test("saveFile uses SDK client.file.write, not raw fetch to /file/write", () => {
+    expect(saveFileBody).toContain("file.write")
+    expect(saveFileBody).not.toContain('fetch(new URL("/file/write"')
+  })
+
+  test("cleanup flush uses SDK client.file.write, not raw fetch", () => {
+    expect(cleanupBlock).toContain("file.write")
+    expect(cleanupBlock).not.toContain('fetch(new URL("/file/write"')
+  })
+
+  test("clears unsavedContent after successful save", () => {
+    // After a successful write, the dirty state must be cleared (null)
+    expect(saveFileBody).toMatch(/onUnsavedContent\(null\)|onClearUnsaved/)
+  })
+
+  test("saveFile uses try/catch for error handling", () => {
+    // The SDK throws on non-2xx — must use try/catch, not bare .then()
+    expect(saveFileBody).toContain("try")
+    expect(saveFileBody).toContain("catch")
+    // Should NOT use .then() on the SDK call (that's the raw-fetch pattern)
+    expect(saveFileBody).not.toContain(".then(")
+  })
+})
