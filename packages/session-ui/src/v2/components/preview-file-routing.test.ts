@@ -354,8 +354,8 @@ describe("toolbar layout (#934)", () => {
   test("pinch/wheel zoom: SessionPreviewTab exposes onZoomChange to PreviewFileView (#934)", () => {
     // Parent must define a handler that accepts an arbitrary zoom value
     expect(previewTabSrc).toContain("onZoomChange")
-    // Must clamp to [50, 200] — same bounds as the +/- buttons
-    expect(previewTabSrc).toContain("200")
+    // Must clamp to [50, 500] — same bounds as the +/- buttons
+    expect(previewTabSrc).toContain("500")
   })
 
   test("pinch/wheel zoom: PreviewFileView has a wheel handler for ctrlKey/shiftKey (#934)", () => {

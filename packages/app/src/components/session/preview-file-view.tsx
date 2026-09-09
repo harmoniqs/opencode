@@ -270,7 +270,7 @@ export function PreviewFileView(props: {
     const oldZoom = props.zoom()
     const factor = Math.exp(-delta * 0.003)
     const next = Math.round(
-      Math.min(Math.max(oldZoom * factor, zoomFloor()), 200),
+      Math.min(Math.max(oldZoom * factor, zoomFloor()), 500),
     )
     if (next === oldZoom) return
     props.onZoomChange(next)
@@ -320,7 +320,7 @@ export function PreviewFileView(props: {
             value={`${props.zoom()}%`}
             onInput={(e) => {
               const val = parseInt(e.currentTarget.value)
-              if (!isNaN(val) && val >= 50 && val <= 200) {
+              if (!isNaN(val) && val >= 50 && val <= 500) {
                 // Direct set not available — zoom is owned by parent.
                 // Manual input is display-only; use +/- buttons to change.
               }
