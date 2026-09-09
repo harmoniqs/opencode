@@ -1,178 +1,87 @@
 import { describe, expect, test, beforeEach } from "bun:test"
 import {
-  createPreviewNavState,
-  filterDirectoryEntries,
-  type PreviewTabState,
-  type DirectoryEntry,
+  createPreviewFileStates,
+  type PreviewFileState,
 } from "./preview-nav-state"
 
 /**
- * Tests for the Preview tab navigation state machine (Slice 2 of #912).
+ * Tests for the Preview tab file state manager (#933 — stripped Finder,
+ * kept per-file state: mode, scroll, unsaved content).
+ *
  * Pure logic — no SolidJS, no DOM.
  */
 
 // ---------------------------------------------------------------------------
-// createPreviewNavState — state transitions
+// createPreviewFileStates — per-file state persistence
 // ---------------------------------------------------------------------------
 
-describe("createPreviewNavState", () => {
-  let state: ReturnType<typeof createPreviewNavState>
+describe("createPreviewFileStates", () => {
+  let states: ReturnType<typeof createPreviewFileStates>
 
   beforeEach(() => {
-    state = createPreviewNavState()
+    states = createPreviewFileStates()
   })
 
-  test("initial state: root directory, no selected file", () => {
-    expect(state.get().currentPath).toBe("")
-    expect(state.get().selectedFile).toBeNull()
-    expect(state.get().searchQuery).toBe("")
+  test("getFileState returns default for unknown file", () => {
+    expect(states.get("unknown.md")).toEqual({
+      mode: "preview",
+      scrollPosition: 0,
+      unsavedContent: null,
+    })
   })
 
-  test("navigateToFolder sets currentPath and clears selectedFile", () => {
-    state.selectFile("src/README.md")
-    state.navigateToFolder("src/components")
-    expect(state.get().currentPath).toBe("src/components")
-    expect(state.get().selectedFile).toBeNull()
-  })
-
-  test("selectFile sets the selected file path", () => {
-    state.selectFile("src/README.md")
-    expect(state.get().selectedFile).toBe("src/README.md")
-  })
-
-  test("goBack from file view: clears selectedFile", () => {
-    state.navigateToFolder("src")
-    state.selectFile("src/README.md")
-    state.goBack()
-    expect(state.get().selectedFile).toBeNull()
-    expect(state.get().currentPath).toBe("src")
-  })
-
-  test("goBack from subdirectory: navigates to parent", () => {
-    state.navigateToFolder("src/components/session")
-    state.goBack()
-    expect(state.get().currentPath).toBe("src/components")
-    expect(state.get().selectedFile).toBeNull()
-  })
-
-  test("goBack from root directory: stays at root (no-op)", () => {
-    state.goBack()
-    expect(state.get().currentPath).toBe("")
-    expect(state.get().selectedFile).toBeNull()
-  })
-
-  test("goBack from first-level directory: returns to root", () => {
-    state.navigateToFolder("src")
-    state.goBack()
-    expect(state.get().currentPath).toBe("")
-  })
-
-  test("fileStates persist across navigation", () => {
-    state.setFileState("README.md", { mode: "edit", scrollPosition: 150, unsavedContent: null })
-    state.navigateToFolder("src")
-    state.navigateToFolder("")
-    expect(state.get().fileStates["README.md"]).toEqual({
+  test("setFileState persists state for a file", () => {
+    states.set("README.md", { mode: "edit", scrollPosition: 150, unsavedContent: null })
+    expect(states.get("README.md")).toEqual({
       mode: "edit",
       scrollPosition: 150,
       unsavedContent: null,
     })
   })
 
-  test("setFileState merges into existing state", () => {
-    state.setFileState("README.md", { mode: "preview", scrollPosition: 0, unsavedContent: null })
-    state.setFileState("README.md", { mode: "edit", scrollPosition: 0, unsavedContent: "edited" })
-    expect(state.get().fileStates["README.md"]?.mode).toBe("edit")
-    expect(state.get().fileStates["README.md"]?.unsavedContent).toBe("edited")
-  })
-
-  test("getFileState returns default for unknown file", () => {
-    expect(state.getFileState("unknown.md")).toEqual({
-      mode: "preview",
+  test("setFileState replaces entire state for a file", () => {
+    states.set("README.md", { mode: "preview", scrollPosition: 0, unsavedContent: null })
+    states.set("README.md", { mode: "edit", scrollPosition: 0, unsavedContent: "edited" })
+    expect(states.get("README.md")).toEqual({
+      mode: "edit",
       scrollPosition: 0,
-      unsavedContent: null,
+      unsavedContent: "edited",
     })
   })
-})
 
-// ---------------------------------------------------------------------------
-// filterDirectoryEntries — show all non-ignored entries (#925)
-// ---------------------------------------------------------------------------
+  test("file states persist across different files", () => {
+    states.set("README.md", { mode: "edit", scrollPosition: 100, unsavedContent: null })
+    states.set("src/app.ts", { mode: "edit", scrollPosition: 200, unsavedContent: "code" })
 
-describe("filterDirectoryEntries", () => {
-  const makeEntry = (name: string, type: "file" | "directory", path?: string): DirectoryEntry => ({
-    name,
-    path: path ?? name,
-    absolute: `/project/${path ?? name}`,
-    type,
-    ignored: false,
+    expect(states.get("README.md").scrollPosition).toBe(100)
+    expect(states.get("src/app.ts").scrollPosition).toBe(200)
+    expect(states.get("src/app.ts").unsavedContent).toBe("code")
   })
 
-  test("includes renderable files", () => {
-    const entries = [
-      makeEntry("README.md", "file"),
-      makeEntry("diagram.png", "file"),
-      makeEntry("paper.pdf", "file"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(3)
+  test("switching away from a file and back restores its state", () => {
+    // Simulate: open file A, set edit mode + scroll, open file B, come back to A
+    states.set("fileA.md", { mode: "edit", scrollPosition: 42, unsavedContent: "draft" })
+    states.set("fileB.md", { mode: "preview", scrollPosition: 0, unsavedContent: null })
+
+    // File A's state should still be intact
+    expect(states.get("fileA.md")).toEqual({
+      mode: "edit",
+      scrollPosition: 42,
+      unsavedContent: "draft",
+    })
   })
 
-  test("includes non-renderable files (code, config, etc.)", () => {
-    const entries = [
-      makeEntry("app.ts", "file"),
-      makeEntry("style.css", "file"),
-      makeEntry("data.json", "file"),
-      makeEntry("README.md", "file"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(4)
-    expect(result.map(e => e.name)).toEqual(["app.ts", "data.json", "README.md", "style.css"])
+  test("getAll returns the full fileStates record", () => {
+    states.set("a.md", { mode: "edit", scrollPosition: 0, unsavedContent: null })
+    states.set("b.ts", { mode: "preview", scrollPosition: 50, unsavedContent: null })
+
+    const all = states.getAll()
+    expect(Object.keys(all)).toHaveLength(2)
+    expect(all["a.md"]?.mode).toBe("edit")
+    expect(all["b.ts"]?.scrollPosition).toBe(50)
   })
 
-  test("includes all non-ignored directories", () => {
-    const entries = [
-      makeEntry("src", "directory"),
-      makeEntry("docs", "directory"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(2)
-  })
-
-  test("excludes ignored entries (files and directories)", () => {
-    const entries = [
-      { name: "node_modules", path: "node_modules", absolute: "/project/node_modules", type: "directory" as const, ignored: true },
-      { name: ".git", path: ".git", absolute: "/project/.git", type: "directory" as const, ignored: true },
-      { name: "bundle.min.js", path: "bundle.min.js", absolute: "/project/bundle.min.js", type: "file" as const, ignored: true },
-      makeEntry("README.md", "file"),
-      makeEntry("app.ts", "file"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(2)
-    expect(result.map(e => e.name)).toEqual(["app.ts", "README.md"])
-  })
-
-  test("sorts directories before files, then alphabetically", () => {
-    const entries = [
-      makeEntry("zebra.ts", "file"),
-      makeEntry("docs", "directory"),
-      makeEntry("alpha.md", "file"),
-      makeEntry("src", "directory"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result.map(e => e.name)).toEqual(["docs", "src", "alpha.md", "zebra.ts"])
-  })
-
-  test("returns all non-ignored files even without renderable ones", () => {
-    const entries = [
-      makeEntry("app.ts", "file"),
-      makeEntry("index.js", "file"),
-    ]
-    const result = filterDirectoryEntries(entries)
-    expect(result).toHaveLength(2)
-    expect(result.map(e => e.name)).toEqual(["app.ts", "index.js"])
-  })
-
-  test("handles empty input", () => {
-    expect(filterDirectoryEntries([])).toHaveLength(0)
+  test("getAll returns empty object when no states recorded", () => {
+    expect(states.getAll()).toEqual({})
   })
 })
