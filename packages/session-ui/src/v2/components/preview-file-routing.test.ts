@@ -629,10 +629,11 @@ describe("file save uses SDK client (#937)", () => {
     expect(saveFileBody).not.toContain('fetch(new URL("/file/write"')
   })
 
-  test("cleanup flush uses SDK client.file.write, not raw fetch", () => {
-    expect(cleanupBlock).toContain("file.write")
-    expect(cleanupBlock).not.toContain('fetch(new URL("/file/write"')
-   })
+  test("no autosave flush on cleanup (save is explicit only)", () => {
+    // With no debounced autosave, there should be no flush-on-cleanup
+    // writing unsaved content to disk
+    expect(fileViewSrc).not.toContain("Flush pending save on navigation away")
+  })
 
   test("clears unsavedContent after successful save", () => {
     // After a successful write, the dirty state must be cleared (null)
@@ -703,5 +704,47 @@ describe("file content handler does not trim text (#937)", () => {
     const isSomeIdx = handlerSrc.indexOf("Option.isSome(text)")
     const returnBlock = handlerSrc.slice(isSomeIdx, isSomeIdx + 200)
     expect(returnBlock).not.toContain(".trim()")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// No autosave — save only on explicit Cmd+S (#937)
+// ---------------------------------------------------------------------------
+
+describe("no autosave — save only on Cmd+S (#937)", () => {
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  // Extract the handleEdit function body
+  const editStart = fileViewSrc.indexOf("const handleEdit =")
+  const editBody = (() => {
+    let depth = 0
+    let started = false
+    for (let i = editStart; i < fileViewSrc.length; i++) {
+      if (fileViewSrc[i] === "{") { depth++; started = true }
+      if (fileViewSrc[i] === "}") { depth-- }
+      if (started && depth === 0) return fileViewSrc.slice(editStart, i + 1)
+    }
+    return ""
+  })()
+
+  test("handleEdit does NOT call debouncedSave or saveFile", () => {
+    // Editing should only track dirty state, never trigger a save
+    expect(editBody).not.toContain("debouncedSave")
+    expect(editBody).not.toContain("saveFile")
+  })
+
+  test("no debouncedSave function exists", () => {
+    expect(fileViewSrc).not.toContain("debouncedSave")
+  })
+
+  test("no saveTimer exists (no debounce infrastructure)", () => {
+    expect(fileViewSrc).not.toMatch(/\bsaveTimer\b/)
+  })
+
+  test("handleImmediateSave still exists for Cmd+S", () => {
+    expect(fileViewSrc).toContain("handleImmediateSave")
   })
 })

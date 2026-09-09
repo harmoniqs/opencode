@@ -163,7 +163,6 @@ export function PreviewFileView(props: {
 
   // ─── Save logic ────────────────────────────────────────────────────────
 
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle")
   let savedTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -185,35 +184,18 @@ export function PreviewFileView(props: {
     }
   }
 
-  const debouncedSave = (path: string, content: string) => {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => saveFile(path, content), 1000)
-  }
-
   const handleEdit = (content: string) => {
     props.onUnsavedContent(content)
     setFileContent(content)
-    debouncedSave(props.filePath, content)
   }
 
   const handleImmediateSave = () => {
     if (props.fileState.unsavedContent !== null) {
-      if (saveTimer) clearTimeout(saveTimer)
       saveFile(props.filePath, props.fileState.unsavedContent)
     }
   }
 
-  // Flush pending save on navigation away
   onCleanup(() => {
-    if (saveTimer) {
-      clearTimeout(saveTimer)
-      if (props.fileState.unsavedContent !== null) {
-        serverSDK().client.file.write({
-          path: props.filePath,
-          content: props.fileState.unsavedContent,
-        }).catch(() => {})
-      }
-    }
     if (savedTimer) clearTimeout(savedTimer)
   })
 
