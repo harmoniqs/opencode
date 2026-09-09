@@ -1,11 +1,13 @@
 import { ComponentProps, splitProps } from "solid-js"
+import { usePlatform } from "@/context/platform"
 
 export interface ExternalLinkProps extends Omit<ComponentProps<"a">, "href"> {
   href: string
 }
 
 export function ExternalLink(props: ExternalLinkProps) {
-  const [local, rest] = splitProps(props, ["href", "children", "class", "target", "rel"])
+  const platform = usePlatform()
+  const [local, rest] = splitProps(props, ["href", "children", "class", "target", "rel", "onClick"])
 
   return (
     <a
@@ -13,6 +15,10 @@ export function ExternalLink(props: ExternalLinkProps) {
       class={`text-text-strong underline ${local.class ?? ""}`}
       target={local.target ?? "_blank"}
       rel={local.rel ?? "noopener noreferrer"}
+      onClick={(event) => {
+        event.preventDefault()
+        platform.openExternal(local.href)
+      }}
       {...rest}
     >
       {local.children}
