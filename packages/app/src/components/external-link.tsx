@@ -16,6 +16,9 @@ export function ExternalLink(props: ExternalLinkProps) {
       target={local.target ?? "_blank"}
       rel={local.rel ?? "noopener noreferrer"}
       onClick={(event) => {
+        if (typeof local.onClick === "function") local.onClick(event)
+        if (Array.isArray(local.onClick)) local.onClick[0](local.onClick[1], event)
+        if (event.defaultPrevented) return
         event.preventDefault()
         platform.openExternal(local.href)
       }}
