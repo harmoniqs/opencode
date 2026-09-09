@@ -9,6 +9,10 @@
  * (LoopbackPort). For a side-panel preview showing one PDF at a time this
  * is fine and avoids CSP/bundling complexity with real Web Workers.
  *
+ * Pages fit the container width at 100% zoom (like images do). User zoom
+ * multiplies on top of the fit-to-width base scale. A ResizeObserver tracks
+ * container width so pages reflow when the panel is resized.
+ *
  * @module
  */
 
@@ -33,11 +37,14 @@ interface PdfCanvasViewProps {
   base64: string
   /** MIME type (e.g. "application/pdf") */
   mime: string
-  /** Zoom percentage (100 = fit width) */
+  /** Zoom percentage (100 = fit container width) */
   zoom: number
   /** The file path — used for the "Open in editor" button */
   filePath: string
 }
+
+// Wrapper padding: p-4 = 16px each side
+const WRAPPER_PADDING = 32
 
 // ---------------------------------------------------------------------------
 // Single page renderer
@@ -47,15 +54,18 @@ function PdfPage(props: {
   doc: pdfjsLib.PDFDocumentProxy
   pageNum: number
   zoom: number
+  /** Available content width in CSS pixels (container minus padding) */
+  containerWidth: number
 }) {
   let canvasRef: HTMLCanvasElement | undefined
 
-  // Re-render whenever zoom or page changes
+  // Re-render whenever zoom, container width, or page changes
   createEffect(() => {
     const doc = props.doc
     const zoom = props.zoom
     const pageNum = props.pageNum
-    if (!canvasRef || !doc) return
+    const containerWidth = props.containerWidth
+    if (!canvasRef || !doc || containerWidth <= 0) return
 
     let cancelled = false
 
@@ -63,9 +73,14 @@ function PdfPage(props: {
       if (cancelled || !canvasRef) return
 
       const dpr = window.devicePixelRatio || 1
-      // Scale: at 100% zoom, render so the page fits the canvas at 1:1 CSS px.
-      // We render at dpr × scale for sharp HiDPI text.
-      const scale = (zoom / 100) * dpr
+
+      // Get intrinsic page size (PDF points at scale=1)
+      const intrinsic = page.getViewport({ scale: 1 })
+
+      // Base scale: fit the page width to the container at 100% zoom.
+      // User zoom multiplies on top: 200% = twice the container width.
+      const baseScale = containerWidth / intrinsic.width
+      const scale = baseScale * (zoom / 100) * dpr
       const viewport = page.getViewport({ scale })
 
       canvasRef.width = viewport.width
@@ -104,8 +119,28 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   const [pageCount, setPageCount] = createSignal(0)
   const [pdfDoc, setPdfDoc] = createSignal<pdfjsLib.PDFDocumentProxy | null>(null)
   const [error, setError] = createSignal(false)
+  const [containerWidth, setContainerWidth] = createSignal(0)
 
-  // Load the PDF document from base64
+  let wrapperRef: HTMLDivElement | undefined
+
+  // ─── Track container width via ResizeObserver ───────────────────────
+  createEffect(() => {
+    const el = wrapperRef
+    if (!el) return
+
+    // Initial measurement
+    setContainerWidth(el.clientWidth - WRAPPER_PADDING)
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentBoxSize[0].inlineSize - WRAPPER_PADDING)
+      }
+    })
+    observer.observe(el)
+    onCleanup(() => observer.disconnect())
+  })
+
+  // ─── Load the PDF document from base64 ──────────────────────────────
   createEffect(
     on(
       () => props.base64,
@@ -150,7 +185,7 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   })
 
   return (
-    <div class="inline-flex flex-col items-center gap-3 p-4 min-w-full min-h-full">
+    <div ref={wrapperRef} class="inline-flex flex-col items-center gap-3 p-4 min-w-full min-h-full">
       {/* Rendered pages */}
       <For each={Array.from({ length: pageCount() }, (_, i) => i + 1)}>
         {(pageNum) => (
@@ -158,6 +193,7 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
             doc={pdfDoc()!}
             pageNum={pageNum}
             zoom={props.zoom}
+            containerWidth={containerWidth()}
           />
         )}
       </For>
