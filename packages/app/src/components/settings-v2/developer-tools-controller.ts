@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, onMount } from "solid-js"
 import { useSettings } from "@/context/settings"
 import { inAmicode } from "@/utils/amicode-bridge"
+import { applyRebuildFlagMutation, rebuildFlagMutation } from "./developer-tools-rebuild-flags"
 
 export interface DevToolsStatus {
   opencodeValid: boolean
@@ -48,7 +49,7 @@ export function createDeveloperToolsController() {
         // Safety timeout: clear after 5 min to avoid permanently stuck state
         setTimeout(() => {
           if (rebuildState() === "rebuilding") {
-            try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
+            applyRebuildFlagMutation(rebuildFlagMutation("failed"))
             setRebuildState("failed")
             setRebuildError("Rebuild timed out")
           }
@@ -97,12 +98,15 @@ export function createDeveloperToolsController() {
         setRebuildState("rebuilding")
         setRebuildError(undefined)
       } else if (d.state === "failed") {
-        try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
+        applyRebuildFlagMutation(rebuildFlagMutation("failed"))
         setRebuildState("failed")
         setRebuildError(d.error ?? "Unknown error")
       } else if (d.state === "done") {
-        try { localStorage.removeItem("amicode:devtools-rebuilding") } catch {}
-        // The window reload follows shortly — "rebuilt" flag is read on next mount
+        // The extension host confirmed the build finished — set the
+        // "rebuilt" flag now (not at rebuild-start) so a dialog reopened
+        // after the window reload correctly shows "Rebuilt!" rather than
+        // "Rebuilding..." (#940). The window reload follows shortly.
+        applyRebuildFlagMutation(rebuildFlagMutation("done"))
       }
     }
 
@@ -153,13 +157,7 @@ export function createDeveloperToolsController() {
     if (rebuildState() === "rebuilding") return // prevent double-clicks
     setRebuildState("rebuilding")
     setRebuildError(undefined)
-    try {
-      localStorage.setItem("amicode:devtools-rebuilding", "1")
-      localStorage.setItem("amicode:devtools-reopen", "1")
-      localStorage.setItem("amicode:devtools-rebuilt", "1")
-    } catch {
-      // non-critical
-    }
+    applyRebuildFlagMutation(rebuildFlagMutation("start"))
     window.parent.postMessage(
       {
         source: "amicode",
