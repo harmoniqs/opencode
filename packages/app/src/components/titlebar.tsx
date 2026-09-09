@@ -984,7 +984,7 @@ function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
         <span class="flex size-5 shrink-0 items-center justify-center">
           <Show
             when={!props.state.installing}
-            fallback={<span data-slot="titlebar-update-loader" aria-hidden="true" />}
+            fallback={<span data-slot="titlebar-update-loader" data-working="" aria-hidden="true" />}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M7 11V3M3.5 7.63128L7 11L10.5 7.63128" stroke="currentColor" />
@@ -1007,14 +1007,8 @@ function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () =
     return (
       <button
         type="button"
+        data-slot="amicode-dev-tag"
         class="font-medium px-2 rounded-sm uppercase font-mono cursor-pointer"
-        style={{
-          // brand chip: yellow fill, ink text, ink edge. Yellow cannot define its
-          // own edge on a light ground, so the border is not optional.
-          background: "var(--accent)",
-          color: "var(--accent-ink)",
-          border: "var(--border-width) solid var(--accent-edge-ink)",
-        }}
         onClick={props.debugTools.toggle}
         aria-label="Toggle debug tools"
         aria-pressed={props.debugTools.visible}

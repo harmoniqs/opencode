@@ -46,7 +46,7 @@ const SOURCES: [amc: string, v2: string, fallback: string][] = [
   // foreground on white, so this is neutral there — see the design-system skill.
   ["--amc-accent", "--v2-icon-icon-accent", "#FFE614"],
   // Accent solid FILL (CTA / chip background): the brand hue #FFE614 in BOTH
-  // schemes, sourced from design-polish's --accent. Pair only with --amc-accent-ink.
+  // schemes, sourced from tokens.css's --accent. Pair only with --amc-accent-ink.
   ["--amc-accent-fill", "--accent", "#FFE614"],
   // Ink ON a yellow fill: always near-black, never --amc-bg (which is white on light).
   ["--amc-accent-ink", "--accent-ink", "#000000"],

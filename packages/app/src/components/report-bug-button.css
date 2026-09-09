@@ -7,7 +7,7 @@
    forced states ([data-state]) exist so the story can render the matrix. */
 
 [data-component="icon-button-v2"][data-action="report-bug"] {
-  border-radius: var(--radius-md); /* control radius token (design-polish.css) */
+  border-radius: var(--radius-md); /* control radius token (design-system/tokens.css) */
   color: var(--v2-state-fg-danger);
   opacity: 0.55;
   cursor: pointer;

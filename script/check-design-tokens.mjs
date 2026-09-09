@@ -2,7 +2,7 @@
 /**
  * Design-token gate for the amicode UI.
  *
- * The brand is defined in ONE place — packages/app/src/design-polish.css, plus
+ * The brand is defined in ONE place — packages/app/src/design-system/tokens.css, plus
  * the theme JSON it documents. Components consume tokens; they never carry
  * literals. This script fails the moment a raw literal reappears, so the rule
  * survives contact with future edits instead of decaying quietly.
@@ -16,7 +16,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs"
 import { join, relative } from "node:path"
 
 const root = process.cwd()
-const BRAND_SHEET = "packages/app/src/design-polish.css"
+const BRAND_SHEET = "packages/app/src/design-system/tokens.css"
 
 // Directories whose components must be fully token-driven.
 // Includes the theme loader and the pre-paint script: both write colours
@@ -41,7 +41,8 @@ const EXEMPT = [
   /packages\/ui\/src\/amicode\/brain-engine\.ts$/, // data-viz categorical palette
   /packages\/ui\/src\/amicode\/context-tree-engine\.ts$/, // data-viz categorical palette
   /packages\/app\/src\/components\/terminal\.tsx$/, // no-theme fallbacks, kept in brand
-  /packages\/app\/src\/design-polish\.css$/, // the brand sheet itself
+  /packages\/session-ui\/src\/pierre\//, // vendored diff engine: inset-9999px shadows are row FILLS, not edges
+  /packages\/app\/src\/design-system\/tokens\.css$/, // the token block: definitions, not literals (components.css is NOT exempt)
   /packages\/app\/src\/index\.css$/, // @font-face declarations
   /\.stories\.tsx$/, // Storybook fixtures, not shipped UI
   /\.test\.tsx?$/,
@@ -78,6 +79,29 @@ const RAW_FONT = /font-family\s*:\s*["']?(?!var\(|inherit|initial|unset|revert)(
 const ARB_COLOUR = /\b(?:text|bg|border|fill|stroke|from|via|to|shadow|ring|outline|decoration|caret|accent)-\[#[0-9a-fA-F]{3,8}\]/g
 // --- rule 5: no literal painted directly onto an element via inline style ---
 const RAW_INLINE = /(style\.backgroundColor|setAttribute\("content")\s*(=|,)\s*["']#[0-9a-fA-F]{3,8}["']/g
+// --- rule 1b: a colour literal hiding as a var() fallback is still a literal --
+// `var(--accent, #fff676)` ships the dead hue the moment the token is missing;
+// the token is always defined, so the fallback is never needed and never right.
+const VAR_FALLBACK_LITERAL = /var\(--[\w-]+\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\()/g
+// --- rule 7: borders are 1px, nothing else (Kate, 2026-09-07) --------------
+// `--border-width: 1px` is the only border width; 0 / none removes one. The
+// 1.5px and 2px "emphasis" borders are exactly the drift this exists to catch.
+// `border-color` / `border-radius` never match: the property must end in a
+// side, `-width`, or nothing before the colon.
+const RAW_BORDER_WIDTH =
+  /(?<![-\w])border(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end))?(?:-width)?\s*:(?!\s*["']?(?:0(?:px)?\b|1px\b|none\b|var\(|inherit|initial|unset|revert))\s*["']?(\d*\.?\d+)(px|rem|em)\b/g
+const ARB_BORDER_WIDTH = /(?<![-\w])border(?:-[trblxyse])?-(?:2|4|8|\[\d*\.?\d+(?:px|rem|em)\])\b/g
+// --- rule 8: no shadows, ever (Law 2) -------------------------------------
+// Nothing in the interface casts a shadow: no box-shadow, no text-shadow, no
+// drop-shadow() filter, no shadow-*/ring-* utility. A floating surface is a
+// hairline-bordered surface on its own ground layer. There is no policy
+// switch: a gate that can be weakened by an environment variable is an
+// exception, and the system has none.
+const ANY_SHADOW = /box-shadow["']?\s*:(?!\s*["']?none\b)\s*[^;}]+/g
+const TEXT_SHADOW = /text-shadow\s*:(?!\s*none\b)\s*[^;}]+/g
+const DROP_SHADOW = /drop-shadow\(/g
+const TW_SHADOW = /(?<![-\w])shadow-(?:(?:sm|md|lg|xl|2xl|inner)\b|\[[^\]]+\])/g
+const TW_RING = /(?<![-\w])ring-(?:\d+|\[[^\]]+\])/g
 
 for (const dir of SCAN) {
   for (const file of walk(join(root, dir))) {
@@ -95,7 +119,15 @@ for (const dir of SCAN) {
         [ARB_RADIUS, "arbitrary Tailwind radius — use rounded-xs/sm/md/lg/full"],
         [RAW_FONT, "hardcoded font stack — use var(--font-family-text) or var(--font-mono)"],
         [RAW_INLINE, "literal painted onto an element — derive it from the active theme"],
+        [VAR_FALLBACK_LITERAL, "colour literal as a var() fallback — the token is always defined; drop the fallback"],
         [ARB_COLOUR, "Tailwind arbitrary colour — use a token, e.g. text-[var(--fg-on-dark)]"],
+        [RAW_BORDER_WIDTH, "border width is 1px only — use var(--border-width), or 0 to remove"],
+        [ARB_BORDER_WIDTH, "Tailwind border width — borders are 1px only (`border`, never border-2/4/8)"],
+        [ANY_SHADOW, "shadows are banned (Law 2) — separate with a hairline and a ground layer"],
+        [TEXT_SHADOW, "text-shadow is banned (Law 2)"],
+        [DROP_SHADOW, "drop-shadow() filter is banned (Law 2)"],
+        [TW_SHADOW, "Tailwind shadow-* is banned (Law 2)"],
+        [TW_RING, "Tailwind ring-* is banned (Law 2) — a ring is a shadow; use a hairline or the focus ring"],
       ]) {
         re.lastIndex = 0
         let m
@@ -115,6 +147,7 @@ for (const token of [
   "--accent-edge:",
   "--radius-sm:",
   "--radius-full:",
+  "--border-width:",
   "--font-body:",
   "--font-mono:",
 ]) {
