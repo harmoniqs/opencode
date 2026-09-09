@@ -302,6 +302,32 @@ describe("toolbar layout (#934)", () => {
     expect(pdfCanvasViewSrc).toContain("min-h-full")
   })
 
+  test("image uses absolute pixel width from measured container, not percentage (#934)", () => {
+    // The root cause of the left-scroll clipping bug: `width: ${zoom}%` inside
+    // an inline-flex wrapper creates a circular CSS dependency. The inline-flex
+    // wrapper sizes from the image's intrinsic (natural) dimensions, then the
+    // percentage resolves to a LARGER value, overflowing the wrapper. justify-center
+    // pushes the left overflow into unreachable negative scroll territory.
+    //
+    // Fix: measure container width via ResizeObserver (like PDF does) and compute
+    // absolute pixel widths. The wrapper then sizes correctly around the content.
+
+    // Must track container width with a signal, same pattern as PdfCanvasView
+    expect(fileViewSrc).toContain("containerWidth")
+    expect(fileViewSrc).toContain("ResizeObserver")
+
+    // Image width must be computed as absolute pixels, NOT a zoom percentage.
+    // Look for the pixel-based width pattern in the image block:
+    const imageMatchStart = fileViewSrc.indexOf('category() === "image"')
+    const imageMatchEnd = fileViewSrc.indexOf("</Match>", imageMatchStart)
+    const imageBlock = fileViewSrc.slice(imageMatchStart, imageMatchEnd)
+
+    // Must use pixel width (e.g. `${imageWidth()}px`), not percentage
+    expect(imageBlock).toContain("px")
+    // Must NOT use `zoom()` directly as a percentage on the image
+    expect(imageBlock).not.toMatch(/width:.*zoom\(\).*%/)
+  })
+
   test("PDF renders via canvas (PDF.js), not iframe/embed/placeholder (#934)", () => {
     const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
     const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)

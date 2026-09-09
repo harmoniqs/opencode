@@ -60,6 +60,9 @@ type FileType = "text" | "binary" | "error" | "too-large" | null
 
 const MAX_FILE_SIZE = 1_000_000
 
+// Wrapper padding: p-4 = 16px each side = 32px total
+const IMAGE_WRAPPER_PADDING = 32
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -84,6 +87,14 @@ export function PreviewFileView(props: {
 
   // Binary data for image/PDF rendering (data URI / blob URL)
   const [binaryData, setBinaryData] = createSignal<{ base64: string; mime: string } | null>(null)
+
+  // ─── Container width for absolute-pixel image sizing ───────────────────
+  // Same pattern as PdfCanvasView: measure the scroll container's width via
+  // ResizeObserver and compute image display width as absolute pixels.
+  // This avoids the circular CSS dependency that `width: ${zoom}%` creates
+  // inside an inline-flex wrapper (the root cause of the left-scroll clipping
+  // bug — see test "image uses absolute pixel width from measured container").
+  const [containerWidth, setContainerWidth] = createSignal(0)
 
   // ─── File loading ──────────────────────────────────────────────────────
 
@@ -243,6 +254,32 @@ export function PreviewFileView(props: {
 
   let scrollRef: HTMLDivElement | undefined
 
+  // ─── Track scroll container width for image sizing ───────────────────
+  // Observe scrollRef (the scroll container) to get its content width.
+  // The image display width is computed as absolute pixels from this,
+  // matching the PdfCanvasView pattern (which observes parentElement
+  // because the PDF wrapper IS inline-flex — here scrollRef is the
+  // scroll container directly).
+  createEffect(() => {
+    const el = scrollRef
+    if (!el) return
+    setContainerWidth(el.clientWidth)
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentBoxSize[0].inlineSize)
+      }
+    })
+    observer.observe(el)
+    onCleanup(() => observer.disconnect())
+  })
+
+  // Image display width: absolute pixels, not percentage.
+  // At 100% zoom, the image fills the container width (minus wrapper padding).
+  // At 200% it's twice that, etc. Deterministic sizing — the inline-flex
+  // wrapper sizes correctly around it, so justify-center never pushes
+  // content into unreachable negative scroll territory.
+  const imageWidth = () => Math.max(0, (containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom() / 100)
+
   const adjustScrollForZoom = (oldZoom: number, newZoom: number) => {
     const el = scrollRef
     if (!el || oldZoom === newZoom || oldZoom === 0) return
@@ -375,7 +412,7 @@ export function PreviewFileView(props: {
                   src={imageDataUrl()}
                   alt={props.filePath.split("/").pop() ?? ""}
                   class="object-contain max-w-none shrink-0"
-                  style={{ width: `${props.zoom()}%`, "image-rendering": "auto" }}
+                  style={{ width: `${imageWidth()}px`, "image-rendering": "auto" }}
                 />
               </div>
             </Match>
