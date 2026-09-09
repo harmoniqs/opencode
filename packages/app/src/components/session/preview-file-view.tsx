@@ -74,6 +74,7 @@ export function PreviewFileView(props: {
   zoom: () => number
   zoomIn: () => void
   zoomOut: () => void
+  onZoomChange?: (zoom: number) => void
 }) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
@@ -232,6 +233,34 @@ export function PreviewFileView(props: {
     props.zoomOut()
   }
 
+  // ─── Pinch / wheel zoom ──────────────────────────────────────────────
+  // Trackpad pinch fires as WheelEvent with ctrlKey: true in Chromium.
+  // Shift+scroll is the mouse-wheel equivalent. Both trigger continuous
+  // zoom via onZoomChange. Must use addEventListener with passive: false
+  // — Solid's onWheel is passive by default and can't preventDefault.
+
+  let scrollRef: HTMLDivElement | undefined
+
+  const handleWheelZoom = (e: WheelEvent) => {
+    if (!e.ctrlKey && !e.shiftKey) return   // normal scroll — pass through
+    e.preventDefault()
+    if (!props.onZoomChange) return
+    const delta = e.deltaY || e.deltaX      // shift+scroll may swap axes
+    if (delta === 0) return
+    const factor = Math.exp(-delta * 0.003)
+    const next = Math.round(
+      Math.min(Math.max(props.zoom() * factor, zoomFloor()), 200),
+    )
+    if (next !== props.zoom()) props.onZoomChange(next)
+  }
+
+  createEffect(() => {
+    const el = scrollRef
+    if (!el) return
+    el.addEventListener("wheel", handleWheelZoom, { passive: false })
+    onCleanup(() => el.removeEventListener("wheel", handleWheelZoom))
+  })
+
   return (
     <div class="h-full flex flex-col overflow-hidden">
       {/* Action bar: mode toggle + zoom controls */}
@@ -303,7 +332,7 @@ export function PreviewFileView(props: {
       </div>
 
       {/* Content */}
-      <div class="flex-1 min-h-0 overflow-auto">
+      <div ref={scrollRef} class="flex-1 min-h-0 overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
           <Switch>
             <Match when={fileType() === "error"}>

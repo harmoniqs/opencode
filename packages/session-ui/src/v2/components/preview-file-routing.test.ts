@@ -338,4 +338,23 @@ describe("toolbar layout (#934)", () => {
     expect(fileViewSrc).toContain("zoomFloor")
   })
 
+  test("pinch/wheel zoom: SessionPreviewTab exposes onZoomChange to PreviewFileView (#934)", () => {
+    // Parent must define a handler that accepts an arbitrary zoom value
+    expect(previewTabSrc).toContain("onZoomChange")
+    // Must clamp to [50, 200] — same bounds as the +/- buttons
+    expect(previewTabSrc).toContain("200")
+  })
+
+  test("pinch/wheel zoom: PreviewFileView has a wheel handler for ctrlKey/shiftKey (#934)", () => {
+    // Must accept onZoomChange prop
+    expect(fileViewSrc).toContain("onZoomChange")
+    // Wheel handler must check ctrlKey (trackpad pinch) and shiftKey (shift+scroll)
+    expect(fileViewSrc).toContain("ctrlKey")
+    expect(fileViewSrc).toContain("shiftKey")
+    // Must use addEventListener with passive: false (Solid's onWheel is passive by default)
+    expect(fileViewSrc).toContain("passive")
+    // Must use exponential scaling for smooth zoom (not linear steps)
+    expect(fileViewSrc).toContain("Math.exp")
+  })
+
 })
