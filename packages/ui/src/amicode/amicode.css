@@ -1468,7 +1468,7 @@
 /* ---- Developer Tools rebuild status + buttons ─────────────────────────── */
 .devtools-section-header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
 }
 

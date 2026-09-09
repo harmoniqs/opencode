@@ -3,11 +3,12 @@ import { describe, expect, test } from "bun:test"
 
 // ============================================================================
 // The devtools "Developer Tools" section header and its rebuild status
-// indicator (#940) sit side by side in a flex row (.devtools-section-header,
-// align-items: center). .settings-v2-section-title carries a padding-bottom
-// meant for the normal case where a title sits above a settings list — but
-// that padding shifts the title's visual center up relative to its flex
-// sibling, misaligning it against the rebuild status text. The existing
+// indicator (#940) sit side by side in a flex row. They use different font
+// sizes, so align-items: center centers their line boxes but puts the status
+// text's baseline slightly below the title's. Baseline alignment fixes that;
+// .settings-v2-section-title also carries a padding-bottom meant for the
+// normal case where a title sits above a settings list, so it must be reset
+// in this row. The existing
 // .settings-v2-providers and .settings-v2-models sections already override
 // this padding to 0 for the same reason; this extends that same override to
 // the devtools header.
@@ -22,10 +23,10 @@ function extractRule(css: string, selector: string): string {
 }
 
 describe("devtools section header title alignment (#940)", () => {
-  test("the amicode.css devtools header rule exists (baseline)", () => {
+  test("the header aligns the title and status text on their shared baseline", () => {
     const css = readFileSync(new URL("./amicode.css", import.meta.url), "utf8")
     const rule = extractRule(css, ".devtools-section-header {")
-    expect(rule).toContain("align-items: center")
+    expect(rule).toContain("align-items: baseline")
   })
 
   test("the title's padding-bottom is zeroed out inside the devtools header, matching the providers/models precedent", () => {
