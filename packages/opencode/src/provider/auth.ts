@@ -78,12 +78,25 @@ export class OauthCallbackFailed extends Schema.TaggedErrorClass<OauthCallbackFa
   {},
 ) {}
 
+export class OauthAuthorizationFailed extends Schema.TaggedErrorClass<OauthAuthorizationFailed>()(
+  "ProviderAuthOauthAuthorizationFailed",
+  {
+    message: Schema.String,
+  },
+) {}
+
 export class ValidationFailed extends Schema.TaggedErrorClass<ValidationFailed>()("ProviderAuthValidationFailed", {
   field: Schema.String,
   message: Schema.String,
 }) {}
 
-export type Error = Auth.AuthError | OauthMissing | OauthCodeMissing | OauthCallbackFailed | ValidationFailed
+export type Error =
+  | Auth.AuthError
+  | OauthMissing
+  | OauthCodeMissing
+  | OauthCallbackFailed
+  | OauthAuthorizationFailed
+  | ValidationFailed
 
 type Hook = NonNullable<Hooks["auth"]>
 
@@ -176,7 +189,13 @@ const layer: Layer.Layer<Service, never, Auth.Service | Plugin.Service> = Layer.
         }
       }
 
-      const result = yield* Effect.promise(() => method.authorize(input.inputs))
+      const result = yield* Effect.tryPromise({
+        try: () => method.authorize(input.inputs),
+        catch: (error) =>
+          new OauthAuthorizationFailed({
+            message: error instanceof Error ? error.message : "OAuth authorization could not be started.",
+          }),
+      })
       pending.set(input.providerID, result)
       return {
         url: result.url,

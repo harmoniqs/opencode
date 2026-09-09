@@ -23,6 +23,9 @@ function mapProviderAuthError<A, R>(self: Effect.Effect<A, ProviderAuth.Error, R
       if (error instanceof ProviderAuth.OauthCallbackFailed) {
         return new ProviderAuthApiError({ name: error._tag, data: {} })
       }
+      if (error instanceof ProviderAuth.OauthAuthorizationFailed) {
+        return new ProviderAuthApiError({ name: error._tag, data: { message: error.message } })
+      }
       if (error instanceof ProviderAuth.ValidationFailed) {
         return new ProviderAuthApiError({ name: error._tag, data: { field: error.field, message: error.message } })
       }

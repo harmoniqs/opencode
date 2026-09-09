@@ -180,6 +180,37 @@ function writeProviderAuthValidationPlugin(dir: string) {
   })
 }
 
+function writeProviderAuthFailurePlugin(dir: string) {
+  return Effect.gen(function* () {
+    const fs = yield* FSUtil.Service
+    yield* Effect.promise(() => markPluginDependenciesReady(path.join(dir, ".opencode")))
+
+    yield* fs.writeWithDirs(
+      path.join(dir, ".opencode", "plugin", "provider-oauth-failure.ts"),
+      [
+        "export default {",
+        '  id: "test.provider-oauth-failure",',
+        "  server: async () => ({",
+        "    auth: {",
+        '      provider: "test-oauth-failure",',
+        "      methods: [",
+        "        {",
+        '          type: "oauth",',
+        '          label: "OAuth",',
+        "          authorize: async () => {",
+        '            throw new Error("Another OpenCode window is already waiting for an OpenAI sign-in. Finish or close the other sign-in, then try again.")',
+        "          },",
+        "        },",
+        "      ],",
+        "    },",
+        "  }),",
+        "}",
+        "",
+      ].join("\n"),
+    )
+  })
+}
+
 function writeFunctionOptionsPlugin(dir: string) {
   return Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -328,6 +359,28 @@ describe("provider HttpApi", () => {
       })
     }),
     { ...projectOptions, init: writeProviderAuthValidationPlugin },
+    30000,
+  )
+
+  it.instance(
+    "returns OAuth authorization failures to the client",
+    Effect.gen(function* () {
+      const directory = (yield* TestInstance).directory
+      const response = yield* requestAuthorize({
+        providerID: "test-oauth-failure",
+        method: 0,
+        headers: { "x-opencode-directory": directory, "content-type": "application/json" },
+      })
+
+      expect(response.status).toBe(400)
+      expect(JSON.parse(response.body)).toEqual({
+        name: "ProviderAuthOauthAuthorizationFailed",
+        data: {
+          message: "Another OpenCode window is already waiting for an OpenAI sign-in. Finish or close the other sign-in, then try again.",
+        },
+      })
+    }),
+    { ...projectOptions, init: writeProviderAuthFailurePlugin },
     30000,
   )
 
