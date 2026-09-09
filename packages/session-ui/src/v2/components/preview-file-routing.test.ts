@@ -296,11 +296,13 @@ describe("toolbar layout (#934)", () => {
     expect(pdfBlock).toContain("PdfCanvasView")
   })
 
-  test("PDF.js is imported and configured without a worker", () => {
+  test("PDF.js is imported with worker injected on globalThis (no Worker created)", () => {
     // pdfjs-dist must be imported in the canvas renderer
     expect(pdfCanvasViewSrc).toContain("pdfjs-dist")
-    // Worker must be disabled (main-thread parsing — fine for a preview panel)
-    expect(pdfCanvasViewSrc).toContain("workerSrc")
+    // Worker module imported and injected on globalThis — the one code path in
+    // pdfjs-dist v6 that bypasses both new Worker() and the workerSrc getter.
+    expect(pdfCanvasViewSrc).toContain("pdf.worker")
+    expect(pdfCanvasViewSrc).toContain("globalThis.pdfjsWorker")
   })
 
   test("PDF keeps open-in-editor as secondary action", () => {

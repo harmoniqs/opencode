@@ -5,18 +5,24 @@
  * paint each page onto a canvas. No browser plugin, no iframe, no Chromium
  * PDF viewer — works in any context including VS Code sandboxed webviews.
  *
- * Worker is disabled (main-thread parsing). For a side-panel preview showing
- * one PDF at a time this is fine and avoids all CSP/bundling complexity.
+ * Worker runs on the main thread via globalThis.pdfjsWorker injection
+ * (LoopbackPort). For a side-panel preview showing one PDF at a time this
+ * is fine and avoids CSP/bundling complexity with real Web Workers.
  *
  * @module
  */
 
 import { createEffect, createSignal, For, on, onCleanup } from "solid-js"
 import * as pdfjsLib from "pdfjs-dist"
+// @ts-expect-error — no type declarations for the worker bundle; Vite resolves it at build time
+import * as pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs"
 
-// Disable worker — run PDF parsing on the main thread.
-// Fine for a preview panel; avoids CSP and Vite worker bundling issues.
-pdfjsLib.GlobalWorkerOptions.workerSrc = ""
+// Inject the worker module on globalThis — the one code path in pdfjs-dist v6
+// that bypasses BOTH `new Worker()` AND the `workerSrc` getter. PDF.js sees
+// `globalThis.pdfjsWorker.WorkerMessageHandler`, routes through LoopbackPort,
+// and runs everything on the main thread. No CSP issue, no blob worker, no
+// external fetch. Fine for a side-panel preview.
+;(globalThis as any).pdfjsWorker = pdfjsWorker
 
 // ---------------------------------------------------------------------------
 // Types
