@@ -52,6 +52,31 @@ describe("file HttpApi", () => {
     expect(await status.json()).toEqual([])
   })
 
+  test("returns binary response for absolute-path binary files (#934)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    // Write a small PNG-like binary file OUTSIDE the workspace (absolute path)
+    const outsideDir = path.join(tmp.path, "..", "outside-" + Date.now())
+    await Bun.write(path.join(outsideDir, "pixel.png"), new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+    ]))
+
+    const absPath = path.join(outsideDir, "pixel.png")
+    const content = await request(FilePaths.content, tmp.path, { path: absPath })
+
+    expect(content.status).toBe(200)
+    const body = await content.json()
+    expect(body.type).toBe("binary")
+    expect(body.encoding).toBe("base64")
+    expect(typeof body.mimeType).toBe("string")
+    expect(body.content.length).toBeGreaterThan(0)
+
+    // Verify the base64 decodes back to the original bytes
+    const decoded = Buffer.from(body.content, "base64")
+    expect(decoded[0]).toBe(0x89)
+    expect(decoded[1]).toBe(0x50) // 'P' in PNG signature
+  })
+
   test("serves search endpoints", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(path.join(tmp.path, "hello.txt"), "needle")
