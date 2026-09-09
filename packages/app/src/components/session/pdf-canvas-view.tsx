@@ -150,7 +150,7 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   })
 
   return (
-    <div class="flex flex-col items-center gap-3 p-4 min-h-full">
+    <div class="inline-flex flex-col items-center gap-3 p-4 min-w-full min-h-full">
       {/* Rendered pages */}
       <For each={Array.from({ length: pageCount() }, (_, i) => i + 1)}>
         {(pageNum) => (

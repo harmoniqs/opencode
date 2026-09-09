@@ -282,6 +282,26 @@ describe("toolbar layout (#934)", () => {
     expect(imageBlock).toContain("shrink-0")
   })
 
+  test("image/PDF wrappers use safe centering for full scroll reach (#934)", () => {
+    // When a flex container centers a child that overflows, the negative
+    // (left/top) overflow is clipped and unreachable via scroll. The fix is
+    // inline-flex + min-w-full: the wrapper's width = max(content, container),
+    // so centering happens inside a box that covers the full scroll area.
+    const imageMatchStart = fileViewSrc.indexOf('category() === "image"')
+    const imageMatchEnd = fileViewSrc.indexOf("</Match>", imageMatchStart)
+    const imageBlock = fileViewSrc.slice(imageMatchStart, imageMatchEnd)
+
+    // Image wrapper must use inline-flex + min-w-full for safe centering
+    expect(imageBlock).toContain("inline-flex")
+    expect(imageBlock).toContain("min-w-full")
+    expect(imageBlock).toContain("min-h-full")
+
+    // PDF wrapper (in PdfCanvasView) must use the same pattern
+    expect(pdfCanvasViewSrc).toContain("inline-flex")
+    expect(pdfCanvasViewSrc).toContain("min-w-full")
+    expect(pdfCanvasViewSrc).toContain("min-h-full")
+  })
+
   test("PDF renders via canvas (PDF.js), not iframe/embed/placeholder (#934)", () => {
     const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
     const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)

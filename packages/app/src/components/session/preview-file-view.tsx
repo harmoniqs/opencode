@@ -314,7 +314,7 @@ export function PreviewFileView(props: {
 
             {/* Renderable binaries: image/PDF use data URI or blob URL */}
             <Match when={category() === "image" && (binaryData() || fileType() === "text")}>
-              <div class="min-h-full flex items-center justify-center p-4">
+              <div class="inline-flex items-center justify-center min-w-full min-h-full p-4">
                 <img
                   src={imageDataUrl()}
                   alt={props.filePath.split("/").pop() ?? ""}
