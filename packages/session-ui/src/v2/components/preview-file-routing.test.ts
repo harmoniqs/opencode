@@ -267,6 +267,17 @@ describe("toolbar layout (#934)", () => {
     expect(imageBlock).not.toContain("origin-top-left")
   })
 
+  test("image element overrides Tailwind preflight max-width and flex-shrink (#934)", () => {
+    const imageMatchStart = fileViewSrc.indexOf('category() === "image"')
+    const imageMatchEnd = fileViewSrc.indexOf("</Match>", imageMatchStart)
+    const imageBlock = fileViewSrc.slice(imageMatchStart, imageMatchEnd)
+
+    // base.css sets max-width: 100% on all img — max-w-none defeats it
+    expect(imageBlock).toContain("max-w-none")
+    // flex parent would shrink the img back — shrink-0 prevents it
+    expect(imageBlock).toContain("shrink-0")
+  })
+
   test("PDF uses iframe with blob URL, not embed (#934)", () => {
     // PDFs should render via <iframe> for better webview compatibility
     const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')

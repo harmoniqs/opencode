@@ -9,7 +9,8 @@ let embeddedUIPromise: Promise<Record<string, string> | null> | undefined
 export const UI_UPSTREAM = new URL("https://app.opencode.ai")
 
 export const csp = (hash = "") =>
-  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; object-src 'self' blob:; media-src 'self' data: blob:; connect-src * data: blob:`
+  // #934: frame-src 'self' blob: — allows <iframe src="blob:..."> for PDF preview in the Preview tab.
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; object-src 'self' blob:; frame-src 'self' blob:; media-src 'self' data: blob:; connect-src * data: blob:`
 export const DEFAULT_CSP = csp()
 
 export function themePreloadHash(body: string) {

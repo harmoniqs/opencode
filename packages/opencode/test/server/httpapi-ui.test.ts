@@ -355,6 +355,8 @@ describe("HttpApi UI fallback", () => {
       expect(csp).toContain("img-src 'self' data: https: blob:")
       expect(csp).toContain("media-src 'self' data: blob:")
       expect(csp).toContain("object-src 'self' blob:")
+      // #934: iframe blob: URLs for PDF preview need frame-src
+      expect(csp).toContain("frame-src 'self' blob:")
     }),
   )
 

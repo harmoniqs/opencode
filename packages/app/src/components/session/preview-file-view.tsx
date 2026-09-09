@@ -330,7 +330,7 @@ export function PreviewFileView(props: {
                 <img
                   src={imageDataUrl()}
                   alt={props.filePath.split("/").pop() ?? ""}
-                  class="object-contain"
+                  class="object-contain max-w-none shrink-0"
                   style={{ width: `${props.zoom()}%`, "image-rendering": "auto" }}
                 />
               </div>
