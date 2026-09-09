@@ -278,14 +278,16 @@ describe("toolbar layout (#934)", () => {
     expect(imageBlock).toContain("shrink-0")
   })
 
-  test("PDF uses iframe with blob URL, not embed (#934)", () => {
-    // PDFs should render via <iframe> for better webview compatibility
+  test("PDF renders a placeholder with open-in-editor action, not an iframe (#934)", () => {
     const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
     const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)
     const pdfBlock = fileViewSrc.slice(pdfMatchStart, pdfMatchEnd)
 
-    expect(pdfBlock).toContain("<iframe")
+    // Must NOT try to render a PDF inline (Chromium PDF viewer unavailable in VS Code webviews)
+    expect(pdfBlock).not.toContain("<iframe")
     expect(pdfBlock).not.toContain("<embed")
+    // Must have an open-in-editor action
+    expect(pdfBlock).toContain("open-file")
   })
 
   test("zoom floor is category-aware: 100% for image/pdf, 50% for markdown/text (#934)", () => {
@@ -295,13 +297,4 @@ describe("toolbar layout (#934)", () => {
     expect(fileViewSrc).toContain("zoomFloor")
   })
 
-  test("PDF iframe has zoom scaling via transform (#934)", () => {
-    const pdfMatchStart = fileViewSrc.indexOf('category() === "pdf"')
-    const pdfMatchEnd = fileViewSrc.indexOf("</Match>", pdfMatchStart)
-    const pdfBlock = fileViewSrc.slice(pdfMatchStart, pdfMatchEnd)
-
-    // PDF zoom uses transform: scale on a wrapper (iframe content can't be resized directly)
-    expect(pdfBlock).toContain("transform:")
-    expect(pdfBlock).toContain("props.zoom()")
-  })
 })

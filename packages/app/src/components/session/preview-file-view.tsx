@@ -147,32 +147,6 @@ export function PreviewFileView(props: {
     return `data:${data.mime};base64,${data.base64}`
   })
 
-  // Blob URL for PDFs (embed/object needs a real URL, not a data URI)
-  const [pdfBlobUrl, setPdfBlobUrl] = createSignal("")
-
-  createEffect(
-    on(binaryData, (data) => {
-      // Revoke previous blob URL
-      const prev = pdfBlobUrl()
-      if (prev) URL.revokeObjectURL(prev)
-      setPdfBlobUrl("")
-
-      if (!data || category() !== "pdf") return
-
-      // Decode base64 → Uint8Array → Blob → object URL
-      const raw = atob(data.base64)
-      const bytes = new Uint8Array(raw.length)
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
-      const blob = new Blob([bytes], { type: data.mime })
-      setPdfBlobUrl(URL.createObjectURL(blob))
-    }),
-  )
-
-  onCleanup(() => {
-    const url = pdfBlobUrl()
-    if (url) URL.revokeObjectURL(url)
-  })
-
   // ─── Save logic ────────────────────────────────────────────────────────
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -348,20 +322,28 @@ export function PreviewFileView(props: {
               </div>
             </Match>
 
-            <Match when={category() === "pdf" && (binaryData() || fileType() === "text")}>
-              <div
-                class="origin-top-left"
-                style={{
-                  transform: `scale(${props.zoom() / 100})`,
-                  width: `${10000 / props.zoom()}%`,
-                  height: `${10000 / props.zoom()}%`,
-                }}
-              >
-                <iframe
-                  src={pdfBlobUrl()}
-                  class="w-full h-full border-0"
-                  title={props.filePath.split("/").pop() ?? "PDF"}
-                />
+            <Match when={category() === "pdf"}>
+              <div class="h-full flex flex-col items-center justify-center gap-3 p-6">
+                <Icon name="open-file" class="w-10 h-10 text-text-faint" />
+                <p class="text-13-regular text-text-weak text-center">
+                  {props.filePath.split("/").pop()}
+                </p>
+                <button
+                  class="text-12-medium text-text-base px-3 py-1.5 rounded-md border border-border-base hover:bg-background-stronger transition-colors"
+                  onClick={() => {
+                    // Post open-file with path to the extension host, which
+                    // opens in a native VS Code tab via vscode.open (#934).
+                    window.parent.postMessage(
+                      { source: "amicode", kind: "open-file", path: props.filePath },
+                      "*",
+                    )
+                  }}
+                >
+                  Open in editor
+                </button>
+                <p class="text-11-regular text-text-faint text-center">
+                  PDF preview is not available in this context
+                </p>
               </div>
             </Match>
 
