@@ -81,7 +81,7 @@ export function NewSessionView(props: NewSessionViewProps) {
             {/* amicode: mark only — the AMICODE wordmark beneath it was dropped
                 as redundant. Accent via icon-icon-accent: yellow on dark,
                 neutral ink on light. */}
-            <MarkDetailed class="w-28" style={{ color: "var(--v2-icon-icon-accent)" }} />
+            <MarkDetailed class="w-28" style={{ color: "var(--ink-strong)" }} />
           </div>
           {/* amicode: getting-started block (tagline + how-it-works + starter chips) */}
           <AmicodeGettingStarted

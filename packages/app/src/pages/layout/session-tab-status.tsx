@@ -1,6 +1,6 @@
 // AMICODE: the per-session tab status dot.
 //
-// Four states: green (done, unread), grey (done, seen), yellow (running),
+// Four states: green (done, unread), grey (done, seen), a neutral PULSE (running),
 // red (error).
 
 export type SessionTabStatus = "idle" | "running" | "done" | "error"
@@ -23,7 +23,7 @@ export function sessionTabStatus(input: {
 
 const TONE: Record<SessionTabStatus, { color: string; label: string }> = {
   idle: { color: "var(--status-idle)", label: "Done" },
-  running: { color: "var(--status-running)", label: "Working" },
+  running: { color: "var(--v2-text-text-base)", label: "Working" },
   done: { color: "var(--status-done)", label: "Done — unread" },
   error: { color: "var(--status-error)", label: "Error" },
 }
@@ -36,6 +36,7 @@ export function StatusDot(props: { color: string; label: string; status?: string
     <span
       data-component="session-status-dot"
       data-status={props.status}
+      data-working={props.status === "running" ? "" : undefined}
       role="img"
       aria-label={props.label}
       title={props.label}

@@ -6,7 +6,7 @@ import { resolve } from "node:path"
 // dot #265). The running dot sits at the bottom of the last row — no position
 // transitions needed, content grows above it.
 
-const indexCss = readFileSync(resolve(__dirname, "../../../index.css"), "utf8")
+const indexCss = readFileSync(resolve(__dirname, "../../../design-system/components.css"), "utf8")
 const polishCss =
   readFileSync(resolve(__dirname, "../../../design-system/tokens.css"), "utf8") +
   readFileSync(resolve(__dirname, "../../../design-system/components.css"), "utf8")

@@ -40,6 +40,10 @@
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
 
+  /* ── measure ── the longest line of running prose (Content type), in
+     characters of the face; the craft floor's 65–75ch, at the top. */
+  --measure: 75ch;
+
   /* ── type ──
      Faces mirror harmoniqs.ai: DM Sans carries display AND body (the site
      aliases --font-display to --font-body), JuliaMono carries data, code and
@@ -61,33 +65,27 @@
 
   --border-width: 1px;
 
-  /* ── elevation ── the one float shadow, for transient overlays that sit above
-     the app ground (toasts, the solver-switch banner). Named so it stops being
-     re-invented as a scattered rgba() literal. */
-  --elev-float: 0 8px 24px rgb(0 0 0 / 0.35);
 }
 
 /* ── session status dots ──
-   Four states: green (done, unread), grey (done, seen), yellow (running),
-   red (error). Colour is never the only signal: each dot carries
-   role="img" + aria-label. */
+   Three hues for three settled states: green (done, unread), grey (done,
+   seen), red (error). RUNNING is motion, not a hue — a neutral pulse in the
+   scheme's text ink (Law 6's Working kind; components.css). Colour is never
+   the only signal: each dot carries role="img" + aria-label. */
 :root,
 [data-color-scheme="light"] {
   --status-idle: #a1a1aa;        /* grey — done and seen */
-  --status-running: #ca8a04;     /* yellow-600 — working */
   --status-done: #16a34a;        /* green-600 — done, unread */
   --status-error: #dc2626;       /* red-600 */
 }
 [data-color-scheme="dark"] {
   --status-idle: #71717a;        /* grey */
-  --status-running: #eab308;     /* yellow-500 */
   --status-done: #4ade80;        /* green-400 */
   --status-error: #ef4444;       /* red-500 */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-color-scheme="light"]) {
     --status-idle: #71717a;
-    --status-running: #eab308;
     --status-done: #4ade80;
     --status-error: #ef4444;
   }
@@ -116,6 +114,27 @@
     --accent-fill-soft: color-mix(in srgb, var(--accent) 10%, transparent);
     --accent-fill-hover: color-mix(in srgb, var(--accent) 16%, transparent);
     --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--v2-border-border-base));
+  }
+}
+
+/* ── strong ink — per scheme ──
+   The scheme's strongest neutral: the focus ring, every pointer (the tour
+   spotlight), and the brand mark. Ink on light, cream on dark — never the
+   accent, because yellow prompts and never points (Law 1). --focus-ring is
+   the value-identical alias Law 8 admits. */
+:root,
+[data-color-scheme="light"] {
+  --ink-strong: #000000;
+  --focus-ring: var(--ink-strong);
+}
+[data-color-scheme="dark"] {
+  --ink-strong: #EFEDCD;
+  --focus-ring: var(--ink-strong);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) {
+    --ink-strong: #EFEDCD;
+    --focus-ring: var(--ink-strong);
   }
 }
 
@@ -183,4 +202,67 @@
     --motion-enter-rise: 0px;
     --motion-enter-blur: 0px;
   }
+}
+
+/* ── faces ── a face declaration is a token definition (Law 9); moved here
+   from index.css so the sheet holds every value the interface consumes. */
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  src: url("/assets/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* amicode: default code/monospace typeface — full JuliaMono glyph set
+   (Greek + math operators) for Julia source */
+@font-face {
+  font-family: "JuliaMono";
+  src: url("/assets/JuliaMono-Regular.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* amicode: the text/UI face, matching harmoniqs.ai. The site loads DM Sans via
+   next/font with the opsz axis and aliases --font-display to it, so one face
+   carries both display and body there; we do the same here. Variable (opsz +
+   wght), OFL, self-hosted — no CDN, so it works offline in the desktop app.
+   NOTE: this is a latin subset (222 glyphs); Inter stays bundled below as the
+   fallback so non-latin UI locales still render. */
+@font-face {
+  font-family: "DM Sans";
+  src: url("/assets/DMSans-Variable.woff2") format("woff2-variations");
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+/* amicode: brand wordmark typeface (AMICODE logo).
+   LICENSE-PENDING: "Aero" by Nirmal Biswas (Picatype) is donationware — usage
+   requires a USD 25+ payment to nirmalbiswas@gmail.com. Bundled for PREVIEW ONLY
+   while the wordmark face is being chosen; MUST be licensed (or replaced) before
+   any release ships. Racing Sans One (OFL, commercial-clean) is kept as the
+   fallback / prior candidate. */
+@font-face {
+  font-family: "Aero";
+  src: url("/assets/Aero-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Racing Sans One";
+  src: url("/assets/RacingSansOne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
