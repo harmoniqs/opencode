@@ -1,7 +1,8 @@
-import { createSignal, onCleanup, onMount } from "solid-js"
+import { batch, createSignal, onCleanup, onMount } from "solid-js"
 import { useSettings } from "@/context/settings"
 import { inAmicode } from "@/utils/amicode-bridge"
 import { applyRebuildFlagMutation, rebuildFlagMutation } from "./developer-tools-rebuild-flags"
+import { reduceDevToolsRequest } from "./developer-tools-request-state"
 
 export interface DevToolsStatus {
   opencodeValid: boolean
@@ -68,27 +69,31 @@ export function createDeveloperToolsController() {
   const handleMessage = (event: MessageEvent) => {
     const d = event.data
     if (d && d.source === "amicode" && d.kind === "dev-tools-status") {
-      setStatus({
-        opencodeValid: d.opencodeValid ?? true,
-        opencodeError: d.opencodeError,
-        amicodeValid: d.amicodeValid ?? true,
-        amicodeError: d.amicodeError,
-        serverRestarted: d.serverRestarted ?? false,
-        reloadNeeded: d.reloadNeeded ?? false,
-        building: d.building ?? false,
-        buildError: d.buildError,
+      const next = reduceDevToolsRequest(
+        { status: status(), pending: pending() },
+        {
+          type: "status-received",
+          status: {
+            opencodeValid: d.opencodeValid ?? true,
+            opencodeError: d.opencodeError,
+            amicodeValid: d.amicodeValid ?? true,
+            amicodeError: d.amicodeError,
+            serverRestarted: d.serverRestarted ?? false,
+            reloadNeeded: d.reloadNeeded ?? false,
+            building: d.building ?? false,
+            buildError: d.buildError,
+          },
+        },
+      )
+      batch(() => {
+        setStatus(next.status)
+        setPending(next.pending)
       })
-      setPending(false)
 
       // When a reload is needed (extension was rebuilt), set a flag so the app
       // reopens settings at the developer tools section after the reload.
       if (d.reloadNeeded) {
-        try {
-          localStorage.setItem("amicode:devtools-reopen", "1")
-          localStorage.setItem("amicode:devtools-rebuilt", "1")
-        } catch {
-          // localStorage unavailable — non-critical
-        }
+        applyRebuildFlagMutation({ set: { reopen: "1", rebuilt: "1" }, clear: [] })
       }
     }
 
@@ -138,8 +143,12 @@ export function createDeveloperToolsController() {
 
   const sendUpdate = () => {
     if (!inAmicode()) return
-    setPending(true)
-    setStatus(undefined)
+    // Keep the stale status visible (dimmed by the UI via `pending`) instead
+    // of blanking it — clearing it here is what caused the validation
+    // flicker (#940): every path edit made the error/success indicator
+    // vanish and then snap back once the reply arrived.
+    const next = reduceDevToolsRequest({ status: status(), pending: pending() }, { type: "request-sent" })
+    setPending(next.pending)
     window.parent.postMessage(
       {
         source: "amicode",

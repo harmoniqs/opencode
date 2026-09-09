@@ -54,6 +54,7 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
   const building = () => props.controller.status()?.building ?? false
   const reloadNeeded = () => props.controller.status()?.reloadNeeded ?? false
   const isRebuilding = () => props.controller.rebuildState() === "rebuilding"
+  const validating = () => props.controller.pending()
 
   return (
     <SettingsListV2>
@@ -135,7 +136,12 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
             <>
               {language.t("settings.general.row.opencodePath.description")}
               <Show when={opencodeError()}>
-                <span class="settings-v2-field-error">{opencodeError()}</span>
+                <span class="settings-v2-field-error" classList={{ "settings-v2-field-stale": validating() }}>
+                  {opencodeError()}
+                </span>
+              </Show>
+              <Show when={validating()}>
+                <span class="settings-v2-field-info">Validating…</span>
               </Show>
             </>
           }
@@ -169,7 +175,9 @@ const DeveloperToolsContent: Component<{ controller: DeveloperToolsController }>
                 </span>
               </Show>
               <Show when={amicodeError()}>
-                <span class="settings-v2-field-error">{amicodeError()}</span>
+                <span class="settings-v2-field-error" classList={{ "settings-v2-field-stale": validating() }}>
+                  {amicodeError()}
+                </span>
               </Show>
               <Show when={reloadNeeded()}>
                 <span class="settings-v2-field-warning">
