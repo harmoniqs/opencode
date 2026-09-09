@@ -57,7 +57,7 @@ export function NewSessionView(props: {
                 takes the accent via icon-icon-accent, which is yellow on dark
                 and neutral ink on light (yellow is 1.27:1 on white). */}
             <div class="flex justify-center">
-              <MarkDetailed class="w-24 h-auto" style={{ color: "var(--v2-icon-icon-accent)" }} />
+              <MarkDetailed class="w-24 h-auto" style={{ color: "var(--ink-strong)" }} />
             </div>
             <div class="mt-8 flex flex-col gap-4">
               {/* amicode/opencode#117: the bug-report dock rides the draft

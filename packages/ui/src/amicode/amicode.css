@@ -1438,31 +1438,17 @@
   gap: 8px;
 }
 
-/* ---- BETA channel tag (titlebar) ---------------------------------------- */
-/* Brand gold rather than the generic interactive blue, so the pre-release
-   marker reads as part of the Amico identity. The amber scale has no
-   theme-switched alias, so both schemes are spelled out: step 11 is the
-   readable text step on each ground, step 9 tints the pill. */
-/* Gold is dead in this palette and the amber pill measured 3.99:1 besides. The
-   BETA pill is now the brand chip: yellow fill, ink label, ink edge — the same
-   grammar as DEV, so the two channels read as one family. */
-[data-slot="amicode-beta-tag"] {
-  color: var(--accent-ink, #000);
-  background: var(--accent);
-  border: var(--border-width, 1px) solid var(--accent-edge-ink, #000);
-}
-[data-color-scheme="dark"] [data-slot="amicode-beta-tag"] {
-  color: var(--amber-dark-11);
-  background: color-mix(in srgb, var(--amber-dark-9) 18%, transparent);
-}
-
-/* ---- DEV channel tag (titlebar) ----------------------------------------- */
-/* Green pill signals developer mode is active — visually distinct from the
-   amber BETA so you never confuse a dev build with a release. Uses the
-   semantic success scale (auto light/dark via theme.css). */
+/* ---- Channel tags: DEV / BETA (titlebar) -------------------------------- */
+/* A channel is a status, not the next action, so the chip is a neutral quiet
+   control — base ink on a strong hairline, no fill — in both schemes
+   (DESIGN.md Law 1: yellow prompts, it never points; Law 3: hairline only).
+   The DEV button (local development, toggles the debug panel) wears the same
+   skin so both channels read as one family; the word carries the distinction. */
+[data-slot="amicode-beta-tag"],
 [data-slot="amicode-dev-tag"] {
-  color: var(--text-on-success-base);
-  background: color-mix(in srgb, var(--surface-success-strong) 16%, transparent);
+  color: var(--v2-text-text-base);
+  background: transparent;
+  border: var(--border-width) solid var(--v2-border-border-strong);
 }
 
 /* ---- Developer Tools rebuild status + buttons ─────────────────────────── */
