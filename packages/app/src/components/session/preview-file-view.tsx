@@ -203,6 +203,14 @@ export function PreviewFileView(props: {
 
   const showModeToggle = () => category() === "markdown"
 
+  // Zoom is disabled in edit mode — gray out the pill
+  const isEditing = () => {
+    const cat = category()
+    if (cat === "markdown") return props.fileState.mode === "edit"
+    if (cat === "image" || cat === "pdf") return false
+    return true // text/code files are always in edit mode
+  }
+
   // Image/PDF: zoom floor at 100% (never shrink below panel fit).
   // Markdown/text: floor stays at the global 50%.
   const zoomFloor = () => {
@@ -297,7 +305,10 @@ export function PreviewFileView(props: {
       {/* Action bar: zoom controls + mode toggle — left-aligned */}
       <div class="shrink-0 flex items-center gap-2 px-3 py-1 border-b border-border-weaker-base">
         {/* Zoom controls: [editable %] [reset] [+ over -] */}
-        <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden">
+        <div
+          class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden"
+          classList={{ "opacity-40 pointer-events-none": isEditing() }}
+        >
           {/* Editable zoom percentage input */}
           <input
             type="text"
@@ -442,7 +453,6 @@ export function PreviewFileView(props: {
                     filePath={props.filePath}
                     onChange={handleEdit}
                     onSave={handleImmediateSave}
-                    zoom={props.zoom}
                   />
                 }
               >
@@ -462,7 +472,6 @@ export function PreviewFileView(props: {
                 filePath={props.filePath}
                 onChange={handleEdit}
                 onSave={handleImmediateSave}
-                zoom={props.zoom}
               />
             </Match>
           </Switch>

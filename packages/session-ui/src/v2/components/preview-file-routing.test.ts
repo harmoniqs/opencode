@@ -446,20 +446,20 @@ describe("editor zoom via CM6 font-size (#937)", () => {
     expect(editorSrc).toContain("reconfigure")
   })
 
-  test("both PreviewEditor call sites pass zoom prop", () => {
+  test("PreviewEditor call sites do NOT pass zoom prop (zoom disabled in edit mode)", () => {
     // Markdown edit mode (inside the <Match when=... "markdown"> block)
     const mdMatchTag = 'Match when={category() === "markdown"}'
     const mdStart = fileViewSrc.indexOf(mdMatchTag)
     const mdEnd = fileViewSrc.indexOf("</Match>", mdStart)
     const markdownMatch = fileViewSrc.slice(mdStart, mdEnd)
-    expect(markdownMatch).toContain("zoom={")
+    expect(markdownMatch).not.toContain("zoom={")
 
     // Text/code file rendering
     const txtMatchTag = 'Match when={category() === "text"}'
     const txtStart = fileViewSrc.indexOf(txtMatchTag)
     const txtEnd = fileViewSrc.indexOf("</Match>", txtStart)
     const textMatch = fileViewSrc.slice(txtStart, txtEnd)
-    expect(textMatch).toContain("zoom={")
+    expect(textMatch).not.toContain("zoom={")
   })
 })
 
@@ -746,5 +746,85 @@ describe("no autosave — save only on Cmd+S (#937)", () => {
 
   test("handleImmediateSave still exists for Cmd+S", () => {
     expect(fileViewSrc).toContain("handleImmediateSave")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Preview tab: zoom pill grayed out in edit mode (#937)
+// ---------------------------------------------------------------------------
+
+describe("preview tab: zoom pill grayed out in edit mode (#937)", () => {
+  const fileViewSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
+    "utf8",
+  )
+
+  test("isEditing signal exists with correct category logic", () => {
+    expect(fileViewSrc).toContain("isEditing")
+    // Must check for markdown edit mode
+    expect(fileViewSrc).toMatch(/category\(\)[\s\S]*markdown[\s\S]*mode.*edit|mode.*edit[\s\S]*markdown/)
+    // Text/code should return true (always editing)
+    expect(fileViewSrc).toMatch(/return true/)
+  })
+
+  test("zoom pill has conditional opacity and pointer-events for edit mode", () => {
+    // The zoom controls container must apply disabled styling when editing
+    expect(fileViewSrc).toContain("isEditing()")
+    expect(fileViewSrc).toContain("opacity-40")
+    expect(fileViewSrc).toContain("pointer-events-none")
+  })
+
+  test("PreviewEditor call sites do not pass zoom prop", () => {
+    // Extract both PreviewEditor instances
+    const editorInstances = fileViewSrc.split("<PreviewEditor").slice(1)
+    expect(editorInstances.length).toBeGreaterThanOrEqual(2)
+    for (const instance of editorInstances) {
+      const closingTag = instance.indexOf("/>")
+      const propsBlock = instance.slice(0, closingTag)
+      expect(propsBlock).not.toContain("zoom={")
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Files Changed tab: floating zoom overlay in preview mode (#937)
+// ---------------------------------------------------------------------------
+
+describe("files changed tab: floating zoom overlay in preview mode (#937)", () => {
+  const reviewSrc = fs.readFileSync(
+    path.resolve(__dirname, "./session-review-file-preview-v2.tsx"),
+    "utf8",
+  )
+
+  test("zoom overlay appears only in markdown preview mode (isPreviewMd)", () => {
+    // The zoom overlay must be gated by isPreviewMd()
+    // Find a zoom-related block near isPreviewMd
+    const zoomIdx = reviewSrc.indexOf('"Zoom in"')
+    expect(zoomIdx).toBeGreaterThan(-1)
+    // The zoom controls must be inside a Show gated on isPreviewMd
+    const regionBefore = reviewSrc.slice(Math.max(0, zoomIdx - 5000), zoomIdx)
+    expect(regionBefore).toContain("isPreviewMd()")
+  })
+
+  test("zoom overlay has absolute positioning (floating)", () => {
+    // The zoom overlay container between isPreviewMd and the zoom buttons must
+    // use absolute positioning to float over the content
+    const previewStart = reviewSrc.indexOf("isPreviewMd()")
+    const zoomIdx = reviewSrc.indexOf('"Zoom in"')
+    const overlayRegion = reviewSrc.slice(previewStart, zoomIdx)
+    expect(overlayRegion).toContain('"absolute"')
+    expect(overlayRegion).toContain('"z-index"')
+  })
+
+  test("zoom state is managed locally (createSignal for zoom)", () => {
+    expect(reviewSrc).toMatch(/createSignal\(100\)/)
+  })
+
+  test("markdown preview applies zoom transform", () => {
+    // The markdown preview div should have a scale transform
+    const mdPreviewIdx = reviewSrc.indexOf("session-review-v2-markdown-preview")
+    expect(mdPreviewIdx).toBeGreaterThan(-1)
+    const mdPreviewBlock = reviewSrc.slice(mdPreviewIdx, mdPreviewIdx + 500)
+    expect(mdPreviewBlock).toMatch(/scale|zoom/)
   })
 })
