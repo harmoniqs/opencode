@@ -11,6 +11,7 @@ describe("file path helpers", () => {
     expect(path.tab("src/app.ts")).toBe("file://src/app.ts")
     expect(path.pathFromTab("file://src/app.ts")).toBe("src/app.ts")
     expect(path.pathFromTab("other://src/app.ts")).toBeUndefined()
+    expect(path.pathFromTab(undefined as never)).toBeUndefined()
   })
 
   test("normalizes Windows absolute paths with mixed separators", () => {

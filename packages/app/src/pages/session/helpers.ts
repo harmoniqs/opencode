@@ -16,7 +16,7 @@ type Tabs = {
 type TabsInput = {
   tabs: Accessor<Tabs>
   pathFromTab: (tab: string) => string | undefined
-  normalizeTab: (tab: string) => string
+  normalizeTab: (tab: string) => string | undefined
   review?: Accessor<boolean>
   hasReview?: Accessor<boolean>
   /** the Vault tab (amicode) — a named surface like "context", never a file */
@@ -25,6 +25,23 @@ type TabsInput = {
 }
 
 export const getSessionKey = (dir: string | undefined, id: string | undefined) => `${dir ?? ""}${id ? `/${id}` : ""}`
+
+export function normalizeSessionTab(tab: unknown, normalizeFileTab: (tab: string) => string) {
+  if (typeof tab !== "string") return
+  if (!tab.startsWith("file://")) return tab
+  return normalizeFileTab(tab)
+}
+
+export function normalizeSessionTabs(list: unknown, normalizeTab: (tab: unknown) => string | undefined) {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  return list.flatMap((item) => {
+    const value = normalizeTab(item)
+    if (value === undefined || seen.has(value)) return []
+    seen.add(value)
+    return [value]
+  })
+}
 
 export function shouldShowFileTree(input: { visible: boolean; opened: boolean }) {
   return input.opened && input.visible
@@ -49,14 +66,14 @@ export const createSessionTabs = (input: TabsInput) => {
   const panelTabs = createMemo(
     () => {
       const seen = new Set<string>()
-      return input
-        .tabs()
+      return input.tabs()
         .all()
+        .filter((tab): tab is string => typeof tab === "string")
         .flatMap((tab) => {
           if (tab === "context" || tab === "review" || tab === "vault" || tab === "home" || tab === SESSION_PREVIEW_TAB || tab === "pulseInspector") return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
-          if (seen.has(value)) return []
+          if (value === undefined || seen.has(value)) return []
           seen.add(value)
           return [value]
         })
@@ -68,7 +85,8 @@ export const createSessionTabs = (input: TabsInput) => {
     equals: same,
   })
   const activeTab = createMemo(() => {
-    const active = input.tabs().active()
+    const activeValue = input.tabs().active()
+    const active = typeof activeValue === "string" ? activeValue : undefined
     if (active === "home") return active
     if (active === "context") return active
     if (active === "pulseInspector") return active
@@ -76,7 +94,10 @@ export const createSessionTabs = (input: TabsInput) => {
     if (active === "vault" && vaultOpen()) return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
-    if (active && input.pathFromTab(active)) return input.normalizeTab(active)
+    if (typeof active === "string" && input.pathFromTab(active)) {
+      const normalized = input.normalizeTab(active)
+      if (normalized !== undefined) return normalized
+    }
 
     const first = openedTabs()[0]
     if (first) return first

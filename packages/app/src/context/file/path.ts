@@ -136,6 +136,7 @@ export function createPathHelpers(scope: () => string) {
   }
 
   const pathFromTab = (tabValue: string) => {
+    if (typeof tabValue !== "string") return
     if (!tabValue.startsWith("file://")) return
     return normalize(tabValue)
   }
