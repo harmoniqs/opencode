@@ -267,18 +267,23 @@ function ProviderPickerV2(props: {
     active: undefined as string | undefined,
     connecting: undefined as string | undefined,
   })
-  const featured = ["opencode", "opencode-go", "anthropic", "openai", "google", "openrouter", "vercel", HARMONIQS_PROVIDER_ID]
+  const featured = [
+    "opencode",
+    "opencode-go",
+    "anthropic",
+    "openai",
+    "google",
+    "openrouter",
+    "vercel",
+    HARMONIQS_PROVIDER_ID,
+  ]
   const custom = () => ({ id: CUSTOM_ID, name: language.t("dialog.provider.custom.label") })
   const harmoniqs = () => ({ id: HARMONIQS_PROVIDER_ID, name: HARMONIQS_PROVIDER_NAME })
   const all = createMemo(() => {
     language.locale()
     const query = store.filter.trim().toLowerCase()
     const providerMap = providers.all()
-    const values = [
-      custom(),
-      ...(shouldShowHarmoniqsEntry(providerMap) ? [harmoniqs()] : []),
-      ...providerMap.values(),
-    ]
+    const values = [custom(), ...(shouldShowHarmoniqsEntry(providerMap) ? [harmoniqs()] : []), ...providerMap.values()]
     if (!query) return values
     return values.filter((provider) => `${provider.id} ${provider.name}`.toLowerCase().includes(query))
   })

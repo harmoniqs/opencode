@@ -29,7 +29,7 @@ describe("shouldShowHarmoniqsEntry", () => {
     unframe()
   })
 
-  test("hidden when a real \"harmoniqs\" catalog entry already exists — the stub never shadows it", () => {
+  test('hidden when a real "harmoniqs" catalog entry already exists — the stub never shadows it', () => {
     const unframe = frame()
     expect(shouldShowHarmoniqsEntry(new Set([HARMONIQS_PROVIDER_ID]))).toBe(false)
     unframe()
