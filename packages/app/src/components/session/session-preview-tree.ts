@@ -9,6 +9,7 @@ export type PreviewSplit = {
   kind: "split"
   id: string
   direction: "horizontal" | "vertical"
+  ratio: number
   first: PreviewPane
   second: PreviewPane
 }
@@ -22,6 +23,8 @@ export type PreviewWorkspace = {
 }
 
 export type PreviewDropPosition = "center" | "left" | "right" | "top" | "bottom"
+
+export const PREVIEW_LEAF_MIN_SIZE = 150
 
 export const createPreviewWorkspace = (paths: readonly string[] = []): PreviewWorkspace => ({
   tree: {
@@ -47,6 +50,13 @@ export const previewLeafByID = (tree: PreviewPane, leafID: string): PreviewLeaf 
 export const previewLeafContaining = (tree: PreviewPane, path: string): PreviewLeaf | undefined =>
   previewLeaves(tree).find((leaf) => leaf.tabs.includes(path))
 
+export const previewMinimumExtent = (tree: PreviewPane, axis: "horizontal" | "vertical"): number => {
+  if (tree.kind === "leaf") return PREVIEW_LEAF_MIN_SIZE
+  const first = previewMinimumExtent(tree.first, axis)
+  const second = previewMinimumExtent(tree.second, axis)
+  return tree.direction === axis ? first + second : Math.max(first, second)
+}
+
 const mapLeaf = (tree: PreviewPane, leafID: string, map: (leaf: PreviewLeaf) => PreviewPane): PreviewPane => {
   if (tree.kind === "leaf") return tree.id === leafID ? map(tree) : tree
   return {
@@ -55,6 +65,21 @@ const mapLeaf = (tree: PreviewPane, leafID: string, map: (leaf: PreviewLeaf) => 
     second: mapLeaf(tree.second, leafID, map),
   }
 }
+
+const mapSplit = (tree: PreviewPane, splitID: string, map: (split: PreviewSplit) => PreviewSplit): PreviewPane => {
+  if (tree.kind === "leaf") return tree
+  return {
+    ...tree,
+    ...(tree.id === splitID ? map(tree) : {}),
+    first: mapSplit(tree.first, splitID, map),
+    second: mapSplit(tree.second, splitID, map),
+  }
+}
+
+export const resizePreviewSplit = (workspace: PreviewWorkspace, splitID: string, ratio: number): PreviewWorkspace => ({
+  ...workspace,
+  tree: mapSplit(workspace.tree, splitID, (split) => ({ ...split, ratio: Math.min(Math.max(ratio, 0), 1) })),
+})
 
 const leafWithRemovedPath = (leaf: PreviewLeaf, path: string): PreviewLeaf => {
   const index = leaf.tabs.indexOf(path)
@@ -177,6 +202,7 @@ export const movePreviewTab = (
     kind: "split",
     id: `split-${workspace.nextPaneID}`,
     direction,
+    ratio: 0.5,
     first: newPaneBeforeTarget ? newLeaf : targetAfterRemoval,
     second: newPaneBeforeTarget ? targetAfterRemoval : newLeaf,
   }

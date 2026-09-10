@@ -5,6 +5,7 @@
 
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
+import { Portal } from "solid-js/web"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { PreviewFileView } from "./preview-file-view"
@@ -15,12 +16,15 @@ import {
   openPreviewPath,
   previewLeafContaining,
   previewLeaves,
+  previewMinimumExtent,
   previewTabCount,
   removePreviewPath,
+  resizePreviewSplit,
   selectPreviewPath,
   type PreviewDropPosition,
   type PreviewLeaf,
   type PreviewPane,
+  type PreviewSplit,
 } from "./session-preview-tree"
 
 const MAX_PREVIEW_TABS = 8
@@ -48,30 +52,10 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   const [previewDrag, setPreviewDrag] = createSignal<PreviewDrag | null>(null)
 
   const leafElements = new Map<string, HTMLElement>()
-  const hostSlots = new Map<string, HTMLDivElement>()
-  const rendererHosts = new Map<string, HTMLDivElement>()
+  const [hostMounts, setHostMounts] = createStore<Record<string, HTMLDivElement | undefined>>({})
   let stopPreviewDrag: (() => void) | undefined
 
   const openedPaths = () => previewLeaves(workspace().tree).flatMap((leaf) => leaf.tabs)
-
-  const relocateRendererHosts = () => {
-    const currentPaths = new Set(openedPaths())
-    for (const path of rendererHosts.keys()) if (!currentPaths.has(path)) rendererHosts.delete(path)
-
-    for (const leaf of previewLeaves(workspace().tree)) {
-      const slot = hostSlots.get(leaf.id)
-      if (!slot?.isConnected) continue
-      for (const path of leaf.tabs) {
-        const host = rendererHosts.get(path)
-        if (host && host.parentElement !== slot) slot.appendChild(host)
-      }
-    }
-  }
-
-  createEffect(() => {
-    workspace()
-    queueMicrotask(relocateRendererHosts)
-  })
 
   const openPath = (path: string) => {
     const current = workspace()
@@ -109,6 +93,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   const removePath = (path: string) => {
     setWorkspace((current) => removePreviewPath(current, path))
     setDirtyPaths(path, false)
+    setHostMounts(path, undefined)
   }
 
   const closePath = (path: string) => {
@@ -192,12 +177,66 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
 
   const isSelected = (path: string) => previewLeafContaining(workspace().tree, path)?.selectedPath === path
 
+  const startDividerResize = (event: PointerEvent, split: PreviewSplit) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const divider = event.currentTarget as HTMLElement
+    const container = divider.parentElement
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const axis = split.direction
+    const extent = axis === "horizontal" ? rect.width : rect.height
+    const start = axis === "horizontal" ? rect.left : rect.top
+    const firstMinimum = previewMinimumExtent(split.first, axis)
+    const secondMinimum = previewMinimumExtent(split.second, axis)
+    if (extent <= 0 || firstMinimum + secondMinimum > extent) return
+
+    divider.setPointerCapture?.(event.pointerId)
+    const stop = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", stop)
+      if (divider.hasPointerCapture?.(event.pointerId)) divider.releasePointerCapture(event.pointerId)
+    }
+    const onMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault()
+      const coordinate = axis === "horizontal" ? moveEvent.clientX : moveEvent.clientY
+      const ratio = Math.min(Math.max((coordinate - start) / extent, firstMinimum / extent), 1 - secondMinimum / extent)
+      setWorkspace((current) => resizePreviewSplit(current, split.id, ratio))
+    }
+    const onUp = () => stop()
+
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", stop)
+  }
+
+  const paneBranchStyle = (pane: PreviewPane, ratio: number) => ({
+    flex: `${ratio} 1 0`,
+    "--preview-branch-min-width": `${previewMinimumExtent(pane, "horizontal")}px`,
+    "--preview-branch-min-height": `${previewMinimumExtent(pane, "vertical")}px`,
+  })
+
   const renderPane = (pane: PreviewPane): JSX.Element => {
     if (pane.kind === "leaf") return renderLeaf(pane)
     return (
       <div data-preview-split data-direction={pane.direction} class="preview-pane-split">
-        {renderPane(pane.first)}
-        {renderPane(pane.second)}
+        <div class="preview-pane-branch" style={paneBranchStyle(pane.first, pane.ratio)}>
+          {renderPane(pane.first)}
+        </div>
+        <div
+          role="separator"
+          aria-label="Resize Preview panes"
+          aria-orientation={pane.direction === "horizontal" ? "vertical" : "horizontal"}
+          tabIndex={0}
+          data-preview-divider={pane.id}
+          data-direction={pane.direction}
+          class="preview-pane-divider"
+          onPointerDown={(event) => startDividerResize(event, pane)}
+        />
+        <div class="preview-pane-branch" style={paneBranchStyle(pane.second, 1 - pane.ratio)}>
+          {renderPane(pane.second)}
+        </div>
       </div>
     )
   }
@@ -248,10 +287,12 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
           </Tabs.List>
         </Tabs>
 
-        <div ref={(element) => {
-          hostSlots.set(leaf.id, element)
-          queueMicrotask(relocateRendererHosts)
-        }} class="preview-pane-content" />
+        <div
+          ref={(element) => {
+            for (const path of leaf.tabs) setHostMounts(path, element)
+          }}
+          class="preview-pane-content"
+        />
 
         <Show when={activeDrop()?.leafID === leaf.id && activeDrop()?.position !== "center"}>
           <div data-preview-drop-preview={activeDrop()!.position} class="preview-pane-drop-preview" />
@@ -298,7 +339,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
         )}
       </Show>
 
-      <div class="flex-1 min-h-0 overflow-auto">
+      <div data-preview-workspace class="flex-1 min-h-0 overflow-auto">
         <Show
           when={previewTabCount(workspace().tree) > 0}
           fallback={
@@ -310,37 +351,37 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
         >
           <div class="preview-workspace-canvas" data-preview-dragging={previewDrag()?.path}>
             <For each={[workspace().tree]}>{renderPane}</For>
-            <div class="hidden">
-              <For each={openedPaths()}>
-                {(path) => (
-                  <div
-                    ref={(element) => {
-                      rendererHosts.set(path, element)
-                      queueMicrotask(relocateRendererHosts)
-                    }}
-                    data-preview-host={path}
-                    class="h-full min-h-0"
-                    classList={{ hidden: !isSelected(path) }}
-                    aria-hidden={!isSelected(path)}
-                    inert={!isSelected(path)}
-                  >
-                    <PreviewFileView
-                      filePath={path}
-                      onDirtyChange={(dirty) => setDirtyPaths(path, dirty)}
-                      saveRequest={() => saveRequests[path] ?? 0}
-                      onSaveComplete={() => {
-                        removePath(path)
-                        setClosingPath(null)
-                      }}
-                      zoom={zoom}
-                      zoomIn={zoomIn}
-                      zoomOut={zoomOut}
-                      onZoomChange={onZoomChange}
-                    />
-                  </div>
-                )}
-              </For>
-            </div>
+            <For each={openedPaths()}>
+              {(path) => (
+                <Show when={hostMounts[path]}>
+                  {(mount) => (
+                    <Portal mount={mount()} ref={(container) => container.classList.add("preview-pane-renderer-mount")}>
+                      <div
+                        data-preview-host={path}
+                        class="h-full min-h-0"
+                        classList={{ hidden: !isSelected(path) }}
+                        aria-hidden={!isSelected(path)}
+                        inert={!isSelected(path)}
+                      >
+                        <PreviewFileView
+                          filePath={path}
+                          onDirtyChange={(dirty) => setDirtyPaths(path, dirty)}
+                          saveRequest={() => saveRequests[path] ?? 0}
+                          onSaveComplete={() => {
+                            removePath(path)
+                            setClosingPath(null)
+                          }}
+                          zoom={zoom}
+                          zoomIn={zoomIn}
+                          zoomOut={zoomOut}
+                          onZoomChange={onZoomChange}
+                        />
+                      </div>
+                    </Portal>
+                  )}
+                </Show>
+              )}
+            </For>
           </div>
         </Show>
       </div>
