@@ -177,6 +177,19 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   flex: 0 0 auto;
   height: auto;
 }
+#review-panel [data-preview-controls] {
+  top: var(--space-2);
+  right: var(--space-3);
+  gap: var(--space-2);
+}
+#review-panel .preview-pane-leaf [data-preview-controls] {
+  top: var(--space-1);
+  right: var(--space-1);
+  gap: var(--space-1);
+  max-width: calc(100% - var(--space-2));
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 #review-panel .preview-pane-content {
   position: relative;
   display: flex;

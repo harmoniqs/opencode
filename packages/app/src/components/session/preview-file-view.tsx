@@ -360,15 +360,13 @@ export function PreviewFileView(props: {
     >
       {/* Floating controls — top-right overlay */}
       <div
+        data-preview-controls
         onMouseEnter={handleControlsMouseEnter}
         onMouseLeave={handleControlsMouseLeave}
         style={{
           position: "absolute",
-          top: "8px",
-          right: "14px",
           "z-index": "20",
           display: "flex",
-          gap: "6px",
           "align-items": "center",
           opacity: showControls() ? "1" : "0",
           "pointer-events": showControls() ? "auto" : "none",
