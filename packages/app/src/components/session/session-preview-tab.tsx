@@ -101,7 +101,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       if (!(event.target instanceof Node)) return
       for (const [leafID, element] of leafElements) {
         if (!element.contains(event.target)) continue
-        setWorkspace((current) => ({ ...current, focusedLeafID: leafID }))
+        setWorkspace((current) => current.focusedLeafID === leafID ? current : { ...current, focusedLeafID: leafID })
         return
       }
     }

@@ -1,6 +1,8 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { expect, test } from "@playwright/test"
+import { expect, test, type Locator } from "@playwright/test"
 import { mockOpenCodeServer } from "../utils/mock-server"
+import { createPdfFixture } from "../utils/pdf-fixture"
+import { dragSelectText } from "../utils/text-selection"
 import { expectSessionTitle } from "../utils/waits"
 
 const directory = "C:/OpenCode/PreviewBaselineContract"
@@ -16,6 +18,13 @@ const markdownContent = ["# Baseline Preview", "", "The renderer must keep focus
   .join("\n\n")
 const secondMarkdownContent = "# Second Preview\n\nThe second renderer stays alive."
 const imageContent = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR+UgAAAABJRU5ErkJggg=="
+const pdfFile = "papers/selectable.pdf"
+const pdfText = "Amicode selectable PDF text"
+const pdfContent = createPdfFixture([pdfText])
+const noTextPdfFile = "papers/no-selectable-text.pdf"
+const noTextPdfContent = createPdfFixture([""])
+const partialTextPdfFile = "papers/partial-selectable-text.pdf"
+const partialTextPdfContent = createPdfFixture([pdfText, ""])
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -61,6 +70,121 @@ test("allows image previews to zoom to 1000%", async ({ page }) => {
   await zoom.fill("1000")
   await zoom.press("Enter")
   await expect(zoom).toHaveValue("1000%")
+})
+
+test("lets a researcher select and copy text from a PDF Preview", async ({ page }) => {
+  await openPreview(page)
+
+  await page.evaluate((src) => {
+    const writes: string[] = []
+    ;(window as Window & { pdfClipboardWrites?: string[] }).pdfClipboardWrites = writes
+    window.addEventListener("message", (event) => {
+      const data = event.data as { source?: string; kind?: string; text?: string } | undefined
+      if (data?.source === "amicode" && data.kind === "clipboard-write" && typeof data.text === "string") {
+        writes.push(data.text)
+      }
+    })
+    const iframe = document.createElement("iframe")
+    iframe.id = "pdf-preview-webview"
+    iframe.src = src
+    iframe.style.cssText = "position: fixed; z-index: 9999; inset: 0; width: 100%; height: 100%; border: 0;"
+    document.body.append(iframe)
+  }, page.url())
+
+  const preview = page.frameLocator("#pdf-preview-webview")
+  await expect(preview.getByRole("heading", { name: title })).toBeVisible()
+  await expect(preview.locator("#review-panel")).toBeAttached()
+  await page.evaluate((path) => {
+    document.querySelector<HTMLIFrameElement>("#pdf-preview-webview")?.contentWindow?.postMessage(
+      { source: "amicode", kind: "preview-file", path },
+      "*",
+    )
+  }, pdfFile)
+
+  const text = preview.getByText(pdfText, { exact: true })
+  await expect(text).toBeVisible()
+  await dragSelectText(page, text)
+  await expect.poll(() => text.evaluate(() => window.getSelection()?.toString())).toBe(pdfText)
+  expect(await text.evaluate((element) => getComputedStyle(element, "::selection").backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
+  await preview.getByRole("tab", { name: "Preview", exact: true }).press(
+    await page.evaluate(() => (navigator.platform.includes("Mac") ? "Meta+c" : "Control+c")),
+  )
+
+  await expect.poll(() => page.evaluate(() => (window as Window & { pdfClipboardWrites?: string[] }).pdfClipboardWrites)).toEqual([pdfText])
+})
+
+test("keeps a PDF with no selectable text visible and explains the limitation", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, noTextPdfFile)
+
+  const panel = page.locator("#review-panel")
+  await expect(panel.locator(`[data-preview-host="${noTextPdfFile}"] canvas`)).toBeVisible()
+  await expect(panel.getByText("This PDF has no selectable text.", { exact: true })).toBeVisible()
+})
+
+test("explains when text selection is unavailable on only some PDF pages", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, partialTextPdfFile)
+
+  const panel = page.locator("#review-panel")
+  await expect(panel.locator(`[data-preview-host="${partialTextPdfFile}"] canvas`)).toHaveCount(2)
+  await expect(panel.getByText(pdfText, { exact: true })).toBeVisible()
+  await expect(panel.getByText("Text selection is unavailable on some pages.", { exact: true })).toBeVisible()
+})
+
+test("keeps selectable PDF text aligned with its page after zooming", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, pdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
+  const canvas = host.locator("canvas")
+  const text = host.getByText(pdfText, { exact: true })
+  const zoom = host.locator('input[type="text"]')
+  await expect(text).toBeVisible()
+  await expect.poll(() => textStaysWithinPage(text, canvas)).toBe(true)
+
+  await zoom.fill("200")
+  await zoom.press("Enter")
+  await expect(zoom).toHaveValue("200%")
+  await expect.poll(() => textStaysWithinPage(text, canvas)).toBe(true)
+  await text.selectText()
+  await expect.poll(() => text.evaluate(() => window.getSelection()?.toString())).toBe(pdfText)
+})
+
+test("keeps selectable PDF text live through repeated zoom updates", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, pdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
+  const text = host.getByText(pdfText, { exact: true })
+  const zoom = host.locator('input[type="text"]')
+  const scroll = host.locator(".overflow-auto")
+  await expect(text).toBeVisible()
+  const textHandle = await text.elementHandle()
+
+  for (const deltaY of [-50, -50, -50]) {
+    await scroll.dispatchEvent("wheel", { ctrlKey: true, deltaY })
+  }
+
+  await expect.poll(async () => Number((await zoom.inputValue()).replace("%", ""))).toBeGreaterThan(100)
+  expect(await textHandle?.evaluate((element) => element.isConnected)).toBe(true)
+  await expect(text).toBeVisible()
+})
+
+test("defers PDF raster replacement until a zoom burst settles", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, pdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
+  const canvas = host.locator("canvas")
+  const scroll = host.locator(".overflow-auto")
+  const initialWidth = await canvas.evaluate((element) => (element as HTMLCanvasElement).width)
+
+  await scroll.dispatchEvent("wheel", { ctrlKey: true, deltaY: -50 })
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  expect(await canvas.evaluate((element) => (element as HTMLCanvasElement).width)).toBe(initialWidth)
+
+  await expect.poll(() => canvas.evaluate((element) => (element as HTMLCanvasElement).width)).toBeGreaterThan(initialWidth)
 })
 
 test("copies a Preview tab filename or full filepath from its context menu", async ({ page }) => {
@@ -847,6 +971,9 @@ async function openPreview(page: Parameters<typeof mockOpenCodeServer>[0]) {
       if (path === markdownFile) return { type: "text", content: markdownContent }
       if (path === secondMarkdownFile) return { type: "text", content: secondMarkdownContent }
       if (path === imageFile) return { type: "binary", content: imageContent, encoding: "base64", mimeType: "image/png" }
+      if (path === pdfFile) return { type: "binary", content: pdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === noTextPdfFile) return { type: "binary", content: noTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === partialTextPdfFile) return { type: "binary", content: partialTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
       if (path === "notes/third.md") return { type: "text", content: "# Third Preview\n\nThe nested renderer stays alive." }
       if (path.startsWith("notes/capacity-")) return { type: "text", content: `# ${path}` }
       return undefined
@@ -887,4 +1014,16 @@ async function openPreviewFile(page: Parameters<typeof mockOpenCodeServer>[0], p
     window.postMessage({ source: "amicode", kind: "preview-file", path }, "*")
   }, path)
   await expect(page.locator("#review-panel").getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("data-selected", "")
+}
+
+async function textStaysWithinPage(text: Locator, canvas: Locator): Promise<boolean> {
+  const [textBox, canvasBox] = await Promise.all([text.boundingBox(), canvas.boundingBox()])
+  if (!textBox || !canvasBox) return false
+  const tolerance = 2
+  return (
+    textBox.x >= canvasBox.x - tolerance &&
+    textBox.y >= canvasBox.y - tolerance &&
+    textBox.x + textBox.width <= canvasBox.x + canvasBox.width + tolerance &&
+    textBox.y + textBox.height <= canvasBox.y + canvasBox.height + tolerance
+  )
 }

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { mockOpenCodeServer } from "../utils/mock-server"
+import { createPdfFixture } from "../utils/pdf-fixture"
+import { dragSelectText } from "../utils/text-selection"
 import { expectAppVisible } from "../utils/waits"
 
 const draftID = "draft_new_session_panel_corner"
@@ -7,6 +9,9 @@ const directory = "C:/OpenCode/NewSessionPanelCorner"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 const previewFile = "notes/draft-preview.md"
 const previewContent = "Draft preview contents."
+const pdfPreviewFile = "papers/draft-preview.pdf"
+const pdfPreviewText = "Amicode draft PDF text"
+const pdfPreviewContent = createPdfFixture([pdfPreviewText])
 
 test.use({
   viewport: { width: 935, height: 522 },
@@ -67,6 +72,16 @@ test("opens and reopens Preview without promoting a new-session draft", async ({
   await expect(preview.getByRole("tab", { name: "draft-preview.md" })).toBeVisible()
 })
 
+test("shows selectable PDF text in draft Preview", async ({ page }) => {
+  await openDraft(page)
+  await postPreviewFile(page, pdfPreviewFile)
+
+  const text = page.locator("[data-draft-preview]").getByText(pdfPreviewText, { exact: true })
+  await expect(text).toBeVisible()
+  await dragSelectText(page, text)
+  await expect.poll(() => text.evaluate(() => window.getSelection()?.toString())).toBe(pdfPreviewText)
+})
+
 async function openDraft(page: Page) {
   await mockOpenCodeServer(page, {
     directory,
@@ -81,7 +96,11 @@ async function openDraft(page: Page) {
     provider: { all: [], connected: [], default: {} },
     sessions: [],
     pageMessages: () => ({ items: [] }),
-    fileContent: (path) => (path === previewFile ? { type: "text", content: previewContent } : undefined),
+    fileContent: (path) => {
+      if (path === previewFile) return { type: "text", content: previewContent }
+      if (path === pdfPreviewFile) return { type: "binary", content: pdfPreviewContent, encoding: "base64", mimeType: "application/pdf" }
+      return undefined
+    },
   })
   await page.addInitScript(
     ({ directory, draftID, server }) => {
@@ -108,8 +127,8 @@ async function openDraft(page: Page) {
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark")
 }
 
-async function postPreviewFile(page: Page) {
+async function postPreviewFile(page: Page, path = previewFile) {
   await page.evaluate((path) => {
     window.postMessage({ source: "amicode", kind: "preview-file", path }, "*")
-  }, previewFile)
+  }, path)
 }
