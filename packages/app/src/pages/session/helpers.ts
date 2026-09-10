@@ -16,7 +16,7 @@ type Tabs = {
 type TabsInput = {
   tabs: Accessor<Tabs>
   pathFromTab: (tab: string) => string | undefined
-  normalizeTab: (tab: string) => string
+  normalizeTab: (tab: string) => string | undefined
   review?: Accessor<boolean>
   hasReview?: Accessor<boolean>
   /** the Vault tab (amicode) — a named surface like "context", never a file */
@@ -73,7 +73,7 @@ export const createSessionTabs = (input: TabsInput) => {
           if (tab === "context" || tab === "review" || tab === "vault" || tab === "home" || tab === SESSION_PREVIEW_TAB || tab === "pulseInspector") return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
-          if (seen.has(value)) return []
+          if (value === undefined || seen.has(value)) return []
           seen.add(value)
           return [value]
         })

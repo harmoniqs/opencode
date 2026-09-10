@@ -180,6 +180,26 @@ describe("createSessionTabs", () => {
     })
   })
 
+  test("ignores a tab rejected by normalization", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: "file://src/a.ts" as string | undefined,
+        all: ["file://src/a.ts"],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => tab.slice("file://".length),
+        normalizeTab: () => undefined,
+      })
+
+      expect(result.panelTabs()).toEqual([])
+      expect(result.activeTab()).toBe("home")
+      dispose()
+    })
+  })
+
   test("prefers context and review fallbacks when no file tab is active", () => {
     createRoot((dispose) => {
       const [state] = createStore({
