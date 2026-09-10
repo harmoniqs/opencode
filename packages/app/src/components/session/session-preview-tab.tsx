@@ -21,6 +21,7 @@ import {
   removePreviewPath,
   resizePreviewSplit,
   selectPreviewPath,
+  setPreviewLeafZoom,
   type PreviewDropPosition,
   type PreviewLeaf,
   type PreviewPane,
@@ -39,21 +40,24 @@ type PreviewDrop = {
 type PreviewDrag = {
   path: string
   sourceLeafID: string
+  x: number
+  y: number
   drop?: PreviewDrop
 }
 
 export function SessionPreviewTab(props: { previewFile: Accessor<string | null> }) {
   const [dirtyPaths, setDirtyPaths] = createStore<Record<string, boolean>>({})
   const [saveRequests, setSaveRequests] = createStore<Record<string, number>>({})
-  const [zoom, setZoom] = createSignal(100)
   const [workspace, setWorkspace] = createSignal(createPreviewWorkspace())
   const [capacityMessage, setCapacityMessage] = createSignal<string | null>(null)
   const [closingPath, setClosingPath] = createSignal<string | null>(null)
   const [previewDrag, setPreviewDrag] = createSignal<PreviewDrag | null>(null)
+  const [dragProxy, setDragProxy] = createSignal<{ path: string; x: number; y: number; leaving: boolean } | null>(null)
 
   const leafElements = new Map<string, HTMLElement>()
   const [hostMounts, setHostMounts] = createStore<Record<string, HTMLDivElement | undefined>>({})
   let stopPreviewDrag: (() => void) | undefined
+  let dragProxyTimer: ReturnType<typeof setTimeout> | undefined
 
   const openedPaths = () => previewLeaves(workspace().tree).flatMap((leaf) => leaf.tabs)
 
@@ -84,11 +88,16 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     window.addEventListener("message", handlePreviewFile)
     onCleanup(() => window.removeEventListener("message", handlePreviewFile))
   })
-  onCleanup(() => stopPreviewDrag?.())
+  onCleanup(() => {
+    stopPreviewDrag?.()
+    if (dragProxyTimer) clearTimeout(dragProxyTimer)
+  })
 
-  const zoomIn = () => setZoom((value) => Math.min(value + 10, 500))
-  const zoomOut = () => setZoom((value) => Math.max(value - 10, 50))
-  const onZoomChange = (value: number) => setZoom(Math.round(Math.min(Math.max(value, 50), 500)))
+  const zoomForPath = (path: string) => previewLeafContaining(workspace().tree, path)?.zoom ?? 100
+  const setZoomForPath = (path: string, value: number) => {
+    const leaf = previewLeafContaining(workspace().tree, path)
+    if (leaf) setWorkspace((current) => setPreviewLeafZoom(current, leaf.id, value))
+  }
 
   const removePath = (path: string) => {
     setWorkspace((current) => removePreviewPath(current, path))
@@ -144,13 +153,30 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     const source = event.currentTarget as HTMLElement
     source.setPointerCapture?.(event.pointerId)
 
-    const stop = () => {
+    const clearDragProxy = (fade: boolean) => {
+      const proxy = dragProxy()
+      if (!proxy) return
+      if (!fade) {
+        if (dragProxyTimer) clearTimeout(dragProxyTimer)
+        dragProxyTimer = undefined
+        setDragProxy(null)
+        return
+      }
+      setDragProxy({ ...proxy, leaving: true })
+      if (dragProxyTimer) clearTimeout(dragProxyTimer)
+      dragProxyTimer = setTimeout(() => {
+        setDragProxy(null)
+        dragProxyTimer = undefined
+      }, 160)
+    }
+    const stop = (fadeProxy = false) => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onCancel)
       if (source.hasPointerCapture?.(event.pointerId)) source.releasePointerCapture(event.pointerId)
       stopPreviewDrag = undefined
       setPreviewDrag(null)
+      clearDragProxy(fadeProxy)
     }
     const onMove = (moveEvent: PointerEvent) => {
       if (!active) {
@@ -158,15 +184,25 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
         active = true
       }
       moveEvent.preventDefault()
-      setPreviewDrag({ path, sourceLeafID, drop: dropTargetAt(moveEvent.clientX, moveEvent.clientY, path, sourceLeafID) })
+      if (dragProxyTimer) clearTimeout(dragProxyTimer)
+      dragProxyTimer = undefined
+      const next = {
+        path,
+        sourceLeafID,
+        x: moveEvent.clientX,
+        y: moveEvent.clientY,
+        drop: dropTargetAt(moveEvent.clientX, moveEvent.clientY, path, sourceLeafID),
+      }
+      setPreviewDrag(next)
+      setDragProxy({ path, x: next.x, y: next.y, leaving: false })
     }
     const onUp = (upEvent: PointerEvent) => {
       const drop = active ? dropTargetAt(upEvent.clientX, upEvent.clientY, path, sourceLeafID) : undefined
-      stop()
+      stop(!drop)
       if (!drop) return
       setWorkspace((current) => movePreviewTab(current, { path, targetLeafID: drop.leafID, position: drop.position, targetIndex: drop.targetIndex }))
     }
-    const onCancel = () => stop()
+    const onCancel = () => stop(true)
 
     stopPreviewDrag?.()
     stopPreviewDrag = stop
@@ -303,6 +339,22 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
+      <Show when={dragProxy()}>
+        {(proxy) => (
+          <div
+            data-preview-tab-drag-proxy
+            data-leaving={proxy().leaving || undefined}
+            class="preview-tab-drag-proxy"
+            aria-hidden="true"
+            style={{
+              "--preview-drag-x": `${proxy().x}px`,
+              "--preview-drag-y": `${proxy().y}px`,
+            }}
+          >
+            <FileVisual path={proxy().path} active={false} explorerIconTheme />
+          </div>
+        )}
+      </Show>
       <Show when={capacityMessage()}>
         <div class="shrink-0 px-3 py-2 text-12-regular text-text-weak" role="alert">
           {capacityMessage()}
@@ -371,10 +423,10 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
                             removePath(path)
                             setClosingPath(null)
                           }}
-                          zoom={zoom}
-                          zoomIn={zoomIn}
-                          zoomOut={zoomOut}
-                          onZoomChange={onZoomChange}
+                          zoom={() => zoomForPath(path)}
+                          zoomIn={() => setZoomForPath(path, zoomForPath(path) + 10)}
+                          zoomOut={() => setZoomForPath(path, zoomForPath(path) - 10)}
+                          onZoomChange={(value) => setZoomForPath(path, value)}
                         />
                       </div>
                     </Portal>

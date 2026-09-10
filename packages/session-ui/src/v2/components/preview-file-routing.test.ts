@@ -226,6 +226,10 @@ describe("toolbar layout (#934)", () => {
     path.resolve(__dirname, "../../../../app/src/components/session/preview-file-view.tsx"),
     "utf8",
   )
+  const previewTreeSrc = fs.readFileSync(
+    path.resolve(__dirname, "../../../../app/src/components/session/session-preview-tree.ts"),
+    "utf8",
+  )
   const pdfCanvasViewSrc = fs.readFileSync(
     path.resolve(__dirname, "../../../../app/src/components/session/pdf-canvas-view.tsx"),
     "utf8",
@@ -235,8 +239,8 @@ describe("toolbar layout (#934)", () => {
     // SessionPreviewTab must NOT render the zoom buttons/input (aria-label)
     expect(previewTabSrc).not.toContain("Zoom out")
     expect(previewTabSrc).not.toContain("Zoom in")
-    // But it must define and pass zoom/zoomIn/zoomOut as props
-    expect(previewTabSrc).toContain("zoom={zoom}")
+    // It routes the pane-local zoom accessor to each renderer host.
+    expect(previewTabSrc).toContain("zoom={() => zoomForPath(path)}")
 
     // PreviewFileView MUST render the zoom widget
     expect(fileViewSrc).toContain("Zoom out")
@@ -256,8 +260,8 @@ describe("toolbar layout (#934)", () => {
   })
 
   test("SessionPreviewTab passes zoomIn and zoomOut to PreviewFileView", () => {
-    expect(previewTabSrc).toContain("zoomIn={zoomIn}")
-    expect(previewTabSrc).toContain("zoomOut={zoomOut}")
+    expect(previewTabSrc).toContain("zoomIn={() => setZoomForPath(path, zoomForPath(path) + 10)}")
+    expect(previewTabSrc).toContain("zoomOut={() => setZoomForPath(path, zoomForPath(path) - 10)}")
   })
 
   test("image zoom uses direct CSS sizing, not transform: scale (#934)", () => {
@@ -371,8 +375,8 @@ describe("toolbar layout (#934)", () => {
   })
 
   test("zoom floor is category-aware: 100% for image/pdf, 50% for markdown/text (#934)", () => {
-    // The parent (SessionPreviewTab) keeps the global floor at 50%
-    expect(previewTabSrc).toContain("Math.max(z - 10, 50)")
+    // The parent routes existing renderer controls to the owning leaf pane.
+    expect(previewTabSrc).toContain("setZoomForPath")
     // PreviewFileView applies a higher floor for image/pdf in its zoom-out handler
     expect(fileViewSrc).toContain("zoomFloor")
   })
@@ -380,8 +384,8 @@ describe("toolbar layout (#934)", () => {
   test("pinch/wheel zoom: SessionPreviewTab exposes onZoomChange to PreviewFileView (#934)", () => {
     // Parent must define a handler that accepts an arbitrary zoom value
     expect(previewTabSrc).toContain("onZoomChange")
-    // Must clamp to [50, 500] — same bounds as the +/- buttons
-    expect(previewTabSrc).toContain("500")
+    // The leaf model clamps to the same [50, 500] range.
+    expect(previewTreeSrc).toContain("Math.min(Math.max(zoom, 50), 500)")
   })
 
   test("pinch/wheel zoom: PreviewFileView has a wheel handler for ctrlKey/shiftKey (#934)", () => {
@@ -638,9 +642,9 @@ describe("dirty dot indicator (#937)", () => {
     "utf8",
   )
 
-  test("shows an unsaved dot based on file state unsavedContent", () => {
-    // Must reference unsavedContent to determine dot visibility
-    expect(previewTabSrc).toContain("unsavedContent")
+  test("shows an unsaved dot based on workspace dirty state", () => {
+    // The workspace owns only the dirty flag; the renderer owns draft text.
+    expect(previewTabSrc).toContain("dirtyPaths")
   })
 
   test("unsaved dot has aria-label for accessibility", () => {
@@ -696,7 +700,7 @@ describe("file save uses SDK client (#937)", () => {
 
   test("clears unsavedContent after successful save", () => {
     // After a successful write, the dirty state must be cleared (null)
-    expect(saveFileBody).toMatch(/onUnsavedContent\(null\)|onClearUnsaved/)
+    expect(saveFileBody).toContain("setUnsavedContent(null)")
   })
 
   test("saveFile uses try/catch for error handling", () => {
