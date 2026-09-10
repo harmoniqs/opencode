@@ -818,13 +818,11 @@ export function SessionSidePanel(props: {
                             </Tabs.Content>
                           </Show>
 
-                          <Show when={activeTab() === SESSION_PREVIEW_TAB}>
-                            <Tabs.Content value={SESSION_PREVIEW_TAB} class="flex flex-col h-full overflow-hidden contain-strict">
-                              <div class="relative flex-1 min-h-0 overflow-hidden">
-                                <SessionPreviewTab previewFile={previewFile} />
-                              </div>
-                            </Tabs.Content>
-                          </Show>
+                          <Tabs.Content value={SESSION_PREVIEW_TAB} forceMount class="flex flex-col h-full overflow-hidden contain-strict">
+                            <div class="relative flex-1 min-h-0 overflow-hidden">
+                              <SessionPreviewTab previewFile={previewFile} />
+                            </div>
+                          </Tabs.Content>
 
                           <Show when={activeFileTab()} keyed>
                             {(tab) => <FileTabContent tab={tab} />}
@@ -1111,13 +1109,11 @@ export function SessionSidePanel(props: {
                           </Tabs.Content>
                         </Show>
 
-                        <Show when={activeTab() === SESSION_PREVIEW_TAB}>
-                           <Tabs.Content value={SESSION_PREVIEW_TAB} class="flex flex-col h-full overflow-hidden contain-strict">
-                             <div class="relative flex-1 min-h-0 overflow-hidden">
-                               <SessionPreviewTab previewFile={previewFile} />
-                             </div>
-                           </Tabs.Content>
-                        </Show>
+                        <Tabs.Content value={SESSION_PREVIEW_TAB} forceMount class="flex flex-col h-full overflow-hidden contain-strict">
+                          <div class="relative flex-1 min-h-0 overflow-hidden">
+                            <SessionPreviewTab previewFile={previewFile} />
+                          </div>
+                        </Tabs.Content>
 
                         <Show when={fileBrowserMounted()}>
                           <div
