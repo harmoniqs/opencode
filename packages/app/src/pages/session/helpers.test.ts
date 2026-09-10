@@ -127,6 +127,26 @@ describe("createSessionTabs", () => {
     })
   })
 
+  test("ignores malformed persisted tab values", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: undefined as string | undefined,
+        all: ["file://src/a.ts", undefined, { invalid: true }] as unknown as string[],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => (tab.startsWith("file://") ? `norm:${tab.slice("file://".length)}` : tab),
+      })
+
+      expect(result.panelTabs()).toEqual(["norm:src/a.ts"])
+      expect(result.activeTab()).toBe("norm:src/a.ts")
+      dispose()
+    })
+  })
+
   test("prefers context and review fallbacks when no file tab is active", () => {
     createRoot((dispose) => {
       const [state] = createStore({

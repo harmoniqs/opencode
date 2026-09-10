@@ -49,9 +49,9 @@ export const createSessionTabs = (input: TabsInput) => {
   const panelTabs = createMemo(
     () => {
       const seen = new Set<string>()
-      return input
-        .tabs()
+      return input.tabs()
         .all()
+        .filter((tab): tab is string => typeof tab === "string")
         .flatMap((tab) => {
           if (tab === "context" || tab === "review" || tab === "vault" || tab === "home" || tab === SESSION_PREVIEW_TAB || tab === "pulseInspector") return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
@@ -76,7 +76,7 @@ export const createSessionTabs = (input: TabsInput) => {
     if (active === "vault" && vaultOpen()) return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
-    if (active && input.pathFromTab(active)) return input.normalizeTab(active)
+    if (typeof active === "string" && input.pathFromTab(active)) return input.normalizeTab(active)
 
     const first = openedTabs()[0]
     if (first) return first

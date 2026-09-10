@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readPartText, settledChunkBoundary, splitSettledChunks } from "./message-part-text"
 import { shouldShowUserMessageText } from "./message-part-user"
+import { amicodeReceiptCandidateKey } from "./message-part"
 
 describe("readPartText", () => {
   test("returns empty string when accum is undefined and part text is undefined", () => {
@@ -25,6 +26,26 @@ describe("readPartText", () => {
 
   test("trims leading and trailing whitespace", () => {
     expect(readPartText(undefined, { id: "part_1", text: "\n  body  \n" })).toBe("body")
+  })
+})
+
+describe("amicodeReceiptCandidateKey", () => {
+  test("ignores a tool part without a string tool name", () => {
+    expect(() => amicodeReceiptCandidateKey({ type: "tool", tool: undefined } as never)).not.toThrow()
+    expect(amicodeReceiptCandidateKey({ type: "tool", tool: undefined } as never)).toEqual({})
+  })
+
+  test("keeps valid completed receipt parts eligible", () => {
+    expect(
+      amicodeReceiptCandidateKey({
+        type: "tool",
+        tool: "amicode_formulate",
+        state: {
+          status: "completed",
+          output: 'AMICODE_DIFF {"problem":"x","entity":"recommend","action":"accepted","seq":3}',
+        },
+      } as never),
+    ).toEqual({ key: { problem: "x", entity: "recommend", action: "accepted" }, seq: 3 })
   })
 })
 

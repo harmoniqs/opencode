@@ -712,8 +712,8 @@ function index<T extends { id: string }>(items: readonly T[]) {
 // whose entity isn't inline-view-eligible — see receipt-runs.ts) are
 // candidates; everything else (still running, errored, not amicode_*, no/
 // unparseable sentinel) gets `key: undefined` and can never merge.
-function amicodeReceiptCandidateKey(part: PartType | undefined): { key?: ReceiptKey; seq?: number } {
-  if (!part || part.type !== "tool" || !part.tool.startsWith("amicode_")) return {}
+export function amicodeReceiptCandidateKey(part: PartType | undefined): { key?: ReceiptKey; seq?: number } {
+  if (!part || part.type !== "tool" || typeof part.tool !== "string" || !part.tool.startsWith("amicode_")) return {}
   if (part.state.status !== "completed") return {}
   const sentinel = parseDiffSentinel(part.state.output)
   return { key: receiptRunKey(sentinel), seq: sentinel?.seq }
