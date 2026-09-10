@@ -372,7 +372,7 @@ describe("toolbar layout (#934)", () => {
 
   test("zoom floor is category-aware: 100% for image/pdf, 50% for markdown/text (#934)", () => {
     // The parent (SessionPreviewTab) keeps the global floor at 50%
-    expect(previewTabSrc).toContain("Math.max(z - 10, 50)")
+    expect(previewTabSrc).toMatch(/Math\.max\(\w+ - 10, 50\)/)
     // PreviewFileView applies a higher floor for image/pdf in its zoom-out handler
     expect(fileViewSrc).toContain("zoomFloor")
   })
@@ -638,9 +638,9 @@ describe("dirty dot indicator (#937)", () => {
     "utf8",
   )
 
-  test("shows an unsaved dot based on file state unsavedContent", () => {
-    // Must reference unsavedContent to determine dot visibility
-    expect(previewTabSrc).toContain("unsavedContent")
+  test("shows an unsaved dot based on workspace dirty state", () => {
+    // The workspace owns only a dirty flag; PreviewFileView owns draft text.
+    expect(previewTabSrc).toContain("dirtyPaths")
   })
 
   test("unsaved dot has aria-label for accessibility", () => {
@@ -696,7 +696,7 @@ describe("file save uses SDK client (#937)", () => {
 
   test("clears unsavedContent after successful save", () => {
     // After a successful write, the dirty state must be cleared (null)
-    expect(saveFileBody).toMatch(/onUnsavedContent\(null\)|onClearUnsaved/)
+    expect(saveFileBody).toContain("setUnsavedContent(null)")
   })
 
   test("saveFile uses try/catch for error handling", () => {
