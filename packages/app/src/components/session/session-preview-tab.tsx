@@ -14,13 +14,36 @@
 
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
+import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
+import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
+import { Accessibility, AutoScroller, Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
+import { RestrictToHorizontalAxis } from "@dnd-kit/abstract/modifiers"
+import { RestrictToElement } from "@dnd-kit/dom/modifiers"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { PreviewFileView } from "./preview-file-view"
 import { FileVisual } from "./session-sortable-tab"
-import type { Accessor } from "solid-js"
+import { reorderPreviewTabs } from "./session-preview-tabs"
+import type { Accessor, JSX } from "solid-js"
 
 // ─── Main Component ─────────────────────────────────────────────────────────
+
+function SortablePreviewTab(props: { path: string; index: () => number; children: JSX.Element }) {
+  const sortable = useSortable({
+    get id() {
+      return props.path
+    },
+    get index() {
+      return props.index()
+    },
+  })
+
+  return (
+    <div ref={sortable.ref} class="h-full flex items-center">
+      {props.children}
+    </div>
+  )
+}
 
 export function SessionPreviewTab(props: {
   previewFile: Accessor<string | null>
@@ -35,6 +58,7 @@ export function SessionPreviewTab(props: {
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null)
   const [capacityMessage, setCapacityMessage] = createSignal<string | null>(null)
   const [closingPath, setClosingPath] = createSignal<string | null>(null)
+  let previewTabList: HTMLDivElement | undefined
 
   const openPath = (path: string) => {
     if (openedPaths().includes(path)) {
@@ -104,33 +128,59 @@ export function SessionPreviewTab(props: {
           classList={{ "preview-tab-strip": true }}
           style={{ height: "auto", overflow: "visible" }}
         >
-          <Tabs.List aria-label="Open previews">
-            <For each={openedPaths()}>
-              {(path) => (
-                <Tabs.Trigger
-                  value={path}
-                  closeButton={
-                    <button
-                      type="button"
-                      class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                      aria-label={`Close ${path.split("/").pop()}`}
-                      onClick={() => closePath(path)}
+          <Tabs.List ref={previewTabList} aria-label="Open previews">
+            <DragDropProvider
+              sensors={[
+                PointerSensor.configure({
+                  activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
+                  preventActivation: (event) =>
+                    event.target instanceof Element && !!event.target.closest('[data-slot="tabs-trigger-close-button"]'),
+                }),
+              ]}
+              modifiers={[
+                RestrictToHorizontalAxis,
+                RestrictToElement.configure({ element: () => previewTabList ?? null }),
+              ]}
+              plugins={(defaults) => [
+                ...defaults.filter((plugin) => plugin !== Accessibility),
+                AutoScroller.configure({ acceleration: 8, threshold: { x: 0.05, y: 0 } }),
+                Feedback.configure({ dropAnimation: null }),
+              ]}
+              onDragEnd={(event) => {
+                const source = event.operation.source
+                if (event.canceled || !isSortable(source) || source.initialIndex === source.index) return
+                setOpenedPaths((paths) => reorderPreviewTabs(paths, source.id.toString(), source.index))
+              }}
+            >
+              <For each={openedPaths()}>
+                {(path, index) => (
+                  <SortablePreviewTab path={path} index={index}>
+                    <Tabs.Trigger
+                      value={path}
+                      closeButton={
+                        <button
+                          type="button"
+                          class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                          aria-label={`Close ${path.split("/").pop()}`}
+                          onClick={() => closePath(path)}
+                        >
+                          <Show
+                            when={dirtyPaths[path]}
+                            fallback={<Icon name="close-small" size="small" />}
+                          >
+                            <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
+                          </Show>
+                        </button>
+                      }
+                      hideCloseButton
+                      onMiddleClick={() => closePath(path)}
                     >
-                      <Show
-                        when={dirtyPaths[path]}
-                        fallback={<Icon name="close-small" size="small" />}
-                      >
-                        <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
-                      </Show>
-                    </button>
-                  }
-                  hideCloseButton
-                  onMiddleClick={() => closePath(path)}
-                >
-                  <FileVisual path={path} active={selectedPath() === path} />
-                </Tabs.Trigger>
-              )}
-            </For>
+                      <FileVisual path={path} active={selectedPath() === path} treeIconState />
+                    </Tabs.Trigger>
+                  </SortablePreviewTab>
+                )}
+              </For>
+            </DragDropProvider>
           </Tabs.List>
         </Tabs>
       </Show>

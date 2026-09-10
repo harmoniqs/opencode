@@ -10,11 +10,11 @@ import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
 
-export function FileVisual(props: { path: string; active?: boolean; temporary?: boolean }): JSX.Element {
+export function FileVisual(props: { path: string; active?: boolean; temporary?: boolean; treeIconState?: boolean }): JSX.Element {
   return (
     <div class="flex items-center gap-x-1.5 min-w-0">
       <Show
-        when={!props.active}
+        when={!props.active || props.treeIconState}
         fallback={<FileIcon node={{ path: props.path, type: "file" }} class="size-4 shrink-0" />}
       >
         <span class="relative inline-flex size-4 shrink-0">
