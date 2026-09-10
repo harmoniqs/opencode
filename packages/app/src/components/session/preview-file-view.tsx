@@ -323,7 +323,7 @@ export function PreviewFileView(props: {
   // At 200% it's twice that, etc. Deterministic sizing — the inline-flex
   // wrapper sizes correctly around it, so justify-center never pushes
   // content into unreachable negative scroll territory.
-  const imageWidth = () => Math.max(0, (containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom() / 100)
+  const imageWidth = () => Math.max(0, ((containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom()) / 100)
 
   const adjustScrollForZoom = (oldZoom: number, newZoom: number, focus?: { x: number; y: number }) => {
     const el = scrollRef
@@ -368,16 +368,14 @@ export function PreviewFileView(props: {
   // — Solid's onWheel is passive by default and can't preventDefault.
 
   const handleWheelZoom = (e: WheelEvent) => {
-    if (!e.ctrlKey && !e.shiftKey) return   // normal scroll — pass through
+    if (!e.ctrlKey && !e.shiftKey) return // normal scroll — pass through
     e.preventDefault()
     if (!props.onZoomChange) return
-    const delta = e.deltaY || e.deltaX      // shift+scroll may swap axes
+    const delta = e.deltaY || e.deltaX // shift+scroll may swap axes
     if (delta === 0) return
     const oldZoom = props.zoom()
     const factor = Math.exp(-delta * 0.003)
-    const next = Math.round(
-      Math.min(Math.max(oldZoom * factor, zoomFloor()), zoomCeiling()),
-    )
+    const next = Math.round(Math.min(Math.max(oldZoom * factor, zoomFloor()), zoomCeiling()))
     if (next === oldZoom) return
     const scroll = scrollRef
     if (!scroll) return
@@ -420,9 +418,46 @@ export function PreviewFileView(props: {
           transition: "opacity 200ms ease",
         }}
       >
+        <Show when={showModeToggle()}>
+          <div
+            class="rounded-md border border-border-base shadow-sm overflow-hidden"
+            style={{
+              background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
+              "backdrop-filter": "blur(4px)",
+            }}
+          >
+            <SegmentedControlV2
+              value={mode()}
+              onChange={(value) => {
+                if (value === "preview" || value === "edit") {
+                  setMode(value)
+                }
+              }}
+              class="!w-auto"
+              aria-label="View mode"
+            >
+              <TooltipV2 openDelay={400} value="Preview">
+                <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
+                  <Icon name="eye" size="small" />
+                </SegmentedControlItemV2>
+              </TooltipV2>
+              <TooltipV2 openDelay={400} value="Edit">
+                <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
+                  <Icon name="edit" size="small" />
+                </SegmentedControlItemV2>
+              </TooltipV2>
+            </SegmentedControlV2>
+          </div>
+        </Show>
         <Show when={!isEditing()}>
           {/* Zoom controls: [editable %] [reset] [+ over -] */}
-          <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
+          <div
+            class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm"
+            style={{
+              background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
+              "backdrop-filter": "blur(4px)",
+            }}
+          >
             {/* Editable zoom percentage input */}
             <input
               type="text"
@@ -461,7 +496,16 @@ export function PreviewFileView(props: {
               }}
               aria-label="Reset zoom"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
               </svg>
@@ -487,31 +531,6 @@ export function PreviewFileView(props: {
                 <span class="text-[10px] font-medium leading-none">−</span>
               </button>
             </div>
-          </div>
-        </Show>
-        <Show when={showModeToggle()}>
-          <div class="rounded-md border border-border-base shadow-sm overflow-hidden" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
-            <SegmentedControlV2
-              value={mode()}
-              onChange={(value) => {
-                if (value === "preview" || value === "edit") {
-                  setMode(value)
-                }
-              }}
-              class="!w-auto"
-              aria-label="View mode"
-            >
-              <TooltipV2 openDelay={400} value="Preview">
-                <SegmentedControlItemV2 value="preview" aria-label="Preview" class="!flex-none !px-2">
-                  <Icon name="eye" size="small" />
-                </SegmentedControlItemV2>
-              </TooltipV2>
-              <TooltipV2 openDelay={400} value="Edit">
-                <SegmentedControlItemV2 value="edit" aria-label="Edit" class="!flex-none !px-2">
-                  <Icon name="edit" size="small" />
-                </SegmentedControlItemV2>
-              </TooltipV2>
-            </SegmentedControlV2>
           </div>
         </Show>
       </div>

@@ -46,6 +46,32 @@ test("keeps Markdown typing in CodeMirror after its language support loads", asy
   await expect(page.locator('[data-component="prompt-input"]')).toHaveText("")
 })
 
+test("keeps the default cursor while a Preview tab crosses an editable file", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  await panel.getByRole("tab", { name: "baseline.md" }).click()
+  await panel.getByRole("button", { name: "Edit" }).click()
+
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const editor = panel.locator('[data-preview-host="notes/baseline.md"] .cm-content')
+  const sourceBox = await source.boundingBox()
+  const editorBox = await editor.boundingBox()
+  if (!sourceBox || !editorBox) throw new Error("Preview tab and editor must be measurable before dragging")
+
+  const target = { x: editorBox.x + editorBox.width / 2, y: editorBox.y + editorBox.height / 2 }
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(target.x, target.y, { steps: 8 })
+
+  await expect(page.locator("html[data-preview-tab-dragging]")).toHaveCount(1)
+  await expect.poll(() => editor.evaluate((element) => getComputedStyle(element).cursor)).toBe("default")
+
+  await page.mouse.up()
+  await expect(page.locator("html[data-preview-tab-dragging]")).toHaveCount(0)
+})
+
 test("uses the Preview header for VS Code-style file tabs instead of a duplicate title", async ({ page }) => {
   await openPreview(page)
 
@@ -56,7 +82,46 @@ test("uses the Preview header for VS Code-style file tabs instead of a duplicate
   await expect(tab.locator("xpath=ancestor::*[@data-slot='tabs-trigger-wrapper']")).toHaveCount(1)
   await expect(panel.getByText("baseline.md", { exact: true })).toHaveCount(1)
   await expect(tablist).toHaveCSS("border-bottom-width", "0px")
-  await expect(tablist.evaluate((element) => getComputedStyle(element, "::after").borderBottomWidth)).resolves.toBe("0px")
+  await expect(tablist.evaluate((element) => getComputedStyle(element, "::after").borderBottomWidth)).resolves.toBe(
+    "0px",
+  )
+})
+
+test("leaves Files Changed after its surface tab closes", async ({ page }) => {
+  await openPreview(page)
+
+  const panel = page.locator("#review-panel")
+  const reviewClose = panel.locator(
+    '[data-slot="tabs-trigger-wrapper"][data-value="review"] [data-slot="tabs-trigger-close-button"] button',
+  )
+
+  await panel.getByRole("tab", { name: /^Files Changed/ }).click()
+  await expect(panel.getByRole("tab", { name: /^Files Changed/ })).toHaveAttribute("aria-selected", "true")
+  await reviewClose.click()
+
+  await expect(panel.getByRole("tab", { name: /^Files Changed/ })).toHaveCount(0)
+  await expect(panel.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true")
+})
+
+test("keeps the Markdown zoom pill aligned with other Preview files", async ({ page }) => {
+  await openPreview(page)
+
+  const panel = page.locator("#review-panel")
+  const markdownHost = panel.locator(`[data-preview-host="${markdownFile}"]`)
+  const modeToggle = markdownHost.getByRole("button", { name: "Preview", exact: true })
+  const markdownZoom = markdownHost.locator('input[type="text"]')
+  const modeBox = await modeToggle.boundingBox()
+  const markdownZoomBox = await markdownZoom.boundingBox()
+  if (!modeBox || !markdownZoomBox) throw new Error("Markdown controls must be measurable")
+
+  expect(modeBox.x).toBeLessThan(markdownZoomBox.x)
+
+  await openPreviewFile(page, imageFile)
+  const imageZoom = panel.locator(`[data-preview-host="${imageFile}"] input[type="text"]`)
+  const imageZoomBox = await imageZoom.boundingBox()
+  if (!imageZoomBox) throw new Error("Image zoom control must be measurable")
+
+  expect(Math.abs(markdownZoomBox.x - imageZoomBox.x)).toBeLessThanOrEqual(1)
 })
 
 test("allows image previews to zoom to 1000%", async ({ page }) => {
@@ -134,22 +199,25 @@ test("lets a researcher select and copy text from a PDF Preview", async ({ page 
   await expect(preview.getByRole("heading", { name: title })).toBeVisible()
   await expect(preview.locator("#review-panel")).toBeAttached()
   await page.evaluate((path) => {
-    document.querySelector<HTMLIFrameElement>("#pdf-preview-webview")?.contentWindow?.postMessage(
-      { source: "amicode", kind: "preview-file", path },
-      "*",
-    )
+    document
+      .querySelector<HTMLIFrameElement>("#pdf-preview-webview")
+      ?.contentWindow?.postMessage({ source: "amicode", kind: "preview-file", path }, "*")
   }, pdfFile)
 
   const text = preview.getByText(pdfText, { exact: true })
   await expect(text).toBeVisible()
   await dragSelectText(page, text)
   await expect.poll(() => text.evaluate(() => window.getSelection()?.toString())).toBe(pdfText)
-  expect(await text.evaluate((element) => getComputedStyle(element, "::selection").backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
-  await preview.getByRole("tab", { name: "Preview", exact: true }).press(
-    await page.evaluate(() => (navigator.platform.includes("Mac") ? "Meta+c" : "Control+c")),
+  expect(await text.evaluate((element) => getComputedStyle(element, "::selection").backgroundColor)).not.toBe(
+    "rgba(0, 0, 0, 0)",
   )
+  await preview
+    .getByRole("tab", { name: "Preview", exact: true })
+    .press(await page.evaluate(() => (navigator.platform.includes("Mac") ? "Meta+c" : "Control+c")))
 
-  await expect.poll(() => page.evaluate(() => (window as Window & { pdfClipboardWrites?: string[] }).pdfClipboardWrites)).toEqual([pdfText])
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { pdfClipboardWrites?: string[] }).pdfClipboardWrites))
+    .toEqual([pdfText])
 })
 
 test("keeps a PDF with no selectable text visible and explains the limitation", async ({ page }) => {
@@ -246,9 +314,13 @@ test("keeps the PDF point under the pointer fixed through wheel zoom", async ({ 
 
   const nextZoom = Number((await zoom.inputValue()).replace("%", ""))
   const ratio = nextZoom / 200
-  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBeCloseTo((before.scrollLeft + focus.x) * ratio - focus.x, 0)
+  await expect
+    .poll(() => scroll.evaluate((element) => element.scrollLeft))
+    .toBeCloseTo((before.scrollLeft + focus.x) * ratio - focus.x, 0)
   const expectedScrollTop = (before.scrollTop + focus.y) * ratio - focus.y
-  await expect.poll(() => scroll.evaluate((element, expected) => Math.abs(element.scrollTop - expected), expectedScrollTop)).toBeLessThanOrEqual(1)
+  await expect
+    .poll(() => scroll.evaluate((element, expected) => Math.abs(element.scrollTop - expected), expectedScrollTop))
+    .toBeLessThanOrEqual(1)
 })
 
 test("keeps Preview controls clear of an overflowing PDF scroll rail", async ({ page }) => {
@@ -283,7 +355,9 @@ test("defers PDF raster replacement until a zoom burst settles", async ({ page }
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   expect(await canvas.evaluate((element) => (element as HTMLCanvasElement).width)).toBe(initialWidth)
 
-  await expect.poll(() => canvas.evaluate((element) => (element as HTMLCanvasElement).width)).toBeGreaterThan(initialWidth)
+  await expect
+    .poll(() => canvas.evaluate((element) => (element as HTMLCanvasElement).width))
+    .toBeGreaterThan(initialWidth)
 })
 
 test("copies a Preview tab filename or full filepath from its context menu", async ({ page }) => {
@@ -302,11 +376,15 @@ test("copies a Preview tab filename or full filepath from its context menu", asy
   const tab = page.locator("#review-panel").getByRole("tab", { name: "baseline.md" })
   await tab.click({ button: "right" })
   await page.getByRole("menuitem", { name: "Copy filename" }).click()
-  await expect.poll(() => page.evaluate(() => (window as Window & { copiedPreviewValue?: string }).copiedPreviewValue)).toBe("baseline.md")
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { copiedPreviewValue?: string }).copiedPreviewValue))
+    .toBe("baseline.md")
 
   await tab.click({ button: "right" })
   await page.getByRole("menuitem", { name: "Copy filepath" }).click()
-  await expect.poll(() => page.evaluate(() => (window as Window & { copiedPreviewValue?: string }).copiedPreviewValue)).toBe(markdownFile)
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { copiedPreviewValue?: string }).copiedPreviewValue))
+    .toBe(markdownFile)
 })
 
 test("keeps ordinary Preview scrolling at the position selected by the user", async ({ page }) => {
@@ -372,12 +450,12 @@ test("retains renderer hosts and editor state through inner and outer Preview ta
 
   await tabs.getByRole("tab", { name: "baseline.md" }).click()
   const baselineHost = panel.locator('[data-preview-host="notes/baseline.md"]')
-   await expect(baselineHost).toBeVisible()
-   await expect(secondHost).toBeHidden()
-   await expect(secondHost).toHaveAttribute("hidden", "")
-   await expect(secondHost).toHaveAttribute("inert", "")
-   await expect(secondHost.locator("[data-preview-controls]")).toBeHidden()
-   const host = await baselineHost.elementHandle()
+  await expect(baselineHost).toBeVisible()
+  await expect(secondHost).toBeHidden()
+  await expect(secondHost).toHaveAttribute("hidden", "")
+  await expect(secondHost).toHaveAttribute("inert", "")
+  await expect(secondHost.locator("[data-preview-controls]")).toBeHidden()
+  const host = await baselineHost.elementHandle()
   expect(host).not.toBeNull()
 
   await panel.getByRole("button", { name: "Edit" }).click()
@@ -470,6 +548,7 @@ test("reorders Preview tabs without recreating their renderer hosts", async ({ p
 
   const panel = page.locator("#review-panel")
   const tabs = panel.getByRole("tablist", { name: "Open previews" })
+  const leaf = panel.locator('[data-preview-leaf="root"]')
   const baselineHost = panel.locator('[data-preview-host="notes/baseline.md"]')
   const host = await baselineHost.elementHandle()
   const source = tabs.getByRole("tab", { name: "second.md" })
@@ -478,14 +557,104 @@ test("reorders Preview tabs without recreating their renderer hosts", async ({ p
   const targetBox = await target.boundingBox()
   if (!sourceBox || !targetBox) throw new Error("Preview tabs must be measurable before dragging")
 
-  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  const grabX = sourceBox.x + sourceBox.width / 2
+  const dragX = targetBox.x + targetBox.width / 2 - 12
+  await page.mouse.move(grabX, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(targetBox.x + targetBox.width / 2 - 12, targetBox.y + targetBox.height / 2, { steps: 8 })
+  await page.mouse.move(dragX, targetBox.y + targetBox.height / 2)
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   await page.mouse.up()
 
-  expect(await tabs.getByRole("tab").allTextContents()).toEqual(["second.md", "baseline.md"])
+  await expect(panel.locator("[data-preview-leaf]")).toHaveCount(1)
+  expect(await leaf.getByRole("tab").allTextContents()).toEqual(["second.md", "baseline.md"])
   await expect(baselineHost).toBeAttached()
   expect(await host!.evaluate((element) => element.isConnected)).toBe(true)
+})
+
+test("shows a rail insertion gap while reordering Preview tabs", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const tabs = panel.getByRole("tablist", { name: "Open previews" })
+  const source = tabs.getByRole("tab", { name: "second.md" })
+  const target = tabs.getByRole("tab", { name: "baseline.md" })
+  const sourceBox = await source.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !targetBox) throw new Error("Preview tabs must be measurable before dragging")
+
+  const grabX = sourceBox.x + sourceBox.width / 2
+  const dragX = targetBox.x + targetBox.width / 2 - 12
+  await page.mouse.move(grabX, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(dragX, targetBox.y + targetBox.height / 2, { steps: 8 })
+
+  await expect(panel.locator("[data-preview-drop-preview]")).toHaveCount(0)
+  await expect(page.locator("[data-preview-tab-drag-proxy]")).toHaveCount(0)
+  await expect(source).toHaveCSS("opacity", "1")
+  const draggedSourceBox = await source.boundingBox()
+  expect(draggedSourceBox ? dragX - draggedSourceBox.x : Infinity).toBeCloseTo(grabX - sourceBox.x, 0)
+  await expect.poll(async () => (await target.boundingBox())?.x ?? -Infinity).toBeGreaterThan(targetBox.x)
+  await page.mouse.up()
+})
+
+test("slides later Preview tabs left when the first tab moves right", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+  await openPreviewFile(page, "notes/third.md")
+
+  const panel = page.locator("#review-panel")
+  const tabs = panel.getByRole("tablist", { name: "Open previews" })
+  const source = tabs.getByRole("tab", { name: "baseline.md" })
+  const middle = tabs.getByRole("tab", { name: "second.md" })
+  const target = tabs.getByRole("tab", { name: "third.md" })
+  const sourceBox = await source.boundingBox()
+  const middleBox = await middle.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !middleBox || !targetBox) throw new Error("Preview tabs must be measurable before dragging")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width - 4, targetBox.y + targetBox.height / 2, { steps: 8 })
+
+  await expect.poll(async () => (await middle.boundingBox())?.x ?? Infinity).toBeLessThan(middleBox.x)
+  await expect.poll(async () => (await target.boundingBox())?.x ?? Infinity).toBeLessThan(targetBox.x)
+  await page.mouse.up()
+})
+
+test("shows a tab ghost when a Preview tab crosses into another rail", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const rootLeaf = panel.locator('[data-preview-leaf="root"]')
+  const source = rootLeaf.getByRole("tab", { name: "second.md" })
+  const sourceBox = await source.boundingBox()
+  const rootBox = await rootLeaf.boundingBox()
+  if (!sourceBox || !rootBox) throw new Error("Preview tab and root leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  const sourceLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  const crossRailSource = sourceLeaf.getByRole("tab", { name: "second.md" })
+  const target = rootLeaf.getByRole("tab", { name: "baseline.md" })
+  const crossRailSourceBox = await crossRailSource.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!crossRailSourceBox || !targetBox) throw new Error("Preview rails must be measurable before cross-rail dragging")
+
+  await page.mouse.move(
+    crossRailSourceBox.x + crossRailSourceBox.width / 2,
+    crossRailSourceBox.y + crossRailSourceBox.height / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width / 2 - 12, targetBox.y + targetBox.height / 2, { steps: 8 })
+
+  await expect(page.locator("[data-preview-tab-drag-proxy]")).toHaveCount(0)
+  await expect(rootLeaf.locator("[data-preview-rail-drag-tab]")).toContainText("second.md")
+  await page.mouse.up()
 })
 
 test("splits a Preview leaf at its right edge without recreating the moved renderer", async ({ page }) => {
@@ -501,7 +670,8 @@ test("splits a Preview leaf at its right edge without recreating the moved rende
   const sourceBox = await source.boundingBox()
   const leafBox = await sourceLeaf.boundingBox()
   const outerPreviewBox = await outerPreview.boundingBox()
-  if (!sourceBox || !leafBox || !host || !outerPreviewBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+  if (!sourceBox || !leafBox || !host || !outerPreviewBox)
+    throw new Error("Preview tab and leaf must be measurable before splitting")
 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
@@ -603,7 +773,10 @@ test("transfers a renderer into another leaf and collapses its emptied source", 
   const rootBox = await rootLeaf.boundingBox()
   if (!initialSourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
 
-  await page.mouse.move(initialSourceBox.x + initialSourceBox.width / 2, initialSourceBox.y + initialSourceBox.height / 2)
+  await page.mouse.move(
+    initialSourceBox.x + initialSourceBox.width / 2,
+    initialSourceBox.y + initialSourceBox.height / 2,
+  )
   await page.mouse.down()
   await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
   await page.mouse.up()
@@ -618,7 +791,9 @@ test("transfers a renderer into another leaf and collapses its emptied source", 
 
   await page.mouse.move(transferBox.x + transferBox.width / 2, transferBox.y + transferBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(transferTarget.x + transferTarget.width / 2, transferTarget.y + transferTarget.height / 2, { steps: 8 })
+  await page.mouse.move(transferTarget.x + transferTarget.width / 2, transferTarget.y + transferTarget.height / 2, {
+    steps: 8,
+  })
 
   const mergePreview = panel.locator('[data-preview-drop-preview="center"]')
   await expect(mergePreview).toBeVisible()
@@ -638,7 +813,9 @@ test("transfers a renderer into another leaf and collapses its emptied source", 
   await expect(rootLeaf.getByText("The second renderer stays alive.", { exact: true })).toBeVisible()
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
   await expect
-    .poll(() => panel.locator("[data-preview-workspace]").evaluate((element) => element.scrollWidth - element.clientWidth))
+    .poll(() =>
+      panel.locator("[data-preview-workspace]").evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
     .toBeLessThanOrEqual(1)
 })
 
@@ -677,7 +854,9 @@ test("retains a focused, scrolled editor and unsaved draft through a Preview edg
   await page.waitForTimeout(250)
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
-  await expect(destinationLeaf.locator('[data-preview-host="notes/baseline.md"] .cm-content')).toContainText("Relocated draft.")
+  await expect(destinationLeaf.locator('[data-preview-host="notes/baseline.md"] .cm-content')).toContainText(
+    "Relocated draft.",
+  )
   await expect(editor).toBeFocused()
   await expect.poll(() => editorScroller.evaluate((element) => element.scrollTop)).toBe(scrollPosition)
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
@@ -795,7 +974,9 @@ test("adopts destination pane zoom when transferring a Preview renderer", async 
 
   await page.mouse.move(transferBox.x + transferBox.width / 2, transferBox.y + transferBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(transferTarget.x + transferTarget.width / 2, transferTarget.y + transferTarget.height / 2, { steps: 8 })
+  await page.mouse.move(transferTarget.x + transferTarget.width / 2, transferTarget.y + transferTarget.height / 2, {
+    steps: 8,
+  })
   await page.mouse.up()
 
   await expect(rootLeaf.locator('[data-preview-host="notes/second.md"] input[type="text"]')).toHaveValue("130%")
@@ -884,11 +1065,13 @@ for (const edge of ["left", "top", "bottom"] as const) {
     const rootLeaf = panel.locator('[data-preview-leaf="root"]')
     const sourceBox = await source.boundingBox()
     const rootBox = await rootLeaf.boundingBox()
-    if (!sourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+    const contentBox = await rootLeaf.locator(".preview-pane-content").boundingBox()
+    if (!sourceBox || !rootBox || !contentBox)
+      throw new Error("Preview tab and pane content must be measurable before splitting")
 
     const target = {
       left: { x: rootBox.x + 2, y: rootBox.y + rootBox.height / 2 },
-      top: { x: rootBox.x + rootBox.width / 2, y: rootBox.y + 2 },
+      top: { x: contentBox.x + contentBox.width / 2, y: contentBox.y + 2 },
       bottom: { x: rootBox.x + rootBox.width / 2, y: rootBox.y + rootBox.height - 2 },
     }[edge]
     await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
@@ -961,7 +1144,9 @@ test("uses CSS overflow when nested Preview panes exceed the Work Column", async
 
   await page.mouse.move(thirdBox.x + thirdBox.width / 2, thirdBox.y + thirdBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(secondLeafBox.x + secondLeafBox.width - 2, secondLeafBox.y + secondLeafBox.height / 2, { steps: 8 })
+  await page.mouse.move(secondLeafBox.x + secondLeafBox.width - 2, secondLeafBox.y + secondLeafBox.height / 2, {
+    steps: 8,
+  })
   await page.mouse.up()
 
   const workspace = panel.locator("[data-preview-workspace]")
@@ -1005,6 +1190,27 @@ test("isolates an outer surface-tab drag from Preview panes", async ({ page }) =
   await expect.poll(async () => (await outerPreview.boundingBox())?.x ?? Infinity).toBeLessThan(filesBox.x)
   await expect(panel.locator("[data-preview-leaf]")).toHaveCount(2)
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
+})
+
+test("keeps Home fixed while surface tabs are rearranged", async ({ page }) => {
+  await openPreview(page)
+
+  const panel = page.locator("#review-panel")
+  const home = panel.getByRole("tab", { name: "Home", exact: true })
+  const preview = panel.getByRole("tab", { name: "Preview", exact: true })
+  const homeHandle = await home.elementHandle()
+  const homeBox = await home.boundingBox()
+  const previewBox = await preview.boundingBox()
+  if (!homeHandle || !homeBox || !previewBox)
+    throw new Error("Home and Preview surface tabs must be measurable before dragging")
+
+  await page.mouse.move(homeBox.x + homeBox.width / 2, homeBox.y + homeBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2, { steps: 8 })
+
+  expect(await homeHandle.evaluate((element) => element.isConnected)).toBe(true)
+  expect(await homeHandle.evaluate((element) => element.getBoundingClientRect().x)).toBe(homeBox.x)
+  await page.mouse.up()
 })
 
 test("opens a later Preview file in the leaf the researcher focused", async ({ page }) => {
@@ -1081,11 +1287,16 @@ async function openPreview(page: Parameters<typeof mockOpenCodeServer>[0]) {
     fileContent: (path) => {
       if (path === markdownFile) return { type: "text", content: markdownContent }
       if (path === secondMarkdownFile) return { type: "text", content: secondMarkdownContent }
-      if (path === imageFile) return { type: "binary", content: imageContent, encoding: "base64", mimeType: "image/png" }
-      if (path === pdfFile) return { type: "binary", content: pdfContent, encoding: "base64", mimeType: "application/pdf" }
-      if (path === noTextPdfFile) return { type: "binary", content: noTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
-      if (path === partialTextPdfFile) return { type: "binary", content: partialTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
-      if (path === "notes/third.md") return { type: "text", content: "# Third Preview\n\nThe nested renderer stays alive." }
+      if (path === imageFile)
+        return { type: "binary", content: imageContent, encoding: "base64", mimeType: "image/png" }
+      if (path === pdfFile)
+        return { type: "binary", content: pdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === noTextPdfFile)
+        return { type: "binary", content: noTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === partialTextPdfFile)
+        return { type: "binary", content: partialTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === "notes/third.md")
+        return { type: "text", content: "# Third Preview\n\nThe nested renderer stays alive." }
       if (path.startsWith("notes/capacity-")) return { type: "text", content: `# ${path}` }
       return undefined
     },
@@ -1124,7 +1335,10 @@ async function openPreviewFile(page: Parameters<typeof mockOpenCodeServer>[0], p
   await page.evaluate((path) => {
     window.postMessage({ source: "amicode", kind: "preview-file", path }, "*")
   }, path)
-  await expect(page.locator("#review-panel").getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("data-selected", "")
+  await expect(page.locator("#review-panel").getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute(
+    "data-selected",
+    "",
+  )
 }
 
 async function textStaysWithinPage(text: Locator, canvas: Locator): Promise<boolean> {

@@ -37,14 +37,23 @@ type PreviewDrop = {
   leafID: string
   position: PreviewDropPosition
   targetIndex?: number
+  sourceOffset?: number
+  kind: "rail" | "pane"
 }
 
 type PreviewDrag = {
   path: string
   sourceLeafID: string
+  width: number
   x: number
   y: number
   drop?: PreviewDrop
+}
+
+type PreviewRailReorder = {
+  direction: "source" | "source-remote" | "left" | "right"
+  width: number
+  offset?: number
 }
 
 type PreviewLeafEdges = {
@@ -101,7 +110,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       if (!(event.target instanceof Node)) return
       for (const [leafID, element] of leafElements) {
         if (!element.contains(event.target)) continue
-        setWorkspace((current) => current.focusedLeafID === leafID ? current : { ...current, focusedLeafID: leafID })
+        setWorkspace((current) => (current.focusedLeafID === leafID ? current : { ...current, focusedLeafID: leafID }))
         return
       }
     }
@@ -149,44 +158,96 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     setTabContextMenu({ path, x: event.clientX, y: event.clientY })
   }
 
-  const dropTargetAt = (clientX: number, clientY: number, path: string, sourceLeafID: string): PreviewDrop | undefined => {
+  const dropTargetAt = (
+    clientX: number,
+    clientY: number,
+    path: string,
+    sourceLeafID: string,
+    sourceStartX: number,
+    sourceGrabOffset: number,
+  ): PreviewDrop | undefined => {
     for (const leaf of previewLeaves(workspace().tree)) {
       const element = leafElements.get(leaf.id)
       const rect = element?.getBoundingClientRect()
-      if (!element || !rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) continue
+      if (
+        !element ||
+        !rect ||
+        clientX < rect.left ||
+        clientX > rect.right ||
+        clientY < rect.top ||
+        clientY > rect.bottom
+      )
+        continue
+
+      const tabsList = element.querySelector<HTMLElement>('[data-slot="tabs-list"]')
+      const tabsRect = tabsList?.getBoundingClientRect()
+      if (
+        tabsList &&
+        tabsRect &&
+        clientX >= tabsRect.left &&
+        clientX <= tabsRect.right &&
+        clientY >= tabsRect.top &&
+        clientY <= tabsRect.bottom
+      ) {
+        const tabs = Array.from(element.querySelectorAll<HTMLElement>("[data-preview-tab]"))
+        const sourceLeaf = previewLeaves(workspace().tree).find((candidate) => candidate.id === sourceLeafID)
+        const insertionTabs = sourceLeaf?.id === leaf.id ? tabs.filter((tab) => tab.dataset.previewTab !== path) : tabs
+        const targetIndex = insertionTabs.findIndex((tab) => {
+          const midpoint = tabsRect.left + tab.offsetLeft - tabsList.offsetLeft + tab.offsetWidth / 2
+          return clientX < midpoint
+        })
+        const insertionIndex = targetIndex === -1 ? insertionTabs.length : targetIndex
+        const sourceOffset = sourceLeaf?.id === leaf.id ? clientX - sourceGrabOffset - sourceStartX : undefined
+        return {
+          leafID: leaf.id,
+          position: "center",
+          targetIndex: insertionIndex,
+          sourceOffset,
+          kind: "rail",
+        }
+      }
+
+      const content = element.querySelector<HTMLElement>(".preview-pane-content")
+      const contentRect = content?.getBoundingClientRect()
+      if (!contentRect) return undefined
 
       const position: PreviewDropPosition =
-        clientX - rect.left < DROP_EDGE_PX
+        clientX - contentRect.left < DROP_EDGE_PX
           ? "left"
-          : rect.right - clientX < DROP_EDGE_PX
+          : contentRect.right - clientX < DROP_EDGE_PX
             ? "right"
-            : clientY - rect.top < DROP_EDGE_PX
+            : clientY - contentRect.top < DROP_EDGE_PX
               ? "top"
-              : rect.bottom - clientY < DROP_EDGE_PX
+              : contentRect.bottom - clientY < DROP_EDGE_PX
                 ? "bottom"
                 : "center"
 
       if (position !== "center" && sourceLeafID === leaf.id && leaf.tabs.length === 1) return undefined
 
-      if (position !== "center") return { leafID: leaf.id, position }
+      if (position !== "center") return { leafID: leaf.id, position, kind: "pane" }
 
       const tabs = Array.from(element.querySelectorAll<HTMLElement>("[data-preview-tab]"))
       const targetIndex = tabs.findIndex((tab) => {
         const tabRect = tab.getBoundingClientRect()
         return clientX < tabRect.left + tabRect.width / 2
       })
-      return { leafID: leaf.id, position, targetIndex: targetIndex === -1 ? tabs.length : targetIndex }
+      return { leafID: leaf.id, position, targetIndex: targetIndex === -1 ? tabs.length : targetIndex, kind: "pane" }
     }
     return undefined
   }
 
   const startPreviewDrag = (event: PointerEvent, path: string, sourceLeafID: string) => {
     event.stopPropagation()
-    if (event.button !== 0 || (event.target instanceof Element && event.target.closest('[data-slot="tabs-trigger-close-button"]'))) return
+    if (
+      event.button !== 0 ||
+      (event.target instanceof Element && event.target.closest('[data-slot="tabs-trigger-close-button"]'))
+    )
+      return
 
     const activeElement = document.activeElement
     const focusTarget =
-      activeElement instanceof HTMLElement && activeElement.closest("[data-preview-host]")?.getAttribute("data-preview-host") === path
+      activeElement instanceof HTMLElement &&
+      activeElement.closest("[data-preview-host]")?.getAttribute("data-preview-host") === path
         ? activeElement
         : undefined
     const focusScroller = focusTarget?.closest<HTMLElement>(".cm-scroller")
@@ -194,7 +255,13 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     const origin = { x: event.clientX, y: event.clientY }
     let active = false
     const source = event.currentTarget as HTMLElement
+    const sourceRect =
+      source.closest<HTMLElement>("[data-preview-tab]")?.getBoundingClientRect() ?? source.getBoundingClientRect()
+    const sourceWidth = sourceRect.width
+    const sourceGrabOffset = event.clientX - sourceRect.left
     source.setPointerCapture?.(event.pointerId)
+    const setDocumentDrag = (dragging: boolean) =>
+      document.documentElement.toggleAttribute("data-preview-tab-dragging", dragging)
 
     const clearDragProxy = (fade: boolean) => {
       const proxy = dragProxy()
@@ -219,12 +286,14 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       if (source.hasPointerCapture?.(event.pointerId)) source.releasePointerCapture(event.pointerId)
       stopPreviewDrag = undefined
       setPreviewDrag(null)
+      setDocumentDrag(false)
       clearDragProxy(fadeProxy)
     }
     const onMove = (moveEvent: PointerEvent) => {
       if (!active) {
         if (Math.hypot(moveEvent.clientX - origin.x, moveEvent.clientY - origin.y) < 4) return
         active = true
+        setDocumentDrag(true)
       }
       moveEvent.preventDefault()
       if (dragProxyTimer) clearTimeout(dragProxyTimer)
@@ -232,18 +301,28 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       const next = {
         path,
         sourceLeafID,
+        width: sourceWidth,
         x: moveEvent.clientX,
         y: moveEvent.clientY,
-        drop: dropTargetAt(moveEvent.clientX, moveEvent.clientY, path, sourceLeafID),
+        drop: dropTargetAt(moveEvent.clientX, moveEvent.clientY, path, sourceLeafID, sourceRect.left, sourceGrabOffset),
       }
       setPreviewDrag(next)
-      setDragProxy({ path, x: next.x, y: next.y, leaving: false })
+      setDragProxy(next.drop?.kind === "rail" ? null : { path, x: next.x, y: next.y, leaving: false })
     }
     const onUp = (upEvent: PointerEvent) => {
-      const drop = active ? dropTargetAt(upEvent.clientX, upEvent.clientY, path, sourceLeafID) : undefined
+      const drop = active
+        ? dropTargetAt(upEvent.clientX, upEvent.clientY, path, sourceLeafID, sourceRect.left, sourceGrabOffset)
+        : undefined
       stop(!drop)
       if (!drop) return
-      setWorkspace((current) => movePreviewTab(current, { path, targetLeafID: drop.leafID, position: drop.position, targetIndex: drop.targetIndex }))
+      setWorkspace((current) =>
+        movePreviewTab(current, {
+          path,
+          targetLeafID: drop.leafID,
+          position: drop.position,
+          targetIndex: drop.targetIndex,
+        }),
+      )
       requestAnimationFrame(() => {
         if (focusTarget?.isConnected) focusTarget.focus({ preventScroll: true })
         requestAnimationFrame(() => {
@@ -261,6 +340,40 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   }
 
   const isSelected = (path: string) => previewLeafContaining(workspace().tree, path)?.selectedPath === path
+
+  const railReorder = (leaf: PreviewLeaf, path: string): PreviewRailReorder | undefined => {
+    const drag = previewDrag()
+    const drop = drag?.drop
+    if (!drag || !drop || drop.kind !== "rail") return undefined
+
+    const source = previewLeaves(workspace().tree).find((candidate) => candidate.id === drag.sourceLeafID)
+    if (!source) return undefined
+    const sourceIndex = source.tabs.indexOf(drag.path)
+    if (sourceIndex === -1) return undefined
+
+    if (leaf.id === source.id && path === drag.path) {
+      const direction: PreviewRailReorder["direction"] = drop.leafID === source.id ? "source" : "source-remote"
+      return {
+        direction,
+        width: drag.width,
+        offset: drop.sourceOffset,
+      }
+    }
+
+    const index = leaf.tabs.indexOf(path)
+    if (index === -1) return undefined
+
+    if (source.id === drop.leafID && leaf.id === source.id) {
+      const targetIndex = Math.max(0, Math.min(drop.targetIndex ?? source.tabs.length - 1, source.tabs.length - 1))
+      if (sourceIndex > targetIndex && index >= targetIndex && index < sourceIndex)
+        return { direction: "right" as const, width: drag.width }
+      if (sourceIndex < targetIndex && index > sourceIndex && index <= targetIndex)
+        return { direction: "left" as const, width: drag.width }
+      return undefined
+    }
+
+    return undefined
+  }
 
   const startDividerResize = (event: PointerEvent, split: PreviewSplit) => {
     event.preventDefault()
@@ -309,10 +422,8 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     edges: PreviewLeafEdges = { top: true, right: true, bottom: true, left: true },
   ): JSX.Element => {
     if (pane.kind === "leaf") return renderLeaf(pane, edges)
-    const firstEdges =
-      pane.direction === "horizontal" ? { ...edges, right: false } : { ...edges, bottom: false }
-    const secondEdges =
-      pane.direction === "horizontal" ? { ...edges, left: false } : { ...edges, top: false }
+    const firstEdges = pane.direction === "horizontal" ? { ...edges, right: false } : { ...edges, bottom: false }
+    const secondEdges = pane.direction === "horizontal" ? { ...edges, left: false } : { ...edges, top: false }
     return (
       <div data-preview-split data-direction={pane.direction} class="preview-pane-split">
         <div class="preview-pane-branch" style={paneBranchStyle(pane.first, pane.ratio)}>
@@ -337,7 +448,28 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   }
 
   const renderLeaf = (leaf: PreviewLeaf, edges: PreviewLeafEdges): JSX.Element => {
-    const activeDrop = () => previewDrag()?.drop
+    const activeDrop = () => {
+      const drop = previewDrag()?.drop
+      return drop?.kind === "pane" ? drop : undefined
+    }
+    const railGhost = () => {
+      const drag = previewDrag()
+      const drop = drag?.drop
+      if (!drag || !drop || drop.kind !== "rail" || drop.leafID !== leaf.id || drag.sourceLeafID === leaf.id)
+        return undefined
+      return { path: drag.path, index: Math.max(0, Math.min(drop.targetIndex ?? leaf.tabs.length, leaf.tabs.length)) }
+    }
+    const RailGhost = () => {
+      const ghost = railGhost()
+      if (!ghost) return null
+      return (
+        <div data-preview-rail-drag-tab class="h-full flex items-center pointer-events-none" aria-hidden="true">
+          <Tabs.Trigger value={ghost.path} tabIndex={-1}>
+            <FileVisual path={ghost.path} active={false} explorerIconTheme />
+          </Tabs.Trigger>
+        </div>
+      )
+    }
     return (
       <section
         ref={(element) => leafElements.set(leaf.id, element)}
@@ -357,32 +489,60 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
         >
           <Tabs.List aria-label="Open previews">
             <For each={leaf.tabs}>
-              {(path) => (
-                <div data-preview-tab={path} class="h-full flex items-center">
-                  <Tabs.Trigger
-                    value={path}
-                    onPointerDown={(event) => startPreviewDrag(event, path, leaf.id)}
-                    onContextMenu={(event: MouseEvent) => openTabContextMenu(event, path)}
-                    closeButton={
-                      <button
-                        type="button"
-                        class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                        aria-label={`Close ${path.split("/").pop()}`}
-                        onClick={() => closePath(path)}
+              {(path, index) => {
+                const reorder = () => railReorder(leaf, path)
+                return (
+                  <>
+                    <Show when={railGhost()?.index === index()}>
+                      <RailGhost />
+                    </Show>
+                    <div
+                      data-preview-tab={path}
+                      data-preview-reorder={reorder()?.direction}
+                      class="h-full flex items-center"
+                      style={
+                        reorder()
+                          ? {
+                              "--preview-drag-width": `${reorder()!.width}px`,
+                              "--preview-drag-offset": `${reorder()!.offset ?? 0}px`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <Tabs.Trigger
+                        value={path}
+                        onPointerDown={(event) => startPreviewDrag(event, path, leaf.id)}
+                        onContextMenu={(event: MouseEvent) => openTabContextMenu(event, path)}
+                        closeButton={
+                          <button
+                            type="button"
+                            class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                            aria-label={`Close ${path.split("/").pop()}`}
+                            onClick={() => closePath(path)}
+                          >
+                            <Show when={dirtyPaths[path]} fallback={<Icon name="close-small" size="small" />}>
+                              <span
+                                data-preview-unsaved
+                                role="status"
+                                aria-label="Unsaved changes"
+                                class="w-2 h-2 rounded-full bg-v2-text-text-faint"
+                              />
+                            </Show>
+                          </button>
+                        }
+                        hideCloseButton
+                        onMiddleClick={() => closePath(path)}
                       >
-                        <Show when={dirtyPaths[path]} fallback={<Icon name="close-small" size="small" />}>
-                          <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
-                        </Show>
-                      </button>
-                    }
-                    hideCloseButton
-                    onMiddleClick={() => closePath(path)}
-                  >
-                    <FileVisual path={path} active={leaf.selectedPath === path} explorerIconTheme />
-                  </Tabs.Trigger>
-                </div>
-              )}
+                        <FileVisual path={path} active={leaf.selectedPath === path} explorerIconTheme />
+                      </Tabs.Trigger>
+                    </div>
+                  </>
+                )
+              }}
             </For>
+            <Show when={railGhost()?.index === leaf.tabs.length}>
+              <RailGhost />
+            </Show>
           </Tabs.List>
         </Tabs>
 
@@ -429,10 +589,19 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
 
         <Show when={closingPath()}>
           {(path) => (
-            <div class="shrink-0 mx-3 mb-3 p-3 border border-border-base rounded-md bg-background-base" role="dialog" aria-modal="true" aria-label="Unsaved changes">
+            <div
+              class="shrink-0 mx-3 mb-3 p-3 border border-border-base rounded-md bg-background-base"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Unsaved changes"
+            >
               <p class="text-12-regular text-text-base">Save changes to {path().split("/").pop()} before closing?</p>
               <div class="mt-2 flex justify-end gap-2">
-                <button type="button" class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus" onClick={() => setClosingPath(null)}>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                  onClick={() => setClosingPath(null)}
+                >
                   Cancel
                 </button>
                 <button
@@ -473,7 +642,10 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
                 {(path) => (
                   <Show when={hostMounts[path]}>
                     {(mount) => (
-                      <Portal mount={mount()} ref={(container) => container.classList.add("preview-pane-renderer-mount")}>
+                      <Portal
+                        mount={mount()}
+                        ref={(container) => container.classList.add("preview-pane-renderer-mount")}
+                      >
                         <div
                           data-preview-host={path}
                           class="h-full min-h-0"
@@ -514,7 +686,9 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
               top: `${tabContextMenu()?.y ?? 0}px`,
             }}
           >
-            <MenuV2.Item onSelect={() => void copyPreviewPath((tabContextMenu()?.path ?? "").split("/").at(-1) ?? "")}>Copy filename</MenuV2.Item>
+            <MenuV2.Item onSelect={() => void copyPreviewPath((tabContextMenu()?.path ?? "").split("/").at(-1) ?? "")}>
+              Copy filename
+            </MenuV2.Item>
             <MenuV2.Item onSelect={() => void copyPreviewPath(tabContextMenu()?.path ?? "")}>Copy filepath</MenuV2.Item>
           </MenuV2.Content>
         </MenuV2.Portal>
