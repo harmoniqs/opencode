@@ -217,6 +217,42 @@ test("reorders Preview tabs without recreating their renderer hosts", async ({ p
   expect(await host!.evaluate((element) => element.isConnected)).toBe(true)
 })
 
+test("splits a Preview leaf at its right edge without recreating the moved renderer", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const sourceLeaf = panel.locator('[data-preview-leaf="root"]')
+  const movedHost = panel.locator('[data-preview-host="notes/second.md"]')
+  const host = await movedHost.elementHandle()
+  const sourceBox = await source.boundingBox()
+  const leafBox = await sourceLeaf.boundingBox()
+  if (!sourceBox || !leafBox || !host) throw new Error("Preview tab and leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(leafBox.x + leafBox.width - 2, leafBox.y + leafBox.height / 2, { steps: 8 })
+  await expect(panel.locator('[data-preview-dragging="notes/second.md"]')).toBeVisible()
+  await expect(panel.locator('[data-preview-drop-preview="right"]')).toBeVisible()
+  await page.mouse.up()
+  await page.waitForTimeout(250)
+
+  const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  await expect(panel.locator("[data-preview-leaf]")).toHaveCount(2)
+  await expect(destinationLeaf.getByRole("tab", { name: "second.md" })).toHaveAttribute("aria-selected", "true")
+  await expect(destinationLeaf.locator('[data-preview-host="notes/second.md"]')).toBeVisible()
+  await expect(destinationLeaf.getByText("The second renderer stays alive.", { exact: true })).toBeVisible()
+  await expect(sourceLeaf.getByText("The renderer must keep focus.", { exact: true })).toBeVisible()
+  expect(await host.evaluate((element) => element.isConnected)).toBe(true)
+
+  const sourceLeafBox = await sourceLeaf.boundingBox()
+  const destinationLeafBox = await destinationLeaf.boundingBox()
+  expect(sourceLeafBox?.width).toBeGreaterThanOrEqual(150)
+  expect(destinationLeafBox?.width).toBeGreaterThanOrEqual(150)
+  expect(destinationLeafBox?.x).toBeGreaterThan(sourceLeafBox!.x)
+})
+
 test("closing clean tabs selects the previous tab then the empty placeholder", async ({ page }) => {
   await openPreview(page)
   await openPreviewFile(page, secondMarkdownFile)

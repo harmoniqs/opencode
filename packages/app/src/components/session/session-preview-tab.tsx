@@ -1,77 +1,85 @@
 /**
- * session-preview-tab — Companion file viewer for the Preview tab.
- *
- * Renders the file at `previewFile()` using PreviewFileView. When no file is
- * selected, shows a placeholder. File discovery, navigation, search, and the
- * Finder directory view have been removed (#933) — the Preview tab is now
- * driven externally by sidebar clicks and chat file-pill routing.
- *
- * Each live renderer host retains its own mode, scroll position, and draft
- * through inner and outer tab switches.
- *
- * @module
+ * The Preview workspace owns tab placement only. Renderer hosts remain a flat,
+ * retained pool and are relocated between leaf slots without being recreated.
  */
 
-import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
-import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
-import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
-import { Accessibility, AutoScroller, Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
-import { RestrictToHorizontalAxis } from "@dnd-kit/abstract/modifiers"
-import { RestrictToElement } from "@dnd-kit/dom/modifiers"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { PreviewFileView } from "./preview-file-view"
 import { FileVisual } from "./session-sortable-tab"
-import { reorderPreviewTabs } from "./session-preview-tabs"
-import type { Accessor, JSX } from "solid-js"
+import {
+  createPreviewWorkspace,
+  movePreviewTab,
+  openPreviewPath,
+  previewLeafContaining,
+  previewLeaves,
+  previewTabCount,
+  removePreviewPath,
+  selectPreviewPath,
+  type PreviewDropPosition,
+  type PreviewLeaf,
+  type PreviewPane,
+} from "./session-preview-tree"
 
-// ─── Main Component ─────────────────────────────────────────────────────────
+const MAX_PREVIEW_TABS = 8
+const DROP_EDGE_PX = 32
 
-function SortablePreviewTab(props: { path: string; index: () => number; children: JSX.Element }) {
-  const sortable = useSortable({
-    get id() {
-      return props.path
-    },
-    get index() {
-      return props.index()
-    },
-  })
-
-  return (
-    <div ref={sortable.ref} class="h-full flex items-center">
-      {props.children}
-    </div>
-  )
+type PreviewDrop = {
+  leafID: string
+  position: PreviewDropPosition
+  targetIndex?: number
 }
 
-export function SessionPreviewTab(props: {
-  previewFile: Accessor<string | null>
-}) {
-  // ─── Workspace state ─────────────────────────────────────────────────────
+type PreviewDrag = {
+  path: string
+  sourceLeafID: string
+  drop?: PreviewDrop
+}
 
+export function SessionPreviewTab(props: { previewFile: Accessor<string | null> }) {
   const [dirtyPaths, setDirtyPaths] = createStore<Record<string, boolean>>({})
   const [saveRequests, setSaveRequests] = createStore<Record<string, number>>({})
-
   const [zoom, setZoom] = createSignal(100)
-  const [openedPaths, setOpenedPaths] = createSignal<string[]>([])
-  const [selectedPath, setSelectedPath] = createSignal<string | null>(null)
+  const [workspace, setWorkspace] = createSignal(createPreviewWorkspace())
   const [capacityMessage, setCapacityMessage] = createSignal<string | null>(null)
   const [closingPath, setClosingPath] = createSignal<string | null>(null)
-  let previewTabList: HTMLDivElement | undefined
+  const [previewDrag, setPreviewDrag] = createSignal<PreviewDrag | null>(null)
+
+  const leafElements = new Map<string, HTMLElement>()
+  const hostSlots = new Map<string, HTMLDivElement>()
+  const rendererHosts = new Map<string, HTMLDivElement>()
+  let stopPreviewDrag: (() => void) | undefined
+
+  const openedPaths = () => previewLeaves(workspace().tree).flatMap((leaf) => leaf.tabs)
+
+  const relocateRendererHosts = () => {
+    const currentPaths = new Set(openedPaths())
+    for (const path of rendererHosts.keys()) if (!currentPaths.has(path)) rendererHosts.delete(path)
+
+    for (const leaf of previewLeaves(workspace().tree)) {
+      const slot = hostSlots.get(leaf.id)
+      if (!slot?.isConnected) continue
+      for (const path of leaf.tabs) {
+        const host = rendererHosts.get(path)
+        if (host && host.parentElement !== slot) slot.appendChild(host)
+      }
+    }
+  }
+
+  createEffect(() => {
+    workspace()
+    queueMicrotask(relocateRendererHosts)
+  })
 
   const openPath = (path: string) => {
-    if (openedPaths().includes(path)) {
-      setSelectedPath(path)
-      setCapacityMessage(null)
-      return
-    }
-    if (openedPaths().length === 8) {
+    const current = workspace()
+    if (!previewLeafContaining(current.tree, path) && previewTabCount(current.tree) === MAX_PREVIEW_TABS) {
       setCapacityMessage("Close an existing Preview tab before opening another file.")
       return
     }
-    setOpenedPaths((paths) => [...paths, path])
-    setSelectedPath(path)
+    setWorkspace(openPreviewPath(current, path))
     setCapacityMessage(null)
   }
 
@@ -79,8 +87,7 @@ export function SessionPreviewTab(props: {
     on(
       () => props.previewFile(),
       (path) => {
-        if (!path) return
-        openPath(path)
+        if (path) openPath(path)
       },
     ),
   )
@@ -88,25 +95,19 @@ export function SessionPreviewTab(props: {
   onMount(() => {
     const handlePreviewFile = (event: MessageEvent) => {
       const data = event.data as { source?: string; kind?: string; path?: string } | undefined
-      if (data?.source !== "amicode" || data.kind !== "preview-file" || !data.path) return
-      openPath(data.path)
+      if (data?.source === "amicode" && data.kind === "preview-file" && data.path) openPath(data.path)
     }
     window.addEventListener("message", handlePreviewFile)
     onCleanup(() => window.removeEventListener("message", handlePreviewFile))
   })
+  onCleanup(() => stopPreviewDrag?.())
 
-  const zoomIn = () => setZoom((z) => Math.min(z + 10, 500))
-  const zoomOut = () => setZoom((z) => Math.max(z - 10, 50))
+  const zoomIn = () => setZoom((value) => Math.min(value + 10, 500))
+  const zoomOut = () => setZoom((value) => Math.max(value - 10, 50))
   const onZoomChange = (value: number) => setZoom(Math.round(Math.min(Math.max(value, 50), 500)))
 
   const removePath = (path: string) => {
-    setOpenedPaths((paths) => {
-      const index = paths.indexOf(path)
-      if (index === -1) return paths
-      const next = paths.filter((item) => item !== path)
-      if (selectedPath() === path) setSelectedPath(next[index - 1] ?? next[index] ?? null)
-      return next
-    })
+    setWorkspace((current) => removePreviewPath(current, path))
     setDirtyPaths(path, false)
   }
 
@@ -118,73 +119,149 @@ export function SessionPreviewTab(props: {
     removePath(path)
   }
 
-  return (
-    <div class="h-full flex flex-col overflow-hidden">
-      <Show when={openedPaths().length > 0}>
+  const dropTargetAt = (clientX: number, clientY: number, path: string, sourceLeafID: string): PreviewDrop | undefined => {
+    for (const leaf of previewLeaves(workspace().tree)) {
+      const element = leafElements.get(leaf.id)
+      const rect = element?.getBoundingClientRect()
+      if (!element || !rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) continue
+
+      const position: PreviewDropPosition =
+        clientX - rect.left < DROP_EDGE_PX
+          ? "left"
+          : rect.right - clientX < DROP_EDGE_PX
+            ? "right"
+            : clientY - rect.top < DROP_EDGE_PX
+              ? "top"
+              : rect.bottom - clientY < DROP_EDGE_PX
+                ? "bottom"
+                : "center"
+
+      if (position !== "center" && sourceLeafID === leaf.id && leaf.tabs.length === 1) return undefined
+
+      if (position !== "center") return { leafID: leaf.id, position }
+
+      const tabs = Array.from(element.querySelectorAll<HTMLElement>("[data-preview-tab]"))
+      const targetIndex = tabs.findIndex((tab) => {
+        const tabRect = tab.getBoundingClientRect()
+        return clientX < tabRect.left + tabRect.width / 2
+      })
+      return { leafID: leaf.id, position, targetIndex: targetIndex === -1 ? tabs.length : targetIndex }
+    }
+    return undefined
+  }
+
+  const startPreviewDrag = (event: PointerEvent, path: string, sourceLeafID: string) => {
+    event.stopPropagation()
+    if (event.button !== 0 || (event.target instanceof Element && event.target.closest('[data-slot="tabs-trigger-close-button"]'))) return
+
+    const origin = { x: event.clientX, y: event.clientY }
+    let active = false
+    const source = event.currentTarget as HTMLElement
+    source.setPointerCapture?.(event.pointerId)
+
+    const stop = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onCancel)
+      if (source.hasPointerCapture?.(event.pointerId)) source.releasePointerCapture(event.pointerId)
+      stopPreviewDrag = undefined
+      setPreviewDrag(null)
+    }
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!active) {
+        if (Math.hypot(moveEvent.clientX - origin.x, moveEvent.clientY - origin.y) < 4) return
+        active = true
+      }
+      moveEvent.preventDefault()
+      setPreviewDrag({ path, sourceLeafID, drop: dropTargetAt(moveEvent.clientX, moveEvent.clientY, path, sourceLeafID) })
+    }
+    const onUp = (upEvent: PointerEvent) => {
+      const drop = active ? dropTargetAt(upEvent.clientX, upEvent.clientY, path, sourceLeafID) : undefined
+      stop()
+      if (!drop) return
+      setWorkspace((current) => movePreviewTab(current, { path, targetLeafID: drop.leafID, position: drop.position, targetIndex: drop.targetIndex }))
+    }
+    const onCancel = () => stop()
+
+    stopPreviewDrag?.()
+    stopPreviewDrag = stop
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onCancel)
+  }
+
+  const isSelected = (path: string) => previewLeafContaining(workspace().tree, path)?.selectedPath === path
+
+  const renderPane = (pane: PreviewPane): JSX.Element => {
+    if (pane.kind === "leaf") return renderLeaf(pane)
+    return (
+      <div data-preview-split data-direction={pane.direction} class="preview-pane-split">
+        {renderPane(pane.first)}
+        {renderPane(pane.second)}
+      </div>
+    )
+  }
+
+  const renderLeaf = (leaf: PreviewLeaf): JSX.Element => {
+    const activeDrop = () => previewDrag()?.drop
+    return (
+      <section
+        ref={(element) => leafElements.set(leaf.id, element)}
+        data-preview-leaf={leaf.id}
+        data-focused={workspace().focusedLeafID === leaf.id || undefined}
+        class="preview-pane-leaf"
+        onPointerDown={() => setWorkspace((current) => ({ ...current, focusedLeafID: leaf.id }))}
+      >
         <Tabs
-          value={selectedPath() ?? undefined}
-          onChange={setSelectedPath}
+          value={leaf.selectedPath ?? undefined}
+          onChange={(path) => setWorkspace((current) => selectPreviewPath(current, leaf.id, path))}
           class="shrink-0"
           classList={{ "preview-tab-strip": true }}
-          style={{ height: "auto", overflow: "visible" }}
         >
-          <Tabs.List ref={previewTabList} aria-label="Open previews">
-            <DragDropProvider
-              sensors={[
-                PointerSensor.configure({
-                  activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })],
-                  preventActivation: (event) =>
-                    event.target instanceof Element && !!event.target.closest('[data-slot="tabs-trigger-close-button"]'),
-                }),
-              ]}
-              modifiers={[
-                RestrictToHorizontalAxis,
-                RestrictToElement.configure({ element: () => previewTabList ?? null }),
-              ]}
-              plugins={(defaults) => [
-                ...defaults.filter((plugin) => plugin !== Accessibility),
-                AutoScroller.configure({ acceleration: 8, threshold: { x: 0.05, y: 0 } }),
-                Feedback.configure({ dropAnimation: null }),
-              ]}
-              onDragEnd={(event) => {
-                const source = event.operation.source
-                if (event.canceled || !isSortable(source) || source.initialIndex === source.index) return
-                setOpenedPaths((paths) => reorderPreviewTabs(paths, source.id.toString(), source.index))
-              }}
-            >
-              <For each={openedPaths()}>
-                {(path, index) => (
-                  <SortablePreviewTab path={path} index={index}>
-                    <Tabs.Trigger
-                      value={path}
-                      closeButton={
-                        <button
-                          type="button"
-                          class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                          aria-label={`Close ${path.split("/").pop()}`}
-                          onClick={() => closePath(path)}
-                        >
-                          <Show
-                            when={dirtyPaths[path]}
-                            fallback={<Icon name="close-small" size="small" />}
-                          >
-                            <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
-                          </Show>
-                        </button>
-                      }
-                      hideCloseButton
-                      onMiddleClick={() => closePath(path)}
-                    >
-                      <FileVisual path={path} active={selectedPath() === path} explorerIconTheme />
-                    </Tabs.Trigger>
-                  </SortablePreviewTab>
-                )}
-              </For>
-            </DragDropProvider>
+          <Tabs.List aria-label="Open previews">
+            <For each={leaf.tabs}>
+              {(path) => (
+                <div data-preview-tab={path} class="h-full flex items-center">
+                  <Tabs.Trigger
+                    value={path}
+                    onPointerDown={(event) => startPreviewDrag(event, path, leaf.id)}
+                    closeButton={
+                      <button
+                        type="button"
+                        class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                        aria-label={`Close ${path.split("/").pop()}`}
+                        onClick={() => closePath(path)}
+                      >
+                        <Show when={dirtyPaths[path]} fallback={<Icon name="close-small" size="small" />}>
+                          <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
+                        </Show>
+                      </button>
+                    }
+                    hideCloseButton
+                    onMiddleClick={() => closePath(path)}
+                  >
+                    <FileVisual path={path} active={leaf.selectedPath === path} explorerIconTheme />
+                  </Tabs.Trigger>
+                </div>
+              )}
+            </For>
           </Tabs.List>
         </Tabs>
-      </Show>
 
+        <div ref={(element) => {
+          hostSlots.set(leaf.id, element)
+          queueMicrotask(relocateRendererHosts)
+        }} class="preview-pane-content" />
+
+        <Show when={activeDrop()?.leafID === leaf.id && activeDrop()?.position !== "center"}>
+          <div data-preview-drop-preview={activeDrop()!.position} class="preview-pane-drop-preview" />
+        </Show>
+      </section>
+    )
+  }
+
+  return (
+    <div class="h-full flex flex-col overflow-hidden">
       <Show when={capacityMessage()}>
         <div class="shrink-0 px-3 py-2 text-12-regular text-text-weak" role="alert">
           {capacityMessage()}
@@ -221,40 +298,51 @@ export function SessionPreviewTab(props: {
         )}
       </Show>
 
-      {/* Main content */}
-      <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <Show when={openedPaths().length === 0}>
-          {/* Empty state — no file selected */}
-          <div class="h-full flex flex-col items-center justify-center gap-3 text-text-weak p-6">
-            <Icon name="open-file" class="w-8 h-8 text-v2-text-text-faint" />
-            <p class="text-13-regular text-center">Select a file from the sidebar</p>
+      <div class="flex-1 min-h-0 overflow-auto">
+        <Show
+          when={previewTabCount(workspace().tree) > 0}
+          fallback={
+            <div class="h-full flex flex-col items-center justify-center gap-3 text-text-weak p-6">
+              <Icon name="open-file" class="w-8 h-8 text-v2-text-text-faint" />
+              <p class="text-13-regular text-center">Select a file from the sidebar</p>
+            </div>
+          }
+        >
+          <div class="preview-workspace-canvas" data-preview-dragging={previewDrag()?.path}>
+            <For each={[workspace().tree]}>{renderPane}</For>
+            <div class="hidden">
+              <For each={openedPaths()}>
+                {(path) => (
+                  <div
+                    ref={(element) => {
+                      rendererHosts.set(path, element)
+                      queueMicrotask(relocateRendererHosts)
+                    }}
+                    data-preview-host={path}
+                    class="h-full min-h-0"
+                    classList={{ hidden: !isSelected(path) }}
+                    aria-hidden={!isSelected(path)}
+                    inert={!isSelected(path)}
+                  >
+                    <PreviewFileView
+                      filePath={path}
+                      onDirtyChange={(dirty) => setDirtyPaths(path, dirty)}
+                      saveRequest={() => saveRequests[path] ?? 0}
+                      onSaveComplete={() => {
+                        removePath(path)
+                        setClosingPath(null)
+                      }}
+                      zoom={zoom}
+                      zoomIn={zoomIn}
+                      zoomOut={zoomOut}
+                      onZoomChange={onZoomChange}
+                    />
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </Show>
-        <For each={openedPaths()}>
-          {(filePath) => (
-            <div
-              data-preview-host={filePath}
-              class="h-full min-h-0"
-              classList={{ hidden: selectedPath() !== filePath }}
-              aria-hidden={selectedPath() !== filePath}
-              inert={selectedPath() !== filePath}
-            >
-              <PreviewFileView
-                filePath={filePath}
-                onDirtyChange={(dirty) => setDirtyPaths(filePath, dirty)}
-                saveRequest={() => saveRequests[filePath] ?? 0}
-                onSaveComplete={() => {
-                  removePath(filePath)
-                  setClosingPath(null)
-                }}
-                zoom={zoom}
-                zoomIn={zoomIn}
-                zoomOut={zoomOut}
-                onZoomChange={onZoomChange}
-              />
-            </div>
-          )}
-        </For>
       </div>
     </div>
   )

@@ -116,6 +116,93 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   height: var(--space-6);
 }
 
+/* Preview's pane tree is structural. The scrollable parent exposes a canvas
+   that can outgrow the Work Column; no position is read, stored, or restored. */
+#review-panel {
+  --preview-pane-min-size: 150px;
+}
+#review-panel .preview-workspace-canvas {
+  display: flex;
+  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
+}
+#review-panel .preview-pane-split {
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  min-width: var(--preview-pane-min-size);
+  min-height: var(--preview-pane-min-size);
+}
+#review-panel .preview-pane-split[data-direction="horizontal"] {
+  flex-direction: row;
+  min-width: calc(var(--preview-pane-min-size) * 2);
+}
+#review-panel .preview-pane-split[data-direction="vertical"] {
+  flex-direction: column;
+  min-height: calc(var(--preview-pane-min-size) * 2);
+}
+#review-panel .preview-pane-leaf {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: var(--preview-pane-min-size);
+  min-height: var(--preview-pane-min-size);
+  overflow: hidden;
+  border: var(--border-width) solid var(--v2-border-border-muted);
+  background: var(--v2-background-bg-base);
+}
+#review-panel .preview-pane-leaf[data-focused] {
+  box-shadow: inset 0 0 0 var(--border-width) var(--v2-border-border-strong);
+}
+#review-panel .preview-pane-leaf > [data-component="tabs"].preview-tab-strip {
+  flex: 0 0 auto;
+  height: auto;
+}
+#review-panel .preview-pane-content {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+#review-panel .preview-pane-content > [data-preview-host] {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+#review-panel .preview-pane-content > [data-preview-host] > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+#review-panel .preview-pane-drop-preview {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  border: var(--border-width) solid var(--accent-edge);
+  background: var(--accent-fill-soft);
+}
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="left"],
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="right"] {
+  top: 0;
+  bottom: 0;
+  width: 50%;
+}
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="left"] { left: 0; }
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="right"] { right: 0; }
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="top"],
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="bottom"] {
+  right: 0;
+  left: 0;
+  height: 50%;
+}
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="top"] { top: 0; }
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="bottom"] { bottom: 0; }
+
 /* ── session status dots ──
    Four states: green (done, unread), grey (done, seen), yellow (running),
    red (error). Colour is never the only signal: each dot carries
