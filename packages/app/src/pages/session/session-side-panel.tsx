@@ -882,7 +882,13 @@ export function SessionSidePanel(props: {
                             </Tabs.Content>
                           </Show>
 
-                          <Tabs.Content value={SESSION_PREVIEW_TAB} forceMount class="flex flex-col h-full overflow-hidden contain-strict">
+                          <Tabs.Content
+                            value={SESSION_PREVIEW_TAB}
+                            forceMount
+                            class="flex flex-col h-full overflow-hidden contain-strict"
+                            style={{ display: activeTab() === SESSION_PREVIEW_TAB ? undefined : "none" }}
+                            inert={activeTab() !== SESSION_PREVIEW_TAB}
+                          >
                             <div class="relative flex-1 min-h-0 overflow-hidden">
                               <SessionPreviewTab previewFile={previewFile} />
                             </div>
@@ -1200,7 +1206,13 @@ export function SessionSidePanel(props: {
                           </Tabs.Content>
                         </Show>
 
-                        <Tabs.Content value={SESSION_PREVIEW_TAB} forceMount class="flex flex-col h-full overflow-hidden contain-strict">
+                        <Tabs.Content
+                          value={SESSION_PREVIEW_TAB}
+                          forceMount
+                          class="flex flex-col h-full overflow-hidden contain-strict"
+                          style={{ display: activeTab() === SESSION_PREVIEW_TAB ? undefined : "none" }}
+                          inert={activeTab() !== SESSION_PREVIEW_TAB}
+                        >
                           <div class="relative flex-1 min-h-0 overflow-hidden">
                             <SessionPreviewTab previewFile={previewFile} />
                           </div>

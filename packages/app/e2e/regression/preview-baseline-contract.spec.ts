@@ -124,6 +124,9 @@ test("retains renderer hosts and editor state through inner and outer Preview ta
   expect(await host!.evaluate((element) => element.isConnected)).toBe(true)
 
   await panel.getByRole("tab", { name: "Home" }).click()
+  await expect(panel.getByRole("tablist", { name: "Open previews" })).toBeHidden()
+  await expect(baselineHost).toBeHidden()
+  await expect(baselineHost).toBeAttached()
   await panel.getByRole("tab", { name: "Preview" }).click()
   await expect(baselineHost).toBeVisible()
   await expect(editor).toContainText("Retained draft.")
@@ -186,6 +189,30 @@ test("reuses an open path and refuses a ninth renderer host", async ({ page }) =
 
   await openPreviewFile(page, "notes/capacity-8.md")
   await expect(panel.getByRole("alert")).toHaveText("Close an existing Preview tab before opening another file.")
+  await expect(baselineHost).toBeAttached()
+  expect(await host!.evaluate((element) => element.isConnected)).toBe(true)
+})
+
+test("reorders Preview tabs without recreating their renderer hosts", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const tabs = panel.getByRole("tablist", { name: "Open previews" })
+  const baselineHost = panel.locator('[data-preview-host="notes/baseline.md"]')
+  const host = await baselineHost.elementHandle()
+  const source = tabs.getByRole("tab", { name: "second.md" })
+  const target = tabs.getByRole("tab", { name: "baseline.md" })
+  const sourceBox = await source.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !targetBox) throw new Error("Preview tabs must be measurable before dragging")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width / 2 - 12, targetBox.y + targetBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  expect(await tabs.getByRole("tab").allTextContents()).toEqual(["second.md", "baseline.md"])
   await expect(baselineHost).toBeAttached()
   expect(await host!.evaluate((element) => element.isConnected)).toBe(true)
 })
