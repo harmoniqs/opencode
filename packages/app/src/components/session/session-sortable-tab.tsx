@@ -9,18 +9,26 @@ import { getFilename } from "@opencode-ai/core/util/path"
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
+import { ExplorerFileIcon } from "./vscode-explorer-file-icon"
 
-export function FileVisual(props: { path: string; active?: boolean; temporary?: boolean; treeIconState?: boolean }): JSX.Element {
+export function FileVisual(props: { path: string; active?: boolean; temporary?: boolean; treeIconState?: boolean; explorerIconTheme?: boolean }): JSX.Element {
   return (
     <div class="flex items-center gap-x-1.5 min-w-0">
       <Show
-        when={!props.active || props.treeIconState}
-        fallback={<FileIcon node={{ path: props.path, type: "file" }} class="size-4 shrink-0" />}
+        when={props.explorerIconTheme}
+        fallback={
+          <Show
+            when={!props.active || props.treeIconState}
+            fallback={<FileIcon node={{ path: props.path, type: "file" }} class="size-4 shrink-0" />}
+          >
+            <span class="relative inline-flex size-4 shrink-0">
+              <FileIcon node={{ path: props.path, type: "file" }} class="absolute inset-0 size-4 tab-fileicon-color" />
+              <FileIcon node={{ path: props.path, type: "file" }} mono class="absolute inset-0 size-4 tab-fileicon-mono" />
+            </span>
+          </Show>
+        }
       >
-        <span class="relative inline-flex size-4 shrink-0">
-          <FileIcon node={{ path: props.path, type: "file" }} class="absolute inset-0 size-4 tab-fileicon-color" />
-          <FileIcon node={{ path: props.path, type: "file" }} mono class="absolute inset-0 size-4 tab-fileicon-mono" />
-        </span>
+        <ExplorerFileIcon path={props.path} />
       </Show>
       <span class="text-14-medium truncate" classList={{ italic: props.temporary }}>
         {getFilename(props.path)}

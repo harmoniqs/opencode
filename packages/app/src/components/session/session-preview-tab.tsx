@@ -175,7 +175,7 @@ export function SessionPreviewTab(props: {
                       hideCloseButton
                       onMiddleClick={() => closePath(path)}
                     >
-                      <FileVisual path={path} active={selectedPath() === path} treeIconState />
+                      <FileVisual path={path} active={selectedPath() === path} explorerIconTheme />
                     </Tabs.Trigger>
                   </SortablePreviewTab>
                 )}
