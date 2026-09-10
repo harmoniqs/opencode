@@ -184,6 +184,13 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     event.stopPropagation()
     if (event.button !== 0 || (event.target instanceof Element && event.target.closest('[data-slot="tabs-trigger-close-button"]'))) return
 
+    const activeElement = document.activeElement
+    const focusTarget =
+      activeElement instanceof HTMLElement && activeElement.closest("[data-preview-host]")?.getAttribute("data-preview-host") === path
+        ? activeElement
+        : undefined
+    const focusScroller = focusTarget?.closest<HTMLElement>(".cm-scroller")
+    const focusScrollTop = focusScroller?.scrollTop
     const origin = { x: event.clientX, y: event.clientY }
     let active = false
     const source = event.currentTarget as HTMLElement
@@ -237,6 +244,12 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       stop(!drop)
       if (!drop) return
       setWorkspace((current) => movePreviewTab(current, { path, targetLeafID: drop.leafID, position: drop.position, targetIndex: drop.targetIndex }))
+      requestAnimationFrame(() => {
+        if (focusTarget?.isConnected) focusTarget.focus({ preventScroll: true })
+        requestAnimationFrame(() => {
+          if (focusScroller?.isConnected && focusScrollTop !== undefined) focusScroller.scrollTop = focusScrollTop
+        })
+      })
     }
     const onCancel = () => stop(true)
 

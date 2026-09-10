@@ -372,10 +372,12 @@ test("retains renderer hosts and editor state through inner and outer Preview ta
 
   await tabs.getByRole("tab", { name: "baseline.md" }).click()
   const baselineHost = panel.locator('[data-preview-host="notes/baseline.md"]')
-  await expect(baselineHost).toBeVisible()
-  await expect(secondHost).toBeHidden()
-  await expect(secondHost).toHaveAttribute("hidden", "")
-  const host = await baselineHost.elementHandle()
+   await expect(baselineHost).toBeVisible()
+   await expect(secondHost).toBeHidden()
+   await expect(secondHost).toHaveAttribute("hidden", "")
+   await expect(secondHost).toHaveAttribute("inert", "")
+   await expect(secondHost.locator("[data-preview-controls]")).toBeHidden()
+   const host = await baselineHost.elementHandle()
   expect(host).not.toBeNull()
 
   await panel.getByRole("button", { name: "Edit" }).click()
@@ -640,21 +642,29 @@ test("transfers a renderer into another leaf and collapses its emptied source", 
     .toBeLessThanOrEqual(1)
 })
 
-test("retains an unsaved editor draft through a Preview edge split", async ({ page }) => {
+test("retains a focused, scrolled editor and unsaved draft through a Preview edge split", async ({ page }) => {
   await openPreview(page)
   await openPreviewFile(page, secondMarkdownFile)
 
   const panel = page.locator("#review-panel")
-  const movedHost = panel.locator('[data-preview-host="notes/second.md"]')
+  await panel.getByRole("tab", { name: "baseline.md" }).click()
+  const movedHost = panel.locator('[data-preview-host="notes/baseline.md"]')
   await panel.getByRole("button", { name: "Edit" }).click()
   const editor = movedHost.locator(".cm-content")
   await editor.click()
   await editor.press("End")
   await editor.type("\nRelocated draft.")
   await expect(editor).toContainText("Relocated draft.")
+  await expect(editor).toBeFocused()
+  const editorScroller = movedHost.locator(".cm-scroller")
+  await editorScroller.evaluate((element) => {
+    element.scrollTop = Math.min(240, element.scrollHeight - element.clientHeight)
+  })
+  await expect.poll(() => editorScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  const scrollPosition = await editorScroller.evaluate((element) => element.scrollTop)
   const host = await movedHost.elementHandle()
 
-  const source = panel.getByRole("tab", { name: "second.md" })
+  const source = panel.getByRole("tab", { name: "baseline.md" })
   const rootLeaf = panel.locator('[data-preview-leaf="root"]')
   const sourceBox = await source.boundingBox()
   const rootBox = await rootLeaf.boundingBox()
@@ -667,7 +677,9 @@ test("retains an unsaved editor draft through a Preview edge split", async ({ pa
   await page.waitForTimeout(250)
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
-  await expect(destinationLeaf.locator('[data-preview-host="notes/second.md"] .cm-content')).toContainText("Relocated draft.")
+  await expect(destinationLeaf.locator('[data-preview-host="notes/baseline.md"] .cm-content')).toContainText("Relocated draft.")
+  await expect(editor).toBeFocused()
+  await expect.poll(() => editorScroller.evaluate((element) => element.scrollTop)).toBe(scrollPosition)
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
 })
 
