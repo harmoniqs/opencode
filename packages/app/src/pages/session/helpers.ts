@@ -26,6 +26,23 @@ type TabsInput = {
 
 export const getSessionKey = (dir: string | undefined, id: string | undefined) => `${dir ?? ""}${id ? `/${id}` : ""}`
 
+export function normalizeSessionTab(tab: unknown, normalizeFileTab: (tab: string) => string) {
+  if (typeof tab !== "string") return
+  if (!tab.startsWith("file://")) return tab
+  return normalizeFileTab(tab)
+}
+
+export function normalizeSessionTabs(list: unknown, normalizeTab: (tab: unknown) => string | undefined) {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  return list.flatMap((item) => {
+    const value = normalizeTab(item)
+    if (value === undefined || seen.has(value)) return []
+    seen.add(value)
+    return [value]
+  })
+}
+
 export function shouldShowFileTree(input: { visible: boolean; opened: boolean }) {
   return input.opened && input.visible
 }
@@ -68,7 +85,8 @@ export const createSessionTabs = (input: TabsInput) => {
     equals: same,
   })
   const activeTab = createMemo(() => {
-    const active = input.tabs().active()
+    const activeValue = input.tabs().active()
+    const active = typeof activeValue === "string" ? activeValue : undefined
     if (active === "home") return active
     if (active === "context") return active
     if (active === "pulseInspector") return active

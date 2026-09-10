@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readPartText, settledChunkBoundary, splitSettledChunks } from "./message-part-text"
 import { shouldShowUserMessageText } from "./message-part-user"
-import { amicodeReceiptCandidateKey } from "./message-part"
+import { amicodeReceiptCandidateKey } from "./message-part-receipts"
 
 describe("readPartText", () => {
   test("returns empty string when accum is undefined and part text is undefined", () => {

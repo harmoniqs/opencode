@@ -68,7 +68,15 @@ import {
   createSessionComposerRegionController,
   SessionComposerRegion,
 } from "@/pages/session/composer"
-import { createOpenReviewFile, createSessionTabs, createSizing, shouldShowFileTree, SESSION_PREVIEW_TAB } from "@/pages/session/helpers"
+import {
+  createOpenReviewFile,
+  createSessionTabs,
+  createSizing,
+  normalizeSessionTab,
+  normalizeSessionTabs,
+  shouldShowFileTree,
+  SESSION_PREVIEW_TAB,
+} from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
 import { createTimelineModel } from "@/pages/session/timeline/model"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
@@ -445,7 +453,7 @@ export default function Page() {
         if (current.all.length > 0 || current.active) return
 
         const all = normalizeTabs(from.all)
-        const active = from.active ? normalizeTab(from.active) : undefined
+        const active = normalizeTab(from.active)
         tabs().setAll(all)
         tabs().setActive(active && all.includes(active) ? active : all[0])
 
@@ -533,21 +541,12 @@ export default function Page() {
     return `calc(100% - ${layout.fileTree.width()}px)`
   })
 
-  function normalizeTab(tab: string) {
-    if (!tab.startsWith("file://")) return tab
-    return file.tab(tab)
+  function normalizeTab(tab: unknown) {
+    return normalizeSessionTab(tab, file.tab)
   }
 
-  function normalizeTabs(list: string[]) {
-    const seen = new Set<string>()
-    const next: string[] = []
-    for (const item of list) {
-      const value = normalizeTab(item)
-      if (seen.has(value)) continue
-      seen.add(value)
-      next.push(value)
-    }
-    return next
+  function normalizeTabs(list: unknown) {
+    return normalizeSessionTabs(list, normalizeTab)
   }
 
   const openReviewPanel = () => {

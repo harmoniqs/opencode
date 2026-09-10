@@ -694,14 +694,12 @@ import {
   type PartGroup,
   type PartRef,
 } from "./message-part-groups"
-import { parseDiffSentinel } from "@opencode-ai/ui/amicode-receipt"
 import { editRowDiff, editRowFilePath, editRowLabel } from "@opencode-ai/ui/amicode-edit-row"
 import {
   collapseReceiptRuns,
-  receiptRunKey,
   type ReceiptCandidate,
-  type ReceiptKey,
 } from "@opencode-ai/ui/amicode-receipt-runs"
+import { amicodeReceiptCandidateKey } from "./message-part-receipts"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
@@ -712,13 +710,6 @@ function index<T extends { id: string }>(items: readonly T[]) {
 // whose entity isn't inline-view-eligible — see receipt-runs.ts) are
 // candidates; everything else (still running, errored, not amicode_*, no/
 // unparseable sentinel) gets `key: undefined` and can never merge.
-export function amicodeReceiptCandidateKey(part: PartType | undefined): { key?: ReceiptKey; seq?: number } {
-  if (!part || part.type !== "tool" || typeof part.tool !== "string" || !part.tool.startsWith("amicode_")) return {}
-  if (part.state.status !== "completed") return {}
-  const sentinel = parseDiffSentinel(part.state.output)
-  return { key: receiptRunKey(sentinel), seq: sentinel?.seq }
-}
-
 function sameAmicodeCounts(a: Map<string, number>, b: Map<string, number>) {
   if (a === b) return true
   if (a.size !== b.size) return false

@@ -8,6 +8,8 @@ import {
   createSessionTabs,
   focusTerminalById,
   getTabReorderIndex,
+  normalizeSessionTab,
+  normalizeSessionTabs,
   shouldShowFileTree,
 } from "./helpers"
 import { closeSessionTab, openSessionTab } from "@/context/layout-tabs"
@@ -16,6 +18,18 @@ describe("shouldShowFileTree", () => {
   test("does not reserve space for a disabled file tree", () => {
     expect(shouldShowFileTree({ visible: false, opened: true })).toBe(false)
     expect(shouldShowFileTree({ visible: true, opened: true })).toBe(true)
+  })
+})
+
+describe("normalizeSessionTabs", () => {
+  test("drops malformed values before file URL normalization", () => {
+    const normalizeFileTab = (tab: string) => `normalized:${tab}`
+    const normalizeTab = (tab: unknown) => normalizeSessionTab(tab, normalizeFileTab)
+
+    expect(normalizeSessionTabs(["file://a.ts", undefined, { invalid: true }, "file://a.ts"], normalizeTab)).toEqual([
+      "normalized:file://a.ts",
+    ])
+    expect(normalizeSessionTab({ invalid: true }, normalizeFileTab)).toBeUndefined()
   })
 })
 
@@ -142,6 +156,25 @@ describe("createSessionTabs", () => {
       })
 
       expect(result.panelTabs()).toEqual(["norm:src/a.ts"])
+      expect(result.activeTab()).toBe("norm:src/a.ts")
+      dispose()
+    })
+  })
+
+  test("ignores a malformed active tab value", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: { invalid: true } as unknown as string | undefined,
+        all: ["file://src/a.ts"],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => (tab.startsWith("file://") ? `norm:${tab.slice("file://".length)}` : tab),
+      })
+
       expect(result.activeTab()).toBe("norm:src/a.ts")
       dispose()
     })
