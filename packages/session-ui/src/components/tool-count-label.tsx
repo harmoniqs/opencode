@@ -1,13 +1,14 @@
 import { createMemo } from "solid-js"
 import { AnimatedNumber } from "@opencode-ai/ui/animated-number"
 
-function split(text: string) {
-  const match = /{{\s*count\s*}}/.exec(text)
-  if (!match) return { before: "", after: text }
-  if (match.index === undefined) return { before: "", after: text }
+export function splitCountLabel(text?: string) {
+  const value = text ?? ""
+  const match = /{{\s*count\s*}}/.exec(value)
+  if (!match) return { before: "", after: value }
+  if (match.index === undefined) return { before: "", after: value }
   return {
-    before: text.slice(0, match.index),
-    after: text.slice(match.index + match[0].length),
+    before: value.slice(0, match.index),
+    after: value.slice(match.index + match[0].length),
   }
 }
 
@@ -23,9 +24,9 @@ function common(one: string, other: string) {
   }
 }
 
-export function AnimatedCountLabel(props: { count: number; one: string; other: string; class?: string }) {
-  const one = createMemo(() => split(props.one))
-  const other = createMemo(() => split(props.other))
+export function AnimatedCountLabel(props: { count: number; one?: string; other?: string; class?: string }) {
+  const one = createMemo(() => splitCountLabel(props.one))
+  const other = createMemo(() => splitCountLabel(props.other))
   const singular = createMemo(() => Math.round(props.count) === 1)
   const active = createMemo(() => (singular() ? one() : other()))
   const suffix = createMemo(() => common(one().after, other().after))
