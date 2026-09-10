@@ -1,5 +1,37 @@
 import { describe, expect, test } from "bun:test"
-import { promptPlaceholder } from "./placeholder"
+import { promptDesignPlaceholder, promptPlaceholder } from "./placeholder"
+
+// harmoniqs/amicode#964 — the design placeholder takes the translate callback
+// (the #929 contract, mirrored to the sync source). A 2-arg call passes
+// undefined as the translate callback, which the helper calls in the
+// non-shell branch: the "n is not a function" failure Aaron hit live
+// post-cutover 2026-09-10.
+describe("promptDesignPlaceholder", () => {
+  const t = (key: string, params?: Record<string, string>) => {
+    let out = key
+    for (const [k, v] of Object.entries(params ?? {})) out = out.split(`{{${k}}}`).join(v)
+    return out
+  }
+
+  test("returns the shell placeholder verbatim in shell mode", () => {
+    expect(promptDesignPlaceholder("shell", "git status", t)).toBe("git status")
+  })
+
+  test("translates through the callback in normal mode", () => {
+    expect(promptDesignPlaceholder("normal", "fallback", t)).toBe(
+      "ui.promptInput.placeholder.normal",
+    )
+  })
+
+  test("the translate callback is REQUIRED — the regressed 2-arg call throws", () => {
+    expect(() =>
+      (promptDesignPlaceholder as unknown as (mode: "normal", placeholder: string) => string)(
+        "normal",
+        "fallback",
+      ),
+    ).toThrow(/is not a function/)
+  })
+})
 
 describe("promptPlaceholder", () => {
   const t = (key: string, params?: Record<string, string>) => `${key}${params?.example ? `:${params.example}` : ""}`
