@@ -72,6 +72,45 @@ test("allows image previews to zoom to 1000%", async ({ page }) => {
   await expect(zoom).toHaveValue("1000%")
 })
 
+test("keeps the image point under the pointer fixed through wheel zoom", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, imageFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${imageFile}"]`)
+  const zoom = host.locator('input[type="text"]')
+  const scroll = host.locator(".overflow-auto")
+  await zoom.fill("200")
+  await zoom.press("Enter")
+  await expect(zoom).toHaveValue("200%")
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await expect.poll(() => scroll.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+
+  await scroll.evaluate((element) => {
+    element.scrollLeft = (element.scrollWidth - element.clientWidth) / 3
+  })
+  const box = await scroll.boundingBox()
+  if (!box) throw new Error("Image preview scroll container must be measurable")
+
+  const focusX = box.width * 0.25
+  const before = await scroll.evaluate((element) => ({
+    scrollLeft: element.scrollLeft,
+    clientWidth: element.clientWidth,
+  }))
+  for (const deltaY of [-30, -30, -30]) {
+    await scroll.dispatchEvent("wheel", {
+      ctrlKey: true,
+      deltaY,
+      clientX: box.x + focusX,
+      clientY: box.y + box.height / 2,
+    })
+  }
+  await expect.poll(async () => Number((await zoom.inputValue()).replace("%", ""))).toBeGreaterThan(200)
+
+  const nextZoom = Number((await zoom.inputValue()).replace("%", ""))
+  const expectedScrollLeft = (before.scrollLeft + focusX) * (nextZoom / 200) - focusX
+  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBeCloseTo(expectedScrollLeft, 0)
+})
+
 test("lets a researcher select and copy text from a PDF Preview", async ({ page }) => {
   await openPreview(page)
 
@@ -169,6 +208,66 @@ test("keeps selectable PDF text live through repeated zoom updates", async ({ pa
   await expect.poll(async () => Number((await zoom.inputValue()).replace("%", ""))).toBeGreaterThan(100)
   expect(await textHandle?.evaluate((element) => element.isConnected)).toBe(true)
   await expect(text).toBeVisible()
+})
+
+test("keeps the PDF point under the pointer fixed through wheel zoom", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, pdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
+  const zoom = host.locator('input[type="text"]')
+  const scroll = host.locator(".overflow-auto")
+  await zoom.fill("200")
+  await zoom.press("Enter")
+  await expect(zoom).toHaveValue("200%")
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await expect.poll(() => scroll.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  await expect.poll(() => scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+
+  await scroll.evaluate((element) => {
+    element.scrollLeft = (element.scrollWidth - element.clientWidth) / 3
+    element.scrollTop = (element.scrollHeight - element.clientHeight) / 3
+  })
+  const box = await scroll.boundingBox()
+  if (!box) throw new Error("PDF preview scroll container must be measurable")
+
+  const focus = { x: box.width * 0.25, y: box.height * 0.4 }
+  const before = await scroll.evaluate((element) => ({
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+  }))
+  await scroll.dispatchEvent("wheel", {
+    ctrlKey: true,
+    deltaY: -80,
+    clientX: box.x + focus.x,
+    clientY: box.y + focus.y,
+  })
+  await expect.poll(async () => Number((await zoom.inputValue()).replace("%", ""))).toBeGreaterThan(200)
+
+  const nextZoom = Number((await zoom.inputValue()).replace("%", ""))
+  const ratio = nextZoom / 200
+  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBeCloseTo((before.scrollLeft + focus.x) * ratio - focus.x, 0)
+  const expectedScrollTop = (before.scrollTop + focus.y) * ratio - focus.y
+  await expect.poll(() => scroll.evaluate((element, expected) => Math.abs(element.scrollTop - expected), expectedScrollTop)).toBeLessThanOrEqual(1)
+})
+
+test("keeps Preview controls clear of an overflowing PDF scroll rail", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, pdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
+  const scroll = host.locator(".overflow-auto")
+  const controls = host.locator("[data-preview-controls]")
+  const zoom = host.locator('input[type="text"]')
+  await zoom.fill("200")
+  await zoom.press("Enter")
+  await expect(zoom).toHaveValue("200%")
+  await expect.poll(() => scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+
+  const scrollBox = await scroll.boundingBox()
+  const controlsBox = await controls.boundingBox()
+  if (!scrollBox || !controlsBox) throw new Error("Preview controls and scroll rail must be measurable")
+  expect(scrollBox.x + scrollBox.width - (controlsBox.x + controlsBox.width)).toBeGreaterThanOrEqual(20)
 })
 
 test("defers PDF raster replacement until a zoom burst settles", async ({ page }) => {

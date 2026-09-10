@@ -227,9 +227,9 @@ body[data-new-layout] #review-panel .preview-pane-leaf:not([data-focused]) > [da
 }
 #review-panel .preview-pane-leaf [data-preview-controls] {
   top: var(--space-1);
-  right: var(--space-1);
+  right: var(--space-5);
   gap: var(--space-1);
-  max-width: calc(100% - var(--space-2));
+  max-width: calc(100% - var(--space-6));
   flex-wrap: wrap;
   justify-content: flex-end;
 }

@@ -274,17 +274,30 @@ export function PreviewFileView(props: {
   const handleZoomOut = () => {
     if (props.zoom() <= zoomFloor()) return
     const before = props.zoom()
+    adjustScrollForZoom(before, Math.max(before - 10, zoomFloor()))
     props.zoomOut()
-    adjustScrollForZoom(before, props.zoom())
   }
 
-  // ─── Scroll-centered zoom ────────────────────────────────────────────
-  // After a zoom change, adjust scroll so the viewport center stays fixed.
-  // Uses rAF to let the DOM update first: image CSS reflows synchronously,
-  // PDF canvas dimensions settle as a microtask (getPage().then()), and
-  // rAF fires after both — so scrollWidth/scrollHeight are correct.
+  // ─── Focus-preserving zoom ───────────────────────────────────────────
+  // After a zoom change, adjust scroll so the focus point stays fixed.
+  // Toolbar and typed zoom use the viewport center; wheel zoom uses its
+  // pointer location. A single rAF coalesces a gesture instead of letting
+  // stale scroll positions from earlier wheel events overwrite the latest.
 
   let scrollRef: HTMLDivElement | undefined
+  let zoomFrame: number | undefined
+  let pendingZoom:
+    | {
+        oldZoom: number
+        newZoom: number
+        focusX: number
+        focusY: number
+        contentX: number
+        contentY: number
+        element: HTMLDivElement
+        host: HTMLElement | null
+      }
+    | undefined
 
   // ─── Track scroll container width for image sizing ───────────────────
   // Observe scrollRef (the scroll container) to get its content width.
@@ -312,15 +325,39 @@ export function PreviewFileView(props: {
   // content into unreachable negative scroll territory.
   const imageWidth = () => Math.max(0, (containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom() / 100)
 
-  const adjustScrollForZoom = (oldZoom: number, newZoom: number) => {
+  const adjustScrollForZoom = (oldZoom: number, newZoom: number, focus?: { x: number; y: number }) => {
     const el = scrollRef
     if (!el || oldZoom === newZoom || oldZoom === 0) return
-    const ratio = newZoom / oldZoom
-    const centerX = el.scrollLeft + el.clientWidth / 2
-    const centerY = el.scrollTop + el.clientHeight / 2
-    requestAnimationFrame(() => {
-      el.scrollLeft = centerX * ratio - el.clientWidth / 2
-      el.scrollTop = centerY * ratio - el.clientHeight / 2
+    const focusX = Math.min(Math.max(focus?.x ?? el.clientWidth / 2, 0), el.clientWidth)
+    const focusY = Math.min(Math.max(focus?.y ?? el.clientHeight / 2, 0), el.clientHeight)
+
+    if (pendingZoom) {
+      pendingZoom.newZoom = newZoom
+      pendingZoom.focusX = focusX
+      pendingZoom.focusY = focusY
+    } else {
+      pendingZoom = {
+        oldZoom,
+        newZoom,
+        focusX,
+        focusY,
+        contentX: el.scrollLeft + focusX,
+        contentY: el.scrollTop + focusY,
+        element: el,
+        host: el.closest<HTMLElement>("[data-preview-host]"),
+      }
+    }
+
+    if (zoomFrame) return
+    zoomFrame = requestAnimationFrame(() => {
+      zoomFrame = undefined
+      const pending = pendingZoom
+      pendingZoom = undefined
+      if (!pending) return
+      const ratio = pending.newZoom / pending.oldZoom
+      const element = pending.host?.querySelector<HTMLDivElement>("[data-preview-scroll]") ?? pending.element
+      element.scrollLeft = pending.contentX * ratio - pending.focusX
+      element.scrollTop = pending.contentY * ratio - pending.focusY
     })
   }
 
@@ -342,8 +379,14 @@ export function PreviewFileView(props: {
       Math.min(Math.max(oldZoom * factor, zoomFloor()), zoomCeiling()),
     )
     if (next === oldZoom) return
+    const scroll = scrollRef
+    if (!scroll) return
+    const bounds = scroll.getBoundingClientRect()
+    adjustScrollForZoom(oldZoom, next, {
+      x: e.clientX - bounds.left,
+      y: e.clientY - bounds.top,
+    })
     props.onZoomChange(next, zoomCeiling())
-    adjustScrollForZoom(oldZoom, next)
     setShowControls(true)
     startIdleTimer()
   }
@@ -402,8 +445,8 @@ export function PreviewFileView(props: {
                 if (!isNaN(val) && props.onZoomChange) {
                   const clamped = Math.min(Math.max(val, zoomFloor()), zoomCeiling())
                   const before = props.zoom()
-                  props.onZoomChange(clamped, zoomCeiling())
                   adjustScrollForZoom(before, clamped)
+                  props.onZoomChange(clamped, zoomCeiling())
                 }
                 e.currentTarget.value = `${props.zoom()}%`
               }}
@@ -413,8 +456,8 @@ export function PreviewFileView(props: {
               class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
               onClick={() => {
                 const before = props.zoom()
-                props.onZoomChange?.(100, zoomCeiling())
                 adjustScrollForZoom(before, 100)
+                props.onZoomChange?.(100, zoomCeiling())
               }}
               aria-label="Reset zoom"
             >
@@ -429,8 +472,8 @@ export function PreviewFileView(props: {
                 class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
                 onClick={() => {
                   const before = props.zoom()
+                  adjustScrollForZoom(before, Math.min(before + 10, zoomCeiling()))
                   props.zoomIn(zoomCeiling())
-                  adjustScrollForZoom(before, props.zoom())
                 }}
                 aria-label="Zoom in"
               >
@@ -474,7 +517,7 @@ export function PreviewFileView(props: {
       </div>
 
       {/* Content */}
-      <div ref={scrollRef} class="h-full overflow-auto">
+      <div ref={scrollRef} data-preview-scroll class="h-full overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
           <Switch>
             <Match when={fileType() === "error"}>
