@@ -35,6 +35,15 @@ test("keeps Markdown typing in CodeMirror after its language support loads", asy
   await expect(page.locator('[data-component="prompt-input"]')).toHaveText("")
 })
 
+test("uses the Preview header for VS Code-style file tabs instead of a duplicate title", async ({ page }) => {
+  await openPreview(page)
+
+  const panel = page.locator("#review-panel")
+  const tab = panel.getByRole("tablist", { name: "Open previews" }).getByRole("tab", { name: "baseline.md" })
+  await expect(tab.locator("xpath=ancestor::*[@data-slot='tabs-trigger-wrapper']")).toHaveCount(1)
+  await expect(panel.getByText("baseline.md", { exact: true })).toHaveCount(1)
+})
+
 test("keeps ordinary Preview scrolling at the position selected by the user", async ({ page }) => {
   await openPreview(page)
 
@@ -128,6 +137,7 @@ test("keeps a dirty tab open on cancel and delegates save before closing", async
   await editor.click()
   await editor.press("End")
   await editor.type("\nSave before close.")
+  await expect(panel.getByRole("button", { name: "Close baseline.md" }).locator("[data-preview-unsaved]")).toBeVisible()
 
   await panel.getByRole("button", { name: "Close baseline.md" }).click()
   const dialog = panel.getByRole("dialog", { name: "Unsaved changes" })

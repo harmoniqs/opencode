@@ -12,10 +12,12 @@
  * @module
  */
 
-import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Tabs } from "@opencode-ai/ui/tabs"
 import { PreviewFileView } from "./preview-file-view"
+import { FileVisual } from "./session-sortable-tab"
 import type { Accessor } from "solid-js"
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -92,72 +94,39 @@ export function SessionPreviewTab(props: {
     removePath(path)
   }
 
-  // ─── Header Display ─────────────────────────────────────────────────────
-
-  const headerTitle = createMemo(() => {
-    const file = selectedPath()
-    if (file) {
-      const parts = file.split("/")
-      return parts[parts.length - 1]
-    }
-    return "Preview"
-  })
-
-  // ─── Render ─────────────────────────────────────────────────────────────
-
-  // Dirty state: true when the current file has unsaved edits
-  const isUnsaved = createMemo(() => {
-    const file = selectedPath()
-    if (!file) return false
-    return dirtyPaths[file] ?? false
-  })
-
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      {/* Header: filename + unsaved dot */}
-      <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border-weaker-base">
-        <div class="flex-1 min-w-0 flex items-center gap-1.5">
-          <span class="text-12-regular text-text-base truncate">
-            {headerTitle()}
-          </span>
-          <Show when={isUnsaved()}>
-            <div class="w-2 h-2 rounded-full bg-v2-text-text-faint shrink-0" aria-label="Unsaved changes" />
-          </Show>
-        </div>
-      </div>
-
       <Show when={openedPaths().length > 0}>
-        <div class="shrink-0 flex items-center gap-1 px-2 py-1 border-b border-border-weaker-base" role="tablist" aria-label="Open previews">
-          <For each={openedPaths()}>
-            {(path) => (
-              <div
-                class="min-w-0 max-w-40 flex items-center rounded-md text-text-weak hover:text-text-base hover:bg-background-stronger"
-                classList={{ "text-text-base bg-background-stronger": selectedPath() === path }}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedPath() === path}
-                  class="min-w-0 flex-1 px-2 py-1 text-12-regular truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                  onClick={() => setSelectedPath(path)}
+        <Tabs value={selectedPath() ?? undefined} onChange={setSelectedPath} class="shrink-0" style={{ height: "auto", overflow: "visible" }}>
+          <Tabs.List aria-label="Open previews">
+            <For each={openedPaths()}>
+              {(path) => (
+                <Tabs.Trigger
+                  value={path}
+                  closeButton={
+                    <button
+                      type="button"
+                      class="h-5 w-5 flex items-center justify-center text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                      aria-label={`Close ${path.split("/").pop()}`}
+                      onClick={() => closePath(path)}
+                    >
+                      <Show
+                        when={dirtyPaths[path]}
+                        fallback={<Icon name="close-small" size="small" />}
+                      >
+                        <span data-preview-unsaved role="status" aria-label="Unsaved changes" class="w-2 h-2 rounded-full bg-v2-text-text-faint" />
+                      </Show>
+                    </button>
+                  }
+                  hideCloseButton
+                  onMiddleClick={() => closePath(path)}
                 >
-                  {path.split("/").pop()}
-                </button>
-                <button
-                  type="button"
-                  class="shrink-0 px-1 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                  aria-label={`Close ${path.split("/").pop()}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    closePath(path)
-                  }}
-                >
-                  <Icon name="close-small" size="small" />
-                </button>
-              </div>
-            )}
-          </For>
-        </div>
+                  <FileVisual path={path} active={selectedPath() === path} />
+                </Tabs.Trigger>
+              )}
+            </For>
+          </Tabs.List>
+        </Tabs>
       </Show>
 
       <Show when={capacityMessage()}>
