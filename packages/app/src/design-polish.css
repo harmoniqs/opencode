@@ -171,7 +171,7 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   background: var(--v2-background-bg-base);
 }
 #review-panel .preview-pane-leaf[data-focused] {
-  box-shadow: inset 0 0 0 var(--border-width) var(--v2-border-border-strong);
+  box-shadow: inset 0 0 0 var(--border-width) var(--accent-edge);
 }
 #review-panel .preview-pane-leaf > [data-component="tabs"].preview-tab-strip {
   flex: 0 0 auto;
@@ -225,6 +225,25 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
 }
 #review-panel .preview-pane-drop-preview[data-preview-drop-preview="top"] { top: 0; }
 #review-panel .preview-pane-drop-preview[data-preview-drop-preview="bottom"] { bottom: 0; }
+#review-panel .preview-tab-drag-proxy {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  max-width: min-content;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--v2-border-border-base);
+  border-radius: var(--radius-md);
+  background: var(--v2-background-bg-layer-01);
+  box-shadow: var(--elev-float);
+  opacity: 0.92;
+  pointer-events: none;
+  transform: translate3d(calc(var(--preview-drag-x) + var(--space-2)), calc(var(--preview-drag-y) + var(--space-2)), 0);
+  transition: opacity 0.16s ease;
+}
+#review-panel .preview-tab-drag-proxy[data-leaving] { opacity: 0; }
 
 /* ── session status dots ──
    Four states: green (done, unread), grey (done, seen), yellow (running),

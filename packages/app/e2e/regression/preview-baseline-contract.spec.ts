@@ -236,6 +236,11 @@ test("splits a Preview leaf at its right edge without recreating the moved rende
   await page.mouse.down()
   await page.mouse.move(leafBox.x + leafBox.width - 2, leafBox.y + leafBox.height / 2, { steps: 8 })
   await expect(panel.locator('[data-preview-dragging="notes/second.md"]')).toBeVisible()
+  const dragProxy = panel.locator("[data-preview-tab-drag-proxy]")
+  await expect(dragProxy).toBeVisible()
+  await expect(dragProxy).toContainText("second.md")
+  await expect(dragProxy).toHaveCSS("pointer-events", "none")
+  expect((await dragProxy.boundingBox())?.x).toBeGreaterThan(leafBox.x)
   const preview = panel.locator('[data-preview-drop-preview="right"]')
   await expect(preview).toBeVisible()
   await expect(preview).toHaveCSS("pointer-events", "none")
@@ -245,6 +250,7 @@ test("splits a Preview leaf at its right edge without recreating the moved rende
   await page.mouse.up()
   await page.waitForTimeout(250)
   await expect(preview).toHaveCount(0)
+  await expect(dragProxy).toHaveCount(0)
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
   await expect(panel.locator("[data-preview-leaf]")).toHaveCount(2)
@@ -327,6 +333,99 @@ test("retains an unsaved editor draft through a Preview edge split", async ({ pa
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
   await expect(destinationLeaf.locator('[data-preview-host="notes/second.md"] .cm-content')).toContainText("Relocated draft.")
+  expect(await host.evaluate((element) => element.isConnected)).toBe(true)
+})
+
+test("keeps Preview zoom independent in split panes", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const rootLeaf = panel.locator('[data-preview-leaf="root"]')
+  const sourceBox = await source.boundingBox()
+  const rootBox = await rootLeaf.boundingBox()
+  if (!sourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  const rootZoom = rootLeaf.locator('input[type="text"]:visible')
+  const destinationZoom = destinationLeaf.locator('input[type="text"]')
+  await expect(rootZoom).toHaveValue("100%")
+  await expect(destinationZoom).toHaveValue("100%")
+
+  await rootZoom.fill("130")
+  await rootZoom.press("Enter")
+
+  await expect(rootZoom).toHaveValue("130%")
+  await expect(destinationZoom).toHaveValue("100%")
+})
+
+test("inherits source zoom and focuses the new Preview leaf after a split", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const rootLeaf = panel.locator('[data-preview-leaf="root"]')
+  const rootZoom = rootLeaf.locator('[data-preview-host="notes/second.md"] input[type="text"]')
+  await rootZoom.fill("130")
+  await rootZoom.press("Enter")
+  await expect(rootZoom).toHaveValue("130%")
+
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const sourceBox = await source.boundingBox()
+  const rootBox = await rootLeaf.boundingBox()
+  if (!sourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  await expect(destinationLeaf).toHaveAttribute("data-focused", "true")
+  await expect(destinationLeaf.locator('input[type="text"]')).toHaveValue("130%")
+})
+
+test("adopts destination pane zoom when transferring a Preview renderer", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const rootLeaf = panel.locator('[data-preview-leaf="root"]')
+  const sourceBox = await source.boundingBox()
+  const rootBox = await rootLeaf.boundingBox()
+  if (!sourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  const rootZoom = rootLeaf.locator('input[type="text"]')
+  await rootZoom.fill("130")
+  await rootZoom.press("Enter")
+  await expect(rootZoom).toHaveValue("130%")
+
+  const sourceLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  const movedHost = sourceLeaf.locator('[data-preview-host="notes/second.md"]')
+  const host = await movedHost.elementHandle()
+  const transferTab = sourceLeaf.getByRole("tab", { name: "second.md" })
+  const transferBox = await transferTab.boundingBox()
+  const transferTarget = await rootLeaf.boundingBox()
+  if (!host || !transferBox || !transferTarget) throw new Error("Preview leaves must be measurable before transferring")
+
+  await page.mouse.move(transferBox.x + transferBox.width / 2, transferBox.y + transferBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(transferTarget.x + transferTarget.width / 2, transferTarget.y + transferTarget.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  await expect(rootLeaf.locator('[data-preview-host="notes/second.md"] input[type="text"]')).toHaveValue("130%")
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
 })
 
@@ -431,10 +530,15 @@ test("clears the prospective pane preview when a Preview drag is cancelled", asy
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(leafBox.x + leafBox.width - 2, leafBox.y + leafBox.height / 2, { steps: 8 })
+  const dragProxy = panel.locator("[data-preview-tab-drag-proxy]")
+  await expect(dragProxy).toBeVisible()
   await expect(panel.locator('[data-preview-drop-preview="right"]')).toBeVisible()
   await page.mouse.move(leafBox.x - 20, leafBox.y + leafBox.height / 2, { steps: 4 })
   await expect(panel.locator("[data-preview-drop-preview]")).toHaveCount(0)
   await page.mouse.up()
+  await expect(dragProxy).toHaveAttribute("data-leaving", "true")
+  await page.waitForTimeout(200)
+  await expect(dragProxy).toHaveCount(0)
 
   await expect(panel.locator("[data-preview-leaf]")).toHaveCount(1)
   await expect(leaf.getByRole("tab", { name: "second.md" })).toHaveAttribute("aria-selected", "true")
