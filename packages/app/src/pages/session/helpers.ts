@@ -94,7 +94,10 @@ export const createSessionTabs = (input: TabsInput) => {
     if (active === "vault" && vaultOpen()) return active
     if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
-    if (typeof active === "string" && input.pathFromTab(active)) return input.normalizeTab(active)
+    if (typeof active === "string" && input.pathFromTab(active)) {
+      const normalized = input.normalizeTab(active)
+      if (normalized !== undefined) return normalized
+    }
 
     const first = openedTabs()[0]
     if (first) return first
