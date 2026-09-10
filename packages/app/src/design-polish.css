@@ -115,6 +115,22 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
 body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[data-variant="normal"][data-orientation="horizontal"] [data-slot="tabs-trigger-wrapper"] {
   height: var(--space-6);
 }
+body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[data-variant="normal"][data-orientation="horizontal"] [data-slot="tabs-list"]::after {
+  border-bottom: 0;
+}
+body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[data-variant="normal"][data-orientation="horizontal"] [data-slot="tabs-list"] {
+  border-bottom: 0;
+}
+
+/* Preview follows VS Code's editor-group hierarchy: each pane keeps its
+   selected file, while only the keyboard-target pane gives that tab full emphasis. */
+body[data-new-layout] #review-panel .preview-pane-leaf:not([data-focused]) > [data-component="tabs"].preview-tab-strip[data-variant="normal"][data-orientation="horizontal"] [data-slot="tabs-trigger-wrapper"]:has([data-selected]) {
+  background-color: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-muted);
+}
+body[data-new-layout] #review-panel .preview-pane-leaf:not([data-focused]) > [data-component="tabs"].preview-tab-strip[data-variant="normal"][data-orientation="horizontal"] [data-slot="tabs-trigger"][data-selected] {
+  color: var(--v2-text-text-muted);
+}
 
 /* Preview's pane tree is structural. The scrollable parent exposes a canvas
    that can outgrow the Work Column; no position is read, stored, or restored. */
@@ -148,16 +164,33 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   min-height: var(--preview-branch-min-height);
 }
 #review-panel .preview-pane-divider {
-  flex: 0 0 var(--space-1);
+  position: relative;
+  z-index: 2;
+  flex: 0 0 var(--border-width);
   background: var(--v2-border-border-muted);
   transition: background-color 0.16s ease;
 }
+#review-panel .preview-pane-divider::before {
+  content: "";
+  position: absolute;
+}
+#review-panel .preview-pane-divider[data-direction="horizontal"]::before {
+  inset: 0 calc(var(--space-1) * -1);
+}
+#review-panel .preview-pane-divider[data-direction="vertical"]::before {
+  inset: calc(var(--space-1) * -1) 0;
+}
 #review-panel .preview-pane-divider[data-direction="horizontal"] { cursor: col-resize; }
 #review-panel .preview-pane-divider[data-direction="vertical"] { cursor: row-resize; }
-#review-panel .preview-pane-divider:hover,
+#review-panel .preview-pane-divider:hover {
+  background: var(--accent);
+}
 #review-panel .preview-pane-divider:focus-visible {
   background: var(--v2-border-border-focus);
   outline: none;
+}
+#review-panel .preview-pane-divider[data-resizing] {
+  background: var(--accent);
 }
 #review-panel .preview-pane-leaf {
   position: relative;
@@ -167,11 +200,21 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   min-width: var(--preview-pane-min-size);
   min-height: var(--preview-pane-min-size);
   overflow: hidden;
-  border: var(--border-width) solid var(--v2-border-border-muted);
+  border-radius: 0;
   background: var(--v2-background-bg-base);
+  isolation: isolate;
 }
-#review-panel .preview-pane-leaf[data-focused] {
-  box-shadow: inset 0 0 0 var(--border-width) var(--accent-edge);
+#review-panel .preview-pane-leaf[data-preview-edge-top][data-preview-edge-left] {
+  border-top-left-radius: var(--radius-md);
+}
+#review-panel .preview-pane-leaf[data-preview-edge-top][data-preview-edge-right] {
+  border-top-right-radius: var(--radius-md);
+}
+#review-panel .preview-pane-leaf[data-preview-edge-bottom][data-preview-edge-left] {
+  border-bottom-left-radius: var(--radius-md);
+}
+#review-panel .preview-pane-leaf[data-preview-edge-bottom][data-preview-edge-right] {
+  border-bottom-right-radius: var(--radius-md);
 }
 #review-panel .preview-pane-leaf > [data-component="tabs"].preview-tab-strip {
   flex: 0 0 auto;
@@ -199,10 +242,7 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   overflow: hidden;
 }
 #review-panel .preview-pane-content > .preview-pane-renderer-mount {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
+  display: contents;
 }
 #review-panel .preview-pane-renderer-mount > [data-preview-host] {
   display: flex;
@@ -215,11 +255,18 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   min-width: 0;
   min-height: 0;
 }
+/* A retained host remains attached for editor state, but the inactive one must
+   not participate in the leaf's flex layout. The Portal wrapper is layout-
+   transparent so the host's hidden state works in every embedded webview. */
+#review-panel .preview-pane-renderer-mount > [data-preview-host].hidden {
+  display: none;
+}
 #review-panel .preview-pane-drop-preview {
   position: absolute;
   z-index: 10;
   pointer-events: none;
   border: var(--border-width) solid var(--accent-edge);
+  border-radius: inherit;
   background: var(--accent-fill-soft);
 }
 #review-panel .preview-pane-drop-preview[data-preview-drop-preview="left"],
@@ -238,7 +285,7 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
 }
 #review-panel .preview-pane-drop-preview[data-preview-drop-preview="top"] { top: 0; }
 #review-panel .preview-pane-drop-preview[data-preview-drop-preview="bottom"] { bottom: 0; }
-#review-panel .preview-tab-drag-proxy {
+[data-preview-tab-drag-proxy] {
   position: fixed;
   z-index: 60;
   top: 0;
@@ -256,7 +303,8 @@ body[data-new-layout] #review-panel [data-component="tabs"].preview-tab-strip[da
   transform: translate3d(calc(var(--preview-drag-x) + var(--space-2)), calc(var(--preview-drag-y) + var(--space-2)), 0);
   transition: opacity 0.16s ease;
 }
-#review-panel .preview-tab-drag-proxy[data-leaving] { opacity: 0; }
+[data-preview-tab-drag-proxy][data-leaving] { opacity: 0; }
+#review-panel .preview-pane-drop-preview[data-preview-drop-preview="center"] { inset: 0; }
 
 /* ── session status dots ──
    Four states: green (done, unread), grey (done, seen), yellow (running),

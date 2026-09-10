@@ -73,9 +73,9 @@ export function PreviewFileView(props: {
   saveRequest?: () => number
   onSaveStatusChange?: (status: "idle" | "saving" | "saved") => void
   zoom: () => number
-  zoomIn: () => void
+  zoomIn: (maximum: number) => void
   zoomOut: () => void
-  onZoomChange?: (zoom: number) => void
+  onZoomChange?: (zoom: number, maximum: number) => void
 }) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
@@ -266,6 +266,10 @@ export function PreviewFileView(props: {
     const cat = category()
     return cat === "image" || cat === "pdf" ? 100 : 50
   }
+  const zoomCeiling = () => {
+    const cat = category()
+    return cat === "image" || cat === "pdf" ? 1000 : 500
+  }
 
   const handleZoomOut = () => {
     if (props.zoom() <= zoomFloor()) return
@@ -335,10 +339,10 @@ export function PreviewFileView(props: {
     const oldZoom = props.zoom()
     const factor = Math.exp(-delta * 0.003)
     const next = Math.round(
-      Math.min(Math.max(oldZoom * factor, zoomFloor()), 500),
+      Math.min(Math.max(oldZoom * factor, zoomFloor()), zoomCeiling()),
     )
     if (next === oldZoom) return
-    props.onZoomChange(next)
+    props.onZoomChange(next, zoomCeiling())
     adjustScrollForZoom(oldZoom, next)
     setShowControls(true)
     startIdleTimer()
@@ -396,9 +400,9 @@ export function PreviewFileView(props: {
               onBlur={(e) => {
                 const val = parseInt(e.currentTarget.value)
                 if (!isNaN(val) && props.onZoomChange) {
-                  const clamped = Math.min(Math.max(val, zoomFloor()), 500)
+                  const clamped = Math.min(Math.max(val, zoomFloor()), zoomCeiling())
                   const before = props.zoom()
-                  props.onZoomChange(clamped)
+                  props.onZoomChange(clamped, zoomCeiling())
                   adjustScrollForZoom(before, clamped)
                 }
                 e.currentTarget.value = `${props.zoom()}%`
@@ -409,7 +413,7 @@ export function PreviewFileView(props: {
               class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
               onClick={() => {
                 const before = props.zoom()
-                props.onZoomChange?.(100)
+                props.onZoomChange?.(100, zoomCeiling())
                 adjustScrollForZoom(before, 100)
               }}
               aria-label="Reset zoom"
@@ -425,7 +429,7 @@ export function PreviewFileView(props: {
                 class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
                 onClick={() => {
                   const before = props.zoom()
-                  props.zoomIn()
+                  props.zoomIn(zoomCeiling())
                   adjustScrollForZoom(before, props.zoom())
                 }}
                 aria-label="Zoom in"

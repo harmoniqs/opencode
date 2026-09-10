@@ -141,9 +141,9 @@ export const selectPreviewPath = (workspace: PreviewWorkspace, leafID: string, p
   }
 }
 
-export const setPreviewLeafZoom = (workspace: PreviewWorkspace, leafID: string, zoom: number): PreviewWorkspace => ({
+export const setPreviewLeafZoom = (workspace: PreviewWorkspace, leafID: string, zoom: number, maximum = 500): PreviewWorkspace => ({
   ...workspace,
-  tree: mapLeaf(workspace.tree, leafID, (leaf) => ({ ...leaf, zoom: Math.round(Math.min(Math.max(zoom, 50), 500)) })),
+  tree: mapLeaf(workspace.tree, leafID, (leaf) => ({ ...leaf, zoom: Math.round(Math.min(Math.max(zoom, 50), Math.min(Math.max(maximum, 50), 1000))) })),
 })
 
 export const removePreviewPath = (workspace: PreviewWorkspace, path: string): PreviewWorkspace => {
