@@ -92,3 +92,21 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: packages/opencode
         run: bun run test:httpapi
+
+  preview-browser:
+    name: preview browser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium
+        working-directory: packages/app
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run Preview browser contract
+        working-directory: packages/app
+        run: bunx playwright test e2e/regression/preview-baseline-contract.spec.ts
