@@ -365,6 +365,32 @@ test("keeps Preview zoom independent in split panes", async ({ page }) => {
   await expect(destinationZoom).toHaveValue("100%")
 })
 
+test("keeps each pane's zoom control inside its minimum-width leaf", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const source = panel.getByRole("tab", { name: "second.md" })
+  const rootLeaf = panel.locator('[data-preview-leaf="root"]')
+  const sourceBox = await source.boundingBox()
+  const rootBox = await rootLeaf.boundingBox()
+  if (!sourceBox || !rootBox) throw new Error("Preview tab and leaf must be measurable before splitting")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
+  await page.mouse.up()
+
+  const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
+  for (const leaf of [rootLeaf, destinationLeaf]) {
+    const leafBox = await leaf.boundingBox()
+    const inputBox = await leaf.locator('input[type="text"]:visible').boundingBox()
+    if (!leafBox || !inputBox) throw new Error("Preview leaf and zoom input must be measurable")
+    expect(inputBox.x).toBeGreaterThanOrEqual(leafBox.x)
+    expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(leafBox.x + leafBox.width)
+  }
+})
+
 test("inherits source zoom and focuses the new Preview leaf after a split", async ({ page }) => {
   await openPreview(page)
   await openPreviewFile(page, secondMarkdownFile)
