@@ -154,6 +154,16 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   )
 
   const tools = resolveTools(input)
+  // Harmoniqs AI custom provider: the app-harmoniqs-ai gateway hard-rejects any
+  // request carrying a `tools` field (400 unsupported_feature — see
+  // app-harmoniqs-ai/src/worker/routes/chat-completions.ts). Agents default to
+  // tool calling, so without this every turn against this provider would 400
+  // instead of just failing to use tools. Strip resolved tools here rather than
+  // relying on `capabilities.toolcall` alone, which is descriptive metadata and
+  // is not currently consulted by resolveTools.
+  if (isNoToolsProvider(input.model.providerID)) {
+    for (const key of Object.keys(tools)) delete tools[key]
+  }
   // Codex parity: OpenAI Responses-family providers hardcode `strict: false`
   // on every function tool so MCP-sourced and dynamic schemas that don't
   // satisfy OpenAI's structured-outputs constraints still register.
@@ -219,6 +229,16 @@ function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission"
     Permission.merge(input.agent.permission, input.permission ?? []),
   )
   return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
+}
+
+/** Provider IDs whose backend rejects `tools` outright (400 unsupported_feature
+ *  style responses) rather than merely ignoring them. Chat-only/no-tools
+ *  providers belong here so resolveTools' output is stripped before it ever
+ *  reaches the wire, instead of failing on the first request. */
+const NO_TOOLS_PROVIDERS = new Set(["harmoniqs"])
+
+export function isNoToolsProvider(providerID: string): boolean {
+  return NO_TOOLS_PROVIDERS.has(providerID)
 }
 
 export function hasToolCalls(messages: ModelMessage[]): boolean {
