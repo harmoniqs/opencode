@@ -3,6 +3,7 @@ export type PreviewLeaf = {
   id: string
   tabs: string[]
   selectedPath: string | null
+  zoom: number
 }
 
 export type PreviewSplit = {
@@ -32,6 +33,7 @@ export const createPreviewWorkspace = (paths: readonly string[] = []): PreviewWo
     id: "root",
     tabs: [...paths],
     selectedPath: paths.at(-1) ?? null,
+    zoom: 100,
   },
   focusedLeafID: "root",
   nextPaneID: 1,
@@ -139,6 +141,11 @@ export const selectPreviewPath = (workspace: PreviewWorkspace, leafID: string, p
   }
 }
 
+export const setPreviewLeafZoom = (workspace: PreviewWorkspace, leafID: string, zoom: number, maximum = 500): PreviewWorkspace => ({
+  ...workspace,
+  tree: mapLeaf(workspace.tree, leafID, (leaf) => ({ ...leaf, zoom: Math.round(Math.min(Math.max(zoom, 50), Math.min(Math.max(maximum, 50), 1000))) })),
+})
+
 export const removePreviewPath = (workspace: PreviewWorkspace, path: string): PreviewWorkspace => {
   const source = previewLeafContaining(workspace.tree, path)
   if (!source) return workspace
@@ -195,6 +202,7 @@ export const movePreviewTab = (
     id: `pane-${workspace.nextPaneID}`,
     tabs: [input.path],
     selectedPath: input.path,
+    zoom: source.zoom,
   }
   const direction = input.position === "left" || input.position === "right" ? "horizontal" : "vertical"
   const newPaneBeforeTarget = input.position === "left" || input.position === "top"
