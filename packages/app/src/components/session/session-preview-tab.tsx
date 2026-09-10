@@ -8,6 +8,8 @@ import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
+import { usePlatform } from "@/context/platform"
 import { PreviewFileView } from "./preview-file-view"
 import { FileVisual } from "./session-sortable-tab"
 import {
@@ -45,7 +47,15 @@ type PreviewDrag = {
   drop?: PreviewDrop
 }
 
+type PreviewLeafEdges = {
+  top: boolean
+  right: boolean
+  bottom: boolean
+  left: boolean
+}
+
 export function SessionPreviewTab(props: { previewFile: Accessor<string | null> }) {
+  const platform = usePlatform()
   const [dirtyPaths, setDirtyPaths] = createStore<Record<string, boolean>>({})
   const [saveRequests, setSaveRequests] = createStore<Record<string, number>>({})
   const [workspace, setWorkspace] = createSignal(createPreviewWorkspace())
@@ -53,6 +63,8 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   const [closingPath, setClosingPath] = createSignal<string | null>(null)
   const [previewDrag, setPreviewDrag] = createSignal<PreviewDrag | null>(null)
   const [dragProxy, setDragProxy] = createSignal<{ path: string; x: number; y: number; leaving: boolean } | null>(null)
+  const [resizingSplitID, setResizingSplitID] = createSignal<string | null>(null)
+  const [tabContextMenu, setTabContextMenu] = createSignal<{ path: string; x: number; y: number } | null>(null)
 
   const leafElements = new Map<string, HTMLElement>()
   const [hostMounts, setHostMounts] = createStore<Record<string, HTMLDivElement | undefined>>({})
@@ -85,8 +97,20 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       const data = event.data as { source?: string; kind?: string; path?: string } | undefined
       if (data?.source === "amicode" && data.kind === "preview-file" && data.path) openPath(data.path)
     }
+    const focusLeafFromPointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      for (const [leafID, element] of leafElements) {
+        if (!element.contains(event.target)) continue
+        setWorkspace((current) => ({ ...current, focusedLeafID: leafID }))
+        return
+      }
+    }
     window.addEventListener("message", handlePreviewFile)
-    onCleanup(() => window.removeEventListener("message", handlePreviewFile))
+    document.addEventListener("pointerdown", focusLeafFromPointer, true)
+    onCleanup(() => {
+      window.removeEventListener("message", handlePreviewFile)
+      document.removeEventListener("pointerdown", focusLeafFromPointer, true)
+    })
   })
   onCleanup(() => {
     stopPreviewDrag?.()
@@ -94,9 +118,9 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   })
 
   const zoomForPath = (path: string) => previewLeafContaining(workspace().tree, path)?.zoom ?? 100
-  const setZoomForPath = (path: string, value: number) => {
+  const setZoomForPath = (path: string, value: number, maximum = 500) => {
     const leaf = previewLeafContaining(workspace().tree, path)
-    if (leaf) setWorkspace((current) => setPreviewLeafZoom(current, leaf.id, value))
+    if (leaf) setWorkspace((current) => setPreviewLeafZoom(current, leaf.id, value, maximum))
   }
 
   const removePath = (path: string) => {
@@ -111,6 +135,18 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
       return
     }
     removePath(path)
+  }
+
+  const copyPreviewPath = async (value: string) => {
+    if (platform.writeClipboardText && (await platform.writeClipboardText(value))) return
+    try {
+      await navigator.clipboard?.writeText(value)
+    } catch {}
+  }
+
+  const openTabContextMenu = (event: MouseEvent, path: string) => {
+    event.preventDefault()
+    setTabContextMenu({ path, x: event.clientX, y: event.clientY })
   }
 
   const dropTargetAt = (clientX: number, clientY: number, path: string, sourceLeafID: string): PreviewDrop | undefined => {
@@ -227,12 +263,14 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     const secondMinimum = previewMinimumExtent(split.second, axis)
     if (extent <= 0 || firstMinimum + secondMinimum > extent) return
 
+    setResizingSplitID(split.id)
     divider.setPointerCapture?.(event.pointerId)
     const stop = () => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", stop)
       if (divider.hasPointerCapture?.(event.pointerId)) divider.releasePointerCapture(event.pointerId)
+      setResizingSplitID((current) => (current === split.id ? null : current))
     }
     const onMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault()
@@ -253,12 +291,19 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
     "--preview-branch-min-height": `${previewMinimumExtent(pane, "vertical")}px`,
   })
 
-  const renderPane = (pane: PreviewPane): JSX.Element => {
-    if (pane.kind === "leaf") return renderLeaf(pane)
+  const renderPane = (
+    pane: PreviewPane,
+    edges: PreviewLeafEdges = { top: true, right: true, bottom: true, left: true },
+  ): JSX.Element => {
+    if (pane.kind === "leaf") return renderLeaf(pane, edges)
+    const firstEdges =
+      pane.direction === "horizontal" ? { ...edges, right: false } : { ...edges, bottom: false }
+    const secondEdges =
+      pane.direction === "horizontal" ? { ...edges, left: false } : { ...edges, top: false }
     return (
       <div data-preview-split data-direction={pane.direction} class="preview-pane-split">
         <div class="preview-pane-branch" style={paneBranchStyle(pane.first, pane.ratio)}>
-          {renderPane(pane.first)}
+          {renderPane(pane.first, firstEdges)}
         </div>
         <div
           role="separator"
@@ -266,26 +311,30 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
           aria-orientation={pane.direction === "horizontal" ? "vertical" : "horizontal"}
           tabIndex={0}
           data-preview-divider={pane.id}
+          data-resizing={resizingSplitID() === pane.id || undefined}
           data-direction={pane.direction}
           class="preview-pane-divider"
           onPointerDown={(event) => startDividerResize(event, pane)}
         />
         <div class="preview-pane-branch" style={paneBranchStyle(pane.second, 1 - pane.ratio)}>
-          {renderPane(pane.second)}
+          {renderPane(pane.second, secondEdges)}
         </div>
       </div>
     )
   }
 
-  const renderLeaf = (leaf: PreviewLeaf): JSX.Element => {
+  const renderLeaf = (leaf: PreviewLeaf, edges: PreviewLeafEdges): JSX.Element => {
     const activeDrop = () => previewDrag()?.drop
     return (
       <section
         ref={(element) => leafElements.set(leaf.id, element)}
         data-preview-leaf={leaf.id}
+        data-preview-edge-top={edges.top || undefined}
+        data-preview-edge-right={edges.right || undefined}
+        data-preview-edge-bottom={edges.bottom || undefined}
+        data-preview-edge-left={edges.left || undefined}
         data-focused={workspace().focusedLeafID === leaf.id || undefined}
         class="preview-pane-leaf"
-        onPointerDown={() => setWorkspace((current) => ({ ...current, focusedLeafID: leaf.id }))}
       >
         <Tabs
           value={leaf.selectedPath ?? undefined}
@@ -300,6 +349,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
                   <Tabs.Trigger
                     value={path}
                     onPointerDown={(event) => startPreviewDrag(event, path, leaf.id)}
+                    onContextMenu={(event: MouseEvent) => openTabContextMenu(event, path)}
                     closeButton={
                       <button
                         type="button"
@@ -330,7 +380,7 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
           class="preview-pane-content"
         />
 
-        <Show when={activeDrop()?.leafID === leaf.id && activeDrop()?.position !== "center"}>
+        <Show when={activeDrop()?.leafID === leaf.id}>
           <div data-preview-drop-preview={activeDrop()!.position} class="preview-pane-drop-preview" />
         </Show>
       </section>
@@ -338,105 +388,124 @@ export function SessionPreviewTab(props: { previewFile: Accessor<string | null> 
   }
 
   return (
-    <div class="h-full flex flex-col overflow-hidden">
-      <Show when={dragProxy()}>
-        {(proxy) => (
-          <div
-            data-preview-tab-drag-proxy
-            data-leaving={proxy().leaving || undefined}
-            class="preview-tab-drag-proxy"
-            aria-hidden="true"
-            style={{
-              "--preview-drag-x": `${proxy().x}px`,
-              "--preview-drag-y": `${proxy().y}px`,
-            }}
-          >
-            <FileVisual path={proxy().path} active={false} explorerIconTheme />
-          </div>
-        )}
-      </Show>
-      <Show when={capacityMessage()}>
-        <div class="shrink-0 px-3 py-2 text-12-regular text-text-weak" role="alert">
-          {capacityMessage()}
-        </div>
-      </Show>
-
-      <Show when={closingPath()}>
-        {(path) => (
-          <div class="shrink-0 mx-3 mb-3 p-3 border border-border-base rounded-md bg-background-base" role="dialog" aria-modal="true" aria-label="Unsaved changes">
-            <p class="text-12-regular text-text-base">Save changes to {path().split("/").pop()} before closing?</p>
-            <div class="mt-2 flex justify-end gap-2">
-              <button type="button" class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus" onClick={() => setClosingPath(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                onClick={() => {
-                  removePath(path())
-                  setClosingPath(null)
+    <>
+      <div class="h-full flex flex-col overflow-hidden">
+        <Show when={dragProxy()}>
+          {(proxy) => (
+            <Portal>
+              <div
+                data-preview-tab-drag-proxy
+                data-leaving={proxy().leaving || undefined}
+                class="preview-tab-drag-proxy"
+                aria-hidden="true"
+                style={{
+                  "--preview-drag-x": `${proxy().x}px`,
+                  "--preview-drag-y": `${proxy().y}px`,
                 }}
               >
-                Discard
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 text-12-regular text-text-base border border-border-strong rounded-md hover:bg-background-stronger focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                onClick={() => setSaveRequests(path(), (request) => (request ?? 0) + 1)}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        )}
-      </Show>
-
-      <div data-preview-workspace class="flex-1 min-h-0 overflow-auto">
-        <Show
-          when={previewTabCount(workspace().tree) > 0}
-          fallback={
-            <div class="h-full flex flex-col items-center justify-center gap-3 text-text-weak p-6">
-              <Icon name="open-file" class="w-8 h-8 text-v2-text-text-faint" />
-              <p class="text-13-regular text-center">Select a file from the sidebar</p>
-            </div>
-          }
-        >
-          <div class="preview-workspace-canvas" data-preview-dragging={previewDrag()?.path}>
-            <For each={[workspace().tree]}>{renderPane}</For>
-            <For each={openedPaths()}>
-              {(path) => (
-                <Show when={hostMounts[path]}>
-                  {(mount) => (
-                    <Portal mount={mount()} ref={(container) => container.classList.add("preview-pane-renderer-mount")}>
-                      <div
-                        data-preview-host={path}
-                        class="h-full min-h-0"
-                        classList={{ hidden: !isSelected(path) }}
-                        aria-hidden={!isSelected(path)}
-                        inert={!isSelected(path)}
-                      >
-                        <PreviewFileView
-                          filePath={path}
-                          onDirtyChange={(dirty) => setDirtyPaths(path, dirty)}
-                          saveRequest={() => saveRequests[path] ?? 0}
-                          onSaveComplete={() => {
-                            removePath(path)
-                            setClosingPath(null)
-                          }}
-                          zoom={() => zoomForPath(path)}
-                          zoomIn={() => setZoomForPath(path, zoomForPath(path) + 10)}
-                          zoomOut={() => setZoomForPath(path, zoomForPath(path) - 10)}
-                          onZoomChange={(value) => setZoomForPath(path, value)}
-                        />
-                      </div>
-                    </Portal>
-                  )}
-                </Show>
-              )}
-            </For>
+                <FileVisual path={proxy().path} active={false} explorerIconTheme />
+              </div>
+            </Portal>
+          )}
+        </Show>
+        <Show when={capacityMessage()}>
+          <div class="shrink-0 px-3 py-2 text-12-regular text-text-weak" role="alert">
+            {capacityMessage()}
           </div>
         </Show>
+
+        <Show when={closingPath()}>
+          {(path) => (
+            <div class="shrink-0 mx-3 mb-3 p-3 border border-border-base rounded-md bg-background-base" role="dialog" aria-modal="true" aria-label="Unsaved changes">
+              <p class="text-12-regular text-text-base">Save changes to {path().split("/").pop()} before closing?</p>
+              <div class="mt-2 flex justify-end gap-2">
+                <button type="button" class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus" onClick={() => setClosingPath(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-12-regular text-text-weak hover:text-text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                  onClick={() => {
+                    removePath(path())
+                    setClosingPath(null)
+                  }}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 text-12-regular text-text-base border border-border-strong rounded-md hover:bg-background-stronger focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                  onClick={() => setSaveRequests(path(), (request) => (request ?? 0) + 1)}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+        </Show>
+
+        <div data-preview-workspace class="flex-1 min-h-0 overflow-auto">
+          <Show
+            when={previewTabCount(workspace().tree) > 0}
+            fallback={
+              <div class="h-full flex flex-col items-center justify-center gap-3 text-text-weak p-6">
+                <Icon name="open-file" class="w-8 h-8 text-v2-text-text-faint" />
+                <p class="text-13-regular text-center">Select a file from the sidebar</p>
+              </div>
+            }
+          >
+            <div class="preview-workspace-canvas" data-preview-dragging={previewDrag()?.path}>
+              <For each={[workspace().tree]}>{(pane) => renderPane(pane)}</For>
+              <For each={openedPaths()}>
+                {(path) => (
+                  <Show when={hostMounts[path]}>
+                    {(mount) => (
+                      <Portal mount={mount()} ref={(container) => container.classList.add("preview-pane-renderer-mount")}>
+                        <div
+                          data-preview-host={path}
+                          class="h-full min-h-0"
+                          hidden={!isSelected(path)}
+                          style={{ display: isSelected(path) ? "flex" : "none" }}
+                          aria-hidden={!isSelected(path)}
+                          inert={!isSelected(path)}
+                        >
+                          <PreviewFileView
+                            filePath={path}
+                            onDirtyChange={(dirty) => setDirtyPaths(path, dirty)}
+                            saveRequest={() => saveRequests[path] ?? 0}
+                            onSaveComplete={() => {
+                              removePath(path)
+                              setClosingPath(null)
+                            }}
+                            zoom={() => zoomForPath(path)}
+                            zoomIn={(maximum) => setZoomForPath(path, zoomForPath(path) + 10, maximum)}
+                            zoomOut={() => setZoomForPath(path, zoomForPath(path) - 10)}
+                            onZoomChange={(value, maximum) => setZoomForPath(path, value, maximum)}
+                          />
+                        </div>
+                      </Portal>
+                    )}
+                  </Show>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
       </div>
-    </div>
+      <MenuV2 open={!!tabContextMenu()} onOpenChange={(open) => !open && setTabContextMenu(null)}>
+        <MenuV2.Portal>
+          <MenuV2.Content
+            class="fixed"
+            style={{
+              left: `${tabContextMenu()?.x ?? 0}px`,
+              top: `${tabContextMenu()?.y ?? 0}px`,
+            }}
+          >
+            <MenuV2.Item onSelect={() => void copyPreviewPath((tabContextMenu()?.path ?? "").split("/").at(-1) ?? "")}>Copy filename</MenuV2.Item>
+            <MenuV2.Item onSelect={() => void copyPreviewPath(tabContextMenu()?.path ?? "")}>Copy filepath</MenuV2.Item>
+          </MenuV2.Content>
+        </MenuV2.Portal>
+      </MenuV2>
+    </>
   )
 }
