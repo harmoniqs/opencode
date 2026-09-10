@@ -2,7 +2,7 @@ import { AmicoSpinner } from "@opencode-ai/ui/amico-spinner"
 import { ThinkingLine, turnTokens } from "@opencode-ai/ui/amicode-thinking"
 import { shellRowLabel } from "@opencode-ai/ui/amicode-shell-row"
 import { sessionHasAmicodeParts } from "@opencode-ai/ui/amicode-rail-gate"
-import { amicoBrainRef, emitAmicoBrainHover } from "@opencode-ai/ui/amicode-brain-ref"
+import { emitAmicoBrainHover } from "@opencode-ai/ui/amicode-brain-ref"
 import { copyTextToClipboard } from "../util/clipboard"
 import {
   Component,
@@ -700,6 +700,7 @@ import {
   type ReceiptCandidate,
 } from "@opencode-ai/ui/amicode-receipt-runs"
 import { amicodeReceiptCandidateKey } from "./message-part-receipts"
+import { messagePartBrainRef } from "./message-part-brain-ref"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
@@ -1348,7 +1349,7 @@ export function ContextToolGroup(props: {
   }
   // amicode: hovering the group chip glances at every member node on the map
   const glanceAll = () => {
-    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(messagePartBrainRef(p, p.state.input ?? {}))
   }
 
   return (
@@ -1463,7 +1464,7 @@ export function ShellToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSiz
   }
   // amicode: hovering the group chip glances at every member node on the map
   const glanceAll = () => {
-    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(messagePartBrainRef(p, p.state.input ?? {}))
   }
 
   return (
@@ -1572,7 +1573,7 @@ export function EditToolGroup(props: { parts: ToolPart[]; busy?: boolean; onSize
   }
   // amicode: hovering the group chip glances at every member node on the map
   const glanceAll = () => {
-    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(amicoBrainRef(p.tool, p.state.input ?? {}))
+    for (const p of props.parts.slice(0, 8)) emitAmicoBrainHover(messagePartBrainRef(p, p.state.input ?? {}))
   }
 
   return (
@@ -2093,7 +2094,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const handleToolOpenChange = (open: boolean) => props.onToolOpenChange?.(open)
 
   // amicode: hovering the row glances at its node on the brain's map
-  const brainRef = createMemo(() => amicoBrainRef(part().tool, input()))
+  const brainRef = createMemo(() => messagePartBrainRef(part(), input()))
   return (
     <Show when={!hideQuestion()}>
       <div
