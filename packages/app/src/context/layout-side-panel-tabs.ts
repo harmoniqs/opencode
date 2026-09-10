@@ -10,14 +10,17 @@ const isSidePanelTabID = (value: unknown): value is SidePanelTabID =>
   typeof value === "string" && SIDE_PANEL_TAB_IDS.includes(value as SidePanelTabID)
 
 export const normalizeSidePanelTabOrder = (value: unknown): SidePanelTabID[] => {
-  const seen = new Set<SidePanelTabID>()
-  const order = Array.isArray(value)
+  const seen = new Set<SidePanelTabID>(["home"])
+  const order: SidePanelTabID[] = ["home"]
+  const persisted = Array.isArray(value)
     ? value.flatMap((tab) => {
         if (!isSidePanelTabID(tab) || seen.has(tab)) return []
         seen.add(tab)
         return [tab]
       })
     : []
+
+  order.push(...persisted)
 
   for (const tab of SIDE_PANEL_TAB_IDS) {
     if (!seen.has(tab)) order.push(tab)
@@ -33,9 +36,9 @@ export const reorderSidePanelTabs = (
 ): SidePanelTabID[] => {
   const next = normalizeSidePanelTabOrder(order)
   const fromIndex = next.indexOf(tab)
-  if (fromIndex === -1) return next
+  if (fromIndex <= 0) return next
 
-  const target = Math.max(0, Math.min(toIndex, next.length - 1))
+  const target = Math.max(1, Math.min(toIndex, next.length - 1))
   if (fromIndex === target) return next
 
   next.splice(target, 0, next.splice(fromIndex, 1)[0])
