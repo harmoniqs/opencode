@@ -97,7 +97,13 @@ export function SessionPreviewTab(props: {
   return (
     <div class="h-full flex flex-col overflow-hidden">
       <Show when={openedPaths().length > 0}>
-        <Tabs value={selectedPath() ?? undefined} onChange={setSelectedPath} class="shrink-0" style={{ height: "auto", overflow: "visible" }}>
+        <Tabs
+          value={selectedPath() ?? undefined}
+          onChange={setSelectedPath}
+          class="shrink-0"
+          classList={{ "preview-tab-strip": true }}
+          style={{ height: "auto", overflow: "visible" }}
+        >
           <Tabs.List aria-label="Open previews">
             <For each={openedPaths()}>
               {(path) => (

@@ -39,7 +39,9 @@ test("uses the Preview header for VS Code-style file tabs instead of a duplicate
   await openPreview(page)
 
   const panel = page.locator("#review-panel")
-  const tab = panel.getByRole("tablist", { name: "Open previews" }).getByRole("tab", { name: "baseline.md" })
+  const tablist = panel.getByRole("tablist", { name: "Open previews" })
+  const tab = tablist.getByRole("tab", { name: "baseline.md" })
+  await expect(tablist).toHaveCSS("height", "32px")
   await expect(tab.locator("xpath=ancestor::*[@data-slot='tabs-trigger-wrapper']")).toHaveCount(1)
   await expect(panel.getByText("baseline.md", { exact: true })).toHaveCount(1)
 })
