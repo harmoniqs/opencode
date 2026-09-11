@@ -151,7 +151,9 @@ describe("tool.edit", () => {
 
         yield* run({ filePath: filepath, oldString: "before", newString: "after" })
 
-        const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+        const assessment = ExternalDiff.assessed(ctx.sessionID, { patch: true }).assessments.find(
+          (entry) => entry.file === filepath,
+        )
         expect(assessment).toMatchObject({
           state: "changed",
           patch: expect.stringContaining("-before"),

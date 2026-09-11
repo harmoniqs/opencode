@@ -132,7 +132,9 @@ describe("tool.write", () => {
           },
         )
 
-        const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+        const assessment = ExternalDiff.assessed(ctx.sessionID, { patch: true }).assessments.find(
+          (entry) => entry.file === filepath,
+        )
         expect(assessmentExistedBeforePermission).toBe(false)
         expect(assessment).toMatchObject({
           state: "changed",
@@ -189,7 +191,9 @@ describe("tool.write", () => {
 
           yield* run({ filePath: filepath, content: "after\n" })
 
-          const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+          const assessment = ExternalDiff.assessed(ctx.sessionID, { patch: true }).assessments.find(
+            (entry) => entry.file === filepath,
+          )
           expect(assessment).toMatchObject({
             state: "changed",
             patch: expect.stringContaining("+formatter"),
