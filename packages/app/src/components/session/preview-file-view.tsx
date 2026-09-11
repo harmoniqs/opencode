@@ -56,7 +56,13 @@ function getFileCategory(path: string): FileCategory {
 
 /** Async file-type classification after file.read() (phase 2). */
 type FileType = "text" | "binary" | "error" | "too-large" | null
-type PdfPageNavigation = { currentPage: number; pageCount: number }
+type PdfPageNavigation = {
+  currentPage: number
+  pageCount: number
+  canPrevious: boolean
+  canNext: boolean
+  navigate: (page: number) => void
+}
 
 const MAX_FILE_SIZE = 1_000_000
 
@@ -454,7 +460,6 @@ export function PreviewFileView(props: {
         <Show when={!isEditing()}>
           <Show when={pdfNavigation()}>
             {(navigation) => {
-              const state = navigation()
               return (
                 <div
                   data-pdf-page-navigation
@@ -463,14 +468,16 @@ export function PreviewFileView(props: {
                   <div class="flex flex-col border-r border-border-base">
                     <button
                       class="flex items-center justify-center w-5 h-3.5 cursor-pointer text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                      disabled={state.currentPage <= 1}
+                      disabled={!navigation().canPrevious}
+                      onClick={() => navigation().navigate(navigation().currentPage - 1)}
                       aria-label="Previous page"
                     >
                       <Icon name="chevron-right" size="small" class="-rotate-90" />
                     </button>
                     <button
                       class="flex items-center justify-center w-5 h-3.5 cursor-pointer text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
-                      disabled={state.currentPage >= state.pageCount}
+                      disabled={!navigation().canNext}
+                      onClick={() => navigation().navigate(navigation().currentPage + 1)}
                       aria-label="Next page"
                     >
                       <Icon name="chevron-right" size="small" class="rotate-90" />
@@ -480,9 +487,9 @@ export function PreviewFileView(props: {
                     class="min-w-11 px-2 text-center text-12-regular text-text-base tabular-nums"
                     role="status"
                     aria-live="polite"
-                    aria-label={`Page ${state.currentPage} of ${state.pageCount}`}
+                    aria-label={`Page ${navigation().currentPage} of ${navigation().pageCount}`}
                   >
-                    {state.currentPage} / {state.pageCount}
+                    {navigation().currentPage} / {navigation().pageCount}
                   </span>
                 </div>
               )

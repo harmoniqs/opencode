@@ -27,6 +27,8 @@ const partialTextPdfFile = "papers/partial-selectable-text.pdf"
 const partialTextPdfContent = createPdfFixture([pdfText, ""])
 const multipagePdfFile = "papers/multipage.pdf"
 const multipagePdfContent = createPdfFixture(["First PDF page", "Second PDF page"])
+const invalidPdfFile = "papers/invalid.pdf"
+const invalidPdfContent = "bm90IGEgcGRm"
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -227,8 +229,21 @@ test("keeps a PDF with no selectable text visible and explains the limitation", 
   await openPreviewFile(page, noTextPdfFile)
 
   const panel = page.locator("#review-panel")
-  await expect(panel.locator(`[data-preview-host="${noTextPdfFile}"] canvas`)).toBeVisible()
+  const host = panel.locator(`[data-preview-host="${noTextPdfFile}"]`)
+  await expect(host.locator("canvas")).toBeVisible()
   await expect(panel.getByText("This PDF has no selectable text.", { exact: true })).toBeVisible()
+  await expect(host.getByRole("status", { name: "Page 1 of 1" })).toHaveText("1 / 1")
+  await expect(host.getByRole("button", { name: "Previous page" })).toBeDisabled()
+  await expect(host.getByRole("button", { name: "Next page" })).toBeDisabled()
+})
+
+test("hides PDF page navigation when PDF rendering fails", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, invalidPdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${invalidPdfFile}"]`)
+  await expect(host.getByText("Could not render PDF", { exact: true })).toBeVisible()
+  await expect(host.locator("[data-pdf-page-navigation]")).toHaveCount(0)
 })
 
 test("explains when text selection is unavailable on only some PDF pages", async ({ page }) => {
@@ -252,12 +267,74 @@ test("shows PDF page navigation before the zoom controls", async ({ page }) => {
   const zoom = host.locator('input[type="text"]')
 
   await expect(pageStatus).toHaveText("1 / 2")
+  await expect(pageStatus).toHaveAttribute("aria-live", "polite")
   await expect(previous).toBeDisabled()
   await expect(next).toBeEnabled()
 
   const [navigationBox, zoomBox] = await Promise.all([pageStatus.boundingBox(), zoom.boundingBox()])
   if (!navigationBox || !zoomBox) throw new Error("PDF navigation and zoom controls must be measurable")
   expect(navigationBox.x + navigationBox.width).toBeLessThanOrEqual(zoomBox.x)
+})
+
+test("navigates a PDF page to the top of the Preview viewport", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageStatus = host.getByRole("status")
+  const previous = host.getByRole("button", { name: "Previous page" })
+  const next = host.getByRole("button", { name: "Next page" })
+  const scroll = host.locator("[data-preview-scroll]")
+  const secondPage = host.locator("canvas").nth(1)
+
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
+  await next.focus()
+  await next.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 2 of 2")
+  await expect(previous).toBeEnabled()
+  await expect(next).toBeDisabled()
+
+  await expect.poll(async () => {
+    const [scrollBox, pageBox] = await Promise.all([scroll.boundingBox(), secondPage.boundingBox()])
+    return scrollBox && pageBox ? Math.abs(pageBox.y - scrollBox.y) : Infinity
+  }).toBeLessThanOrEqual(20)
+
+  await previous.focus()
+  await previous.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
+})
+
+test("tracks the PDF page nearest the Preview viewport center", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageStatus = host.getByRole("status")
+  const canvases = host.locator("canvas")
+
+  await expect(canvases).toHaveCount(2)
+  await canvases.nth(1).evaluate((canvas) => {
+    const scroll = canvas.closest<HTMLElement>("[data-preview-scroll]")
+    if (!scroll) throw new Error("PDF canvas must be inside the Preview scroll container")
+    scroll.scrollTop += canvas.getBoundingClientRect().top - scroll.getBoundingClientRect().top
+  })
+  await expect(pageStatus).toHaveAccessibleName("Page 2 of 2")
+
+  await canvases.evaluateAll((elements) => {
+    const [first, second] = elements
+    if (!(first instanceof HTMLCanvasElement) || !(second instanceof HTMLCanvasElement)) {
+      throw new Error("PDF page elements must be canvases")
+    }
+    const scroll = first?.closest<HTMLElement>("[data-preview-scroll]")
+    if (!first || !second || !scroll) throw new Error("PDF pages must be inside the Preview scroll container")
+    const scrollBounds = scroll.getBoundingClientRect()
+    const firstBounds = first.getBoundingClientRect()
+    const secondBounds = second.getBoundingClientRect()
+    const firstCenter = firstBounds.top - scrollBounds.top + scroll.scrollTop + firstBounds.height / 2
+    const secondCenter = secondBounds.top - scrollBounds.top + scroll.scrollTop + secondBounds.height / 2
+    scroll.scrollTop = (firstCenter + secondCenter) / 2 - scroll.clientHeight / 2
+  })
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
 })
 
 test("keeps selectable PDF text aligned with its page after zooming", async ({ page }) => {
@@ -1346,6 +1423,8 @@ async function openPreview(page: Parameters<typeof mockOpenCodeServer>[0]) {
         return { type: "binary", content: partialTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
       if (path === multipagePdfFile)
         return { type: "binary", content: multipagePdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === invalidPdfFile)
+        return { type: "binary", content: invalidPdfContent, encoding: "base64", mimeType: "application/pdf" }
       if (path === "notes/third.md")
         return { type: "text", content: "# Third Preview\n\nThe nested renderer stays alive." }
       if (path.startsWith("notes/capacity-")) return { type: "text", content: `# ${path}` }
