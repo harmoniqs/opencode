@@ -9868,7 +9868,8 @@ export type SessionAssessedDiffResponses = {
     assessments: Array<{
       reference: string
       file: string
-      state: "changed" | "unavailable"
+      state: "changed" | "unchanged" | "unavailable"
+      status?: "added" | "modified" | "deleted"
       patch?: string
       additions?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       deletions?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"

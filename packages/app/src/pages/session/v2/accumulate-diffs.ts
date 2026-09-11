@@ -54,8 +54,7 @@ export function mergeServerAndToolDiffs(opts: MergeOpts): Array<SnapshotFileDiff
     .filter((diff) => diff.state === "changed" && diff.patch !== undefined)
     .map((diff) => {
       const file = toHomePath(diff.file, home, prefix)
-      const override = externalFileStatus?.get(file)
-      const status: "added" | "modified" | "deleted" = override ?? "modified"
+      const status: "added" | "modified" | "deleted" = diff.status ?? "modified"
       const additions = typeof diff.additions === "number" ? diff.additions : 0
       const deletions = typeof diff.deletions === "number" ? diff.deletions : 0
       return {

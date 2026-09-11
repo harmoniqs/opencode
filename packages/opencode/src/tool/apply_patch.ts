@@ -14,6 +14,7 @@ import DESCRIPTION from "./apply_patch.txt"
 import { FileSystem } from "@opencode-ai/core/filesystem"
 import { Format } from "../format"
 import * as Bom from "@/util/bom"
+import { ExternalDiff } from "@/session/external-diff"
 
 export const Parameters = Schema.Struct({
   patchText: Schema.String.annotate({ description: "The full patch text that describes all changes to be made" }),
@@ -65,13 +66,15 @@ export const ApplyPatchTool = Tool.define(
         additions: number
         deletions: number
         bom: boolean
+        external: boolean
+        moveExternal: boolean
       }> = []
 
       let totalDiff = ""
 
       for (const hunk of hunks) {
         const filePath = path.resolve(instance.directory, hunk.path)
-        yield* assertExternalDirectoryEffect(ctx, filePath)
+        const external = yield* assertExternalDirectoryEffect(ctx, filePath)
 
         switch (hunk.type) {
           case "add": {
@@ -97,6 +100,8 @@ export const ApplyPatchTool = Tool.define(
               additions,
               deletions,
               bom: next.bom,
+              external,
+              moveExternal: false,
             })
 
             totalDiff += diff + "\n"
@@ -140,7 +145,7 @@ export const ApplyPatchTool = Tool.define(
             }
 
             const movePath = hunk.move_path ? path.resolve(instance.directory, hunk.move_path) : undefined
-            yield* assertExternalDirectoryEffect(ctx, movePath)
+            const moveExternal = yield* assertExternalDirectoryEffect(ctx, movePath)
 
             fileChanges.push({
               filePath,
@@ -152,6 +157,8 @@ export const ApplyPatchTool = Tool.define(
               additions,
               deletions,
               bom,
+              external,
+              moveExternal,
             })
 
             totalDiff += diff + "\n"
@@ -182,6 +189,8 @@ export const ApplyPatchTool = Tool.define(
               additions: 0,
               deletions,
               bom: source.bom,
+              external,
+              moveExternal: false,
             })
 
             totalDiff += deleteDiff + "\n"
@@ -214,48 +223,69 @@ export const ApplyPatchTool = Tool.define(
         },
       })
 
+      const externalFiles = [
+        ...new Set(
+          fileChanges.flatMap((change) => [
+            ...(change.external ? [change.filePath] : []),
+            ...(change.movePath && change.moveExternal ? [change.movePath] : []),
+          ]),
+        ),
+      ]
+      const reservation = externalFiles.length
+        ? ExternalDiff.prepare({ sessionID: ctx.sessionID, files: externalFiles })
+        : undefined
+
       // Apply the changes
       const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
 
-      for (const change of fileChanges) {
-        const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
-        switch (change.type) {
-          case "add":
-            // Create parent directories (recursive: true is safe on existing/root dirs)
-
-            yield* afs.writeWithDirs(change.filePath, Bom.join(change.newContent, change.bom))
-            updates.push({ file: change.filePath, event: "add" })
-            break
-
-          case "update":
-            yield* afs.writeWithDirs(change.filePath, Bom.join(change.newContent, change.bom))
-            updates.push({ file: change.filePath, event: "change" })
-            break
-
-          case "move":
-            if (change.movePath) {
+      yield* Effect.gen(function* () {
+        for (const change of fileChanges) {
+          const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
+          switch (change.type) {
+            case "add":
               // Create parent directories (recursive: true is safe on existing/root dirs)
 
-              yield* afs.writeWithDirs(change.movePath!, Bom.join(change.newContent, change.bom))
+              yield* afs.writeWithDirs(change.filePath, Bom.join(change.newContent, change.bom))
+              updates.push({ file: change.filePath, event: "add" })
+              break
+
+            case "update":
+              yield* afs.writeWithDirs(change.filePath, Bom.join(change.newContent, change.bom))
+              updates.push({ file: change.filePath, event: "change" })
+              break
+
+            case "move":
+              if (change.movePath) {
+                // Create parent directories (recursive: true is safe on existing/root dirs)
+
+                yield* afs.writeWithDirs(change.movePath, Bom.join(change.newContent, change.bom))
+                yield* afs.remove(change.filePath)
+                updates.push({ file: change.filePath, event: "unlink" })
+                updates.push({ file: change.movePath, event: "add" })
+              }
+              break
+
+            case "delete":
               yield* afs.remove(change.filePath)
               updates.push({ file: change.filePath, event: "unlink" })
-              updates.push({ file: change.movePath, event: "add" })
-            }
-            break
-
-          case "delete":
-            yield* afs.remove(change.filePath)
-            updates.push({ file: change.filePath, event: "unlink" })
-            break
-        }
-
-        if (edited) {
-          if (yield* format.file(edited)) {
-            yield* Bom.syncFile(afs, edited, change.bom)
+              break
           }
-          yield* events.publish(FileSystem.Event.Edited, { file: edited })
+
+          if (edited) {
+            if (yield* format.file(edited)) {
+              yield* Bom.syncFile(afs, edited, change.bom)
+            }
+            yield* events.publish(FileSystem.Event.Edited, { file: edited })
+          }
         }
-      }
+        if (reservation) ExternalDiff.commit({ sessionID: ctx.sessionID, reservation })
+      }).pipe(
+        Effect.onError(() =>
+          Effect.sync(() => {
+            if (reservation) ExternalDiff.abort({ sessionID: ctx.sessionID, reservation })
+          }),
+        ),
+      )
 
       // Publish file change events
       for (const update of updates) {

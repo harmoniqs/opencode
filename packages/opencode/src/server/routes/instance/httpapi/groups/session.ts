@@ -83,7 +83,8 @@ export const TouchedFile = Schema.Struct({
 export const AssessedExternalDiff = Schema.Struct({
   reference: Schema.String,
   file: Schema.String,
-  state: Schema.Literals(["changed", "unavailable"]),
+  state: Schema.Literals(["changed", "unchanged", "unavailable"]),
+  status: Schema.optional(Schema.Literals(["added", "modified", "deleted"])),
   patch: Schema.optional(Schema.String),
   additions: Schema.optional(Schema.Number),
   deletions: Schema.optional(Schema.Number),
