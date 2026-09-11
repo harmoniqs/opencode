@@ -38,7 +38,7 @@ import { statusTriggerVisibility } from "../status-popover-model"
 import { useServerSync } from "@/context/server-sync"
 import { useGlobal } from "@/context/global"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { sessionListDirectories, sortedRootSessions } from "@/pages/layout/helpers"
+import { arraysEqual, sessionListDirectories, sortedRootSessions } from "@/pages/layout/helpers"
 import { useNavigate } from "@solidjs/router"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
@@ -715,6 +715,22 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
 
   const currentSessionID = createMemo(() => props.currentSessionID)
 
+  // Directories for session listing — extracted into a structurally-compared
+  // memo so downstream consumers (activeSessions, the bootstrap effect) only
+  // re-run when the directory set actually changes, not on every reactive tick
+  // that happens to re-evaluate sessionListDirectories (amicode#1012).
+  const flyoutDirectories = createMemo(
+    () => {
+      if (!open()) return []
+      const conn = server.current
+      if (!conn) return []
+      const ctx = globalCtx.ensureServerCtx(conn)
+      if (!ctx) return []
+      return sessionListDirectories(ctx.projects.list(), ctx.sync.data?.project ?? [])
+    },
+    { equals: arraysEqual },
+  )
+
   // Active sessions — only computed when the flyout is open to avoid
   // triggering reactive subscriptions (serverSync().child pins the directory
   // and can cascade re-renders to the parent Portal).
@@ -727,7 +743,7 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
       if (!conn) return []
       const ctx = globalCtx.ensureServerCtx(conn)
       if (!ctx) return []
-      const directories = sessionListDirectories(ctx.projects.list(), ctx.sync.data?.project ?? [])
+      const directories = flyoutDirectories()
       const seen = new Set<string>()
       const sessions: Session[] = []
       for (const dir of directories) {
@@ -753,7 +769,7 @@ export function SessionChatsDropdown(props: { currentSessionID?: string } = {}) 
     if (!conn) return
     const ctx = globalCtx.ensureServerCtx(conn)
     if (!ctx) return
-    for (const dir of sessionListDirectories(ctx.projects.list(), ctx.sync.data?.project ?? [])) {
+    for (const dir of flyoutDirectories()) {
       const [store] = ctx.sync.child(dir, { bootstrap: false })
       if ((store.session?.length ?? 0) === 0) ctx.sync.project.loadSessions(dir, { limit: 50 })
     }

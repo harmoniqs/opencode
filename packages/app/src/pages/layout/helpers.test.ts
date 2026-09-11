@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import {
   collectNewSessionDeepLinks,
   collectOpenProjectDeepLinks,
@@ -8,6 +10,7 @@ import {
 } from "./deep-links"
 import { type Session } from "@opencode-ai/sdk/v2/client"
 import {
+  arraysEqual,
   childSessionOnPath,
   closeHomeProject,
   displayName,
@@ -349,6 +352,62 @@ describe("layout workspace helpers", () => {
         { worktree: "", sandboxes: [""] },
       ]
       expect(sessionListDirectories([], server)).toEqual(["/a"])
+    })
+  })
+
+  describe("arraysEqual — structural equality for string arrays (amicode#1012)", () => {
+    test("returns true for identical content", () => {
+      expect(arraysEqual(["/a", "/b", "/c"], ["/a", "/b", "/c"])).toBe(true)
+    })
+
+    test("returns false for different content", () => {
+      expect(arraysEqual(["/a", "/b"], ["/a", "/x"])).toBe(false)
+    })
+
+    test("returns false for different lengths", () => {
+      expect(arraysEqual(["/a", "/b"], ["/a"])).toBe(false)
+      expect(arraysEqual(["/a"], ["/a", "/b"])).toBe(false)
+    })
+
+    test("returns true for two empty arrays", () => {
+      expect(arraysEqual([], [])).toBe(true)
+    })
+
+    test("is order-sensitive (same elements, different order)", () => {
+      expect(arraysEqual(["/a", "/b"], ["/b", "/a"])).toBe(false)
+    })
+
+    test("returns true for the same reference", () => {
+      const arr = ["/a", "/b"]
+      expect(arraysEqual(arr, arr)).toBe(true)
+    })
+  })
+
+  describe("arraysEqual is wired into sessionListDirectories consumers (amicode#1012)", () => {
+    const homeSource = readFileSync(join(import.meta.dir, "..", "home.tsx"), "utf8")
+    const headerSource = readFileSync(
+      join(import.meta.dir, "..", "..", "components", "session", "session-header.tsx"),
+      "utf8",
+    )
+
+    test("home.tsx projectDirectories memo uses structural equality", () => {
+      expect(homeSource).toContain("equals: arraysEqual")
+    })
+
+    test("session-header.tsx has a flyoutDirectories memo with structural equality", () => {
+      expect(headerSource).toContain("flyoutDirectories")
+      expect(headerSource).toContain("equals: arraysEqual")
+    })
+
+    test("session-header.tsx activeSessions reads flyoutDirectories() instead of inline sessionListDirectories", () => {
+      // The activeSessions memo body should reference flyoutDirectories(),
+      // not call sessionListDirectories directly
+      const activeSessionsBlock = headerSource.slice(
+        headerSource.indexOf("const activeSessions = createMemo"),
+        headerSource.indexOf("const activeSessions = createMemo") + 600,
+      )
+      expect(activeSessionsBlock).toContain("flyoutDirectories()")
+      expect(activeSessionsBlock).not.toContain("sessionListDirectories(")
     })
   })
 })

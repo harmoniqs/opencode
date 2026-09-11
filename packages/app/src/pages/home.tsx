@@ -45,6 +45,7 @@ import { useNotification } from "@/context/notification"
 import {
   closeHomeProject,
   displayName,
+  arraysEqual,
   errorMessage,
   homeProjectDirectories,
   homeProjectNavigation,
@@ -290,8 +291,9 @@ function HomeDesign() {
   // empty/populated with selection and hid non-selected projects' sessions.
   // amicode#288: a fresh client has an empty opened-projects registry — fall
   // back to the server's registered projects so history is still listed.
-  const projectDirectories = createMemo(() =>
-    sessionListDirectories(projects(), focusedSync().data.project ?? []),
+  const projectDirectories = createMemo(
+    () => sessionListDirectories(projects(), focusedSync().data.project ?? []),
+    { equals: arraysEqual },
   )
   const search = createMemo(() => state.search.trim())
   const sessionLoad = useQuery(() => ({

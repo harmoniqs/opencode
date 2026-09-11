@@ -66,6 +66,20 @@ export const displayName = (project: { name?: string; worktree: string }) =>
  * project becomes impossible (amicode#839, replacing the fallback-only behavior
  * from amicode#288).
  */
+/**
+ * Shallow structural equality for string arrays — use as the `equals` option on
+ * SolidJS `createMemo` to prevent downstream re-renders when the array content
+ * is unchanged even though the reference is new (amicode#1012).
+ */
+export function arraysEqual(a: string[], b: string[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 export function sessionListDirectories(
   opened: { worktree: string; sandboxes?: string[] }[],
   serverProjects: { worktree: string; sandboxes?: string[] }[],
