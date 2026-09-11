@@ -103,6 +103,7 @@ import { authTokenFromCredentials } from "@/utils/server"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { postRouteInfo } from "@/utils/amicode-route-info"
+import { assessedDiffInvalidation, sessionContextMessage } from "@/utils/amicode-session-relay"
 import { notifyProjectSelected } from "@/utils/amicode-workspace-projects"
 import { setSessionCopyProvider } from "@/utils/global-clipboard"
 import { serializeSession } from "@/utils/serialize-session"
@@ -386,6 +387,15 @@ export default function Page() {
   const reviewFile = () => view().review.file()
   const sessionOwnership = createSessionOwnership(sessionKey)
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
+
+  createEffect(() => {
+    if (window.parent === window) return
+    window.parent.postMessage(sessionContextMessage(params.id), "*")
+  })
+  onCleanup(() => {
+    if (window.parent === window) return
+    window.parent.postMessage(sessionContextMessage(), "*")
+  })
 
   createEffect(() => {
     if (!prompt.ready()) return
@@ -779,6 +789,17 @@ export default function Page() {
   window.addEventListener("message", onFsDiffInvalidate)
   onCleanup(() => window.removeEventListener("message", onFsDiffInvalidate))
 
+  // Server-owned external references are invalidated opaquely: the app keeps
+  // no client-side lifecycle or path state and refetches assessed detail.
+  const onAssessedDiffInvalidate = (e: MessageEvent) => {
+    if (!assessedDiffInvalidation(e.data)) return
+    const sessionID = params.id
+    if (!sessionID) return
+    sync().set("diff_version", sessionID, (v: number | undefined) => (v ?? 0) + 1)
+  }
+  window.addEventListener("message", onAssessedDiffInvalidate)
+  onCleanup(() => window.removeEventListener("message", onAssessedDiffInvalidate))
+
   // Refetch when the session transitions to idle (assistant finished, snapshot taken)
   // or when a file-editing tool completes mid-turn (diff_version bumps)
   const sessionDiffVersion = () => {
@@ -883,13 +904,11 @@ export default function Page() {
     })
   })
 
-  // #844: Send watch-files to the extension host whenever the file list changes.
-  // The FileWatcherBridge watches these paths for external create/change/delete.
-  // We resolve ~/... paths back to absolute for the OS-level watcher.
+  // #844: Preserve raw watch-files only for the server's in-worktree diff rows.
+  // External paths stay in the extension host behind opaque assessed references.
   createEffect(() => {
-    const diffs = reviewDiffs()
     const home = typeof globalThis.process !== "undefined" ? globalThis.process.env?.HOME : undefined
-    const files = diffs
+    const files = (sessionDiffQuery.data ?? [])
       .map((d) => {
         if (!d.file) return ""
         // Resolve ~/... back to absolute
