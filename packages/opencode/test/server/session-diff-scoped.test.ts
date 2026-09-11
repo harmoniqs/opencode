@@ -48,6 +48,154 @@ const withSession = (input?: Parameters<Session.Interface["create"]>[0]) =>
 
 describe("Session.diff — session-scoped agent diffs (#174)", () => {
   it.instance(
+    "prepares an opaque external reservation over the authenticated session API",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-http-reservation" })
+        const fs = yield* FSUtil.Service
+        const sibling = path.join(path.dirname(test.directory), `external-http-${session.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "before\n")
+
+        const response = yield* requestInDirectory(
+          `/session/${session.id}/external-diff/reservations/prepare`,
+          test.directory,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ version: 1, files: [sibling] }),
+          },
+        )
+
+        expect(response.status).toBe(200)
+        const body = yield* response.json
+        expect(body).toEqual({
+          version: 1,
+          reservation: {
+            id: expect.any(String),
+            expiresAt: expect.any(Number),
+            endpoints: [
+              {
+                reference: expect.any(String),
+                capability: expect.any(String),
+                revision: 0,
+              },
+            ],
+          },
+        })
+        expect(JSON.stringify(body)).not.toContain(sibling)
+        expect(JSON.stringify(body)).not.toContain("before")
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "rejects mismatched reservations while preserving idempotent group commit and conditional abort",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-http-commit" })
+        const other = yield* withSession({ title: "external-http-other" })
+        const fs = yield* FSUtil.Service
+        const source = path.join(path.dirname(test.directory), `external-http-source-${session.id}.txt`)
+        const destination = path.join(path.dirname(test.directory), `external-http-destination-${session.id}.txt`)
+        const partialSource = path.join(path.dirname(test.directory), `external-http-partial-source-${session.id}.txt`)
+        const partialDestination = path.join(
+          path.dirname(test.directory),
+          `external-http-partial-destination-${session.id}.txt`,
+        )
+        const abortedFile = path.join(path.dirname(test.directory), `external-http-aborted-${session.id}.txt`)
+        yield* fs.writeWithDirs(source, "before\n")
+        yield* fs.writeWithDirs(partialSource, "partial-before\n")
+
+        const prepare = (id: string, files: string[]) =>
+          requestInDirectory(`/session/${id}/external-diff/reservations/prepare`, test.directory, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ version: 1, files }),
+          })
+        const lifecycle = (id: string, action: "commit" | "abort", reservation: unknown) =>
+          requestInDirectory(`/session/${id}/external-diff/reservations/${action}`, test.directory, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ version: 1, reservation }),
+          })
+        type Reservation = {
+          id: string
+          expiresAt: number
+          endpoints: Array<{ reference: string; capability: string; revision: number }>
+        }
+        const prepared = yield* prepare(session.id, [source, destination])
+        expect(prepared.status).toBe(200)
+        const reservation = ((yield* prepared.json) as { reservation: Reservation }).reservation
+        const stalePrepared = yield* prepare(session.id, [source])
+        expect(stalePrepared.status).toBe(200)
+        const staleReservation = ((yield* stalePrepared.json) as { reservation: Reservation }).reservation
+
+        yield* fs.writeWithDirs(destination, "before\n")
+        yield* fs.remove(source)
+
+        const wrongSession = yield* lifecycle(other.id, "commit", reservation)
+        expect(wrongSession.status).toBe(409)
+        const wrongCapability = yield* lifecycle(session.id, "commit", {
+          ...reservation,
+          endpoints: [{ ...reservation.endpoints[0], capability: "forged" }, reservation.endpoints[1]],
+        })
+        expect(wrongCapability.status).toBe(409)
+        const wrongReference = yield* lifecycle(session.id, "commit", {
+          ...reservation,
+          endpoints: [{ ...reservation.endpoints[0], reference: "external_forged" }, reservation.endpoints[1]],
+        })
+        expect(wrongReference.status).toBe(409)
+        const committed = yield* lifecycle(session.id, "commit", reservation)
+        expect(committed.status).toBe(200)
+        expect(yield* committed.json).toEqual({ version: 1, committed: true })
+        const staleRevision = yield* lifecycle(session.id, "commit", staleReservation)
+        expect(staleRevision.status).toBe(409)
+        const retry = yield* lifecycle(session.id, "commit", reservation)
+        expect(retry.status).toBe(200)
+        expect(yield* retry.json).toEqual({ version: 1, committed: true })
+        const postCommitAbort = yield* lifecycle(session.id, "abort", reservation)
+        expect(postCommitAbort.status).toBe(409)
+
+        const abortPrepared = yield* prepare(session.id, [abortedFile])
+        expect(abortPrepared.status).toBe(200)
+        const aborted = yield* lifecycle(
+          session.id,
+          "abort",
+          ((yield* abortPrepared.json) as { reservation: Reservation }).reservation,
+        )
+        expect(aborted.status).toBe(200)
+        expect(yield* aborted.json).toEqual({ version: 1, aborted: true })
+
+        const partial = yield* prepare(session.id, [partialSource, partialDestination])
+        expect(partial.status).toBe(200)
+        const partialReservation = ((yield* partial.json) as { reservation: Reservation }).reservation
+        yield* fs.writeWithDirs(partialDestination, "partial\n")
+        yield* fs.remove(partialSource)
+        const stale = yield* lifecycle(session.id, "commit", {
+          ...partialReservation,
+          endpoints: [{ ...partialReservation.endpoints[0], revision: -1 }, partialReservation.endpoints[1]],
+        })
+        expect(stale.status).toBe(409)
+        const detail = yield* requestInDirectory(
+          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }),
+          test.directory,
+        )
+        expect(detail.status).toBe(200)
+        expect(yield* detail.json).toEqual(
+          expect.objectContaining({
+            assessments: expect.arrayContaining([
+              expect.objectContaining({ file: partialSource, state: "unavailable" }),
+              expect.objectContaining({ file: partialDestination, state: "unavailable" }),
+            ]),
+          }),
+        )
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
     "returns a settled, no-store assessed diff for one non-Git sibling file",
     () =>
       Effect.gen(function* () {

@@ -3,9 +3,11 @@ import { ConfigProvider, Layer } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { EventPaths } from "../../src/server/routes/instance/httpapi/groups/event"
 import { PtyPaths } from "../../src/server/routes/instance/httpapi/groups/pty"
+import { SessionPaths } from "../../src/server/routes/instance/httpapi/groups/session"
 import { HttpApiApp } from "../../src/server/routes/instance/httpapi/server"
 import { ServerAuth } from "../../src/server/auth"
 import { PtyID } from "@opencode-ai/core/pty/schema"
+import { SessionID } from "../../src/session/schema"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, tmpdir } from "../fixture/fixture"
 
@@ -76,6 +78,24 @@ describe("HttpApi instance route authorization", () => {
       headers: { ...headers, authorization: basic("opencode", "secret") },
     })
     await cancelBody(authed)
+    expect(authed.status).toBe(404)
+  })
+
+  test("requires configured auth before preparing an external mutation reservation", async () => {
+    await using tmp = await tmpdir({ git: true, config: { formatter: false, lsp: false } })
+    const server = app({ password: "secret" })
+    const route = SessionPaths.externalReservationPrepare.replace(":sessionID", SessionID.make("ses_auth_probe"))
+    const headers = { "x-opencode-directory": tmp.path, "content-type": "application/json" }
+    const body = JSON.stringify({ version: 1, files: ["/tmp/external.txt"] })
+
+    const missing = await server.request(route, { method: "POST", headers, body })
+    expect(missing.status).toBe(401)
+
+    const authed = await server.request(route, {
+      method: "POST",
+      headers: { ...headers, authorization: basic("opencode", "secret") },
+      body,
+    })
     expect(authed.status).toBe(404)
   })
 })

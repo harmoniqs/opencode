@@ -20,7 +20,7 @@ import {
   WorkspaceRoutingQuery,
   WorkspaceRoutingQueryFields,
 } from "../middleware/workspace-routing"
-import { ApiNotFoundError, PermissionNotFoundError, SessionBusyError } from "../errors"
+import { ApiNotFoundError, ConflictError, PermissionNotFoundError, SessionBusyError } from "../errors"
 import { described } from "./metadata"
 import { QueryBoolean } from "./query"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -100,6 +100,38 @@ export const AssessedExternalDiffResponse = Schema.Struct({
   assessments: Schema.Array(AssessedExternalDiff),
 })
 
+/** Versioned extension transport. Prepare accepts paths; later calls carry only opaque server-issued values. */
+export const ExternalReservationEndpoint = Schema.Struct({
+  reference: Schema.String,
+  capability: Schema.String,
+  revision: Schema.Number,
+})
+export const ExternalReservation = Schema.Struct({
+  id: Schema.String,
+  expiresAt: Schema.Number,
+  endpoints: Schema.Array(ExternalReservationEndpoint),
+})
+export const ExternalReservationPreparePayload = Schema.Struct({
+  version: Schema.Literal(1),
+  files: Schema.Array(Schema.String),
+})
+export const ExternalReservationPayload = Schema.Struct({
+  version: Schema.Literal(1),
+  reservation: ExternalReservation,
+})
+export const ExternalReservationPrepareResponse = Schema.Struct({
+  version: Schema.Literal(1),
+  reservation: ExternalReservation,
+})
+export const ExternalReservationCommitResponse = Schema.Struct({
+  version: Schema.Literal(1),
+  committed: Schema.Literal(true),
+})
+export const ExternalReservationAbortResponse = Schema.Struct({
+  version: Schema.Literal(1),
+  aborted: Schema.Literal(true),
+})
+
 export const SessionPaths = {
   list: root,
   status: `${root}/status`,
@@ -108,6 +140,9 @@ export const SessionPaths = {
   todo: `${root}/:sessionID/todo`,
   diff: `${root}/:sessionID/diff`,
   assessedDiff: `${root}/:sessionID/diff/assessed`,
+  externalReservationPrepare: `${root}/:sessionID/external-diff/reservations/prepare`,
+  externalReservationCommit: `${root}/:sessionID/external-diff/reservations/commit`,
+  externalReservationAbort: `${root}/:sessionID/external-diff/reservations/abort`,
   touchedFiles: `${root}/:sessionID/touched-files`,
   messages: `${root}/:sessionID/message`,
   message: `${root}/:sessionID/message/:messageID`,
@@ -215,6 +250,45 @@ export const SessionApi = HttpApi.make("session")
             description: "Get current session-owned external file assessments.",
           }),
         ),
+        HttpApiEndpoint.post("externalReservationPrepare", SessionPaths.externalReservationPrepare, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: ExternalReservationPreparePayload,
+          success: described(ExternalReservationPrepareResponse, "Prepared opaque external mutation reservation"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, ConflictError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.externalReservationPrepare",
+            summary: "Prepare an external mutation reservation",
+            description: "Capture server-owned external baselines and return opaque reservation capabilities.",
+          }),
+        ),
+        HttpApiEndpoint.post("externalReservationCommit", SessionPaths.externalReservationCommit, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: ExternalReservationPayload,
+          success: described(ExternalReservationCommitResponse, "Committed external mutation reservation"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, ConflictError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.externalReservationCommit",
+            summary: "Commit an external mutation reservation",
+            description: "Atomically record server-verified endpoint state for an opaque reservation group.",
+          }),
+        ),
+        HttpApiEndpoint.post("externalReservationAbort", SessionPaths.externalReservationAbort, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: ExternalReservationPayload,
+          success: described(ExternalReservationAbortResponse, "Aborted external mutation reservation"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, ConflictError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.externalReservationAbort",
+            summary: "Abort an external mutation reservation",
+            description: "Conditionally discard a prepared opaque reservation without replacing committed state.",
+          }),
+        ),
         HttpApiEndpoint.get("touchedFiles", SessionPaths.touchedFiles, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
@@ -224,7 +298,8 @@ export const SessionApi = HttpApi.make("session")
           OpenApi.annotations({
             identifier: "session.touchedFiles",
             summary: "Get touched files",
-            description: "Get all files that were edited or written by tools in this session, regardless of current git state.",
+            description:
+              "Get all files that were edited or written by tools in this session, regardless of current git state.",
           }),
         ),
         HttpApiEndpoint.get("messages", SessionPaths.messages, {

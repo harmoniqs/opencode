@@ -2571,6 +2571,12 @@ export type NotFoundError = {
   }
 }
 
+export type ConflictError = {
+  _tag: "ConflictError"
+  message: string
+  resource?: string
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -2746,12 +2752,6 @@ export type PromptInput = {
   text: string
   files?: Array<PromptInputFileAttachment>
   agents?: Array<PromptAgentAttachment>
-}
-
-export type ConflictError = {
-  _tag: "ConflictError"
-  message: string
-  resource?: string
 }
 
 export type ServiceUnavailableError = {
@@ -9881,6 +9881,168 @@ export type SessionAssessedDiffResponses = {
 }
 
 export type SessionAssessedDiffResponse = SessionAssessedDiffResponses[keyof SessionAssessedDiffResponses]
+
+export type SessionExternalReservationPrepareData = {
+  body?: {
+    version: 1
+    files: Array<string>
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/external-diff/reservations/prepare"
+}
+
+export type SessionExternalReservationPrepareErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * ConflictError
+   */
+  409: ConflictError
+}
+
+export type SessionExternalReservationPrepareError =
+  SessionExternalReservationPrepareErrors[keyof SessionExternalReservationPrepareErrors]
+
+export type SessionExternalReservationPrepareResponses = {
+  /**
+   * Prepared opaque external mutation reservation
+   */
+  200: {
+    version: 1
+    reservation: {
+      id: string
+      expiresAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      endpoints: Array<{
+        reference: string
+        capability: string
+        revision: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }>
+    }
+  }
+}
+
+export type SessionExternalReservationPrepareResponse =
+  SessionExternalReservationPrepareResponses[keyof SessionExternalReservationPrepareResponses]
+
+export type SessionExternalReservationCommitData = {
+  body?: {
+    version: 1
+    reservation: {
+      id: string
+      expiresAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      endpoints: Array<{
+        reference: string
+        capability: string
+        revision: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }>
+    }
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/external-diff/reservations/commit"
+}
+
+export type SessionExternalReservationCommitErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * ConflictError
+   */
+  409: ConflictError
+}
+
+export type SessionExternalReservationCommitError =
+  SessionExternalReservationCommitErrors[keyof SessionExternalReservationCommitErrors]
+
+export type SessionExternalReservationCommitResponses = {
+  /**
+   * Committed external mutation reservation
+   */
+  200: {
+    version: 1
+    committed: true
+  }
+}
+
+export type SessionExternalReservationCommitResponse =
+  SessionExternalReservationCommitResponses[keyof SessionExternalReservationCommitResponses]
+
+export type SessionExternalReservationAbortData = {
+  body?: {
+    version: 1
+    reservation: {
+      id: string
+      expiresAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      endpoints: Array<{
+        reference: string
+        capability: string
+        revision: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }>
+    }
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/external-diff/reservations/abort"
+}
+
+export type SessionExternalReservationAbortErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * ConflictError
+   */
+  409: ConflictError
+}
+
+export type SessionExternalReservationAbortError =
+  SessionExternalReservationAbortErrors[keyof SessionExternalReservationAbortErrors]
+
+export type SessionExternalReservationAbortResponses = {
+  /**
+   * Aborted external mutation reservation
+   */
+  200: {
+    version: 1
+    aborted: true
+  }
+}
+
+export type SessionExternalReservationAbortResponse =
+  SessionExternalReservationAbortResponses[keyof SessionExternalReservationAbortResponses]
 
 export type SessionTouchedFilesData = {
   body?: never

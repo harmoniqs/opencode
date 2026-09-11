@@ -1,13 +1,5 @@
 import { createHash } from "node:crypto"
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import * as path from "path"
 import { Global } from "@opencode-ai/core/global"
 import { createTwoFilesPatch, diffLines } from "diff"
@@ -62,8 +54,14 @@ export namespace ExternalDiff {
     sessionID: string
     expiresAt: number
     endpoints: ReservedEndpoint[]
+    state: "prepared" | "committed"
   }
   export type PreparedReservation = Pick<Reservation, "id" | "sessionID" | "expiresAt" | "endpoints">
+  export type TransportReservation = {
+    id: string
+    expiresAt: number
+    endpoints: ReadonlyArray<Pick<ReservedEndpoint, "reference" | "revision" | "capability">>
+  }
 
   const entries = new Map<string, Map<string, Entry>>()
   const revisions = new Map<string, number>()
@@ -225,7 +223,7 @@ export namespace ExternalDiff {
   /** Reserve all endpoints before a registered mutation. Duplicate canonical paths reject self-moves. */
   export function prepare(input: {
     sessionID: string
-    files: string[]
+    files: readonly string[]
     ttlMs?: number
   }): PreparedReservation | undefined {
     if (tombstoned(input.sessionID)) return
@@ -270,7 +268,11 @@ export namespace ExternalDiff {
     // Publish a lease before artifact bytes. A tombstone wins over this lease,
     // and a late creator fails closed instead of recreating deleted ownership.
     if (
-      !persist(input.sessionID, session, created.map((entry) => entry.reference)) ||
+      !persist(
+        input.sessionID,
+        session,
+        created.map((entry) => entry.reference),
+      ) ||
       !created.every((entry) => writeArtifact(input.sessionID, entry)) ||
       !persist(input.sessionID, session)
     ) {
@@ -283,6 +285,7 @@ export namespace ExternalDiff {
       sessionID: input.sessionID,
       expiresAt: Date.now() + (input.ttlMs ?? 60_000),
       endpoints,
+      state: "prepared",
     }
     reservations.set(reservation.id, reservation)
     return reservation
@@ -291,7 +294,7 @@ export namespace ExternalDiff {
     if (tombstoned(input.sessionID)) return
     const stored = reservations.get(input.reservation.id)
     if (!stored || stored.sessionID !== input.sessionID || stored.sessionID !== input.reservation.sessionID) return
-    if (stored.expiresAt < Date.now() || stored.expiresAt !== input.reservation.expiresAt) return
+    if (stored.expiresAt !== input.reservation.expiresAt) return
     if (
       stored.endpoints.length !== input.reservation.endpoints.length ||
       stored.endpoints.some((endpoint, index) => {
@@ -305,15 +308,63 @@ export namespace ExternalDiff {
       })
     )
       return
+    // A completed group is a durable idempotency record for its short lease.
+    // Its endpoint revisions have moved, so return it before the prepared-only
+    // revision and expiry checks below.
+    if (stored.state === "committed") return stored
+    if (stored.expiresAt < Date.now()) return
     const session = entries.get(input.sessionID)
     if (!session || stored.endpoints.some((endpoint) => session.get(endpoint.file)?.revision !== endpoint.revision))
       return
     return stored
   }
+  function transport(reservation: PreparedReservation): TransportReservation {
+    return {
+      id: reservation.id,
+      expiresAt: reservation.expiresAt,
+      endpoints: reservation.endpoints.map(({ reference, revision, capability }) => ({
+        reference,
+        revision,
+        capability,
+      })),
+    }
+  }
+  function validTransport(input: { sessionID: string; reservation: TransportReservation }) {
+    const stored = reservations.get(input.reservation.id)
+    if (tombstoned(input.sessionID) || !stored || stored.sessionID !== input.sessionID) return
+    if (
+      stored.expiresAt !== input.reservation.expiresAt ||
+      stored.endpoints.length !== input.reservation.endpoints.length
+    )
+      return
+    if (
+      stored.endpoints.some((endpoint, index) => {
+        const candidate = input.reservation.endpoints[index]
+        return (
+          endpoint.reference !== candidate?.reference ||
+          endpoint.capability !== candidate?.capability ||
+          endpoint.revision !== candidate?.revision
+        )
+      })
+    )
+      return
+    if (stored.state === "committed") return stored
+    if (stored.expiresAt < Date.now()) return
+    const session = entries.get(input.sessionID)
+    if (!session || stored.endpoints.some((endpoint) => session.get(endpoint.file)?.revision !== endpoint.revision))
+      return
+    return stored
+  }
+  /** HTTP-safe reservation handoff: paths and baseline bytes never leave this module. */
+  export function prepareTransport(input: { sessionID: string; files: readonly string[] }) {
+    const reservation = prepare(input)
+    return reservation && transport(reservation)
+  }
   /** Commit a complete reservation group from endpoint bytes read by this server. */
   export function commit(input: { sessionID: string; reservation: PreparedReservation }) {
     const reservation = valid(input)
     if (!reservation) return false
+    if (reservation.state === "committed") return true
     const session = entries.get(input.sessionID)!
     const states = reservation.endpoints.map((endpoint) => read(endpoint.file))
     if (states.some((state) => !state)) return false
@@ -324,13 +375,19 @@ export namespace ExternalDiff {
       reassess(input.sessionID, entry)
     }
     if (!persist(input.sessionID, session)) return false
-    reservations.delete(reservation.id)
+    reservation.state = "committed"
     return true
+  }
+  /** Commit an opaque HTTP reservation group without accepting caller-supplied paths or endpoint state. */
+  export function commitTransport(input: { sessionID: string; reservation: TransportReservation }) {
+    const reservation = validTransport(input)
+    if (!reservation) return false
+    return commit({ sessionID: input.sessionID, reservation })
   }
   /** Abort a reservation without replacing a prior committed expected state. */
   export function abort(input: { sessionID: string; reservation: PreparedReservation }) {
     const reservation = valid(input)
-    if (!reservation) return false
+    if (!reservation || reservation.state !== "prepared") return false
     const session = entries.get(input.sessionID)!
     for (const endpoint of reservation.endpoints) {
       const entry = session.get(endpoint.file)!
@@ -346,6 +403,12 @@ export namespace ExternalDiff {
     reservations.delete(reservation.id)
     return true
   }
+  /** Abort remains conditional: completed groups retain their committed expected state. */
+  export function abortTransport(input: { sessionID: string; reservation: TransportReservation }) {
+    const reservation = validTransport(input)
+    if (!reservation || reservation.state !== "prepared") return false
+    return abort({ sessionID: input.sessionID, reservation })
+  }
   /** Delete ownership before physical artifacts so a stale reservation can never republish it. */
   export function remove(sessionID: string) {
     mkdirSync(path.dirname(tombstoneFile(sessionID)), { recursive: true })
@@ -357,6 +420,7 @@ export namespace ExternalDiff {
   }
   /** Idempotently removes only unmanifested or tombstoned artifact directories. */
   export function sweep() {
+    for (const [id, reservation] of reservations) if (reservation.expiresAt < Date.now()) reservations.delete(id)
     try {
       for (const name of readdirSync(root())) {
         if (name === "tombstones") continue
