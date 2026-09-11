@@ -15,6 +15,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { Format } from "../format"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
+import { ExternalDiff } from "@/session/external-diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
@@ -80,7 +81,8 @@ export const EditTool = Tool.define(
           const filePath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filePath)
+          const external = yield* assertExternalDirectoryEffect(ctx, filePath)
+          let externalReference: string | undefined
 
           let diff = ""
           let contentOld = ""
@@ -108,9 +110,24 @@ export const EditTool = Tool.define(
                     diff,
                   },
                 })
+                if (external) {
+                  externalReference = ExternalDiff.capture({
+                    sessionID: ctx.sessionID,
+                    file: filePath,
+                    baseline: contentOld,
+                  })
+                }
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
                   contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
+                }
+                if (externalReference) {
+                  ExternalDiff.settle({
+                    sessionID: ctx.sessionID,
+                    reference: externalReference,
+                    file: filePath,
+                    current: contentNew,
+                  })
                 }
                 yield* events.publish(FileSystem.Event.Edited, { file: filePath })
                 yield* events.publish(Watcher.Event.Updated, {
@@ -151,10 +168,25 @@ export const EditTool = Tool.define(
                   diff,
                 },
               })
+              if (external) {
+                externalReference = ExternalDiff.capture({
+                  sessionID: ctx.sessionID,
+                  file: filePath,
+                  baseline: contentOld,
+                })
+              }
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
               if (yield* format.file(filePath)) {
                 contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
+              }
+              if (externalReference) {
+                ExternalDiff.settle({
+                  sessionID: ctx.sessionID,
+                  reference: externalReference,
+                  file: filePath,
+                  current: contentNew,
+                })
               }
               yield* events.publish(FileSystem.Event.Edited, { file: filePath })
               yield* events.publish(Watcher.Event.Updated, {
@@ -169,7 +201,16 @@ export const EditTool = Tool.define(
                   normalizeLineEndings(contentNew),
                 ),
               )
-            }).pipe(Effect.orDie),
+            }).pipe(
+              Effect.onError(() =>
+                Effect.sync(() => {
+                  if (externalReference) {
+                    ExternalDiff.unavailable({ sessionID: ctx.sessionID, reference: externalReference, file: filePath })
+                  }
+                }),
+              ),
+              Effect.orDie,
+            ),
           )
 
           let additions = 0

@@ -1,4 +1,4 @@
-import type { FilePart, Project, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
+import type { FilePart, Project, SessionAssessedDiffResponse, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createQuery, skipToken, useMutation } from "@tanstack/solid-query"
@@ -810,6 +810,24 @@ export default function Page() {
         : skipToken,
     }
   })
+  const assessedExternalDiffQuery = createQuery(() => {
+    const sessionID = params.id
+    return {
+      queryKey: ["session-assessed-external-diff", params.id ?? "", sessionDiffVersion()] as const,
+      enabled: !!sessionID,
+      placeholderData: (
+        prev: SessionAssessedDiffResponse | undefined,
+        prevQuery: { queryKey?: readonly unknown[] } | undefined,
+      ) => (prevQuery?.queryKey?.[1] === sessionID ? prev : undefined),
+      queryFn: sessionID
+        ? () =>
+            sdk()
+              .client.session
+              .assessedDiff({ sessionID, directory: sdk().directory })
+              .then((result) => result.data)
+        : skipToken,
+    }
+  })
   const reviewDiffs = createMemo(() => {
     // Shared path normalization — both sources must use the same function for dedup to work.
     const dir = sdk().directory
@@ -846,10 +864,17 @@ export default function Page() {
     // --- Server diffs (authoritative for in-project files) ---
     const serverDiffs = sessionDiffQuery.data ?? []
     const serverResponded = sessionDiffQuery.status === "success" || sessionDiffQuery.isPlaceholderData
+    // External metadata is never a current-diff fallback. It is visible only
+    // after this session's authenticated, server-assessed detail request settles.
+    const assessedDiffs =
+      assessedExternalDiffQuery.status === "success"
+        ? (assessedExternalDiffQuery.data?.assessments ?? [])
+        : []
 
     return mergeServerAndToolDiffs({
       serverDiffs,
       toolDiffs,
+      assessedDiffs,
       serverResponded,
       directory: dir,
       home,

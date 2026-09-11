@@ -9833,6 +9833,51 @@ export type SessionDiffResponses = {
 
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
 
+export type SessionAssessedDiffData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/diff/assessed"
+}
+
+export type SessionAssessedDiffErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionAssessedDiffError = SessionAssessedDiffErrors[keyof SessionAssessedDiffErrors]
+
+export type SessionAssessedDiffResponses = {
+  /**
+   * Server-assessed external file diffs
+   */
+  200: {
+    version: 1
+    revision: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    assessments: Array<{
+      reference: string
+      file: string
+      state: "changed" | "unavailable"
+      patch?: string
+      additions?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      deletions?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+  }
+}
+
+export type SessionAssessedDiffResponse = SessionAssessedDiffResponses[keyof SessionAssessedDiffResponses]
+
 export type SessionTouchedFilesData = {
   body?: never
   path: {

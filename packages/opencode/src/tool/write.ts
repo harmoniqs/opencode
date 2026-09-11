@@ -12,6 +12,7 @@ import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
+import { ExternalDiff } from "@/session/external-diff"
 import { trimDiff } from "./edit"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import * as Bom from "@/util/bom"
@@ -42,7 +43,7 @@ export const WriteTool = Tool.define(
           const filepath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filepath)
+          const external = yield* assertExternalDirectoryEffect(ctx, filepath)
 
           const exists = yield* fs.existsSafe(filepath)
           const source = exists ? yield* Bom.readFile(fs, filepath) : { bom: false, text: "" }
@@ -61,6 +62,9 @@ export const WriteTool = Tool.define(
               diff,
             },
           })
+          const reference = external
+            ? ExternalDiff.capture({ sessionID: ctx.sessionID, file: filepath, baseline: contentOld })
+            : undefined
 
           // Compute filediff for the Files Changed panel (same pattern as edit.ts)
           let additions = 0
@@ -85,10 +89,22 @@ export const WriteTool = Tool.define(
             },
           })
 
-          yield* fs.writeWithDirs(filepath, Bom.join(contentNew, desiredBom))
-          if (yield* format.file(filepath)) {
-            yield* Bom.syncFile(fs, filepath, desiredBom)
-          }
+          yield* Effect.gen(function* () {
+            yield* fs.writeWithDirs(filepath, Bom.join(contentNew, desiredBom))
+            let settled = contentNew
+            if (yield* format.file(filepath)) {
+              settled = yield* Bom.syncFile(fs, filepath, desiredBom)
+            }
+            if (reference) {
+              ExternalDiff.settle({ sessionID: ctx.sessionID, reference, file: filepath, current: settled })
+            }
+          }).pipe(
+            Effect.onError(() =>
+              Effect.sync(() => {
+                if (reference) ExternalDiff.unavailable({ sessionID: ctx.sessionID, reference, file: filepath })
+              }),
+            ),
+          )
           yield* events.publish(FileSystem.Event.Edited, { file: filepath })
           yield* events.publish(Watcher.Event.Updated, {
             file: filepath,

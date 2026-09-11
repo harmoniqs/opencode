@@ -6,6 +6,7 @@ import { Command } from "@/command"
 import { Permission } from "@/permission"
 import { SessionShare } from "@/share/session"
 import { Session } from "@/session/session"
+import { ExternalDiff } from "@/session/external-diff"
 import { SessionCompaction } from "@/session/compaction"
 import { MessageV2 } from "@/session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
@@ -19,7 +20,7 @@ import { NamedError } from "@opencode-ai/core/util/error"
 import { Cause, Effect, Option, Schema, Scope } from "effect"
 import * as Stream from "effect/Stream"
 import { InstanceState } from "@/effect/instance-state"
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiError, HttpApiSchema } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import {
@@ -101,6 +102,16 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       query: typeof DiffQuery.Type
     }) {
       return yield* session.diff(ctx.params.sessionID)
+    })
+
+    const assessedDiff = Effect.fn("SessionHttpApi.assessedDiff")(function* (ctx: {
+      params: { sessionID: SessionID }
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+        Effect.succeed(HttpServerResponse.setHeader(response, "cache-control", "no-store")),
+      )
+      return ExternalDiff.assessed(ctx.params.sessionID)
     })
 
     const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
@@ -441,6 +452,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("children", children)
       .handle("todo", todo)
       .handle("diff", diff)
+      .handle("assessedDiff", assessedDiff)
       .handle("touchedFiles", touchedFiles)
       .handle("messages", messages)
       .handle("message", message)

@@ -12,6 +12,7 @@ import { Truncate } from "@/tool/truncate"
 import { Tool } from "@/tool/tool"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { ExternalDiff } from "../../src/session/external-diff"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -112,6 +113,94 @@ describe("tool.write", () => {
   })
 
   describe("existing file overwrite", () => {
+    it.instance("captures a sibling baseline only after permission and settles the formatted result", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(path.dirname(test.directory), `external-${Date.now()}.txt`)
+        yield* Effect.promise(() => fs.writeFile(filepath, "before\n", "utf-8"))
+        let assessmentExistedBeforePermission = false
+        const result = yield* run(
+          { filePath: filepath, content: "after\n" },
+          {
+            ...ctx,
+            ask: () =>
+              Effect.sync(() => {
+                assessmentExistedBeforePermission ||= ExternalDiff.assessed(ctx.sessionID).assessments.some(
+                  (entry) => entry.file === filepath,
+                )
+              }),
+          },
+        )
+
+        const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+        expect(assessmentExistedBeforePermission).toBe(false)
+        expect(assessment).toMatchObject({
+          state: "changed",
+          patch: expect.stringContaining("-before"),
+          additions: 1,
+          deletions: 1,
+        })
+        expect(result.metadata).not.toHaveProperty("baseline")
+      }),
+    )
+
+    it.instance("does not capture a sibling baseline when permission is denied", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(path.dirname(test.directory), `denied-${Date.now()}.txt`)
+        yield* Effect.promise(() => fs.writeFile(filepath, "before\n", "utf-8"))
+
+        const exit = yield* run(
+          { filePath: filepath, content: "after\n" },
+          {
+            ...ctx,
+            ask: () =>
+              Effect.sync(() => {
+                throw new Error("permission denied")
+              }),
+          },
+        ).pipe(Effect.exit)
+
+        expect(exit._tag).toBe("Failure")
+        expect(ExternalDiff.assessed(ctx.sessionID).assessments.some((entry) => entry.file === filepath)).toBe(false)
+      }),
+    )
+
+    it.instance(
+      "assesses formatter output instead of the pre-format tool patch",
+      () =>
+        Effect.gen(function* () {
+          const test = yield* TestInstance
+          const filepath = path.join(path.dirname(test.directory), `formatted-${Date.now()}.fmt`)
+          yield* Effect.promise(() => fs.writeFile(filepath, "before\n", "utf-8"))
+
+          yield* run({ filePath: filepath, content: "after\n" })
+
+          const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+          expect(assessment).toMatchObject({
+            state: "changed",
+            patch: expect.stringContaining("+formatter"),
+            additions: 2,
+            deletions: 1,
+          })
+        }),
+      {
+        config: {
+          formatter: {
+            append: {
+              extensions: [".fmt"],
+              command: [
+                "node",
+                "-e",
+                "const fs = require('fs'); const file = process.argv[1]; fs.appendFileSync(file, 'formatter\\n')",
+                "$FILE",
+              ],
+            },
+          },
+        },
+      },
+    )
+
     it.instance("overwrites existing file content", () =>
       Effect.gen(function* () {
         const test = yield* TestInstance

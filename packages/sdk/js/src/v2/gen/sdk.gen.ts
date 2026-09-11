@@ -179,6 +179,8 @@ import type {
   QuestionV2Reply,
   SessionAbortErrors,
   SessionAbortResponses,
+  SessionAssessedDiffErrors,
+  SessionAssessedDiffResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
@@ -3737,6 +3739,38 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<SessionDiffResponses, SessionDiffErrors, ThrowOnError>({
       url: "/session/{sessionID}/diff",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get server-assessed external file diffs
+   *
+   * Get current session-owned external file assessments.
+   */
+  public assessedDiff<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionAssessedDiffResponses, SessionAssessedDiffErrors, ThrowOnError>({
+      url: "/session/{sessionID}/diff/assessed",
       ...options,
       ...params,
     })

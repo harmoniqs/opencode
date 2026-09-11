@@ -1289,6 +1289,20 @@ const scenarios: Scenario[] = [
     .at((ctx) => ({ path: route("/session/{sessionID}/diff", { sessionID: ctx.state.id }), headers: ctx.headers() }))
     .json(200, array),
   http.protected
+    .get("/session/{sessionID}/diff/assessed", "session.assessedDiff")
+    .seeded((ctx) => ctx.session({ title: "Assessed external diff session" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/diff/assessed", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      object(body)
+      check(body.version === 1, "assessed diff response should be versioned")
+      check(body.revision === 0, "new session should have no external assessment revision")
+      array(body.assessments)
+      check(body.assessments.length === 0, "new session should have no external assessments")
+    }),
+  http.protected
     .get("/session/{sessionID}/touched-files", "session.touchedFiles")
     .seeded((ctx) => ctx.session({ title: "Touched files session" }))
     .at((ctx) => ({
