@@ -61,7 +61,7 @@ type PdfPageNavigation = {
   pageCount: number
   canPrevious: boolean
   canNext: boolean
-  navigate: (page: number) => void
+  navigate: (page: number) => boolean
 }
 
 const MAX_FILE_SIZE = 1_000_000
@@ -92,6 +92,7 @@ export function PreviewFileView(props: {
   const [loading, setLoading] = createSignal(true)
   const [fileType, setFileType] = createSignal<FileType>(null)
   const [pdfNavigation, setPdfNavigation] = createSignal<PdfPageNavigation | null>(null)
+  const pageInputID = `pdf-page-input-${props.filePath}`
 
   // Binary data for image/PDF rendering (data URI / blob URL)
   const [binaryData, setBinaryData] = createSignal<{ base64: string; mime: string } | null>(null)
@@ -404,6 +405,11 @@ export function PreviewFileView(props: {
     onCleanup(() => el.removeEventListener("wheel", handleWheelZoom))
   })
 
+  const previewControlSurfaceStyle = {
+    background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
+    "backdrop-filter": "blur(4px)",
+  }
+
   return (
     <div
       class="h-full relative overflow-hidden"
@@ -463,9 +469,46 @@ export function PreviewFileView(props: {
               return (
                 <div
                   data-pdf-page-navigation
-                  class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm bg-background-base"
+                  class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm"
+                  style={previewControlSurfaceStyle}
                 >
-                  <div class="flex flex-col border-r border-border-base">
+                  <label class="sr-only" for={pageInputID}>
+                    Page number, 1 through {navigation().pageCount}
+                  </label>
+                  <input
+                    data-pdf-page-input
+                    id={pageInputID}
+                    type="text"
+                    class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
+                    value={`${navigation().currentPage} / ${navigation().pageCount}`}
+                    onFocus={(event) => {
+                      event.currentTarget.value = `${navigation().currentPage}`
+                      event.currentTarget.select()
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur()
+                      } else if (event.key === "Escape") {
+                        const state = navigation()
+                        event.currentTarget.value = `${state.currentPage} / ${state.pageCount}`
+                        event.currentTarget.blur()
+                      }
+                    }}
+                    onBlur={(event) => {
+                      const state = navigation()
+                      const raw = event.currentTarget.value.trim()
+                      const numeric = /^-?\d+$/.test(raw) ? Number(raw) : null
+                      if (numeric === null) {
+                        event.currentTarget.value = `${state.currentPage} / ${state.pageCount}`
+                        return
+                      }
+
+                      const page = Math.min(Math.max(numeric, 1), state.pageCount)
+                      const moved = state.navigate(page)
+                      event.currentTarget.value = moved ? `${page} / ${state.pageCount}` : `${state.currentPage} / ${state.pageCount}`
+                    }}
+                  />
+                  <div class="flex flex-col border-l border-border-base">
                     <button
                       class="flex items-center justify-center w-5 h-3.5 cursor-pointer text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
                       disabled={!navigation().canPrevious}
@@ -484,7 +527,7 @@ export function PreviewFileView(props: {
                     </button>
                   </div>
                   <span
-                    class="min-w-11 px-2 text-center text-12-regular text-text-base tabular-nums"
+                    class="sr-only"
                     role="status"
                     aria-live="polite"
                     aria-label={`Page ${navigation().currentPage} of ${navigation().pageCount}`}
@@ -498,13 +541,11 @@ export function PreviewFileView(props: {
           {/* Zoom controls: [editable %] [reset] [+ over -] */}
           <div
             class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm"
-            style={{
-              background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
-              "backdrop-filter": "blur(4px)",
-            }}
+            style={previewControlSurfaceStyle}
           >
             {/* Editable zoom percentage input */}
             <input
+              data-preview-zoom
               type="text"
               class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
               value={`${props.zoom()}%`}

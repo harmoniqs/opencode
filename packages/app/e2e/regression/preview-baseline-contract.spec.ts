@@ -113,7 +113,7 @@ test("keeps the Markdown zoom pill aligned with other Preview files", async ({ p
   const panel = page.locator("#review-panel")
   const markdownHost = panel.locator(`[data-preview-host="${markdownFile}"]`)
   const modeToggle = markdownHost.getByRole("button", { name: "Preview", exact: true })
-  const markdownZoom = markdownHost.locator('input[type="text"]')
+  const markdownZoom = markdownHost.locator("[data-preview-zoom]")
   const modeBox = await modeToggle.boundingBox()
   const markdownZoomBox = await markdownZoom.boundingBox()
   if (!modeBox || !markdownZoomBox) throw new Error("Markdown controls must be measurable")
@@ -121,7 +121,7 @@ test("keeps the Markdown zoom pill aligned with other Preview files", async ({ p
   expect(modeBox.x).toBeLessThan(markdownZoomBox.x)
 
   await openPreviewFile(page, imageFile)
-  const imageZoom = panel.locator(`[data-preview-host="${imageFile}"] input[type="text"]`)
+  const imageZoom = panel.locator(`[data-preview-host="${imageFile}"] [data-preview-zoom]`)
   const imageZoomBox = await imageZoom.boundingBox()
   if (!imageZoomBox) throw new Error("Image zoom control must be measurable")
 
@@ -133,7 +133,7 @@ test("allows image previews to zoom to 1000%", async ({ page }) => {
   await openPreviewFile(page, imageFile)
 
   const panel = page.locator("#review-panel")
-  const zoom = panel.locator(`[data-preview-host="${imageFile}"] input[type="text"]`)
+  const zoom = panel.locator(`[data-preview-host="${imageFile}"] [data-preview-zoom]`)
   await expect(panel.getByAltText("preview.png")).toBeVisible()
   await expect(zoom).toHaveValue("100%")
   await zoom.fill("1000")
@@ -146,7 +146,7 @@ test("keeps the image point under the pointer fixed through wheel zoom", async (
   await openPreviewFile(page, imageFile)
 
   const host = page.locator(`#review-panel [data-preview-host="${imageFile}"]`)
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
   const scroll = host.locator(".overflow-auto")
   await zoom.fill("200")
   await zoom.press("Enter")
@@ -264,7 +264,7 @@ test("shows PDF page navigation before the zoom controls", async ({ page }) => {
   const pageStatus = host.getByRole("status", { name: "Page 1 of 2" })
   const previous = host.getByRole("button", { name: "Previous page" })
   const next = host.getByRole("button", { name: "Next page" })
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
 
   await expect(pageStatus).toHaveText("1 / 2")
   await expect(pageStatus).toHaveAttribute("aria-live", "polite")
@@ -274,6 +274,93 @@ test("shows PDF page navigation before the zoom controls", async ({ page }) => {
   const [navigationBox, zoomBox] = await Promise.all([pageStatus.boundingBox(), zoom.boundingBox()])
   if (!navigationBox || !zoomBox) throw new Error("PDF navigation and zoom controls must be measurable")
   expect(navigationBox.x + navigationBox.width).toBeLessThanOrEqual(zoomBox.x)
+})
+
+test("shows the editable PDF page field before page actions", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageInput = host.getByRole("textbox", { name: "Page number, 1 through 2" })
+  const next = host.getByRole("button", { name: "Next page" })
+
+  await expect(host.locator("label").filter({ hasText: "Page number" })).toHaveCount(1)
+  await expect(pageInput).toHaveValue("1 / 2")
+  const [inputBox, nextBox] = await Promise.all([pageInput.boundingBox(), next.boundingBox()])
+  if (!inputBox || !nextBox) throw new Error("Page field and actions must be measurable")
+  expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(nextBox.x)
+})
+
+test("uses the same surface treatment for PDF page and zoom controls", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageControl = host.locator("[data-pdf-page-navigation]")
+  const zoom = host.locator("[data-preview-zoom]")
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme })
+    const [pageSurface, zoomSurface] = await Promise.all([
+      pageControl.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { background: style.backgroundColor, backdropFilter: style.backdropFilter }
+      }),
+      zoom.evaluate((element) => {
+        const style = getComputedStyle(element.parentElement!)
+        return { background: style.backgroundColor, backdropFilter: style.backdropFilter }
+      }),
+    ])
+    expect(pageSurface).toEqual(zoomSurface)
+  }
+})
+
+test("clamps manual PDF page entry to the document bounds", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageInput = host.getByRole("textbox", { name: "Page number, 1 through 2" })
+  const pageStatus = host.getByRole("status")
+
+  await pageInput.focus()
+  await expect(pageInput).toHaveValue("1")
+  await pageInput.fill("-4")
+  await pageInput.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
+  await expect(pageInput).toHaveValue("1 / 2")
+
+  await pageInput.focus()
+  await pageInput.fill("99")
+  await pageInput.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 2 of 2")
+  await expect(pageInput).toHaveValue("2 / 2")
+})
+
+test("restores the current PDF page after invalid or cancelled entry", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageInput = host.getByRole("textbox", { name: "Page number, 1 through 2" })
+  const pageStatus = host.getByRole("status")
+
+  await pageInput.focus()
+  await pageInput.fill("two")
+  await pageInput.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
+  await expect(pageInput).toHaveValue("1 / 2")
+
+  await pageInput.focus()
+  await pageInput.fill("")
+  await pageInput.press("Enter")
+  await expect(pageInput).toHaveValue("1 / 2")
+
+  await pageInput.focus()
+  await pageInput.fill("2")
+  await pageInput.press("Escape")
+  await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
+  await expect(pageInput).toHaveValue("1 / 2")
 })
 
 test("navigates a PDF page to the top of the Preview viewport", async ({ page }) => {
@@ -344,7 +431,7 @@ test("keeps selectable PDF text aligned with its page after zooming", async ({ p
   const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
   const canvas = host.locator("canvas")
   const text = host.getByText(pdfText, { exact: true })
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
   await expect(text).toBeVisible()
   await expect.poll(() => textStaysWithinPage(text, canvas)).toBe(true)
 
@@ -362,7 +449,7 @@ test("keeps selectable PDF text live through repeated zoom updates", async ({ pa
 
   const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
   const text = host.getByText(pdfText, { exact: true })
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
   const scroll = host.locator(".overflow-auto")
   await expect(text).toBeVisible()
   const textHandle = await text.elementHandle()
@@ -381,7 +468,7 @@ test("keeps the PDF point under the pointer fixed through wheel zoom", async ({ 
   await openPreviewFile(page, pdfFile)
 
   const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
   const scroll = host.locator(".overflow-auto")
   await zoom.fill("200")
   await zoom.press("Enter")
@@ -428,7 +515,7 @@ test("keeps Preview controls clear of an overflowing PDF scroll rail", async ({ 
   const host = page.locator(`#review-panel [data-preview-host="${pdfFile}"]`)
   const scroll = host.locator(".overflow-auto")
   const controls = host.locator("[data-preview-controls]")
-  const zoom = host.locator('input[type="text"]')
+  const zoom = host.locator("[data-preview-zoom]")
   await zoom.fill("200")
   await zoom.press("Enter")
   await expect(zoom).toHaveValue("200%")
@@ -1009,8 +1096,8 @@ test("keeps Preview zoom independent in split panes", async ({ page }) => {
   await page.mouse.up()
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
-  const rootZoom = rootLeaf.locator('input[type="text"]:visible')
-  const destinationZoom = destinationLeaf.locator('input[type="text"]')
+  const rootZoom = rootLeaf.locator("[data-preview-zoom]:visible")
+  const destinationZoom = destinationLeaf.locator("[data-preview-zoom]")
   await expect(rootZoom).toHaveValue("100%")
   await expect(destinationZoom).toHaveValue("100%")
 
@@ -1040,7 +1127,7 @@ test("keeps each pane's zoom control inside its minimum-width leaf", async ({ pa
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
   for (const leaf of [rootLeaf, destinationLeaf]) {
     const leafBox = await leaf.boundingBox()
-    const inputBox = await leaf.locator('input[type="text"]:visible').boundingBox()
+    const inputBox = await leaf.locator("[data-preview-zoom]:visible").boundingBox()
     if (!leafBox || !inputBox) throw new Error("Preview leaf and zoom input must be measurable")
     expect(inputBox.x).toBeGreaterThanOrEqual(leafBox.x)
     expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(leafBox.x + leafBox.width)
@@ -1053,7 +1140,7 @@ test("inherits source zoom and focuses the new Preview leaf after a split", asyn
 
   const panel = page.locator("#review-panel")
   const rootLeaf = panel.locator('[data-preview-leaf="root"]')
-  const rootZoom = rootLeaf.locator('[data-preview-host="notes/second.md"] input[type="text"]')
+  const rootZoom = rootLeaf.locator('[data-preview-host="notes/second.md"] [data-preview-zoom]')
   await rootZoom.fill("130")
   await rootZoom.press("Enter")
   await expect(rootZoom).toHaveValue("130%")
@@ -1070,7 +1157,7 @@ test("inherits source zoom and focuses the new Preview leaf after a split", asyn
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
   await expect(destinationLeaf).toHaveAttribute("data-focused", "true")
-  await expect(destinationLeaf.locator('input[type="text"]')).toHaveValue("130%")
+  await expect(destinationLeaf.locator("[data-preview-zoom]")).toHaveValue("130%")
 })
 
 test("adopts destination pane zoom when transferring a Preview renderer", async ({ page }) => {
@@ -1089,7 +1176,7 @@ test("adopts destination pane zoom when transferring a Preview renderer", async 
   await page.mouse.move(rootBox.x + rootBox.width - 2, rootBox.y + rootBox.height / 2, { steps: 8 })
   await page.mouse.up()
 
-  const rootZoom = rootLeaf.locator('input[type="text"]')
+  const rootZoom = rootLeaf.locator("[data-preview-zoom]")
   await rootZoom.fill("130")
   await rootZoom.press("Enter")
   await expect(rootZoom).toHaveValue("130%")
@@ -1109,7 +1196,7 @@ test("adopts destination pane zoom when transferring a Preview renderer", async 
   })
   await page.mouse.up()
 
-  await expect(rootLeaf.locator('[data-preview-host="notes/second.md"] input[type="text"]')).toHaveValue("130%")
+  await expect(rootLeaf.locator('[data-preview-host="notes/second.md"] [data-preview-zoom]')).toHaveValue("130%")
   expect(await host.evaluate((element) => element.isConnected)).toBe(true)
 })
 

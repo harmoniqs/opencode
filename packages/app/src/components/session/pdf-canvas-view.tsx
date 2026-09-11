@@ -51,7 +51,7 @@ type PdfPageNavigation = {
   pageCount: number
   canPrevious: boolean
   canNext: boolean
-  navigate: (page: number) => void
+  navigate: (page: number) => boolean
 }
 
 // Wrapper padding: p-4 = 16px each side
@@ -292,11 +292,12 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   const navigateToPage = (page: number) => {
     const scroll = wrapperRef?.parentElement
     const anchor = pageAnchors.get(page)
-    if (!scroll || !anchor) return
+    if (!scroll || !anchor) return false
 
     const target = scroll.scrollTop + anchor.getBoundingClientRect().top - scroll.getBoundingClientRect().top
     setCurrentPage(page)
     scroll.scrollTo({ top: target, behavior: "smooth" })
+    return true
   }
 
   // ─── Track container width via ResizeObserver ───────────────────────
