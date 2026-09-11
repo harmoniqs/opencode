@@ -26,6 +26,8 @@ import { InstanceHttpApi } from "../api"
 import {
   CommandPayload,
   DiffQuery,
+  ExternalReservationPayload,
+  ExternalReservationPreparePayload,
   ForkPayload,
   InitPayload,
   ListQuery,
@@ -37,7 +39,7 @@ import {
   SummarizePayload,
   UpdatePayload,
 } from "../groups/session"
-import { PermissionNotFoundError } from "../errors"
+import { ConflictError, PermissionNotFoundError } from "../errors"
 import * as SessionError from "./session-errors"
 
 const tryParseJson = (text: string) =>
@@ -115,15 +117,51 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       return ExternalDiff.assessed(ctx.params.sessionID, { patch: ctx.query.patch === true })
     })
 
+    const noStore = () =>
+      HttpEffect.appendPreResponseHandler((_request, response) =>
+        Effect.succeed(HttpServerResponse.setHeader(response, "cache-control", "no-store")),
+      )
+
+    const externalReservationPrepare = Effect.fn("SessionHttpApi.externalReservationPrepare")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof ExternalReservationPreparePayload.Type
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      yield* noStore()
+      const reservation = ExternalDiff.prepareTransport({ sessionID: ctx.params.sessionID, files: ctx.payload.files })
+      if (!reservation) return yield* new HttpApiError.BadRequest({})
+      return { version: 1 as const, reservation }
+    })
+
+    const externalReservationCommit = Effect.fn("SessionHttpApi.externalReservationCommit")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof ExternalReservationPayload.Type
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      yield* noStore()
+      if (!ExternalDiff.commitTransport({ sessionID: ctx.params.sessionID, reservation: ctx.payload.reservation }))
+        return yield* new ConflictError({ message: "Reservation is no longer current" })
+      return { version: 1 as const, committed: true as const }
+    })
+
+    const externalReservationAbort = Effect.fn("SessionHttpApi.externalReservationAbort")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof ExternalReservationPayload.Type
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      yield* noStore()
+      if (!ExternalDiff.abortTransport({ sessionID: ctx.params.sessionID, reservation: ctx.payload.reservation }))
+        return yield* new ConflictError({ message: "Reservation is no longer current" })
+      return { version: 1 as const, aborted: true as const }
+    })
+
     const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
 
     const touchedFiles = Effect.fn("SessionHttpApi.touchedFiles")(function* (ctx: {
       params: { sessionID: SessionID }
     }) {
       yield* requireSession(ctx.params.sessionID)
-      const allMessages = yield* SessionError.mapStorageNotFound(
-        session.messages({ sessionID: ctx.params.sessionID }),
-      )
+      const allMessages = yield* SessionError.mapStorageNotFound(session.messages({ sessionID: ctx.params.sessionID }))
       const seen = new Map<string, "added" | "modified">()
       for (const msg of allMessages) {
         for (const part of msg.parts) {
@@ -454,6 +492,9 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("todo", todo)
       .handle("diff", diff)
       .handle("assessedDiff", assessedDiff)
+      .handle("externalReservationPrepare", externalReservationPrepare)
+      .handle("externalReservationCommit", externalReservationCommit)
+      .handle("externalReservationAbort", externalReservationAbort)
       .handle("touchedFiles", touchedFiles)
       .handle("messages", messages)
       .handle("message", message)
