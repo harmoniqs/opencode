@@ -56,6 +56,7 @@ function getFileCategory(path: string): FileCategory {
 
 /** Async file-type classification after file.read() (phase 2). */
 type FileType = "text" | "binary" | "error" | "too-large" | null
+type PdfPageNavigation = { currentPage: number; pageCount: number }
 
 const MAX_FILE_SIZE = 1_000_000
 
@@ -84,6 +85,7 @@ export function PreviewFileView(props: {
   const [unsavedContent, setUnsavedContent] = createSignal<string | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [fileType, setFileType] = createSignal<FileType>(null)
+  const [pdfNavigation, setPdfNavigation] = createSignal<PdfPageNavigation | null>(null)
 
   // Binary data for image/PDF rendering (data URI / blob URL)
   const [binaryData, setBinaryData] = createSignal<{ base64: string; mime: string } | null>(null)
@@ -450,6 +452,42 @@ export function PreviewFileView(props: {
           </div>
         </Show>
         <Show when={!isEditing()}>
+          <Show when={pdfNavigation()}>
+            {(navigation) => {
+              const state = navigation()
+              return (
+                <div
+                  data-pdf-page-navigation
+                  class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm bg-background-base"
+                >
+                  <div class="flex flex-col border-r border-border-base">
+                    <button
+                      class="flex items-center justify-center w-5 h-3.5 cursor-pointer text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                      disabled={state.currentPage <= 1}
+                      aria-label="Previous page"
+                    >
+                      <Icon name="chevron-right" size="small" class="-rotate-90" />
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-5 h-3.5 cursor-pointer text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-focus"
+                      disabled={state.currentPage >= state.pageCount}
+                      aria-label="Next page"
+                    >
+                      <Icon name="chevron-right" size="small" class="rotate-90" />
+                    </button>
+                  </div>
+                  <span
+                    class="min-w-11 px-2 text-center text-12-regular text-text-base tabular-nums"
+                    role="status"
+                    aria-live="polite"
+                    aria-label={`Page ${state.currentPage} of ${state.pageCount}`}
+                  >
+                    {state.currentPage} / {state.pageCount}
+                  </span>
+                </div>
+              )
+            }}
+          </Show>
           {/* Zoom controls: [editable %] [reset] [+ over -] */}
           <div
             class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm"
@@ -563,6 +601,7 @@ export function PreviewFileView(props: {
                 mime={binaryData()!.mime}
                 zoom={props.zoom()}
                 filePath={props.filePath}
+                onPageNavigationChange={setPdfNavigation}
               />
             </Match>
 

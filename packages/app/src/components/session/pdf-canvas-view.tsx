@@ -42,6 +42,8 @@ interface PdfCanvasViewProps {
   zoom: number
   /** The file path — used for the "Open in editor" button */
   filePath: string
+  /** Reports the current PDF page state to the Preview controls. */
+  onPageNavigationChange?: (navigation: { currentPage: number; pageCount: number } | null) => void
 }
 
 // Wrapper padding: p-4 = 16px each side
@@ -232,6 +234,7 @@ function PdfPage(props: {
 
 export function PdfCanvasView(props: PdfCanvasViewProps) {
   const [pageCount, setPageCount] = createSignal(0)
+  const [currentPage, setCurrentPage] = createSignal(1)
   const [pdfDoc, setPdfDoc] = createSignal<pdfjsLib.PDFDocumentProxy | null>(null)
   const [error, setError] = createSignal(false)
   const [containerWidth, setContainerWidth] = createSignal(0)
@@ -272,6 +275,7 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
         if (!b64) return
         setError(false)
         setPageCount(0)
+        setCurrentPage(1)
         setPdfDoc(null)
         setTextAvailability({})
 
@@ -307,6 +311,12 @@ export function PdfCanvasView(props: PdfCanvasViewProps) {
   onCleanup(() => {
     const doc = pdfDoc()
     if (doc) doc.cleanup()
+    props.onPageNavigationChange?.(null)
+  })
+
+  createEffect(() => {
+    const count = pageCount()
+    props.onPageNavigationChange?.(count > 0 && !error() ? { currentPage: currentPage(), pageCount: count } : null)
   })
 
   const textAvailabilityMessage = () => {

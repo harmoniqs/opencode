@@ -25,6 +25,8 @@ const noTextPdfFile = "papers/no-selectable-text.pdf"
 const noTextPdfContent = createPdfFixture([""])
 const partialTextPdfFile = "papers/partial-selectable-text.pdf"
 const partialTextPdfContent = createPdfFixture([pdfText, ""])
+const multipagePdfFile = "papers/multipage.pdf"
+const multipagePdfContent = createPdfFixture(["First PDF page", "Second PDF page"])
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -237,6 +239,25 @@ test("explains when text selection is unavailable on only some PDF pages", async
   await expect(panel.locator(`[data-preview-host="${partialTextPdfFile}"] canvas`)).toHaveCount(2)
   await expect(panel.getByText(pdfText, { exact: true })).toBeVisible()
   await expect(panel.getByText("Text selection is unavailable on some pages.", { exact: true })).toBeVisible()
+})
+
+test("shows PDF page navigation before the zoom controls", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, multipagePdfFile)
+
+  const host = page.locator(`#review-panel [data-preview-host="${multipagePdfFile}"]`)
+  const pageStatus = host.getByRole("status", { name: "Page 1 of 2" })
+  const previous = host.getByRole("button", { name: "Previous page" })
+  const next = host.getByRole("button", { name: "Next page" })
+  const zoom = host.locator('input[type="text"]')
+
+  await expect(pageStatus).toHaveText("1 / 2")
+  await expect(previous).toBeDisabled()
+  await expect(next).toBeEnabled()
+
+  const [navigationBox, zoomBox] = await Promise.all([pageStatus.boundingBox(), zoom.boundingBox()])
+  if (!navigationBox || !zoomBox) throw new Error("PDF navigation and zoom controls must be measurable")
+  expect(navigationBox.x + navigationBox.width).toBeLessThanOrEqual(zoomBox.x)
 })
 
 test("keeps selectable PDF text aligned with its page after zooming", async ({ page }) => {
@@ -1323,6 +1344,8 @@ async function openPreview(page: Parameters<typeof mockOpenCodeServer>[0]) {
         return { type: "binary", content: noTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
       if (path === partialTextPdfFile)
         return { type: "binary", content: partialTextPdfContent, encoding: "base64", mimeType: "application/pdf" }
+      if (path === multipagePdfFile)
+        return { type: "binary", content: multipagePdfContent, encoding: "base64", mimeType: "application/pdf" }
       if (path === "notes/third.md")
         return { type: "text", content: "# Third Preview\n\nThe nested renderer stays alive." }
       if (path.startsWith("notes/capacity-")) return { type: "text", content: `# ${path}` }
