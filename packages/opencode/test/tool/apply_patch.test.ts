@@ -12,6 +12,7 @@ import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Truncate } from "@/tool/truncate"
 import { TestInstance } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { ExternalDiff } from "../../src/session/external-diff"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
@@ -86,6 +87,46 @@ const expectFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message?: string
 const expectReadFailure = (filepath: string) => expectFailure(readText(filepath))
 
 describe("tool.apply_patch freeform", () => {
+  it.instance("prepares paired external move endpoints before mutation and commits their assessed lifecycle", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const { ctx } = makeCtx()
+      const source = path.join(path.dirname(test.directory), `external-source-${Date.now()}.txt`)
+      const destination = path.join(path.dirname(test.directory), `external-destination-${Date.now()}.txt`)
+      yield* writeText(source, "before\n")
+
+      yield* execute(
+        {
+          patchText: `*** Begin Patch\n*** Update File: ${source}\n*** Move to: ${destination}\n@@\n-before\n+after\n*** End Patch`,
+        },
+        ctx,
+      )
+
+      const assessments = ExternalDiff.assessed(ctx.sessionID).assessments
+      expect(assessments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ file: source, state: "changed", status: "deleted" }),
+          expect.objectContaining({ file: destination, state: "changed", status: "added" }),
+        ]),
+      )
+    }),
+  )
+
+  it.instance("commits a registered external deletion from its verified absent endpoint", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const { ctx } = makeCtx()
+      const file = path.join(path.dirname(test.directory), `external-delete-${Date.now()}.txt`)
+      yield* writeText(file, "before\n")
+
+      yield* execute({ patchText: `*** Begin Patch\n*** Delete File: ${file}\n*** End Patch` }, ctx)
+
+      expect(ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === file)).toEqual(
+        expect.objectContaining({ state: "changed", status: "deleted" }),
+      )
+    }),
+  )
+
   it.live("requires patchText", () =>
     Effect.gen(function* () {
       const { ctx } = makeCtx()

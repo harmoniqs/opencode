@@ -32,6 +32,7 @@ import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
+import { ExternalDiff } from "@/session/external-diff"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
 import { SessionID, MessageID, PartID } from "./schema"
@@ -623,6 +624,10 @@ const layer: Layer.Layer<
           yield* remove(child.id)
         }
 
+        // External baselines are host-local and never belong to a fork or a
+        // transcript. Tombstone them before deleting session records so an
+        // in-flight mutation cannot recreate ownership after teardown starts.
+        ExternalDiff.remove(sessionID)
         yield* events.publish(SessionV1.Event.Deleted, { sessionID, info: session })
         yield* events.remove(sessionID)
       } catch (error) {

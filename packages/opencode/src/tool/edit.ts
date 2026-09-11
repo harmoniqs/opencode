@@ -15,6 +15,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { Format } from "../format"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
+import { ExternalDiff } from "@/session/external-diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
@@ -80,7 +81,8 @@ export const EditTool = Tool.define(
           const filePath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filePath)
+          const external = yield* assertExternalDirectoryEffect(ctx, filePath)
+          let reservation: ExternalDiff.PreparedReservation | undefined
 
           let diff = ""
           let contentOld = ""
@@ -108,10 +110,14 @@ export const EditTool = Tool.define(
                     diff,
                   },
                 })
+                if (external) {
+                  reservation = ExternalDiff.prepare({ sessionID: ctx.sessionID, files: [filePath] })
+                }
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
                   contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
                 }
+                if (reservation) ExternalDiff.commit({ sessionID: ctx.sessionID, reservation })
                 yield* events.publish(FileSystem.Event.Edited, { file: filePath })
                 yield* events.publish(Watcher.Event.Updated, {
                   file: filePath,
@@ -151,11 +157,15 @@ export const EditTool = Tool.define(
                   diff,
                 },
               })
+              if (external) {
+                reservation = ExternalDiff.prepare({ sessionID: ctx.sessionID, files: [filePath] })
+              }
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
               if (yield* format.file(filePath)) {
                 contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
               }
+              if (reservation) ExternalDiff.commit({ sessionID: ctx.sessionID, reservation })
               yield* events.publish(FileSystem.Event.Edited, { file: filePath })
               yield* events.publish(Watcher.Event.Updated, {
                 file: filePath,
@@ -169,7 +179,14 @@ export const EditTool = Tool.define(
                   normalizeLineEndings(contentNew),
                 ),
               )
-            }).pipe(Effect.orDie),
+            }).pipe(
+              Effect.onError(() =>
+                Effect.sync(() => {
+                  if (reservation) ExternalDiff.abort({ sessionID: ctx.sessionID, reservation })
+                }),
+              ),
+              Effect.orDie,
+            ),
           )
 
           let additions = 0

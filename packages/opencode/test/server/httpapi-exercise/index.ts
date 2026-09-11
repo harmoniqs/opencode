@@ -21,6 +21,7 @@ import { Effect } from "effect"
 import { OpenApi } from "effect/unstable/httpapi"
 import { TestLLMServer } from "../../lib/llm-server"
 import path from "path"
+import { ExternalDiff } from "../../../src/session/external-diff"
 import { array, boolean, check, isRecord, message, object, stable } from "./assertions"
 import { controlledPtyInput, http, route } from "./dsl"
 import {
@@ -1288,6 +1289,88 @@ const scenarios: Scenario[] = [
     .seeded((ctx) => ctx.session({ title: "Diff session" }))
     .at((ctx) => ({ path: route("/session/{sessionID}/diff", { sessionID: ctx.state.id }), headers: ctx.headers() }))
     .json(200, array),
+  http.protected
+    .get("/session/{sessionID}/diff/assessed", "session.assessedDiff")
+    .seeded((ctx) => ctx.session({ title: "Assessed external diff session" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/diff/assessed", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      object(body)
+      check(body.version === 1, "assessed diff response should be versioned")
+      check(body.revision === 0, "new session should have no external assessment revision")
+      array(body.assessments)
+      check(body.assessments.length === 0, "new session should have no external assessments")
+    }),
+  http.protected
+    .post("/session/{sessionID}/external-diff/reservations/prepare", "session.externalReservationPrepare")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const session = yield* ctx.session({ title: "External reservation prepare" })
+        const file = path.join(ctx.directory!, "external-reservation-prepare.txt")
+        yield* ctx.file("external-reservation-prepare.txt", "before\n")
+        return { session, file }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/external-diff/reservations/prepare", { sessionID: ctx.state.session.id }),
+      headers: ctx.headers(),
+      body: { version: 1, files: [ctx.state.file] },
+    }))
+    .json(200, (body, ctx) => {
+      object(body)
+      check(body.version === 1, "prepare should return the transport version")
+      object(body.reservation)
+      check(typeof body.reservation.id === "string", "prepare should return a reservation ID")
+      check(typeof body.reservation.expiresAt === "number", "prepare should return a reservation expiry")
+      array(body.reservation.endpoints)
+      check(body.reservation.endpoints.length === 1, "prepare should reserve the requested file")
+      check(!JSON.stringify(body).includes(ctx.state.file), "prepare should not expose the caller file path")
+    }),
+  http.protected
+    .post("/session/{sessionID}/external-diff/reservations/commit", "session.externalReservationCommit")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const session = yield* ctx.session({ title: "External reservation commit" })
+        const file = path.join(ctx.directory!, "external-reservation-commit.txt")
+        yield* ctx.file("external-reservation-commit.txt", "before\n")
+        const reservation = ExternalDiff.prepareTransport({ sessionID: session.id, files: [file] })
+        check(reservation !== undefined, "commit scenario should prepare an opaque reservation")
+        yield* ctx.file("external-reservation-commit.txt", "after\n")
+        return { session, reservation }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/external-diff/reservations/commit", { sessionID: ctx.state.session.id }),
+      headers: ctx.headers(),
+      body: { version: 1, reservation: ctx.state.reservation },
+    }))
+    .json(200, (body) => {
+      object(body)
+      check(body.version === 1 && body.committed === true, "commit should confirm the prepared reservation")
+    }),
+  http.protected
+    .post("/session/{sessionID}/external-diff/reservations/abort", "session.externalReservationAbort")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const session = yield* ctx.session({ title: "External reservation abort" })
+        const file = path.join(ctx.directory!, "external-reservation-abort.txt")
+        yield* ctx.file("external-reservation-abort.txt", "before\n")
+        const reservation = ExternalDiff.prepareTransport({ sessionID: session.id, files: [file] })
+        check(reservation !== undefined, "abort scenario should prepare an opaque reservation")
+        return { session, reservation }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/external-diff/reservations/abort", { sessionID: ctx.state.session.id }),
+      headers: ctx.headers(),
+      body: { version: 1, reservation: ctx.state.reservation },
+    }))
+    .json(200, (body) => {
+      object(body)
+      check(body.version === 1 && body.aborted === true, "abort should conditionally discard a prepared reservation")
+    }),
   http.protected
     .get("/session/{sessionID}/touched-files", "session.touchedFiles")
     .seeded((ctx) => ctx.session({ title: "Touched files session" }))
