@@ -622,7 +622,26 @@ test("slides later Preview tabs left when the first tab moves right", async ({ p
   await page.mouse.up()
 })
 
-test("shows a tab ghost when a Preview tab crosses into another rail", async ({ page }) => {
+test("snaps a Preview tab to its rail inside the capture zone", async ({ page }) => {
+  await openPreview(page)
+  await openPreviewFile(page, secondMarkdownFile)
+
+  const panel = page.locator("#review-panel")
+  const tabs = panel.getByRole("tablist", { name: "Open previews" })
+  const source = tabs.getByRole("tab", { name: "second.md" })
+  const railBox = await tabs.boundingBox()
+  const sourceBox = await source.boundingBox()
+  if (!railBox || !sourceBox) throw new Error("Preview rail and tab must be measurable before dragging")
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2 - 12, railBox.y + railBox.height + 12, { steps: 8 })
+
+  await expect.poll(async () => (await source.boundingBox())?.y ?? Infinity).toBeCloseTo(sourceBox.y, 0)
+  await page.mouse.up()
+})
+
+test("keeps the dragged Preview tab under the pointer while it crosses another rail", async ({ page }) => {
   await openPreview(page)
   await openPreviewFile(page, secondMarkdownFile)
 
@@ -645,15 +664,17 @@ test("shows a tab ghost when a Preview tab crosses into another rail", async ({ 
   const targetBox = await target.boundingBox()
   if (!crossRailSourceBox || !targetBox) throw new Error("Preview rails must be measurable before cross-rail dragging")
 
-  await page.mouse.move(
-    crossRailSourceBox.x + crossRailSourceBox.width / 2,
-    crossRailSourceBox.y + crossRailSourceBox.height / 2,
-  )
-  await page.mouse.down()
-  await page.mouse.move(targetBox.x + targetBox.width / 2 - 12, targetBox.y + targetBox.height / 2, { steps: 8 })
+  const grabX = crossRailSourceBox.x + crossRailSourceBox.width / 2
+  const dropX = targetBox.x + targetBox.width / 2 - 12
 
-  await expect(page.locator("[data-preview-tab-drag-proxy]")).toHaveCount(0)
-  await expect(rootLeaf.locator("[data-preview-rail-drag-tab]")).toContainText("second.md")
+  await page.mouse.move(grabX, crossRailSourceBox.y + crossRailSourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(dropX, targetBox.y + targetBox.height / 2, { steps: 8 })
+
+  const dragged = panel.getByRole("tab", { name: "second.md" })
+  await expect(dragged).toHaveCSS("opacity", "1")
+  const draggedBox = await dragged.boundingBox()
+  expect(draggedBox ? dropX - draggedBox.x : Infinity).toBeCloseTo(grabX - crossRailSourceBox.x, 0)
   await page.mouse.up()
 })
 
@@ -677,15 +698,7 @@ test("splits a Preview leaf at its right edge without recreating the moved rende
   await page.mouse.down()
   await page.mouse.move(leafBox.x + leafBox.width - 2, leafBox.y + leafBox.height / 2, { steps: 8 })
   await expect(panel.locator('[data-preview-dragging="notes/second.md"]')).toBeVisible()
-  const dragProxy = page.locator("[data-preview-tab-drag-proxy]")
-  await expect(dragProxy).toBeVisible()
-  await expect(dragProxy).toContainText("second.md")
-  await expect(dragProxy).toHaveCSS("pointer-events", "none")
-  const dragProxyBox = await dragProxy.boundingBox()
-  expect(dragProxyBox).not.toBeNull()
-  expect(await dragProxy.evaluate((element) => element.parentElement?.parentElement === document.body)).toBe(true)
-  expect(Math.abs(dragProxyBox!.x - (leafBox.x + leafBox.width - 2 + 8))).toBeLessThan(2)
-  expect(Math.abs(dragProxyBox!.y - (leafBox.y + leafBox.height / 2 + 8))).toBeLessThan(2)
+  await expect(page.locator("[data-preview-tab-drag-proxy]")).toHaveCount(0)
   const preview = panel.locator('[data-preview-drop-preview="right"]')
   await expect(preview).toBeVisible()
   await expect(preview).toHaveCSS("pointer-events", "none")
@@ -695,11 +708,30 @@ test("splits a Preview leaf at its right edge without recreating the moved rende
   await page.mouse.up()
   await page.waitForTimeout(250)
   await expect(preview).toHaveCount(0)
-  await expect(dragProxy).toHaveCount(0)
 
   const destinationLeaf = panel.locator('[data-preview-leaf="pane-1"]')
   await expect(panel.locator("[data-preview-leaf]")).toHaveCount(2)
-  await expect(destinationLeaf.getByRole("tab", { name: "second.md" })).toHaveAttribute("aria-selected", "true")
+  const baselineTab = sourceLeaf.getByRole("tab", { name: "baseline.md" })
+  await expect(baselineTab).toBeVisible()
+  const baselineTabBox = await baselineTab.boundingBox()
+  const sourceLeafTabBox = await sourceLeaf.boundingBox()
+  expect(baselineTabBox?.x ?? -Infinity).toBeGreaterThanOrEqual(sourceLeafTabBox?.x ?? Infinity)
+  expect((baselineTabBox?.x ?? Infinity) + (baselineTabBox?.width ?? Infinity)).toBeLessThanOrEqual(
+    (sourceLeafTabBox?.x ?? -Infinity) + (sourceLeafTabBox?.width ?? -Infinity),
+  )
+  const destinationTab = destinationLeaf.getByRole("tab", { name: "second.md" })
+  await expect(destinationTab).toHaveAttribute("aria-selected", "true")
+  const destinationTabBox = await destinationTab.boundingBox()
+  const destinationTabLeafBox = await destinationLeaf.boundingBox()
+  expect(destinationTabBox?.x ?? -Infinity).toBeGreaterThanOrEqual(destinationTabLeafBox?.x ?? Infinity)
+  expect((destinationTabBox?.x ?? Infinity) + (destinationTabBox?.width ?? Infinity)).toBeLessThanOrEqual(
+    (destinationTabLeafBox?.x ?? -Infinity) + (destinationTabLeafBox?.width ?? -Infinity),
+  )
+  expect(await sourceLeaf.getByRole("tab").allTextContents()).toEqual(["baseline.md"])
+  expect(await destinationLeaf.getByRole("tab").allTextContents()).toEqual(["second.md"])
+  await expect(panel.getByRole("tab", { name: "second.md" })).toHaveCount(1)
+  await expect(destinationTab).toHaveCSS("transform", "none")
+  await expect(destinationLeaf.locator('[data-preview-tab="notes/second.md"]')).toHaveCSS("translate", "none")
   await expect(destinationLeaf.locator('[data-preview-host="notes/second.md"]')).toBeVisible()
   await expect(destinationLeaf.getByText("The second renderer stays alive.", { exact: true })).toBeVisible()
   await expect(sourceLeaf.getByText("The renderer must keep focus.", { exact: true })).toBeVisible()
@@ -1105,15 +1137,11 @@ test("clears the prospective pane preview when a Preview drag is cancelled", asy
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(leafBox.x + leafBox.width - 2, leafBox.y + leafBox.height / 2, { steps: 8 })
-  const dragProxy = page.locator("[data-preview-tab-drag-proxy]")
-  await expect(dragProxy).toBeVisible()
+  await expect(page.locator("[data-preview-tab-drag-proxy]")).toHaveCount(0)
   await expect(panel.locator('[data-preview-drop-preview="right"]')).toBeVisible()
   await page.mouse.move(leafBox.x - 20, leafBox.y + leafBox.height / 2, { steps: 4 })
   await expect(panel.locator("[data-preview-drop-preview]")).toHaveCount(0)
   await page.mouse.up()
-  await expect(dragProxy).toHaveAttribute("data-leaving", "true")
-  await page.waitForTimeout(200)
-  await expect(dragProxy).toHaveCount(0)
 
   await expect(panel.locator("[data-preview-leaf]")).toHaveCount(1)
   await expect(leaf.getByRole("tab", { name: "second.md" })).toHaveAttribute("aria-selected", "true")
