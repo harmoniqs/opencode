@@ -157,6 +157,21 @@ export type SnapshotFileDiff = {
   status?: "added" | "deleted" | "modified"
 }
 
+export type AssessedExternalDiff = {
+  reference: string
+  file: string
+  state: "changed" | "unavailable"
+  patch?: string
+  additions?: number
+  deletions?: number
+}
+
+export type AssessedExternalDiffResponse = {
+  version: 1
+  revision: number
+  assessments: Array<AssessedExternalDiff>
+}
+
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -9832,6 +9847,32 @@ export type SessionDiffResponses = {
 }
 
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
+
+export type SessionAssessedDiffData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/diff/assessed"
+}
+
+export type SessionAssessedDiffErrors = {
+  /** Not found */
+  404: NotFoundError
+}
+
+export type SessionAssessedDiffError = SessionAssessedDiffErrors[keyof SessionAssessedDiffErrors]
+
+export type SessionAssessedDiffResponses = {
+  /** Server-assessed external file diffs */
+  200: AssessedExternalDiffResponse
+}
+
+export type SessionAssessedDiffResponse = SessionAssessedDiffResponses[keyof SessionAssessedDiffResponses]
 
 export type SessionTouchedFilesData = {
   body?: never

@@ -810,6 +810,30 @@ export default function Page() {
         : skipToken,
     }
   })
+  const assessedExternalDiffQuery = createQuery(() => {
+    const sessionID = params.id
+    return {
+      queryKey: ["session-assessed-external-diff", params.id ?? "", sessionDiffVersion()] as const,
+      enabled: !!sessionID,
+      placeholderData: (
+        prev:
+          | {
+              version: 1
+              revision: number
+              assessments: Array<import("@/pages/session/v2/accumulate-diffs").AssessedExternalDiff>
+            }
+          | undefined,
+        prevQuery: { queryKey?: readonly unknown[] } | undefined,
+      ) => (prevQuery?.queryKey?.[1] === sessionID ? prev : undefined),
+      queryFn: sessionID
+        ? () =>
+            sdk()
+              .client.session
+              .assessedDiff({ sessionID, directory: sdk().directory })
+              .then((result) => result.data)
+        : skipToken,
+    }
+  })
   const reviewDiffs = createMemo(() => {
     // Shared path normalization — both sources must use the same function for dedup to work.
     const dir = sdk().directory
@@ -846,10 +870,17 @@ export default function Page() {
     // --- Server diffs (authoritative for in-project files) ---
     const serverDiffs = sessionDiffQuery.data ?? []
     const serverResponded = sessionDiffQuery.status === "success" || sessionDiffQuery.isPlaceholderData
+    // External metadata is never a current-diff fallback. It is visible only
+    // after this session's authenticated, server-assessed detail request settles.
+    const assessedDiffs =
+      assessedExternalDiffQuery.status === "success"
+        ? (assessedExternalDiffQuery.data?.assessments ?? [])
+        : []
 
     return mergeServerAndToolDiffs({
       serverDiffs,
       toolDiffs,
+      assessedDiffs,
       serverResponded,
       directory: dir,
       home,

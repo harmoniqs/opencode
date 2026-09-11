@@ -12,6 +12,7 @@ import { Agent } from "../../src/agent/agent"
 import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Truncate } from "@/tool/truncate"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { ExternalDiff } from "../../src/session/external-diff"
 import * as Tool from "../../src/tool/tool"
 import { testEffect } from "../lib/effect"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
@@ -142,6 +143,24 @@ describe("tool.edit", () => {
   })
 
   describe("editing existing files", () => {
+    it.instance("captures and settles an external edit after permission", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(path.dirname(test.directory), `external-edit-${Date.now()}.txt`)
+        yield* put(filepath, "before\n")
+
+        yield* run({ filePath: filepath, oldString: "before", newString: "after" })
+
+        const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
+        expect(assessment).toMatchObject({
+          state: "changed",
+          patch: expect.stringContaining("-before"),
+          additions: 1,
+          deletions: 1,
+        })
+      }),
+    )
+
     it.instance("replaces text in existing file", () =>
       Effect.gen(function* () {
         const test = yield* TestInstance

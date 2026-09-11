@@ -15,6 +15,7 @@ import path from "path"
 import { Effect, Layer } from "effect"
 import { Session } from "@/session/session"
 import { Snapshot } from "@/snapshot"
+import { ExternalDiff } from "@/session/external-diff"
 import { Storage } from "@/storage/storage"
 import { SessionPaths } from "@/server/routes/instance/httpapi/groups/session"
 import { MessageID, PartID } from "@/session/schema"
@@ -46,6 +47,52 @@ const withSession = (input?: Parameters<Session.Interface["create"]>[0]) =>
   Effect.acquireRelease(Session.use.create(input), (created) => Session.use.remove(created.id).pipe(Effect.ignore))
 
 describe("Session.diff — session-scoped agent diffs (#174)", () => {
+  it.instance(
+    "returns a settled, no-store assessed diff for one non-Git sibling file",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-sibling" })
+        const fs = yield* FSUtil.Service
+        const sibling = path.join(path.dirname(test.directory), `external-${session.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "before\n")
+
+        const reference = ExternalDiff.capture({ sessionID: session.id, file: sibling, baseline: "before\n" })
+        yield* fs.writeWithDirs(sibling, "after\n")
+        ExternalDiff.settle({ sessionID: session.id, reference, file: sibling, current: "after\n" })
+
+        const response = yield* requestInDirectory(
+          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }),
+          test.directory,
+        )
+        expect(response.status).toBe(200)
+        expect(response.headers["cache-control"]).toBe("no-store")
+        expect(yield* response.json).toEqual({
+          version: 1,
+          revision: 1,
+          assessments: [
+            {
+              reference,
+              file: sibling,
+              state: "changed",
+              patch: expect.stringContaining("-before"),
+              additions: 1,
+              deletions: 1,
+            },
+          ],
+        })
+
+        const other = yield* withSession({ title: "external-sibling-other-session" })
+        const otherResponse = yield* requestInDirectory(
+          pathFor(SessionPaths.assessedDiff, { sessionID: other.id }),
+          test.directory,
+        )
+        expect(otherResponse.status).toBe(200)
+        expect(yield* otherResponse.json).toEqual({ version: 1, revision: 0, assessments: [] })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
   it.instance(
     "returns [] for session with no messages",
     () =>

@@ -141,6 +141,60 @@ describe("mergeServerAndToolDiffs", () => {
     expect(files).toContain("~/other-project/bar.ts")
   })
 
+  test("renders a settled external assessment instead of the completed tool patch", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [diff("~/other-project/bar.ts", "tool-patch", 9, 4)],
+      assessedDiffs: [
+        {
+          reference: "external_opaque",
+          file: "/Users/jj/other-project/bar.ts",
+          state: "changed" as const,
+          patch: "assessed-patch",
+          additions: 2,
+          deletions: 1,
+        },
+      ],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+
+    expect(result).toEqual([diff("~/other-project/bar.ts", "assessed-patch", 2, 1)])
+  })
+
+  test("does not promote an external tool patch while its assessment is absent or loading", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [diff("~/other-project/bar.ts", "stale-tool-patch", 9, 4)],
+      assessedDiffs: [],
+      serverResponded: false,
+      directory: DIR,
+      home: HOME,
+    })
+
+    expect(result).toEqual([])
+  })
+
+  test("does not render an unavailable external assessment", () => {
+    const result = mergeServerAndToolDiffs({
+      serverDiffs: [],
+      toolDiffs: [diff("~/other-project/bar.ts", "stale-tool-patch", 9, 4)],
+      assessedDiffs: [
+        {
+          reference: "external_opaque",
+          file: "/Users/jj/other-project/bar.ts",
+          state: "unavailable" as const,
+        },
+      ],
+      serverResponded: true,
+      directory: DIR,
+      home: HOME,
+    })
+
+    expect(result).toEqual([])
+  })
+
   test("in-project files come from the server, not tool metadata (server wins)", () => {
     const result = mergeServerAndToolDiffs({
       serverDiffs: [diff("src/foo.ts", "server-patch", 10, 5)],

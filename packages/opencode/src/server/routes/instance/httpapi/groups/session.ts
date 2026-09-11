@@ -80,6 +80,21 @@ export const TouchedFile = Schema.Struct({
   status: Schema.Literals(["added", "modified"]),
 })
 
+export const AssessedExternalDiff = Schema.Struct({
+  reference: Schema.String,
+  file: Schema.String,
+  state: Schema.Literals(["changed", "unavailable"]),
+  patch: Schema.optional(Schema.String),
+  additions: Schema.optional(Schema.Number),
+  deletions: Schema.optional(Schema.Number),
+})
+
+export const AssessedExternalDiffResponse = Schema.Struct({
+  version: Schema.Literal(1),
+  revision: Schema.Number,
+  assessments: Schema.Array(AssessedExternalDiff),
+})
+
 export const SessionPaths = {
   list: root,
   status: `${root}/status`,
@@ -87,6 +102,7 @@ export const SessionPaths = {
   children: `${root}/:sessionID/children`,
   todo: `${root}/:sessionID/todo`,
   diff: `${root}/:sessionID/diff`,
+  assessedDiff: `${root}/:sessionID/diff/assessed`,
   touchedFiles: `${root}/:sessionID/touched-files`,
   messages: `${root}/:sessionID/message`,
   message: `${root}/:sessionID/message/:messageID`,
@@ -180,6 +196,18 @@ export const SessionApi = HttpApi.make("session")
             identifier: "session.diff",
             summary: "Get message diff",
             description: "Get the file changes (diff) that resulted from a specific user message in the session.",
+          }),
+        ),
+        HttpApiEndpoint.get("assessedDiff", SessionPaths.assessedDiff, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(AssessedExternalDiffResponse, "Server-assessed external file diffs"),
+          error: ApiNotFoundError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.assessedDiff",
+            summary: "Get server-assessed external file diffs",
+            description: "Get current session-owned external file assessments.",
           }),
         ),
         HttpApiEndpoint.get("touchedFiles", SessionPaths.touchedFiles, {
