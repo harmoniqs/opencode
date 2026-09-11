@@ -63,7 +63,7 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         expect(ExternalDiff.commit({ sessionID: session.id, reservation: reservation! })).toBe(true)
 
         const response = yield* requestInDirectory(
-          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }),
+          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }) + "?patch=true",
           test.directory,
         )
         expect(response.status).toBe(200)
@@ -118,6 +118,96 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         expect(ExternalDiff.assessed(session.id).assessments).toEqual([
           expect.objectContaining({ file: sibling, state: "unchanged" }),
         ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "marks a stale external owner unavailable while preserving a matching later owner",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const fs = yield* FSUtil.Service
+        const first = yield* withSession({ title: "external-first-owner" })
+        const second = yield* withSession({ title: "external-second-owner" })
+        const sibling = path.join(path.dirname(test.directory), `external-contention-${first.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "baseline\n")
+
+        const firstWrite = ExternalDiff.prepare({ sessionID: first.id, files: [sibling] })!
+        yield* fs.writeWithDirs(sibling, "first\n")
+        expect(ExternalDiff.commit({ sessionID: first.id, reservation: firstWrite })).toBe(true)
+
+        const secondWrite = ExternalDiff.prepare({ sessionID: second.id, files: [sibling] })!
+        yield* fs.writeWithDirs(sibling, "second\n")
+        expect(ExternalDiff.commit({ sessionID: second.id, reservation: secondWrite })).toBe(true)
+
+        expect(ExternalDiff.assessed(first.id).assessments).toEqual([
+          expect.objectContaining({ file: sibling, state: "unavailable" }),
+        ])
+        expect(ExternalDiff.assessed(second.id, { patch: true }).assessments).toEqual([
+          expect.objectContaining({ file: sibling, state: "changed", patch: expect.stringContaining("+second") }),
+        ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "rehydrates a committed external baseline after a same-host restart",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const fs = yield* FSUtil.Service
+        const session = yield* withSession({ title: "external-rehydrate" })
+        const sibling = path.join(path.dirname(test.directory), `external-rehydrate-${session.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "BASELINE_SECRET_975\n")
+        const reservation = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })!
+        yield* fs.writeWithDirs(sibling, "changed\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation })).toBe(true)
+
+        ExternalDiff.resetMemoryForTest()
+
+        expect(ExternalDiff.assessed(session.id, { patch: true }).assessments).toEqual([
+          expect.objectContaining({
+            file: sibling,
+            state: "changed",
+            patch: expect.stringContaining("BASELINE_SECRET_975"),
+          }),
+        ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "keeps generated external patches out of unrequested detail and legacy diff responses",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const fs = yield* FSUtil.Service
+        const session = yield* withSession({ title: "external-egress" })
+        const sibling = path.join(path.dirname(test.directory), `external-egress-${session.id}.txt`)
+        const sentinel = "EXTERNAL_PATCH_SENTINEL_975"
+        yield* fs.writeWithDirs(sibling, `${sentinel}-before\n`)
+        const reservation = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })!
+        yield* fs.writeWithDirs(sibling, `${sentinel}-after\n`)
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation })).toBe(true)
+
+        const detail = yield* requestInDirectory(
+          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }),
+          test.directory,
+        )
+        expect(detail.headers["cache-control"]).toBe("no-store")
+        expect(JSON.stringify(yield* detail.json)).not.toContain(sentinel)
+        expect(JSON.stringify(ExternalDiff.assessed(session.id).assessments)).not.toContain(sentinel)
+
+        const legacy = yield* requestInDirectory(pathFor(SessionPaths.diff, { sessionID: session.id }), test.directory)
+        expect(legacy.status).toBe(200)
+        expect(yield* legacy.json).toEqual([])
+
+        const requested = yield* requestInDirectory(
+          pathFor(SessionPaths.assessedDiff, { sessionID: session.id }) + "?patch=true",
+          test.directory,
+        )
+        expect(JSON.stringify(yield* requested.json)).toContain(sentinel)
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )

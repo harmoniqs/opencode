@@ -1954,6 +1954,7 @@ export type Config = {
   model?: string
   small_model?: string
   default_agent?: string
+  agent_order?: Array<string>
   subagent_depth?: number
   username?: string
   mode?: {
@@ -2553,6 +2554,7 @@ export type ProviderAuthError1 = {
     | "ProviderAuthOauthMissing"
     | "ProviderAuthOauthCodeMissing"
     | "ProviderAuthOauthCallbackFailed"
+    | "ProviderAuthOauthAuthorizationFailed"
     | "ProviderAuthValidationFailed"
   data: {
     providerID?: string
@@ -9841,6 +9843,7 @@ export type SessionAssessedDiffData = {
   query?: {
     directory?: string
     workspace?: string
+    patch?: "true" | "false"
   }
   url: "/session/{sessionID}/diff/assessed"
 }

@@ -18,6 +18,8 @@ import { eq } from "drizzle-orm"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { resetDatabase } from "../fixture/db"
 import { pollWithTimeout, testEffect } from "../lib/effect"
+import { ExternalDiff } from "@/session/external-diff"
+import path from "path"
 
 const env = LayerNode.compile(LayerNode.group([CrossSpawnSpawner.node]))
 const it = testEffect(env)
@@ -169,6 +171,54 @@ describe("ShareNext", () => {
           expect(createRequests).toHaveLength(1)
           expect(createRequests[0].method).toBe("POST")
           expect(createRequests[0].url).toBe("https://legacy-share.example.com/api/share")
+        }).pipe(Effect.provide(integrationLayer(client)))
+      },
+      { config: { enterprise: { url: "https://legacy-share.example.com" } } },
+    ),
+  )
+
+  it.live("never sends a generated external patch through the sharing queue", () =>
+    provideTmpdirInstance(
+      (dir) => {
+        const seen: string[] = []
+        const client = HttpClient.make((req) => {
+          if (req.url.endsWith("/sync") && req.body._tag === "Uint8Array") {
+            seen.push(new TextDecoder().decode(req.body.body))
+          }
+          return Effect.succeed(json(req, { ok: true }))
+        })
+        return Effect.gen(function* () {
+          const share = yield* ShareNext.Service
+          const session = yield* Session.Service
+          const info = yield* session.create({ title: "external-share" })
+          const sentinel = "EXTERNAL_SHARE_SENTINEL_975"
+          const external = path.join(path.dirname(dir), `external-share-${info.id}.txt`)
+          yield* Effect.promise(() => Bun.write(external, `${sentinel}-before\n`))
+          const reservation = ExternalDiff.prepare({ sessionID: info.id, files: [external] })!
+          yield* Effect.promise(() => Bun.write(external, `${sentinel}-after\n`))
+          expect(ExternalDiff.commit({ sessionID: info.id, reservation })).toBe(true)
+          expect(JSON.stringify(ExternalDiff.assessed(info.id, { patch: true }))).toContain(sentinel)
+
+          yield* share.init()
+          const { db } = yield* Database.Service
+          yield* db
+            .insert(SessionShareTable)
+            .values({
+              session_id: info.id,
+              id: "shr_external",
+              url: "https://legacy-share.example.com/share/external",
+              secret: "sec_975",
+            })
+            .run()
+            .pipe(Effect.orDie)
+          yield* session.setTitle({ sessionID: info.id, title: "external-share-updated" })
+          yield* pollWithTimeout(
+            Effect.sync(() => (seen.length === 1 ? true : undefined)),
+            "timed out waiting for share sync",
+            "5 seconds",
+          )
+          expect(seen).toHaveLength(1)
+          expect(seen[0]).not.toContain(sentinel)
         }).pipe(Effect.provide(integrationLayer(client)))
       },
       { config: { enterprise: { url: "https://legacy-share.example.com" } } },
