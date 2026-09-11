@@ -315,7 +315,7 @@ test("uses the same surface treatment for PDF page and zoom controls", async ({ 
   }
 })
 
-test("clamps manual PDF page entry to the document bounds", async ({ page }) => {
+test("restores out-of-range manual PDF page entry", async ({ page }) => {
   await openPreview(page)
   await openPreviewFile(page, multipagePdfFile)
 
@@ -324,14 +324,19 @@ test("clamps manual PDF page entry to the document bounds", async ({ page }) => 
   const pageStatus = host.getByRole("status")
 
   await pageInput.focus()
-  await expect(pageInput).toHaveValue("1")
-  await pageInput.fill("-4")
+  await pageInput.fill("99")
   await pageInput.press("Enter")
   await expect(pageStatus).toHaveAccessibleName("Page 1 of 2")
   await expect(pageInput).toHaveValue("1 / 2")
 
   await pageInput.focus()
-  await pageInput.fill("99")
+  await pageInput.fill("2")
+  await pageInput.press("Enter")
+  await expect(pageStatus).toHaveAccessibleName("Page 2 of 2")
+  await expect(pageInput).toHaveValue("2 / 2")
+
+  await pageInput.focus()
+  await pageInput.fill("-4")
   await pageInput.press("Enter")
   await expect(pageStatus).toHaveAccessibleName("Page 2 of 2")
   await expect(pageInput).toHaveValue("2 / 2")

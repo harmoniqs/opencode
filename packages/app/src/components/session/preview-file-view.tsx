@@ -498,14 +498,13 @@ export function PreviewFileView(props: {
                       const state = navigation()
                       const raw = event.currentTarget.value.trim()
                       const numeric = /^-?\d+$/.test(raw) ? Number(raw) : null
-                      if (numeric === null) {
+                      if (numeric === null || numeric < 1 || numeric > state.pageCount) {
                         event.currentTarget.value = `${state.currentPage} / ${state.pageCount}`
                         return
                       }
 
-                      const page = Math.min(Math.max(numeric, 1), state.pageCount)
-                      const moved = state.navigate(page)
-                      event.currentTarget.value = moved ? `${page} / ${state.pageCount}` : `${state.currentPage} / ${state.pageCount}`
+                      const moved = state.navigate(numeric)
+                      event.currentTarget.value = moved ? `${numeric} / ${state.pageCount}` : `${state.currentPage} / ${state.pageCount}`
                     }}
                   />
                   <div class="flex flex-col border-l border-border-base">
