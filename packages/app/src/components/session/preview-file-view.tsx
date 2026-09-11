@@ -73,9 +73,9 @@ export function PreviewFileView(props: {
   saveRequest?: () => number
   onSaveStatusChange?: (status: "idle" | "saving" | "saved") => void
   zoom: () => number
-  zoomIn: () => void
+  zoomIn: (maximum: number) => void
   zoomOut: () => void
-  onZoomChange?: (zoom: number) => void
+  onZoomChange?: (zoom: number, maximum: number) => void
 }) {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
@@ -266,21 +266,38 @@ export function PreviewFileView(props: {
     const cat = category()
     return cat === "image" || cat === "pdf" ? 100 : 50
   }
+  const zoomCeiling = () => {
+    const cat = category()
+    return cat === "image" || cat === "pdf" ? 1000 : 500
+  }
 
   const handleZoomOut = () => {
     if (props.zoom() <= zoomFloor()) return
     const before = props.zoom()
+    adjustScrollForZoom(before, Math.max(before - 10, zoomFloor()))
     props.zoomOut()
-    adjustScrollForZoom(before, props.zoom())
   }
 
-  // ─── Scroll-centered zoom ────────────────────────────────────────────
-  // After a zoom change, adjust scroll so the viewport center stays fixed.
-  // Uses rAF to let the DOM update first: image CSS reflows synchronously,
-  // PDF canvas dimensions settle as a microtask (getPage().then()), and
-  // rAF fires after both — so scrollWidth/scrollHeight are correct.
+  // ─── Focus-preserving zoom ───────────────────────────────────────────
+  // After a zoom change, adjust scroll so the focus point stays fixed.
+  // Toolbar and typed zoom use the viewport center; wheel zoom uses its
+  // pointer location. A single rAF coalesces a gesture instead of letting
+  // stale scroll positions from earlier wheel events overwrite the latest.
 
   let scrollRef: HTMLDivElement | undefined
+  let zoomFrame: number | undefined
+  let pendingZoom:
+    | {
+        oldZoom: number
+        newZoom: number
+        focusX: number
+        focusY: number
+        contentX: number
+        contentY: number
+        element: HTMLDivElement
+        host: HTMLElement | null
+      }
+    | undefined
 
   // ─── Track scroll container width for image sizing ───────────────────
   // Observe scrollRef (the scroll container) to get its content width.
@@ -306,17 +323,41 @@ export function PreviewFileView(props: {
   // At 200% it's twice that, etc. Deterministic sizing — the inline-flex
   // wrapper sizes correctly around it, so justify-center never pushes
   // content into unreachable negative scroll territory.
-  const imageWidth = () => Math.max(0, (containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom() / 100)
+  const imageWidth = () => Math.max(0, ((containerWidth() - IMAGE_WRAPPER_PADDING) * props.zoom()) / 100)
 
-  const adjustScrollForZoom = (oldZoom: number, newZoom: number) => {
+  const adjustScrollForZoom = (oldZoom: number, newZoom: number, focus?: { x: number; y: number }) => {
     const el = scrollRef
     if (!el || oldZoom === newZoom || oldZoom === 0) return
-    const ratio = newZoom / oldZoom
-    const centerX = el.scrollLeft + el.clientWidth / 2
-    const centerY = el.scrollTop + el.clientHeight / 2
-    requestAnimationFrame(() => {
-      el.scrollLeft = centerX * ratio - el.clientWidth / 2
-      el.scrollTop = centerY * ratio - el.clientHeight / 2
+    const focusX = Math.min(Math.max(focus?.x ?? el.clientWidth / 2, 0), el.clientWidth)
+    const focusY = Math.min(Math.max(focus?.y ?? el.clientHeight / 2, 0), el.clientHeight)
+
+    if (pendingZoom) {
+      pendingZoom.newZoom = newZoom
+      pendingZoom.focusX = focusX
+      pendingZoom.focusY = focusY
+    } else {
+      pendingZoom = {
+        oldZoom,
+        newZoom,
+        focusX,
+        focusY,
+        contentX: el.scrollLeft + focusX,
+        contentY: el.scrollTop + focusY,
+        element: el,
+        host: el.closest<HTMLElement>("[data-preview-host]"),
+      }
+    }
+
+    if (zoomFrame) return
+    zoomFrame = requestAnimationFrame(() => {
+      zoomFrame = undefined
+      const pending = pendingZoom
+      pendingZoom = undefined
+      if (!pending) return
+      const ratio = pending.newZoom / pending.oldZoom
+      const element = pending.host?.querySelector<HTMLDivElement>("[data-preview-scroll]") ?? pending.element
+      element.scrollLeft = pending.contentX * ratio - pending.focusX
+      element.scrollTop = pending.contentY * ratio - pending.focusY
     })
   }
 
@@ -327,19 +368,23 @@ export function PreviewFileView(props: {
   // — Solid's onWheel is passive by default and can't preventDefault.
 
   const handleWheelZoom = (e: WheelEvent) => {
-    if (!e.ctrlKey && !e.shiftKey) return   // normal scroll — pass through
+    if (!e.ctrlKey && !e.shiftKey) return // normal scroll — pass through
     e.preventDefault()
     if (!props.onZoomChange) return
-    const delta = e.deltaY || e.deltaX      // shift+scroll may swap axes
+    const delta = e.deltaY || e.deltaX // shift+scroll may swap axes
     if (delta === 0) return
     const oldZoom = props.zoom()
     const factor = Math.exp(-delta * 0.003)
-    const next = Math.round(
-      Math.min(Math.max(oldZoom * factor, zoomFloor()), 500),
-    )
+    const next = Math.round(Math.min(Math.max(oldZoom * factor, zoomFloor()), zoomCeiling()))
     if (next === oldZoom) return
-    props.onZoomChange(next)
-    adjustScrollForZoom(oldZoom, next)
+    const scroll = scrollRef
+    if (!scroll) return
+    const bounds = scroll.getBoundingClientRect()
+    adjustScrollForZoom(oldZoom, next, {
+      x: e.clientX - bounds.left,
+      y: e.clientY - bounds.top,
+    })
+    props.onZoomChange(next, zoomCeiling())
     setShowControls(true)
     startIdleTimer()
   }
@@ -360,92 +405,27 @@ export function PreviewFileView(props: {
     >
       {/* Floating controls — top-right overlay */}
       <div
+        data-preview-controls
         onMouseEnter={handleControlsMouseEnter}
         onMouseLeave={handleControlsMouseLeave}
         style={{
           position: "absolute",
-          top: "8px",
-          right: "14px",
           "z-index": "20",
           display: "flex",
-          gap: "6px",
           "align-items": "center",
           opacity: showControls() ? "1" : "0",
           "pointer-events": showControls() ? "auto" : "none",
           transition: "opacity 200ms ease",
         }}
       >
-        <Show when={!isEditing()}>
-          {/* Zoom controls: [editable %] [reset] [+ over -] */}
-          <div class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
-            {/* Editable zoom percentage input */}
-            <input
-              type="text"
-              class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
-              value={`${props.zoom()}%`}
-              onFocus={(e) => {
-                e.currentTarget.value = `${props.zoom()}`
-                e.currentTarget.select()
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur()
-                } else if (e.key === "Escape") {
-                  e.currentTarget.value = `${props.zoom()}`
-                  e.currentTarget.blur()
-                }
-              }}
-              onBlur={(e) => {
-                const val = parseInt(e.currentTarget.value)
-                if (!isNaN(val) && props.onZoomChange) {
-                  const clamped = Math.min(Math.max(val, zoomFloor()), 500)
-                  const before = props.zoom()
-                  props.onZoomChange(clamped)
-                  adjustScrollForZoom(before, clamped)
-                }
-                e.currentTarget.value = `${props.zoom()}%`
-              }}
-            />
-            {/* Reset to 100% */}
-            <button
-              class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-              onClick={() => {
-                const before = props.zoom()
-                props.onZoomChange?.(100)
-                adjustScrollForZoom(before, 100)
-              }}
-              aria-label="Reset zoom"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
-            {/* Vertical +/- stepper */}
-            <div class="flex flex-col border-l border-border-base">
-              <button
-                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
-                onClick={() => {
-                  const before = props.zoom()
-                  props.zoomIn()
-                  adjustScrollForZoom(before, props.zoom())
-                }}
-                aria-label="Zoom in"
-              >
-                <span class="text-[10px] font-medium leading-none">+</span>
-              </button>
-              <button
-                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base"
-                onClick={() => handleZoomOut()}
-                aria-label="Zoom out"
-              >
-                <span class="text-[10px] font-medium leading-none">−</span>
-              </button>
-            </div>
-          </div>
-        </Show>
         <Show when={showModeToggle()}>
-          <div class="rounded-md border border-border-base shadow-sm overflow-hidden" style={{ background: "color-mix(in srgb, var(--background-base) 80%, transparent)", "backdrop-filter": "blur(4px)" }}>
+          <div
+            class="rounded-md border border-border-base shadow-sm overflow-hidden"
+            style={{
+              background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
+              "backdrop-filter": "blur(4px)",
+            }}
+          >
             <SegmentedControlV2
               value={mode()}
               onChange={(value) => {
@@ -469,10 +449,94 @@ export function PreviewFileView(props: {
             </SegmentedControlV2>
           </div>
         </Show>
+        <Show when={!isEditing()}>
+          {/* Zoom controls: [editable %] [reset] [+ over -] */}
+          <div
+            class="shrink-0 flex items-center h-7 rounded-md border border-border-base overflow-hidden shadow-sm"
+            style={{
+              background: "color-mix(in srgb, var(--background-base) 80%, transparent)",
+              "backdrop-filter": "blur(4px)",
+            }}
+          >
+            {/* Editable zoom percentage input */}
+            <input
+              type="text"
+              class="w-11 h-full text-center text-12-regular text-text-base bg-transparent outline-none"
+              value={`${props.zoom()}%`}
+              onFocus={(e) => {
+                e.currentTarget.value = `${props.zoom()}`
+                e.currentTarget.select()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur()
+                } else if (e.key === "Escape") {
+                  e.currentTarget.value = `${props.zoom()}`
+                  e.currentTarget.blur()
+                }
+              }}
+              onBlur={(e) => {
+                const val = parseInt(e.currentTarget.value)
+                if (!isNaN(val) && props.onZoomChange) {
+                  const clamped = Math.min(Math.max(val, zoomFloor()), zoomCeiling())
+                  const before = props.zoom()
+                  adjustScrollForZoom(before, clamped)
+                  props.onZoomChange(clamped, zoomCeiling())
+                }
+                e.currentTarget.value = `${props.zoom()}%`
+              }}
+            />
+            {/* Reset to 100% */}
+            <button
+              class="flex items-center justify-center w-6 h-full border-l border-border-base text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+              onClick={() => {
+                const before = props.zoom()
+                adjustScrollForZoom(before, 100)
+                props.onZoomChange?.(100, zoomCeiling())
+              }}
+              aria-label="Reset zoom"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+            {/* Vertical +/- stepper */}
+            <div class="flex flex-col border-l border-border-base">
+              <button
+                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors"
+                onClick={() => {
+                  const before = props.zoom()
+                  adjustScrollForZoom(before, Math.min(before + 10, zoomCeiling()))
+                  props.zoomIn(zoomCeiling())
+                }}
+                aria-label="Zoom in"
+              >
+                <span class="text-[10px] font-medium leading-none">+</span>
+              </button>
+              <button
+                class="flex items-center justify-center w-5 h-3.5 text-text-weak hover:text-text-base hover:bg-background-stronger transition-colors border-t border-border-base"
+                onClick={() => handleZoomOut()}
+                aria-label="Zoom out"
+              >
+                <span class="text-[10px] font-medium leading-none">−</span>
+              </button>
+            </div>
+          </div>
+        </Show>
       </div>
 
       {/* Content */}
-      <div ref={scrollRef} class="h-full overflow-auto">
+      <div ref={scrollRef} data-preview-scroll class="h-full overflow-auto">
         <Show when={!loading()} fallback={<div class="p-4 text-12-regular text-text-weak">Loading...</div>}>
           <Switch>
             <Match when={fileType() === "error"}>
