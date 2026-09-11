@@ -27,6 +27,8 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language"
 import { tags } from "@lezer/highlight"
+import { shikiHighlightExtension, updateWorkerTheme } from "./shiki-highlight-plugin"
+import { onThemeChange } from "./shiki-theme-state"
 
 // ---------------------------------------------------------------------------
 // External-update annotation — marks programmatic content dispatches so the
@@ -252,6 +254,8 @@ export function editableExtensions(opts: {
 export function baseExtensions(opts: {
   theme: Extension
   language?: LanguageSupport | null
+  /** File extension for Shiki highlighting (e.g. "ts", "py", "jl"). */
+  lang?: string
 }): Extension[] {
   return [
     lineNumbers(),
@@ -261,9 +265,10 @@ export function baseExtensions(opts: {
     bracketMatching(),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     EditorView.lineWrapping,
-    buildSyntaxHighlightStyle(),
+    buildSyntaxHighlightStyle(), // first-paint bridge: lezer colors until Shiki responds
     opts.theme,
     ...(opts.language ? [opts.language] : []),
+    ...(opts.lang ? shikiHighlightExtension(opts.lang) : []),
   ]
 }
 
@@ -292,3 +297,9 @@ export function detectMode(): "light" | "dark" {
     return "dark"
   return "light"
 }
+
+// ---------------------------------------------------------------------------
+// Wire theme changes to the Shiki highlight worker
+// ---------------------------------------------------------------------------
+
+onThemeChange(() => updateWorkerTheme())
