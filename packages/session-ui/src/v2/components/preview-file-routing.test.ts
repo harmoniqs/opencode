@@ -260,7 +260,7 @@ describe("toolbar layout (#934)", () => {
   })
 
   test("SessionPreviewTab passes zoomIn and zoomOut to PreviewFileView", () => {
-    expect(previewTabSrc).toContain("zoomIn={() => setZoomForPath(path, zoomForPath(path) + 10)}")
+    expect(previewTabSrc).toContain("zoomIn={(maximum) => setZoomForPath(path, zoomForPath(path) + 10, maximum)}")
     expect(previewTabSrc).toContain("zoomOut={() => setZoomForPath(path, zoomForPath(path) - 10)}")
   })
 
@@ -384,8 +384,8 @@ describe("toolbar layout (#934)", () => {
   test("pinch/wheel zoom: SessionPreviewTab exposes onZoomChange to PreviewFileView (#934)", () => {
     // Parent must define a handler that accepts an arbitrary zoom value
     expect(previewTabSrc).toContain("onZoomChange")
-    // The leaf model clamps to the same [50, 500] range.
-    expect(previewTreeSrc).toContain("Math.min(Math.max(zoom, 50), 500)")
+    // The leaf model clamps to the renderer's category-specific maximum.
+    expect(previewTreeSrc).toContain("Math.min(Math.max(zoom, 50), Math.min(Math.max(maximum, 50), 1000))")
   })
 
   test("pinch/wheel zoom: PreviewFileView has a wheel handler for ctrlKey/shiftKey (#934)", () => {
@@ -501,7 +501,7 @@ describe("zoom layout redesign (#937)", () => {
     expect(inputBlock).not.toContain("onInput")
   })
 
-  test("zoom input commits on blur with clamping to [zoomFloor, 500]", () => {
+  test("zoom input commits on blur with category-aware clamping", () => {
     const inputStart = fileViewSrc.indexOf("Editable zoom percentage input")
     const inputEnd = fileViewSrc.indexOf("/>", inputStart)
     const inputBlock = fileViewSrc.slice(inputStart, inputEnd)
@@ -509,7 +509,7 @@ describe("zoom layout redesign (#937)", () => {
     expect(inputBlock).toContain("onBlur")
     // Must clamp the parsed value to the valid range
     expect(inputBlock).toContain("zoomFloor()")
-    expect(inputBlock).toContain("500")
+    expect(inputBlock).toContain("zoomCeiling()")
     expect(inputBlock).toContain("Math.min")
     expect(inputBlock).toContain("Math.max")
   })
@@ -573,12 +573,12 @@ describe("preview tab: floating overlay controls (#937)", () => {
     expect(fileViewSrc).toMatch(/Show when=\{showModeToggle\(\)\}/)
   })
 
-  test("zoom pill appears before mode toggle in the flex container", () => {
+  test("mode toggle appears before the zoom pill in the flex container", () => {
     const ctrlIdx = fileViewSrc.indexOf("Floating controls")
     const afterCtrl = fileViewSrc.slice(ctrlIdx)
     const zoomIdx = afterCtrl.indexOf("!isEditing()")
     const toggleIdx = afterCtrl.indexOf("showModeToggle()")
-    expect(zoomIdx).toBeLessThan(toggleIdx)
+    expect(toggleIdx).toBeLessThan(zoomIdx)
   })
 
   test("showControls signal + 2s idle timer", () => {
@@ -610,7 +610,7 @@ describe("preview tab: floating overlay controls (#937)", () => {
 
   test("pinch/wheel zoom reveals controls", () => {
     const wheelIdx = fileViewSrc.indexOf("handleWheelZoom")
-    const wheelBlock = fileViewSrc.slice(wheelIdx, wheelIdx + 600)
+    const wheelBlock = fileViewSrc.slice(wheelIdx, wheelIdx + 1000)
     expect(wheelBlock).toContain("setShowControls(true)")
     expect(wheelBlock).toContain("startIdleTimer")
   })
@@ -723,12 +723,13 @@ describe("dirty dot uses valid v2 color tokens (#937)", () => {
   )
 
   test("unsaved dot uses a v2-prefixed background color", () => {
-    // Find the line containing the unsaved dot (aria-label with "Unsaved")
-    const dotLine = previewTabSrc.split("\n").find((l) => /aria-label.*[Uu]nsaved/.test(l))
-    expect(dotLine).toBeDefined()
+    // The aria-label and its visual class may span adjacent lines.
+    const dotStart = previewTabSrc.indexOf('aria-label="Unsaved changes"')
+    expect(dotStart).toBeGreaterThan(-1)
+    const dotBlock = previewTabSrc.slice(dotStart, dotStart + 160)
     // Must use bg-v2-* (the valid v2 design system token), not bare bg-text-faint
-    expect(dotLine).toMatch(/bg-v2-/)
-    expect(dotLine).not.toMatch(/bg-text-faint[^-]|bg-text-faint"/)
+    expect(dotBlock).toMatch(/bg-v2-/)
+    expect(dotBlock).not.toMatch(/bg-text-faint[^-]|bg-text-faint"/)
   })
 
   test("empty-state icon uses a v2-prefixed text color", () => {
