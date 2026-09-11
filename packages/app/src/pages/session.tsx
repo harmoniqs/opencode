@@ -815,15 +815,16 @@ export default function Page() {
     return {
       queryKey: ["session-assessed-external-diff", params.id ?? "", sessionDiffVersion()] as const,
       enabled: !!sessionID,
-      placeholderData: (
-        prev: SessionAssessedDiffResponse | undefined,
-        prevQuery: { queryKey?: readonly unknown[] } | undefined,
-      ) => (prevQuery?.queryKey?.[1] === sessionID ? prev : undefined),
+        // Generated external patches are sensitive, one-response render data.
+        // Do not retain them in the persistent query cache or telemetry cache.
+        gcTime: 0,
+        staleTime: 0,
+        retry: false,
       queryFn: sessionID
         ? () =>
             sdk()
               .client.session
-              .assessedDiff({ sessionID, directory: sdk().directory })
+              .assessedDiff({ sessionID, directory: sdk().directory, patch: "true" })
               .then((result) => result.data)
         : skipToken,
     }

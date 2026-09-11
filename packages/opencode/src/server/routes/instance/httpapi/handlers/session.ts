@@ -106,12 +106,13 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
 
     const assessedDiff = Effect.fn("SessionHttpApi.assessedDiff")(function* (ctx: {
       params: { sessionID: SessionID }
+      query: { patch?: boolean }
     }) {
       yield* requireSession(ctx.params.sessionID)
       yield* HttpEffect.appendPreResponseHandler((_request, response) =>
         Effect.succeed(HttpServerResponse.setHeader(response, "cache-control", "no-store")),
       )
-      return ExternalDiff.assessed(ctx.params.sessionID)
+      return ExternalDiff.assessed(ctx.params.sessionID, { patch: ctx.query.patch === true })
     })
 
     const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])

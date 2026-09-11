@@ -16,6 +16,8 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { InstanceStore } from "@/project/instance-store"
 import { InstanceBootstrap } from "@/project/bootstrap"
+import { ExternalDiff } from "@/session/external-diff"
+import path from "path"
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -248,6 +250,30 @@ describe("Session", () => {
 
       expect(created.metadata).toBeUndefined()
       expect(saved.metadata).toBeUndefined()
+    }),
+  )
+
+  it.instance("forks and recursively removes external ownership without inheriting host-local baselines", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const dir = yield* tmpdirScoped({ git: true })
+      const parent = yield* provideInstance(dir)(session.create({ title: "external-owner" }))
+      const external = path.join(path.dirname(dir), `external-owner-${parent.id}.txt`)
+      yield* Effect.promise(() => Bun.write(external, "baseline\n"))
+      const reservation = ExternalDiff.prepare({ sessionID: parent.id, files: [external] })!
+      yield* Effect.promise(() => Bun.write(external, "changed\n"))
+      expect(ExternalDiff.commit({ sessionID: parent.id, reservation })).toBe(true)
+
+      const fork = yield* provideInstance(dir)(session.fork({ sessionID: parent.id }))
+      expect(ExternalDiff.assessed(fork.id).assessments).toEqual([])
+
+      yield* session.remove(parent.id)
+      ExternalDiff.resetMemoryForTest()
+      expect(ExternalDiff.assessed(parent.id).assessments).toEqual([])
+      expect(ExternalDiff.assessed(fork.id).assessments).toEqual([])
+      expect(ExternalDiff.commit({ sessionID: parent.id, reservation })).toBe(false)
+      ExternalDiff.sweep()
+      ExternalDiff.sweep()
     }),
   )
 })

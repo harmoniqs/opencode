@@ -40,6 +40,10 @@ export const DiffQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
   ...Struct.omit(SessionSummary.DiffInput.fields, ["sessionID"]),
 })
+export const AssessedDiffQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  patch: Schema.optional(QueryBoolean),
+})
 export const MessagesQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
@@ -201,7 +205,7 @@ export const SessionApi = HttpApi.make("session")
         ),
         HttpApiEndpoint.get("assessedDiff", SessionPaths.assessedDiff, {
           params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
+          query: AssessedDiffQuery,
           success: described(AssessedExternalDiffResponse, "Server-assessed external file diffs"),
           error: ApiNotFoundError,
         }).annotateMerge(
