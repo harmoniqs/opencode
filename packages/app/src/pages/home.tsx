@@ -1083,7 +1083,7 @@ function HomeDesign() {
   }
 
   return (
-    <div class="rounded-md shadow-[var(--v2-elevation-raised)] m-2 min-h-0 md:overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
+    <div class="rounded-md shadow-[var(--v2-elevation-raised)] m-2 min-h-0 overflow-hidden bg-v2-background-bg-base self-stretch flex-1">
       <div
         data-slot="amicode-home-shell"
         class="mx-auto flex w-full h-full min-h-0 max-w-[1440px] flex-col gap-6 overflow-y-auto px-8 pt-10 pb-6"

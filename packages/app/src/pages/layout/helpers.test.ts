@@ -428,4 +428,16 @@ describe("layout workspace helpers", () => {
       expect(loadingBlock).toContain(".latest")
     })
   })
+
+  describe("home.tsx overflow-hidden at all widths (amicode#1012)", () => {
+    const homeSource = readFileSync(join(import.meta.dir, "..", "home.tsx"), "utf8")
+
+    test("home shell container has overflow-hidden without md: breakpoint prefix", () => {
+      // The outer shell container must clip at ALL widths, not just md: and up.
+      // md:overflow-hidden left a gap below 768px where the child's
+      // overflow-y-auto had no parent clip (Cause C).
+      expect(homeSource).not.toContain("md:overflow-hidden")
+      expect(homeSource).toContain("overflow-hidden")
+    })
+  })
 })
