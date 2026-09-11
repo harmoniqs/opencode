@@ -1,4 +1,4 @@
-import type { FilePart, Project, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
+import type { FilePart, Project, SessionAssessedDiffResponse, SnapshotFileDiff, UserMessage } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createQuery, skipToken, useMutation } from "@tanstack/solid-query"
@@ -816,13 +816,7 @@ export default function Page() {
       queryKey: ["session-assessed-external-diff", params.id ?? "", sessionDiffVersion()] as const,
       enabled: !!sessionID,
       placeholderData: (
-        prev:
-          | {
-              version: 1
-              revision: number
-              assessments: Array<import("@/pages/session/v2/accumulate-diffs").AssessedExternalDiff>
-            }
-          | undefined,
+        prev: SessionAssessedDiffResponse | undefined,
         prevQuery: { queryKey?: readonly unknown[] } | undefined,
       ) => (prevQuery?.queryKey?.[1] === sessionID ? prev : undefined),
       queryFn: sessionID

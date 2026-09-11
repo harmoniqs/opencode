@@ -27,11 +27,6 @@ export namespace ExternalDiff {
     return path.resolve(file)
   }
 
-  export function isExternal(worktree: string, file: string) {
-    const relative = path.relative(worktree, file)
-    return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
-  }
-
   export function capture(input: { sessionID: string; file: string; baseline: string }) {
     const file = canonical(input.file)
     const session = entries.get(input.sessionID) ?? new Map<string, Entry>()

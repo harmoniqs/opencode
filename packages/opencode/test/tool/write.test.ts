@@ -118,14 +118,22 @@ describe("tool.write", () => {
         const test = yield* TestInstance
         const filepath = path.join(path.dirname(test.directory), `external-${Date.now()}.txt`)
         yield* Effect.promise(() => fs.writeFile(filepath, "before\n", "utf-8"))
-        const permissionOrder: string[] = []
+        let assessmentExistedBeforePermission = false
         const result = yield* run(
           { filePath: filepath, content: "after\n" },
-          { ...ctx, ask: () => Effect.sync(() => void permissionOrder.push("granted")) },
+          {
+            ...ctx,
+            ask: () =>
+              Effect.sync(() => {
+                assessmentExistedBeforePermission ||= ExternalDiff.assessed(ctx.sessionID).assessments.some(
+                  (entry) => entry.file === filepath,
+                )
+              }),
+          },
         )
 
         const assessment = ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)
-        expect(permissionOrder).toEqual(["granted"])
+        expect(assessmentExistedBeforePermission).toBe(false)
         expect(assessment).toMatchObject({
           state: "changed",
           patch: expect.stringContaining("-before"),
@@ -144,7 +152,13 @@ describe("tool.write", () => {
 
         const exit = yield* run(
           { filePath: filepath, content: "after\n" },
-          { ...ctx, ask: () => Effect.fail(new Error("permission denied")) },
+          {
+            ...ctx,
+            ask: () =>
+              Effect.sync(() => {
+                throw new Error("permission denied")
+              }),
+          },
         ).pipe(Effect.exit)
 
         expect(exit._tag).toBe("Failure")

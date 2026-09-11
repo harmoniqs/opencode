@@ -1,4 +1,4 @@
-import type { SnapshotFileDiff } from "@opencode-ai/sdk/v2"
+import type { SessionAssessedDiffResponse, SnapshotFileDiff } from "@opencode-ai/sdk/v2"
 
 export type ToolEditPart = {
   file: string
@@ -32,14 +32,7 @@ export interface MergeOpts {
   externalFileStatus?: Map<string, "deleted">
 }
 
-export type AssessedExternalDiff = {
-  reference: string
-  file: string
-  state: "changed" | "unavailable"
-  patch?: string
-  additions?: number
-  deletions?: number
-}
+export type AssessedExternalDiff = SessionAssessedDiffResponse["assessments"][number]
 
 /**
  * Merge server shadow-git diffs with tool-metadata diffs.
@@ -62,12 +55,15 @@ export function mergeServerAndToolDiffs(opts: MergeOpts): Array<SnapshotFileDiff
     .map((diff) => {
       const file = toHomePath(diff.file, home, prefix)
       const override = externalFileStatus?.get(file)
+      const status: "added" | "modified" | "deleted" = override ?? "modified"
+      const additions = typeof diff.additions === "number" ? diff.additions : 0
+      const deletions = typeof diff.deletions === "number" ? diff.deletions : 0
       return {
         file,
         patch: diff.patch,
-        additions: diff.additions ?? 0,
-        deletions: diff.deletions ?? 0,
-        status: override ?? "modified",
+        additions,
+        deletions,
+        status,
       }
     })
 

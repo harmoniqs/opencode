@@ -81,8 +81,7 @@ export const EditTool = Tool.define(
           const filePath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filePath)
-          const external = ExternalDiff.isExternal(instance.worktree, filePath)
+          const external = yield* assertExternalDirectoryEffect(ctx, filePath)
           let externalReference: string | undefined
 
           let diff = ""
@@ -112,14 +111,23 @@ export const EditTool = Tool.define(
                   },
                 })
                 if (external) {
-                  externalReference = ExternalDiff.capture({ sessionID: ctx.sessionID, file: filePath, baseline: contentOld })
+                  externalReference = ExternalDiff.capture({
+                    sessionID: ctx.sessionID,
+                    file: filePath,
+                    baseline: contentOld,
+                  })
                 }
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
                   contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
                 }
                 if (externalReference) {
-                  ExternalDiff.settle({ sessionID: ctx.sessionID, reference: externalReference, file: filePath, current: contentNew })
+                  ExternalDiff.settle({
+                    sessionID: ctx.sessionID,
+                    reference: externalReference,
+                    file: filePath,
+                    current: contentNew,
+                  })
                 }
                 yield* events.publish(FileSystem.Event.Edited, { file: filePath })
                 yield* events.publish(Watcher.Event.Updated, {
@@ -161,7 +169,11 @@ export const EditTool = Tool.define(
                 },
               })
               if (external) {
-                externalReference = ExternalDiff.capture({ sessionID: ctx.sessionID, file: filePath, baseline: contentOld })
+                externalReference = ExternalDiff.capture({
+                  sessionID: ctx.sessionID,
+                  file: filePath,
+                  baseline: contentOld,
+                })
               }
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
@@ -169,7 +181,12 @@ export const EditTool = Tool.define(
                 contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
               }
               if (externalReference) {
-                ExternalDiff.settle({ sessionID: ctx.sessionID, reference: externalReference, file: filePath, current: contentNew })
+                ExternalDiff.settle({
+                  sessionID: ctx.sessionID,
+                  reference: externalReference,
+                  file: filePath,
+                  current: contentNew,
+                })
               }
               yield* events.publish(FileSystem.Event.Edited, { file: filePath })
               yield* events.publish(Watcher.Event.Updated, {
