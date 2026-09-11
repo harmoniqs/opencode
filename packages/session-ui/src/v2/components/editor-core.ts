@@ -228,7 +228,7 @@ export function buildSyntaxHighlightStyle(): Extension {
     { tag: [tags.variableName, tags.definition(tags.variableName)],
       color: "var(--v2-text-text-base, var(--text-strong))" },
     { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)],
-      color: "var(--syntax-function, var(--syntax-property))" },
+      color: "var(--syntax-property)" },
     { tag: [tags.constant(tags.variableName), tags.atom],
       color: "var(--syntax-constant)" },
     { tag: [tags.operator, tags.punctuation, tags.separator],
