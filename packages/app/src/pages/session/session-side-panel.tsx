@@ -231,7 +231,10 @@ function HomeTabContent() {
     () => amicodeGet(server.current, "/amicode/widgets").catch(() => undefined),
   )
   const widgetInfos = createMemo(() => {
-    const raw = widgetsRaw()
+    // Use .latest so the grid stays mounted during resource refetch — the
+    // previous value persists while loading, preventing scroll-position reset
+    // from a Show-gate unmount/remount cycle (amicode#1012).
+    const raw = widgetsRaw.latest
     return raw === undefined ? [] : parseWidgetsResponse(raw)
   })
 
@@ -243,7 +246,8 @@ function HomeTabContent() {
   const dashboard = createMemo<DashboardState | undefined>(() => {
     const local = savedDashboard()
     if (local) return local
-    const raw = dashboardRaw()
+    // Use .latest so the grid stays mounted during resource refetch (amicode#1012).
+    const raw = dashboardRaw.latest
     return raw === undefined ? undefined : parseDashboardResponse(raw)
   })
 

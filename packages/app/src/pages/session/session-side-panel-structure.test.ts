@@ -28,3 +28,13 @@ describe("work column is vault-free (amicode#105)", () => {
     expect(source).toContain("handleSurfaceTabDragEnd")
   })
 })
+
+describe("home tab keeps widgets visible during refetch (amicode#1012)", () => {
+  test("widgetInfos reads .latest so the grid stays mounted during resource refetch", () => {
+    expect(source).toContain("widgetsRaw.latest")
+  })
+
+  test("dashboard reads .latest so the grid stays mounted during resource refetch", () => {
+    expect(source).toContain("dashboardRaw.latest")
+  })
+})

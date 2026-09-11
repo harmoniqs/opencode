@@ -662,7 +662,10 @@ function HomeDesign() {
     () => amicodeGet(focusedServer(), "/amicode/widgets").catch(() => undefined),
   )
   const widgetInfos = createMemo(() => {
-    const raw = widgetsRaw()
+    // Use .latest so the grid stays mounted during resource refetch — the
+    // previous value persists while loading, preventing scroll-position reset
+    // from a Show-gate unmount/remount cycle (amicode#1012).
+    const raw = widgetsRaw.latest
     return raw === undefined ? [] : parseWidgetsResponse(raw)
   })
   const [dashboardRaw] = createResource(
@@ -674,15 +677,18 @@ function HomeDesign() {
   const dashboard = createMemo<DashboardState | undefined>(() => {
     const local = savedDashboard()
     if (local) return local
-    const raw = dashboardRaw()
+    // Use .latest so the grid stays mounted during resource refetch (amicode#1012).
+    const raw = dashboardRaw.latest
     return raw === undefined ? undefined : parseDashboardResponse(raw)
   })
-  // While the widget/dashboard registry is still loading we must render a
-  // skeleton, NOT the legacy hardcoded cards — otherwise the legacy cards flash
-  // on every reload before the widget grid mounts (Kate, 2026-07-23). The
-  // legacy fallback is reserved for a server that has genuinely *resolved*
-  // without widget routes.
-  const homeCardsLoading = createMemo(() => widgetsRaw.loading || dashboardRaw.loading)
+  // Show skeleton only on initial load — during refetch, .latest keeps the
+  // previous content visible so scroll position is not reset (amicode#1012).
+  // The legacy fallback is reserved for a server that has genuinely *resolved*
+  // without widget routes (Kate, 2026-07-23).
+  const homeCardsLoading = createMemo(() =>
+    (widgetsRaw.loading && widgetsRaw.latest === undefined) ||
+    (dashboardRaw.loading && dashboardRaw.latest === undefined),
+  )
   // Frame documents are server-served (own CSP header — srcdoc would inherit
   // the app CSP and kill the inline runtime). The registry hash rides the URL
   // so a widget edit busts the frame cache.

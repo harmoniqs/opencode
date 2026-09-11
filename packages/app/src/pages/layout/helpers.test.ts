@@ -410,4 +410,22 @@ describe("layout workspace helpers", () => {
       expect(activeSessionsBlock).not.toContain("sessionListDirectories(")
     })
   })
+
+  describe("home.tsx keeps widgets visible during refetch (amicode#1012)", () => {
+    const homeSource = readFileSync(join(import.meta.dir, "..", "home.tsx"), "utf8")
+
+    test("widgetInfos reads .latest so the grid stays mounted during resource refetch", () => {
+      expect(homeSource).toContain("widgetsRaw.latest")
+    })
+
+    test("homeCardsLoading gates on initial load only (not refetch)", () => {
+      // homeCardsLoading should reference .latest to distinguish initial load
+      // from refetch — skeleton only when no data has ever been loaded
+      const loadingBlock = homeSource.slice(
+        homeSource.indexOf("const homeCardsLoading"),
+        homeSource.indexOf("const homeCardsLoading") + 200,
+      )
+      expect(loadingBlock).toContain(".latest")
+    })
+  })
 })
