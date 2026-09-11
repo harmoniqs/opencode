@@ -62,8 +62,8 @@ export const WriteTool = Tool.define(
               diff,
             },
           })
-          const reference = external
-            ? ExternalDiff.capture({ sessionID: ctx.sessionID, file: filepath, baseline: contentOld })
+          const reservation = external
+            ? ExternalDiff.prepare({ sessionID: ctx.sessionID, files: [filepath] })
             : undefined
 
           // Compute filediff for the Files Changed panel (same pattern as edit.ts)
@@ -95,13 +95,11 @@ export const WriteTool = Tool.define(
             if (yield* format.file(filepath)) {
               settled = yield* Bom.syncFile(fs, filepath, desiredBom)
             }
-            if (reference) {
-              ExternalDiff.settle({ sessionID: ctx.sessionID, reference, file: filepath, current: settled })
-            }
+            if (reservation) ExternalDiff.commit({ sessionID: ctx.sessionID, reservation })
           }).pipe(
             Effect.onError(() =>
               Effect.sync(() => {
-                if (reference) ExternalDiff.unavailable({ sessionID: ctx.sessionID, reference, file: filepath })
+                if (reservation) ExternalDiff.abort({ sessionID: ctx.sessionID, reservation })
               }),
             ),
           )

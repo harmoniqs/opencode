@@ -166,6 +166,19 @@ describe("tool.write", () => {
       }),
     )
 
+    it.instance("commits an external creation from the server-verified endpoint state", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const filepath = path.join(path.dirname(test.directory), `created-${Date.now()}.txt`)
+
+        yield* run({ filePath: filepath, content: "created\n" })
+
+        expect(ExternalDiff.assessed(ctx.sessionID).assessments.find((entry) => entry.file === filepath)).toEqual(
+          expect.objectContaining({ state: "changed", status: "added" }),
+        )
+      }),
+    )
+
     it.instance(
       "assesses formatter output instead of the pre-format tool patch",
       () =>

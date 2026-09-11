@@ -57,9 +57,10 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         const sibling = path.join(path.dirname(test.directory), `external-${session.id}.txt`)
         yield* fs.writeWithDirs(sibling, "before\n")
 
-        const reference = ExternalDiff.capture({ sessionID: session.id, file: sibling, baseline: "before\n" })
+        const reservation = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })
+        expect(reservation).toBeDefined()
         yield* fs.writeWithDirs(sibling, "after\n")
-        ExternalDiff.settle({ sessionID: session.id, reference, file: sibling, current: "after\n" })
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: reservation! })).toBe(true)
 
         const response = yield* requestInDirectory(
           pathFor(SessionPaths.assessedDiff, { sessionID: session.id }),
@@ -69,12 +70,13 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         expect(response.headers["cache-control"]).toBe("no-store")
         expect(yield* response.json).toEqual({
           version: 1,
-          revision: 1,
+          revision: 2,
           assessments: [
             {
-              reference,
+              reference: reservation!.endpoints[0].reference,
               file: sibling,
               state: "changed",
+              status: "modified",
               patch: expect.stringContaining("-before"),
               additions: 1,
               deletions: 1,
@@ -89,6 +91,238 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         )
         expect(otherResponse.status).toBe(200)
         expect(yield* otherResponse.json).toEqual({ version: 1, revision: 0, assessments: [] })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "removes a reverted external file from the assessed changed rows",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-revert" })
+        const fs = yield* FSUtil.Service
+        const sibling = path.join(path.dirname(test.directory), `external-revert-${session.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "before\n")
+
+        const reservation = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })
+        expect(reservation).toBeDefined()
+        yield* fs.writeWithDirs(sibling, "after\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: reservation! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toMatchObject([{ file: sibling, state: "changed" }])
+
+        const revert = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })
+        expect(revert).toBeDefined()
+        yield* fs.writeWithDirs(sibling, "before\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: revert! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file: sibling, state: "unchanged" }),
+        ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "assesses a committed external creation as added and its committed deletion as unchanged",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-create-delete" })
+        const fs = yield* FSUtil.Service
+        const sibling = path.join(path.dirname(test.directory), `external-new-${session.id}.txt`)
+
+        const create = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })
+        expect(create).toBeDefined()
+        yield* fs.writeWithDirs(sibling, "created\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: create! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file: sibling, state: "changed", status: "added" }),
+        ])
+
+        const remove = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })
+        expect(remove).toBeDefined()
+        yield* fs.remove(sibling)
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: remove! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file: sibling, state: "unchanged" }),
+        ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "commits paired move endpoints atomically with distinct source and destination baselines",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-paired-move" })
+        const fs = yield* FSUtil.Service
+        const source = path.join(path.dirname(test.directory), `external-source-${session.id}.txt`)
+        const missingDestination = path.join(path.dirname(test.directory), `external-destination-${session.id}.txt`)
+        const existingDestination = path.join(path.dirname(test.directory), `external-overwrite-${session.id}.txt`)
+        yield* fs.writeWithDirs(source, "source\n")
+        yield* fs.writeWithDirs(existingDestination, "destination\n")
+
+        const missingMove = ExternalDiff.prepare({ sessionID: session.id, files: [source, missingDestination] })
+        expect(missingMove).toBeDefined()
+        yield* fs.writeWithDirs(missingDestination, "source\n")
+        yield* fs.remove(source)
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: missingMove! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ file: source, state: "changed", status: "deleted" }),
+            expect.objectContaining({ file: missingDestination, state: "changed", status: "added" }),
+          ]),
+        )
+
+        const overwriteMove = ExternalDiff.prepare({
+          sessionID: session.id,
+          files: [missingDestination, existingDestination],
+        })
+        expect(overwriteMove).toBeDefined()
+        yield* fs.writeWithDirs(existingDestination, "source\n")
+        yield* fs.remove(missingDestination)
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: overwriteMove! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ file: existingDestination, state: "changed", status: "modified" }),
+          ]),
+        )
+
+        expect(ExternalDiff.prepare({ sessionID: session.id, files: [source, source] })).toBeUndefined()
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "aborts prepared mutations conservatively and preserves B/E/C evidence",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-abort" })
+        const fs = yield* FSUtil.Service
+        const fresh = path.join(path.dirname(test.directory), `external-prepared-${session.id}.txt`)
+        const file = path.join(path.dirname(test.directory), `external-bec-${session.id}.txt`)
+
+        const firstTouch = ExternalDiff.prepare({ sessionID: session.id, files: [fresh] })
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file: fresh, state: "unavailable" }),
+        ])
+        expect(ExternalDiff.abort({ sessionID: session.id, reservation: firstTouch! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([])
+
+        yield* fs.writeWithDirs(file, "B\n")
+        const committed = ExternalDiff.prepare({ sessionID: session.id, files: [file] })
+        yield* fs.writeWithDirs(file, "E\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: committed! })).toBe(true)
+
+        const restored = ExternalDiff.prepare({ sessionID: session.id, files: [file] })
+        yield* fs.writeWithDirs(file, "B\n")
+        expect(ExternalDiff.abort({ sessionID: session.id, reservation: restored! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file, state: "unchanged" }),
+        ])
+
+        const retained = ExternalDiff.prepare({ sessionID: session.id, files: [file] })
+        yield* fs.writeWithDirs(file, "E\n")
+        expect(ExternalDiff.abort({ sessionID: session.id, reservation: retained! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file, state: "changed", status: "modified" }),
+        ])
+
+        const partial = ExternalDiff.prepare({ sessionID: session.id, files: [file] })
+        yield* fs.writeWithDirs(file, "C\n")
+        expect(ExternalDiff.abort({ sessionID: session.id, reservation: partial! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file, state: "unavailable" }),
+        ])
+
+        yield* fs.writeWithDirs(file, "B\n")
+        const expectedBaseline = ExternalDiff.prepare({ sessionID: session.id, files: [file] })
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: expectedBaseline! })).toBe(true)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([
+          expect.objectContaining({ file, state: "unchanged" }),
+        ])
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "rejects invalid reservation commits without partially replacing expected state",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-invalid-reservations" })
+        const fs = yield* FSUtil.Service
+        const source = path.join(path.dirname(test.directory), `external-invalid-source-${session.id}.txt`)
+        const destination = path.join(path.dirname(test.directory), `external-invalid-destination-${session.id}.txt`)
+        yield* fs.writeWithDirs(source, "before\n")
+
+        const initial = ExternalDiff.prepare({ sessionID: session.id, files: [source] })!
+        yield* fs.writeWithDirs(source, "expected\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: initial })).toBe(true)
+        const before = ExternalDiff.assessed(session.id)
+
+        const stale = ExternalDiff.prepare({ sessionID: session.id, files: [source] })!
+        const winning = ExternalDiff.prepare({ sessionID: session.id, files: [source] })!
+        yield* fs.writeWithDirs(source, "winning\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: winning })).toBe(true)
+        const committed = ExternalDiff.assessed(session.id)
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: stale })).toBe(false)
+        expect(ExternalDiff.commit({ sessionID: "other-session", reservation: stale })).toBe(false)
+        expect(
+          ExternalDiff.commit({
+            sessionID: session.id,
+            reservation: { ...stale, id: "forged", endpoints: [...stale.endpoints] },
+          }),
+        ).toBe(false)
+        expect(
+          ExternalDiff.commit({
+            sessionID: session.id,
+            reservation: {
+              ...stale,
+              endpoints: [{ ...stale.endpoints[0], reference: "wrong-reference" }],
+            },
+          }),
+        ).toBe(false)
+        const expired = ExternalDiff.prepare({ sessionID: session.id, files: [source], ttlMs: -1 })!
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation: expired })).toBe(false)
+        expect(before.assessments[0]).toMatchObject({ state: "changed" })
+        expect(ExternalDiff.assessed(session.id)).toEqual(committed)
+
+        const group = ExternalDiff.prepare({ sessionID: session.id, files: [source, destination] })!
+        yield* fs.writeWithDirs(destination, "partial\n")
+        yield* fs.remove(source)
+        expect(
+          ExternalDiff.commit({
+            sessionID: session.id,
+            reservation: { ...group, endpoints: [{ ...group.endpoints[0], revision: -1 }, group.endpoints[1]] },
+          }),
+        ).toBe(false)
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual(
+          expect.arrayContaining([expect.objectContaining({ file: destination, state: "unavailable" })]),
+        )
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "does not publish one endpoint when a paired reservation cannot prepare the other",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* withSession({ title: "external-prepare-atomic" })
+        const fs = yield* FSUtil.Service
+        const source = path.join(path.dirname(test.directory), `external-prepare-source-${session.id}.txt`)
+        const unreadableDestination = path.join(
+          path.dirname(test.directory),
+          `external-prepare-destination-${session.id}`,
+        )
+        yield* fs.writeWithDirs(source, "before\n")
+        yield* fs.makeDirectory(unreadableDestination)
+
+        expect(ExternalDiff.prepare({ sessionID: session.id, files: [source, unreadableDestination] })).toBeUndefined()
+        expect(ExternalDiff.assessed(session.id).assessments).toEqual([])
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )
@@ -187,10 +421,7 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
         yield* fs.writeWithDirs(path.join(test.directory, "external.txt"), "external change")
 
         // Record a patch part (provides snapshot hash range, but files no longer feed the filter)
-        const agentFiles = [
-          path.join(test.directory, "new-file.ts"),
-          path.join(test.directory, "existing.txt"),
-        ]
+        const agentFiles = [path.join(test.directory, "new-file.ts"), path.join(test.directory, "existing.txt")]
         yield* Session.use.updatePart({
           id: PartID.ascending(),
           sessionID: session.id,
@@ -567,9 +798,7 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
           agent: "plan",
           model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("model") },
           summary: {
-            diffs: [
-              { file: "foreign-edit.ts", additions: 1, deletions: 0, status: "added" as const },
-            ],
+            diffs: [{ file: "foreign-edit.ts", additions: 1, deletions: 0, status: "added" as const }],
           },
         } satisfies SessionV1.User)
 
