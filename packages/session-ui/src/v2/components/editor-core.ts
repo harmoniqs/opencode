@@ -45,7 +45,12 @@ import { onThemeChange } from "./shiki-theme-state"
 export const externalUpdate = Annotation.define<boolean>()
 
 // ---------------------------------------------------------------------------
-// Language loader — dynamic imports so unused grammars stay out of the bundle.
+// Language loader — uses a manual map for common extensions (with specific
+// options like jsx/typescript flags) and falls back to @codemirror/language-data
+// for broader coverage (~150 languages including Rust, Go, YAML, SQL, etc.).
+// Shiki handles visual highlighting for 200+ languages via TextMate grammars;
+// this loader provides lezer grammars for structural features (bracket
+// matching, code folding, auto-indent).
 // ---------------------------------------------------------------------------
 
 const EXTENSION_MAP: Record<string, () => Promise<LanguageSupport>> = {
@@ -71,19 +76,47 @@ const EXTENSION_MAP: Record<string, () => Promise<LanguageSupport>> = {
 
 /**
  * Dynamically load a CodeMirror language support by file extension.
- * Returns null for unknown extensions.
+ *
+ * Uses the manual EXTENSION_MAP first (covers common extensions with specific
+ * options), then falls back to @codemirror/language-data's LanguageDescription
+ * auto-detection for broader coverage.
+ *
+ * Returns null for extensions with no known lezer grammar. Note: Shiki still
+ * provides visual highlighting for these files via TextMate grammars — only
+ * structural features (bracket matching, folding) degrade to CM6's generic
+ * behavior.
  */
 export async function loadLanguage(
   ext: string,
 ): Promise<LanguageSupport | null> {
   const normalized = ext.replace(/^\./, "").toLowerCase()
+
+  // Fast path: manual map with specific options
   const loader = EXTENSION_MAP[normalized]
-  if (!loader) return null
-  try {
-    return await loader()
-  } catch {
-    return null
+  if (loader) {
+    try {
+      return await loader()
+    } catch {
+      return null
+    }
   }
+
+  // Slow path: @codemirror/language-data auto-detection
+  try {
+    const { languages } = await import("@codemirror/language-data")
+    const filename = `file.${normalized}`
+    const desc = languages.find((lang) =>
+      lang.extensions.some((e) => filename.endsWith(e)) ||
+      lang.filename?.test(filename),
+    )
+    if (desc) {
+      return await desc.load()
+    }
+  } catch {
+    // language-data not available or failed to load — fall through
+  }
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
