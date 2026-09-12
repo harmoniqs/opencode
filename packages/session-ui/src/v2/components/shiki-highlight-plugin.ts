@@ -136,10 +136,6 @@ class ShikiHighlightPluginValue implements PluginValue {
     this.view = view
     this.lang = lang
 
-    // DEBUG: visual indicator that the Shiki plugin is alive
-    view.dom.style.outline = "2px solid magenta"
-    view.dom.dataset.shikiLang = lang
-
     this.unsubTheme = onThemeChange(() => {
       void handleThemeUpdate()
       this.scheduleTokenize()
@@ -170,23 +166,13 @@ class ShikiHighlightPluginValue implements PluginValue {
     const view = this.view
     const text = view.state.doc.toString()
 
-    console.log(`[shiki] tokenizing lang=${this.lang}, text=${text.length} chars`)
     const result = await tokenize(text, this.lang)
-    const totalTokens = result.lines.reduce((n, l) => n + l.tokens.length, 0)
-    console.log(`[shiki] got ${result.lines.length} lines, ${totalTokens} tokens`)
-    if (totalTokens > 0 && result.lines[0]?.tokens[0]) {
-      const t = result.lines[0].tokens[0]
-      console.log(`[shiki] first token: color=${t.color}, length=${t.length}`)
-    }
 
     // Stale check: if another tokenization was started, discard this one
     if (id !== this.currentTokenizeId) return
     if (!this.view) return
 
     const decorations = tokensToDecorations(result, text)
-    console.log(`[shiki] dispatching ${decorations.size} decorations`)
-    // DEBUG: change outline color to show tokenize completed
-    this.view.dom.style.outline = totalTokens > 0 ? "2px solid lime" : "2px solid red"
     view.dispatch({ effects: setShikiDecorations.of(decorations) })
   }
 }

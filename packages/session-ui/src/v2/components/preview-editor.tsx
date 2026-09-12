@@ -162,13 +162,11 @@ export function PreviewEditor(props: {
     <div
       ref={containerRef!}
       data-amc-clipboard="codemirror"
-      data-shiki-diag="preview-editor-mounted"
       style={{
         width: "100%",
         height: "100%",
         overflow: "auto",
         position: "relative",
-        outline: "3px dashed cyan",
       }}
     />
   )
