@@ -413,6 +413,8 @@ export function PreviewFileView(props: {
   return (
     <div
       class="h-full relative overflow-hidden"
+      data-shiki-diag={`pfv:cat=${category()},ft=${fileType()},loading=${loading()}`}
+      style={{ outline: "3px dashed orange" }}
       onMouseEnter={handleWrapperMouseEnter}
       onMouseMove={handleWrapperMouseMove}
       onMouseLeave={handleWrapperMouseLeave}

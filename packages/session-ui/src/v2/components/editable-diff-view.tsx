@@ -178,6 +178,7 @@ export function EditableDiffView(props: EditableDiffViewProps): JSX.Element {
         height: "100%",
         overflow: "auto",
         position: "relative",
+        outline: "3px dashed lime",
       }}
     />
   ) as JSX.Element
