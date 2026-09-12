@@ -113,7 +113,8 @@ async function tokenize(
         })),
       })),
     }
-  } catch {
+  } catch (err) {
+    console.error("[shiki] tokenize failed:", err)
     return { type: "tokenize-result", id: 0, lines: [] }
   }
 }
@@ -165,13 +166,21 @@ class ShikiHighlightPluginValue implements PluginValue {
     const view = this.view
     const text = view.state.doc.toString()
 
+    console.log(`[shiki] tokenizing lang=${this.lang}, text=${text.length} chars`)
     const result = await tokenize(text, this.lang)
+    const totalTokens = result.lines.reduce((n, l) => n + l.tokens.length, 0)
+    console.log(`[shiki] got ${result.lines.length} lines, ${totalTokens} tokens`)
+    if (totalTokens > 0 && result.lines[0]?.tokens[0]) {
+      const t = result.lines[0].tokens[0]
+      console.log(`[shiki] first token: color=${t.color}, length=${t.length}`)
+    }
 
     // Stale check: if another tokenization was started, discard this one
     if (id !== this.currentTokenizeId) return
     if (!this.view) return
 
     const decorations = tokensToDecorations(result, text)
+    console.log(`[shiki] dispatching ${decorations.size} decorations`)
     view.dispatch({ effects: setShikiDecorations.of(decorations) })
   }
 }
