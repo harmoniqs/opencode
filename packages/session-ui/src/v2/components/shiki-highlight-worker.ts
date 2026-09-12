@@ -5,17 +5,21 @@
  * of CM6 editor content. Receives text + language + theme, returns tokens
  * with colors for the CM6 decoration plugin.
  *
+ * Uses the pure-JS regex engine (no oniguruma WASM) so the Worker
+ * initializes without fetching any binary — works in VS Code webviews,
+ * iframes, and any restricted context.
+ *
  * @module
  */
 
-import {
-  bundledLanguages,
-  createHighlighter,
-  type BundledLanguage,
-  type ThemeRegistrationRaw,
-} from "shiki"
+import { bundledLanguages, type BundledLanguage } from "shiki/langs"
+import { createHighlighterCore, type HighlighterCore } from "shiki/core"
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
+import type { ThemeRegistrationRaw } from "shiki/types"
 
-let highlighter: ReturnType<typeof createHighlighter> | undefined
+const jsEngine = createJavaScriptRegexEngine()
+
+let highlighter: Promise<HighlighterCore> | undefined
 let currentThemeName: string | undefined
 
 export interface ShikiTokenizeRequest {
@@ -60,7 +64,11 @@ self.onmessage = async (event: MessageEvent<ShikiHighlightWorkerRequest>) => {
 
   if (data.type === "init") {
     currentThemeName = data.name
-    highlighter ??= createHighlighter({ themes: [data.theme], langs: [] })
+    highlighter ??= createHighlighterCore({
+      themes: [data.theme],
+      langs: [],
+      engine: jsEngine,
+    })
     return
   }
 
@@ -68,8 +76,10 @@ self.onmessage = async (event: MessageEvent<ShikiHighlightWorkerRequest>) => {
     if (!highlighter) return
     const instance = await highlighter
     if (typeof data.theme === "object") {
-      // Register a custom theme
-      await instance.loadTheme(data.theme as ThemeRegistrationRaw)
+      // Custom theme from VS Code — register under its own name, then
+      // also ensure currentThemeName matches what the plugin requests.
+      const themed = { ...(data.theme as ThemeRegistrationRaw), name: data.name }
+      await instance.loadTheme(themed)
     }
     currentThemeName = data.name
     return
@@ -83,13 +93,14 @@ self.onmessage = async (event: MessageEvent<ShikiHighlightWorkerRequest>) => {
         return
       }
 
-      const language = data.lang in bundledLanguages ? data.lang : "text"
-      if (!instance.getLoadedLanguages().includes(language)) {
-        await instance.loadLanguage(bundledLanguages[language as BundledLanguage])
+      const langId = data.lang
+      const language = langId in bundledLanguages ? langId as BundledLanguage : null
+      if (language && !instance.getLoadedLanguages().includes(language)) {
+        await instance.loadLanguage(bundledLanguages[language])
       }
 
       const result = instance.codeToTokens(data.text, {
-        lang: language as BundledLanguage,
+        lang: language ?? "text",
         theme: currentThemeName,
       })
 
