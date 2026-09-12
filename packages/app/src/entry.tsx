@@ -1,5 +1,16 @@
 // @refresh reload
 
+// ── SHIKI DIAGNOSTIC (remove after debugging) ─────────────────────────────
+// If you see a red bar at the top of the app, the new binary's assets loaded.
+requestAnimationFrame(() => {
+  const bar = document.createElement("div")
+  bar.id = "shiki-debug-bar"
+  bar.textContent = `SHIKI DEBUG BUILD — ${new Date().toLocaleTimeString()}`
+  bar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:999999;background:red;color:white;text-align:center;font:bold 12px monospace;padding:2px;pointer-events:none"
+  document.body.prepend(bar)
+})
+// ── END DIAGNOSTIC ─────────────────────────────────────────────────────────
+
 import * as Sentry from "@sentry/solid"
 import { render } from "solid-js/web"
 import { AppBaseProviders, AppInterface } from "@/app"
