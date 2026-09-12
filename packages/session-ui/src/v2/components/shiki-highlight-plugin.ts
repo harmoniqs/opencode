@@ -4,6 +4,9 @@
  * syntaxHighlighting for visual coloring while keeping lezer for
  * structural features (bracket matching, folding, auto-indent).
  *
+ * Runs Shiki on the main thread with the pure-JS regex engine — no Worker,
+ * no WASM, no URL resolution issues in webview contexts.
+ *
  * @module
  */
 
@@ -22,83 +25,97 @@ import {
 } from "./shiki-highlight-decorations"
 import { getActiveShikiTheme, getActiveThemeObject, onThemeChange } from "./shiki-theme-state"
 import { OpenCodeTheme } from "@opencode-ai/ui/context/marked"
-import ShikiHighlightWorkerUrl from "./shiki-highlight-worker.ts?worker&url"
 
 // ---------------------------------------------------------------------------
-// Worker management — single shared worker for all CM6 instances
+// Main-thread Shiki highlighter — lazy singleton
 // ---------------------------------------------------------------------------
 
-let sharedWorker: Worker | null = null
-const pendingRequests = new Map<number, (result: ShikiTokenizeResult) => void>()
-let nextRequestId = 1
+import { createHighlighterCore, type HighlighterCore } from "shiki/core"
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
+import { bundledLanguages, type BundledLanguage } from "shiki/langs"
+import type { ThemeRegistrationRaw } from "shiki/types"
 
-function getWorker(): Worker | null {
-  if (sharedWorker) return sharedWorker
-  try {
-    sharedWorker = new Worker(ShikiHighlightWorkerUrl, { type: "module" })
-    sharedWorker.onmessage = (event: MessageEvent<ShikiTokenizeResult>) => {
-      if (event.data.type === "tokenize-result") {
-        const cb = pendingRequests.get(event.data.id)
-        if (cb) {
-          pendingRequests.delete(event.data.id)
-          cb(event.data)
-        }
-      }
-    }
-    // Initialize with the current theme — if a VS Code theme has been
-    // received, use it; otherwise use the full OpenCodeTheme (the same
-    // CSS-variable-based theme the markdown worker uses).
-    const themeObj = getActiveThemeObject()
-    const themeName = getActiveShikiTheme()
-    if (themeObj) {
-      sharedWorker.postMessage({
-        type: "init",
-        theme: { ...themeObj, name: "vscode-active" },
-        name: "vscode-active",
-      })
-    } else {
-      // Use the actual OpenCodeTheme object — it has 30+ TextMate scope
-      // rules with CSS variable colors that resolve in the DOM context.
-      sharedWorker.postMessage({
-        type: "init",
-        theme: OpenCodeTheme,
-        name: themeName,
-      })
-    }
-    return sharedWorker
-  } catch {
-    return null
+const jsEngine = createJavaScriptRegexEngine()
+
+let highlighterPromise: Promise<HighlighterCore> | null = null
+let currentThemeName: string | undefined
+
+function getHighlighter(): Promise<HighlighterCore> {
+  if (highlighterPromise) return highlighterPromise
+
+  const themeObj = getActiveThemeObject()
+  const themeName = getActiveShikiTheme()
+
+  if (themeObj) {
+    currentThemeName = "vscode-active"
+    highlighterPromise = createHighlighterCore({
+      themes: [{ ...(themeObj as ThemeRegistrationRaw), name: "vscode-active" }],
+      langs: [],
+      engine: jsEngine,
+    })
+  } else {
+    currentThemeName = themeName
+    highlighterPromise = createHighlighterCore({
+      themes: [{ ...(OpenCodeTheme as ThemeRegistrationRaw), name: themeName }],
+      langs: [],
+      engine: jsEngine,
+    })
+  }
+
+  return highlighterPromise
+}
+
+async function handleThemeUpdate(): Promise<void> {
+  if (!highlighterPromise) return
+  const instance = await highlighterPromise
+  const themeObj = getActiveThemeObject()
+  const name = getActiveShikiTheme()
+
+  if (themeObj) {
+    const themed = { ...(themeObj as ThemeRegistrationRaw), name: "vscode-active" }
+    await instance.loadTheme(themed)
+    currentThemeName = "vscode-active"
+  } else {
+    currentThemeName = name
   }
 }
 
-function sendThemeUpdate(name: string, theme: string | object): void {
-  const worker = sharedWorker
-  if (!worker) return
-  worker.postMessage({ type: "theme-update", theme, name })
-}
-
-function tokenize(
+async function tokenize(
   text: string,
   lang: string,
-  theme: string,
 ): Promise<ShikiTokenizeResult> {
-  const worker = getWorker()
-  if (!worker) return Promise.resolve({ type: "tokenize-result" as const, id: 0, lines: [] })
+  try {
+    const instance = await getHighlighter()
+    if (!currentThemeName) {
+      return { type: "tokenize-result", id: 0, lines: [] }
+    }
 
-  const id = nextRequestId++
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      pendingRequests.delete(id)
-      resolve({ type: "tokenize-result", id, lines: [] })
-    }, 2000)
+    const langId = lang as BundledLanguage
+    const language = langId in bundledLanguages ? langId : null
+    if (language && !instance.getLoadedLanguages().includes(language)) {
+      await instance.loadLanguage(bundledLanguages[language])
+    }
 
-    pendingRequests.set(id, (result) => {
-      clearTimeout(timeout)
-      resolve(result)
+    const result = instance.codeToTokens(text, {
+      lang: language ?? "text",
+      theme: currentThemeName,
     })
 
-    worker.postMessage({ type: "tokenize", id, text, lang, theme })
-  })
+    return {
+      type: "tokenize-result",
+      id: 0,
+      lines: result.tokens.map((lineTokens) => ({
+        tokens: lineTokens.map((token) => ({
+          offset: token.offset,
+          length: token.content.length,
+          color: token.color ?? "",
+          ...(token.fontStyle ? { fontStyle: token.fontStyle } : {}),
+        })),
+      })),
+    }
+  } catch {
+    return { type: "tokenize-result", id: 0, lines: [] }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +136,7 @@ class ShikiHighlightPluginValue implements PluginValue {
     this.lang = lang
 
     this.unsubTheme = onThemeChange(() => {
+      void handleThemeUpdate()
       this.scheduleTokenize()
     })
 
@@ -145,11 +163,9 @@ class ShikiHighlightPluginValue implements PluginValue {
   private async doTokenize(): Promise<void> {
     const id = ++this.currentTokenizeId
     const view = this.view
-    const doc = view.state.doc
-    const text = doc.toString()
-    const theme = getActiveShikiTheme()
+    const text = view.state.doc.toString()
 
-    const result = await tokenize(text, this.lang, theme)
+    const result = await tokenize(text, this.lang)
 
     // Stale check: if another tokenization was started, discard this one
     if (id !== this.currentTokenizeId) return
@@ -178,10 +194,8 @@ export function shikiHighlightExtension(lang: string): Extension[] {
 }
 
 /**
- * Notify the Shiki worker about a theme change.
+ * Notify the highlighter about a theme change (called from editor-core).
  */
 export function updateWorkerTheme(): void {
-  const name = getActiveShikiTheme()
-  const obj = getActiveThemeObject()
-  sendThemeUpdate(name, obj ?? name)
+  void handleThemeUpdate()
 }
