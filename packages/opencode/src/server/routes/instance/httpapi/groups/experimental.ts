@@ -68,6 +68,7 @@ const WorktreeErrorName = Schema.Union([
   Schema.Literal("WorktreeStartCommandFailedError"),
   Schema.Literal("WorktreeRemoveFailedError"),
   Schema.Literal("WorktreeResetFailedError"),
+  Schema.Literal("WorktreeRenameFailedError"),
   Schema.Literal("WorktreeListFailedError"),
 ])
 export class WorktreeApiError extends Schema.ErrorClass<WorktreeApiError>("WorktreeError")(
@@ -96,6 +97,7 @@ export const ExperimentalPaths = {
   toolIDs: "/experimental/tool/ids",
   worktree: "/experimental/worktree",
   worktreeReset: "/experimental/worktree/reset",
+  worktreeRename: "/experimental/worktree/rename",
   session: "/experimental/session",
   sessionBackground: "/experimental/session/:sessionID/background",
   resource: "/experimental/resource",
@@ -219,6 +221,18 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "worktree.reset",
             summary: "Reset worktree",
             description: "Reset a worktree branch to the primary default branch.",
+          }),
+        ),
+        HttpApiEndpoint.post("worktreeRename", ExperimentalPaths.worktreeRename, {
+          query: WorkspaceRoutingQuery,
+          payload: Worktree.RenameInput,
+          success: described(Worktree.Info, "Worktree renamed"),
+          error: WorktreeApiError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "worktree.rename",
+            summary: "Rename worktree",
+            description: "Move a git worktree to a new name, updating all references.",
           }),
         ),
         HttpApiEndpoint.get("session", ExperimentalPaths.session, {

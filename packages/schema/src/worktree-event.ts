@@ -19,4 +19,13 @@ export const Failed = Event.define({
   },
 })
 
-export const Definitions = Event.inventory(Ready, Failed)
+export const Renamed = Event.define({
+  type: "worktree.renamed",
+  schema: {
+    name: Schema.String,
+    branch: optional(Schema.String),
+    oldDirectory: Schema.String,
+  },
+})
+
+export const Definitions = Event.inventory(Ready, Failed, Renamed)

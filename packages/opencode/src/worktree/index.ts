@@ -6,6 +6,7 @@ import { Project } from "@/project/project"
 import { Database } from "@opencode-ai/core/database/database"
 import { eq } from "drizzle-orm"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
+import { SessionTable } from "@opencode-ai/core/session/sql"
 import type { ProjectV2 } from "@opencode-ai/core/project"
 import { Slug } from "@opencode-ai/core/util/slug"
 import { errorMessage } from "../util/error"
@@ -45,6 +46,12 @@ export const ResetInput = Schema.Struct({
 }).annotate({ identifier: "WorktreeResetInput" })
 export type ResetInput = Schema.Schema.Type<typeof ResetInput>
 
+export const RenameInput = Schema.Struct({
+  directory: Schema.String,
+  newName: Schema.String,
+}).annotate({ identifier: "WorktreeRenameInput" })
+export type RenameInput = Schema.Schema.Type<typeof RenameInput>
+
 export class NotGitError extends Schema.TaggedErrorClass<NotGitError>()("WorktreeNotGitError", {
   message: Schema.String,
 }) {}
@@ -75,6 +82,10 @@ export class ResetFailedError extends Schema.TaggedErrorClass<ResetFailedError>(
   message: Schema.String,
 }) {}
 
+export class RenameFailedError extends Schema.TaggedErrorClass<RenameFailedError>()("WorktreeRenameFailedError", {
+  message: Schema.String,
+}) {}
+
 export class ListFailedError extends Schema.TaggedErrorClass<ListFailedError>()("WorktreeListFailedError", {
   message: Schema.String,
 }) {}
@@ -86,6 +97,7 @@ export type Error =
   | StartCommandFailedError
   | RemoveFailedError
   | ResetFailedError
+  | RenameFailedError
   | ListFailedError
 
 function slugify(input: string) {
@@ -123,6 +135,7 @@ export interface Interface {
   readonly list: () => Effect.Effect<(Omit<Info, "branch"> & { branch?: string })[], Error>
   readonly remove: (input: RemoveInput) => Effect.Effect<boolean, Error>
   readonly reset: (input: ResetInput) => Effect.Effect<boolean, Error>
+  readonly rename: (input: RenameInput) => Effect.Effect<Info, Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Worktree") {}
@@ -610,7 +623,101 @@ const layer: Layer.Layer<
       return true
     })
 
-    return Service.of({ makeWorktreeInfo, createFromInfo, create, list, remove, reset })
+    const rename = Effect.fn("Worktree.rename")(function* (input: RenameInput) {
+      const ctx = yield* InstanceState.context
+      if (ctx.project.vcs !== "git") {
+        return yield* new NotGitError({ message: "Worktrees are only supported for git projects" })
+      }
+
+      const oldDirectory = yield* canonical(input.directory)
+      const primary = yield* canonical(ctx.worktree)
+      if (oldDirectory === primary) {
+        return yield* new RenameFailedError({ message: "Cannot rename the primary workspace" })
+      }
+
+      // Verify old worktree exists
+      const listResult = yield* git(["worktree", "list", "--porcelain"], { cwd: ctx.worktree })
+      if (listResult.code !== 0) {
+        return yield* new RenameFailedError({ message: listResult.stderr || "Failed to read git worktrees" })
+      }
+      const entry = yield* locateWorktree(parseWorktreeList(listResult.text), oldDirectory)
+      if (!entry?.path) {
+        return yield* new RenameFailedError({ message: "Worktree not found" })
+      }
+
+      // Compute new path
+      const newSlug = slugify(input.newName)
+      if (!newSlug) {
+        return yield* new RenameFailedError({ message: "Invalid name" })
+      }
+      const parentDir = pathSvc.dirname(oldDirectory)
+      const newDirectory = pathSvc.join(parentDir, newSlug)
+
+      // Check new path doesn't exist
+      if (yield* fs.exists(newDirectory).pipe(Effect.orDie)) {
+        return yield* new RenameFailedError({ message: `Directory already exists: ${newDirectory}` })
+      }
+
+      // 1. git worktree move
+      const moved = yield* git(["worktree", "move", entry.path, newDirectory], { cwd: ctx.worktree })
+      if (moved.code !== 0) {
+        return yield* new RenameFailedError({ message: moved.stderr || "Failed to move worktree" })
+      }
+
+      // 2. Branch rename (non-fatal if it fails)
+      const oldBranch = entry.branch?.replace(/^refs\/heads\//, "")
+      const newBranch = `opencode/${newSlug}`
+      if (oldBranch && oldBranch !== newBranch) {
+        const renamed = yield* git(["branch", "-m", oldBranch, newBranch], { cwd: ctx.worktree })
+        if (renamed.code !== 0) {
+          yield* Effect.logWarning("worktree branch rename failed", { oldBranch, newBranch, message: renamed.stderr })
+        }
+      }
+
+      // 3. Swap project sandbox references
+      yield* project.removeSandbox(ctx.project.id, oldDirectory).pipe(Effect.catch(() => Effect.void))
+      yield* project.addSandbox(ctx.project.id, newDirectory).pipe(Effect.catch(() => Effect.void))
+
+      // 4. Tear down old instance
+      yield* store.disposeDirectory(entry.path)
+
+      // 5. Migrate session directories in DB
+      yield* db
+        .update(SessionTable)
+        .set({ directory: newDirectory })
+        .where(eq(SessionTable.directory, oldDirectory))
+        .run()
+        .pipe(Effect.orDie)
+
+      // 6. Boot new instance
+      yield* store.load({ directory: newDirectory }).pipe(
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            yield* Effect.logError("worktree reboot after rename failed", {
+              directory: newDirectory,
+              message: errorMessage(error),
+            })
+          }),
+        ),
+      )
+
+      // 7. Emit renamed event
+      const workspaceID = yield* InstanceState.workspaceID
+      const info: Info = { name: newSlug, directory: newDirectory, ...(newBranch ? { branch: newBranch } : {}) }
+      GlobalBus.emit("event", {
+        directory: newDirectory,
+        project: ctx.project.id,
+        workspace: workspaceID,
+        payload: {
+          type: Event.Renamed.type,
+          properties: { name: newSlug, ...(newBranch ? { branch: newBranch } : {}), oldDirectory },
+        },
+      })
+
+      return info
+    })
+
+    return Service.of({ makeWorktreeInfo, createFromInfo, create, list, remove, reset, rename })
   }),
 )
 
