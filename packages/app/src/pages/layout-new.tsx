@@ -6,11 +6,15 @@ import { SolverSwitchBanner } from "@/components/solver-switch-banner"
 import { VaultPanel } from "@/components/vault-panel"
 import { usePlatform } from "@/context/platform"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
+import { useNotificationToasts } from "./layout/notification-toasts"
+import { useWorktreeAutoRename } from "./layout/worktree-auto-rename"
 
 export default function NewLayout(props: ParentProps) {
   const platform = usePlatform()
   const [state, setState] = createStore({ debugTools: true })
 
+  useNotificationToasts()
+  useWorktreeAutoRename()
   createEffect(() => setV2Toast(true))
 
   const update: TitlebarUpdate = {

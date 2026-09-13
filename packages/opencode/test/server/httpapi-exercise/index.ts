@@ -592,6 +592,23 @@ const scenarios: Scenario[] = [
       }),
     ),
   http.protected
+    .post("/experimental/worktree/rename", "worktree.rename")
+    .mutating()
+    .seeded((ctx) => ctx.worktree({ name: "api-rename" }))
+    .at((ctx) => ({
+      path: "/experimental/worktree/rename",
+      headers: ctx.headers(),
+      body: { directory: ctx.state.directory, newName: "api-renamed" },
+    }))
+    .jsonEffect(200, (body, ctx) =>
+      Effect.gen(function* () {
+        object(body)
+        check(typeof body.directory === "string", "renamed worktree should include directory")
+        check(typeof body.name === "string", "renamed worktree should include name")
+        yield* ctx.worktreeRemove(body.directory)
+      }),
+    ),
+  http.protected
     .get("/experimental/session", "experimental.session.list")
     .at((ctx) => ({ path: "/experimental/session?roots=false&archived=false", headers: ctx.headers() }))
     .json(200, array),

@@ -135,6 +135,12 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return true
     })
 
+    const worktreeRename = Effect.fn("ExperimentalHttpApi.worktreeRename")(function* (ctx: {
+      payload: Worktree.RenameInput
+    }) {
+      return yield* mapWorktreeError(worktreeSvc.rename(ctx.payload))
+    })
+
     const session = Effect.fn("ExperimentalHttpApi.session")(function* (ctx: { query: typeof SessionListQuery.Type }) {
       const limit = ctx.query.limit ?? 100
       const directory = ctx.query.directory ? yield* InstanceState.directory : undefined
@@ -186,6 +192,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("worktreeCreate", worktreeCreate)
       .handle("worktreeRemove", worktreeRemove)
       .handle("worktreeReset", worktreeReset)
+      .handle("worktreeRename", worktreeRename)
       .handle("session", session)
       .handle("sessionBackground", sessionBackground)
       .handle("resource", resource)
