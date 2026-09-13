@@ -75,6 +75,7 @@ import {
 } from "./layout/deep-links"
 import { createInlineEditorController } from "./layout/inline-editor"
 import { useNotificationToasts } from "./layout/notification-toasts"
+import { useWorktreeAutoRename } from "./layout/worktree-auto-rename"
 import {
   LocalWorkspace,
   SortableWorkspace,
@@ -345,6 +346,7 @@ export default function LegacyLayout(props: ParentProps) {
   }
 
   useNotificationToasts({ setBusy })
+  useWorktreeAutoRename()
 
   function scrollToSession(sessionId: string, sessionKey: string) {
     if (!scrollContainerRef) return

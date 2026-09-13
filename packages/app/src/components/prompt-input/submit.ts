@@ -15,6 +15,7 @@ import { useSDK, type DirectorySDK } from "@/context/sdk"
 import { useSync, type DirectorySync } from "@/context/sync"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
+import { markWorktreeCreated } from "@/pages/layout/worktree-auto-rename"
 import { buildRequestParts } from "./build-request-parts"
 import { setCursorPosition } from "./editor-dom"
 import { formatServerError } from "@/utils/server-errors"
@@ -380,6 +381,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
           return
         }
         WorktreeState.pending(sdk().scope, createdWorktree.directory)
+        markWorktreeCreated(sdk().scope, createdWorktree.directory)
         sessionDirectory = createdWorktree.directory
       }
 
