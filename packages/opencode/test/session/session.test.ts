@@ -240,6 +240,8 @@ describe("Session", () => {
 
       expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(1)
       expect(SessionEvidence.exists(root.id, "evidence_overflow_operation")).toBe(false)
+      yield* SessionReceipt.assessEvidence(database, { receiptID: "evidence_overflow_receipt", timeCreated: 2 })
+      expect(yield* SessionReceipt.assessments(database, "evidence_overflow_receipt")).toEqual([])
     }),
   )
 
@@ -310,6 +312,26 @@ describe("Session", () => {
       yield* SessionReceipt.expireEvidence(database, { rootID: root.id, now: 20, retentionMs: 10 })
       yield* SessionReceipt.expireEvidence(database, { rootID: root.id, now: 20, retentionMs: 10 })
       expect(SessionEvidence.exists(root.id, "retained_evidence_operation")).toBe(false)
+      const expiredAssessment = yield* SessionReceipt.assessments(database, "retained_evidence_receipt")
+      expect(expiredAssessment).toMatchObject([
+        {
+          receiptID: "retained_evidence_receipt",
+          confidence: "observed",
+          netState: "unknown",
+          evidenceState: "available",
+          revision: 1,
+          timeCreated: 10,
+        },
+        {
+          receiptID: "retained_evidence_receipt",
+          confidence: "unavailable",
+          netState: "unavailable",
+          evidenceState: "unavailable",
+          revision: 2,
+          timeCreated: 20,
+        },
+      ])
+      expect(expiredAssessment[0]).not.toHaveProperty("patch")
 
       SessionEvidence.write(
         root.id,
@@ -320,6 +342,64 @@ describe("Session", () => {
       yield* session.remove(root.id)
       yield* SessionReceipt.removeRootEvidence(database, root.id)
       expect(SessionEvidence.exists(root.id, "deleted_evidence_operation")).toBe(false)
+    }),
+  )
+
+  it.instance("assesses missing receipt evidence as unavailable without a patch payload", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "missing evidence root" })
+      yield* SessionReceipt.publish(database, {
+        id: "missing_evidence_operation",
+        sessionID: root.id,
+        origin: "agent",
+        budget: { maxReceipts: 2, maxMetadataBytes: 1_000, maxEvidenceBytes: 1_000 },
+        receipts: [
+          {
+            id: "missing_evidence_receipt",
+            resource: "file:///missing",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 1,
+          },
+          {
+            id: "metadata_only_receipt",
+            resource: "file:///metadata-only",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 1,
+          },
+        ],
+        evidence: [{ receiptID: "missing_evidence_receipt", content: "baseline" }],
+      })
+      SessionEvidence.removeRoot(root.id)
+
+      yield* SessionReceipt.assessEvidence(database, { receiptID: "missing_evidence_receipt", timeCreated: 2 })
+      yield* SessionReceipt.assessEvidence(database, { receiptID: "missing_evidence_receipt", timeCreated: 3 })
+      yield* SessionReceipt.assessEvidence(database, { receiptID: "metadata_only_receipt", timeCreated: 2 })
+
+      const assessment = yield* SessionReceipt.assessments(database, "missing_evidence_receipt")
+      expect(assessment).toMatchObject([
+        {
+          receiptID: "missing_evidence_receipt",
+          confidence: "observed",
+          netState: "unknown",
+          evidenceState: "available",
+          revision: 1,
+          timeCreated: 1,
+        },
+        {
+          receiptID: "missing_evidence_receipt",
+          confidence: "unavailable",
+          netState: "unavailable",
+          evidenceState: "unavailable",
+          revision: 2,
+          timeCreated: 2,
+        },
+      ])
+      expect(assessment[0]).not.toHaveProperty("patch")
+      expect(yield* SessionReceipt.assessments(database, "metadata_only_receipt")).toEqual([])
     }),
   )
 
@@ -447,6 +527,7 @@ describe("Session", () => {
       const session = yield* SessionNs.Service
       const database = yield* Database.Service
       const root = yield* session.create({ title: "receipt root" })
+      const child = yield* session.create({ parentID: root.id, title: "receipt child" })
       const budget = { maxReceipts: 4, maxMetadataBytes: 100_000 }
 
       yield* SessionReceipt.publish(database, {
@@ -490,7 +571,7 @@ describe("Session", () => {
 
       yield* SessionReceipt.publish(database, {
         id: "op_followup",
-        sessionID: root.id,
+        sessionID: child.id,
         origin: "agent",
         budget,
         receipts: [
@@ -538,6 +619,32 @@ describe("Session", () => {
         ],
       })
       expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(3)
+
+      const firstPage = yield* SessionReceipt.page(database, child.id, { limit: 2 })
+      expect(firstPage).toMatchObject({
+        rootID: root.id,
+        receipts: [
+          { id: "receipt_first", sequence: 1 },
+          { id: "receipt_second", sequence: 2 },
+        ],
+        nextCursor: 2,
+      })
+      const secondPage = yield* SessionReceipt.page(database, root.id, { cursor: firstPage.nextCursor, limit: 1 })
+      expect(secondPage).toMatchObject({
+        rootID: root.id,
+        receipts: [{ id: "receipt_third", sequence: 3 }],
+        nextCursor: 3,
+      })
+      const thirdPage = yield* SessionReceipt.page(database, root.id, { cursor: secondPage.nextCursor, limit: 2 })
+      expect(thirdPage).toMatchObject({
+        rootID: root.id,
+        receipts: [{ id: "receipt_after_failure", sequence: 4 }],
+        nextCursor: undefined,
+      })
+      expect(
+        [...firstPage.receipts, ...secondPage.receipts, ...thirdPage.receipts].map((receipt) => receipt.sequence),
+      ).toEqual([1, 2, 3, 4])
+      expect((yield* Effect.exit(SessionReceipt.page(database, child.id, { limit: 0 })))._tag).toBe("Failure")
 
       const rewrite = yield* Effect.exit(
         database.db

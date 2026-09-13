@@ -326,6 +326,45 @@ describe("Session.diff — session-scoped agent diffs (#174)", () => {
   )
 
   it.instance(
+    "projects persisted v1 external diffs as legacy_external without ownership",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const fs = yield* FSUtil.Service
+        const session = yield* withSession({ title: "external-legacy-compatibility" })
+        const sibling = path.join(path.dirname(test.directory), `external-legacy-${session.id}.txt`)
+        yield* fs.writeWithDirs(sibling, "before\n")
+        const reservation = ExternalDiff.prepare({ sessionID: session.id, files: [sibling] })!
+        yield* fs.writeWithDirs(sibling, "after\n")
+        expect(ExternalDiff.commit({ sessionID: session.id, reservation })).toBe(true)
+        const legacyWire = ExternalDiff.assessed(session.id)
+
+        ExternalDiff.resetMemoryForTest()
+
+        const compatibility = ExternalDiff.compatibility(session.id)
+        expect(compatibility).toEqual([
+          {
+            kind: "legacy_external",
+            assessment: expect.objectContaining({
+              reference: reservation.endpoints[0].reference,
+              file: sibling,
+              state: "changed",
+              status: "modified",
+            }),
+          },
+        ])
+        expect(compatibility[0]).not.toHaveProperty("operationID")
+        expect(compatibility[0]).not.toHaveProperty("rootID")
+        expect(compatibility[0]).not.toHaveProperty("lineage")
+        expect(compatibility[0]).not.toHaveProperty("origin")
+        const stillLegacy = ExternalDiff.assessed(session.id)
+        expect(Object.keys(stillLegacy).sort()).toEqual(["assessments", "revision", "version"])
+        expect(stillLegacy).toMatchObject({ version: legacyWire.version, assessments: legacyWire.assessments })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
     "keeps generated external patches out of unrequested detail and legacy diff responses",
     () =>
       Effect.gen(function* () {
