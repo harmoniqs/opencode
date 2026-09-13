@@ -5,7 +5,7 @@ import {
   SessionReceiptOperationTable,
   SessionReceiptTable,
 } from "@opencode-ai/core/session/sql"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm"
 import { Effect } from "effect"
 import { SessionEvidence } from "./evidence"
 import { SessionID } from "./schema"
@@ -113,7 +113,10 @@ export namespace SessionReceipt {
     )
   }
 
-  export function commit(database: Database.Interface, input: { id: string; receipts: ReadonlyArray<Fact> }) {
+  export function commit(
+    database: Database.Interface,
+    input: { id: string; receipts: ReadonlyArray<Fact>; evidenceReceiptIDs?: ReadonlySet<string> },
+  ) {
     return database.db
       .transaction(
         (tx) =>
@@ -130,6 +133,13 @@ export namespace SessionReceipt {
               reservation.reserved_metadata_bytes !== metadataSize(input.receipts)
             )
               return yield* Effect.fail(new Error(`Receipt reservation mismatch for ${input.id}`))
+            if (
+              input.evidenceReceiptIDs?.size &&
+              [...input.evidenceReceiptIDs].some(
+                (receiptID) => !input.receipts.some((receipt) => receipt.id === receiptID),
+              )
+            )
+              return yield* Effect.fail(new Error(`Evidence receipt mismatch for ${input.id}`))
 
             const latest = yield* tx
               .select({ sequence: SessionReceiptTable.creation_seq })
@@ -158,6 +168,23 @@ export namespace SessionReceipt {
                   })),
                 )
                 .run()
+            const evidence = input.receipts.filter((receipt) => input.evidenceReceiptIDs?.has(receipt.id))
+            if (evidence.length)
+              yield* tx
+                .insert(SessionReceiptAssessmentTable)
+                .values(
+                  evidence.map((receipt) => ({
+                    id: crypto.randomUUID(),
+                    receipt_id: receipt.id,
+                    root_id: reservation.root_id,
+                    confidence: "observed",
+                    net_state: "unknown",
+                    evidence_state: "available",
+                    revision: 1,
+                    time_created: receipt.timeCreated,
+                  })),
+                )
+                .run()
             yield* tx
               .update(SessionReceiptOperationTable)
               .set({ state: "committed" })
@@ -173,12 +200,16 @@ export namespace SessionReceipt {
     return Effect.gen(function* () {
       yield* reserve(database, input)
       const lineage = yield* root(database, input.sessionID)
-      if (input.evidence?.length)
-        yield* Effect.try({
-          try: () => SessionEvidence.write(lineage, input.id, input.evidence!, input.budget.maxEvidenceBytes ?? 0),
-          catch: (cause) => new Error(`Failed to publish receipt evidence for ${input.id}`, { cause }),
-        })
-      yield* commit(database, input)
+      const evidence = input.evidence?.length
+        ? yield* Effect.try({
+            try: () => SessionEvidence.write(lineage, input.id, input.evidence!, input.budget.maxEvidenceBytes ?? 0),
+            catch: (cause) => new Error(`Failed to publish receipt evidence for ${input.id}`, { cause }),
+          })
+        : false
+      yield* commit(database, {
+        ...input,
+        ...(evidence ? { evidenceReceiptIDs: new Set(input.evidence!.map((entry) => entry.receiptID)) } : {}),
+      })
     })
   }
 
@@ -208,8 +239,22 @@ export namespace SessionReceipt {
         .where(eq(SessionReceiptTable.root_id, input.rootID))
         .orderBy(desc(SessionReceiptTable.time_created))
         .get()
-      if (latest && latest.timeCreated + input.retentionMs <= input.now)
+      if (latest && latest.timeCreated + input.retentionMs <= input.now) {
+        const evidence = yield* database.db
+          .select({ receiptID: SessionReceiptAssessmentTable.receipt_id })
+          .from(SessionReceiptAssessmentTable)
+          .where(
+            and(
+              eq(SessionReceiptAssessmentTable.root_id, input.rootID),
+              eq(SessionReceiptAssessmentTable.evidence_state, "available"),
+            ),
+          )
+          .all()
         yield* Effect.sync(() => SessionEvidence.removeRoot(input.rootID))
+        yield* Effect.forEach(evidence, (entry) =>
+          assessEvidence(database, { receiptID: entry.receiptID, timeCreated: input.now }),
+        )
+      }
     })
   }
 
@@ -275,6 +320,79 @@ export namespace SessionReceipt {
           })),
         ),
       )
+  }
+
+  /** Marks an evidence-bearing receipt unavailable when its host-local sidecar is absent. */
+  export function assessEvidence(database: Database.Interface, input: { receiptID: string; timeCreated: number }) {
+    return database.db.transaction(
+      (tx) =>
+        Effect.gen(function* () {
+          const receipt = yield* tx
+            .select({ rootID: SessionReceiptTable.root_id, operationID: SessionReceiptTable.operation_id })
+            .from(SessionReceiptTable)
+            .where(eq(SessionReceiptTable.id, input.receiptID))
+            .get()
+          if (!receipt) return yield* Effect.fail(new Error(`Missing receipt ${input.receiptID}`))
+          if (SessionEvidence.has(receipt.rootID, receipt.operationID, input.receiptID)) return
+
+          const latest = yield* tx
+            .select({
+              revision: SessionReceiptAssessmentTable.revision,
+              evidenceState: SessionReceiptAssessmentTable.evidence_state,
+            })
+            .from(SessionReceiptAssessmentTable)
+            .where(eq(SessionReceiptAssessmentTable.receipt_id, input.receiptID))
+            .orderBy(desc(SessionReceiptAssessmentTable.revision))
+            .get()
+          if (latest?.evidenceState !== "available") return
+          yield* tx
+            .insert(SessionReceiptAssessmentTable)
+            .values({
+              id: crypto.randomUUID(),
+              receipt_id: input.receiptID,
+              root_id: receipt.rootID,
+              confidence: "unavailable",
+              net_state: "unavailable",
+              evidence_state: "unavailable",
+              revision: (latest?.revision ?? 0) + 1,
+              time_created: input.timeCreated,
+            })
+            .run()
+        }),
+      { behavior: "immediate" },
+    )
+  }
+
+  /** Pages immutable root-owned facts by their creation sequence. */
+  export function page(database: Database.Interface, sessionID: SessionID, input: { cursor?: number; limit: number }) {
+    return Effect.gen(function* () {
+      if (!Number.isSafeInteger(input.limit) || input.limit < 1)
+        return yield* Effect.fail(new Error(`Invalid receipt page limit ${input.limit}`))
+      if (input.cursor !== undefined && (!Number.isSafeInteger(input.cursor) || input.cursor < 0))
+        return yield* Effect.fail(new Error(`Invalid receipt page cursor ${input.cursor}`))
+      const rootID = yield* root(database, sessionID)
+      const receipts = yield* database.db
+        .select()
+        .from(SessionReceiptTable)
+        .where(and(eq(SessionReceiptTable.root_id, rootID), gt(SessionReceiptTable.creation_seq, input.cursor ?? 0)))
+        .orderBy(asc(SessionReceiptTable.creation_seq))
+        .limit(input.limit + 1)
+        .all()
+      const page = receipts.slice(0, input.limit)
+      const next = receipts.length > input.limit ? page.at(-1)?.creation_seq : undefined
+      return {
+        rootID,
+        receipts: page.map((receipt) => ({
+          id: receipt.id,
+          sequence: receipt.creation_seq,
+          resource: receipt.resource,
+          operation: receipt.operation,
+          outcome: receipt.outcome,
+          timeCreated: receipt.time_created,
+        })),
+        nextCursor: next,
+      }
+    })
   }
 
   export function committed(database: Database.Interface, sessionID: SessionID) {

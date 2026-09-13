@@ -1,5 +1,5 @@
 import { Global } from "@opencode-ai/core/global"
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 /** Host-local receipt evidence. Contents never enter the session database. */
@@ -29,6 +29,37 @@ export namespace SessionEvidence {
 
   export function exists(rootID: string, operationID: string) {
     return existsSync(file(rootID, operationID))
+  }
+
+  export function read(rootID: string, operationID: string): Entry[] | undefined {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(file(rootID, operationID), "utf8"))
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("version" in parsed) ||
+        parsed.version !== 1 ||
+        !("entries" in parsed) ||
+        !Array.isArray(parsed.entries) ||
+        !parsed.entries.every(
+          (entry: unknown): entry is Entry =>
+            typeof entry === "object" &&
+            entry !== null &&
+            "receiptID" in entry &&
+            typeof entry.receiptID === "string" &&
+            "content" in entry &&
+            typeof entry.content === "string",
+        )
+      )
+        return
+      return parsed.entries
+    } catch {
+      return
+    }
+  }
+
+  export function has(rootID: string, operationID: string, receiptID: string) {
+    return read(rootID, operationID)?.some((entry) => entry.receiptID === receiptID) ?? false
   }
 
   export function removeRoot(rootID: string) {
