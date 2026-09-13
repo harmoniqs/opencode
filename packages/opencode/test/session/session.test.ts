@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
-import { SessionLineageTable } from "@opencode-ai/core/session/sql"
+import { SessionLineageTable, SessionReceiptAssessmentTable, SessionReceiptTable } from "@opencode-ai/core/session/sql"
 import { EventV2 } from "@opencode-ai/core/event"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { Deferred, Effect, Exit, Layer } from "effect"
@@ -19,6 +19,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { InstanceStore } from "@/project/instance-store"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { ExternalDiff } from "@/session/external-diff"
+import { SessionReceipt } from "@/session/receipt"
 import path from "path"
 import { eq } from "drizzle-orm"
 
@@ -212,6 +213,134 @@ describe("step-finish token propagation via event", () => {
 })
 
 describe("Session", () => {
+  it.instance("atomically publishes one committed receipt group for a lineage root", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "receipt root" })
+
+      yield* SessionReceipt.publish(database, {
+        id: "op_first",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: [
+          { id: "receipt_first", resource: "file:///first", operation: "write", outcome: "applied", timeCreated: 1 },
+          { id: "receipt_second", resource: "file:///second", operation: "write", outcome: "applied", timeCreated: 2 },
+        ],
+      })
+
+      expect(yield* SessionReceipt.committed(database, root.id)).toEqual([
+        {
+          id: "op_first",
+          rootID: root.id,
+          sessionID: root.id,
+          origin: "agent",
+          state: "committed",
+          receipts: [
+            { id: "receipt_first", sequence: 1, resource: "file:///first", operation: "write", outcome: "applied", timeCreated: 1 },
+            { id: "receipt_second", sequence: 2, resource: "file:///second", operation: "write", outcome: "applied", timeCreated: 2 },
+          ],
+        },
+      ])
+
+      yield* SessionReceipt.publish(database, {
+        id: "op_followup",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: [{ id: "receipt_third", resource: "file:///third", operation: "delete", outcome: "applied", timeCreated: 3 }],
+      })
+      expect((yield* SessionReceipt.committed(database, root.id))[1]?.receipts).toEqual([
+        { id: "receipt_third", sequence: 3, resource: "file:///third", operation: "delete", outcome: "applied", timeCreated: 3 },
+      ])
+
+      const duplicate = yield* Effect.exit(
+        SessionReceipt.publish(database, {
+          id: "op_rolled_back",
+          sessionID: root.id,
+          origin: "agent",
+          receipts: [{ id: "receipt_first", resource: "file:///third", operation: "write", outcome: "applied", timeCreated: 3 }],
+        }),
+      )
+      expect(duplicate._tag).toBe("Failure")
+      expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(2)
+
+      const rewrite = yield* Effect.exit(
+        database.db
+          .update(SessionReceiptTable)
+          .set({ outcome: "rewritten" })
+          .where(eq(SessionReceiptTable.id, "receipt_first"))
+          .run(),
+      )
+      expect(rewrite._tag).toBe("Failure")
+      expect((yield* SessionReceipt.committed(database, root.id))[0]?.receipts[0]?.outcome).toBe("applied")
+    }),
+  )
+
+  it.instance("appends receipt assessments without rewriting immutable facts", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "assessment root" })
+      yield* SessionReceipt.publish(database, {
+        id: "op_assessed",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: [{ id: "receipt_assessed", resource: "file:///assessed", operation: "write", outcome: "applied", timeCreated: 1 }],
+      })
+
+      yield* SessionReceipt.appendAssessment(database, {
+        id: "assessment_first",
+        receiptID: "receipt_assessed",
+        confidence: "observed",
+        netState: "changed",
+        evidenceState: "available",
+        revision: 1,
+        expiresAt: 10,
+        timeCreated: 2,
+      })
+      yield* SessionReceipt.appendAssessment(database, {
+        id: "assessment_second",
+        receiptID: "receipt_assessed",
+        confidence: "verified",
+        netState: "restored",
+        evidenceState: "unavailable",
+        revision: 2,
+        timeCreated: 3,
+      })
+
+      expect(yield* SessionReceipt.assessments(database, "receipt_assessed")).toEqual([
+        {
+          id: "assessment_first",
+          receiptID: "receipt_assessed",
+          confidence: "observed",
+          netState: "changed",
+          evidenceState: "available",
+          revision: 1,
+          expiresAt: 10,
+          timeCreated: 2,
+        },
+        {
+          id: "assessment_second",
+          receiptID: "receipt_assessed",
+          confidence: "verified",
+          netState: "restored",
+          evidenceState: "unavailable",
+          revision: 2,
+          timeCreated: 3,
+        },
+      ])
+      const rewrite = yield* Effect.exit(
+        database.db
+          .update(SessionReceiptAssessmentTable)
+          .set({ net_state: "rewritten" })
+          .where(eq(SessionReceiptAssessmentTable.id, "assessment_first"))
+          .run(),
+      )
+      expect(rewrite._tag).toBe("Failure")
+      expect((yield* SessionReceipt.committed(database, root.id))[0]?.receipts[0]?.outcome).toBe("applied")
+    }),
+  )
+
   it.instance("creates one full lineage root for each new session", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
