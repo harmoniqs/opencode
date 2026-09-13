@@ -34,6 +34,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { ExternalDiff } from "@/session/external-diff"
 import { SessionLineage } from "@/session/lineage"
+import { SessionReceipt } from "@/session/receipt"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
 import { SessionID, MessageID, PartID } from "./schema"
@@ -641,6 +642,7 @@ const layer: Layer.Layer<
         // transcript. Tombstone them before deleting session records so an
         // in-flight mutation cannot recreate ownership after teardown starts.
         yield* SessionLineage.retainBeforeDelete(database, { sessionID, title: session.title })
+        yield* SessionReceipt.removeRootEvidence(database, sessionID).pipe(Effect.orDie)
         ExternalDiff.remove(sessionID)
         yield* events.publish(SessionV1.Event.Deleted, { sessionID, info: session })
         yield* events.remove(sessionID)
