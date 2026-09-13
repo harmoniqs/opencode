@@ -33,6 +33,7 @@ import type { InstanceContext } from "../project/instance-context"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { ExternalDiff } from "@/session/external-diff"
+import { SessionLineage } from "@/session/lineage"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
 import { SessionID, MessageID, PartID } from "./schema"
@@ -418,6 +419,7 @@ export interface Interface {
   readonly listGlobal: (input?: GlobalListInput) => Effect.Effect<GlobalInfo[]>
   readonly create: (input?: {
     parentID?: SessionID
+    lineageEdgeKind?: SessionLineage.EdgeKind
     title?: string
     agent?: string
     model?: Schema.Schema.Type<typeof Model>
@@ -450,6 +452,11 @@ export interface Interface {
   readonly diff: (sessionID: SessionID) => Effect.Effect<Snapshot.FileDiff[]>
   readonly messages: (input: { sessionID: SessionID; limit?: number }) => Effect.Effect<SessionV1.WithParts[], NotFound>
   readonly children: (parentID: SessionID) => Effect.Effect<Info[]>
+  readonly lineage: (
+    sessionID: SessionID,
+    options?: { retainedOrigins?: boolean },
+  ) => Effect.Effect<SessionLineage.Info, NotFound>
+  readonly beginPartialLineage: (sessionID: SessionID, boundary?: number) => Effect.Effect<void, NotFound>
   readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound>
   readonly updateMessage: <T extends SessionV1.Info>(msg: T) => Effect.Effect<T>
   readonly removeMessage: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<MessageID>
@@ -506,6 +513,7 @@ const layer: Layer.Layer<
       agent?: string
       model?: Schema.Schema.Type<typeof Model>
       parentID?: SessionID
+      lineageEdgeKind?: SessionLineage.EdgeKind
       workspaceID?: WorkspaceV2.ID
       directory: string
       path?: string
@@ -537,6 +545,11 @@ const layer: Layer.Layer<
       yield* Effect.logInfo("created", result)
 
       yield* events.publish(SessionV1.Event.Created, { sessionID: result.id, info: result })
+      yield* SessionLineage.register(database, {
+        sessionID: result.id,
+        parentID: input.parentID,
+        edgeKind: input.lineageEdgeKind,
+      })
 
       return result
     })
@@ -627,6 +640,7 @@ const layer: Layer.Layer<
         // External baselines are host-local and never belong to a fork or a
         // transcript. Tombstone them before deleting session records so an
         // in-flight mutation cannot recreate ownership after teardown starts.
+        yield* SessionLineage.retainBeforeDelete(database, { sessionID, title: session.title })
         ExternalDiff.remove(sessionID)
         yield* events.publish(SessionV1.Event.Deleted, { sessionID, info: session })
         yield* events.remove(sessionID)
@@ -675,6 +689,7 @@ const layer: Layer.Layer<
 
     const create = Effect.fn("Session.create")(function* (input?: {
       parentID?: SessionID
+      lineageEdgeKind?: SessionLineage.EdgeKind
       title?: string
       agent?: string
       model?: Schema.Schema.Type<typeof Model>
@@ -686,6 +701,7 @@ const layer: Layer.Layer<
       const workspace = yield* InstanceState.workspaceID
       return yield* createNext({
         parentID: input?.parentID,
+        lineageEdgeKind: input?.lineageEdgeKind,
         directory: ctx.directory,
         path: sessionPath(ctx.worktree, ctx.directory),
         title: input?.title,
@@ -696,6 +712,18 @@ const layer: Layer.Layer<
         workspaceID: input?.workspaceID ?? workspace,
       })
     })
+
+    const lineage: Interface["lineage"] = Effect.fn("Session.lineage")(function* (sessionID, options) {
+      yield* get(sessionID)
+      return yield* SessionLineage.get(database, sessionID, options)
+    })
+
+    const beginPartialLineage: Interface["beginPartialLineage"] = Effect.fn("Session.beginPartialLineage")(
+      function* (sessionID, boundary) {
+        yield* get(sessionID)
+        yield* SessionLineage.beginPartial(database, sessionID, boundary)
+      },
+    )
 
     const fork = Effect.fn("Session.fork")(function* (input: { sessionID: SessionID; messageID?: MessageID }) {
       const ctx = yield* InstanceState.context
@@ -1112,6 +1140,8 @@ const layer: Layer.Layer<
       diff,
       messages,
       children,
+      lineage,
+      beginPartialLineage,
       remove,
       updateMessage,
       removeMessage,
