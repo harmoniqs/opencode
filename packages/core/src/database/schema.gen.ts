@@ -233,6 +233,8 @@ export default {
           \`root_id\` text NOT NULL,
           \`session_id\` text NOT NULL,
           \`origin\` text NOT NULL,
+          \`reserved_receipts\` integer DEFAULT 0 NOT NULL,
+          \`reserved_metadata_bytes\` integer DEFAULT 0 NOT NULL,
           \`state\` text NOT NULL,
           CONSTRAINT \`fk_session_receipt_operation_root_id_session_id_fk\` FOREIGN KEY (\`root_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
         );

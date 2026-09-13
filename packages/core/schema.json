@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "54667ea5-ab5c-486b-b9d0-a398dcc360d6",
+  "id": "f984d12a-8384-4efa-a337-4a1518eba1f1",
   "prevIds": [
-    "847009df-a964-45cd-b79f-6d07bf06e3e2"
+    "d9a74873-59fb-4487-9bf1-76477c0f831c"
   ],
   "ddl": [
     {
@@ -1403,6 +1403,26 @@
       "default": null,
       "generated": null,
       "name": "origin",
+      "entityType": "columns",
+      "table": "session_receipt_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "reserved_receipts",
+      "entityType": "columns",
+      "table": "session_receipt_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "reserved_metadata_bytes",
       "entityType": "columns",
       "table": "session_receipt_operation"
     },

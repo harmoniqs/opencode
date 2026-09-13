@@ -213,16 +213,137 @@ describe("step-finish token propagation via event", () => {
 })
 
 describe("Session", () => {
+  it.instance("reserves root-wide receipt and metadata capacity before publishing", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "budget root" })
+      const budget = { maxReceipts: 2, maxMetadataBytes: 1_000 }
+      const first = [
+        { id: "budget_first", resource: "file:///first", operation: "write", outcome: "applied", timeCreated: 1 },
+      ]
+      const second = [
+        { id: "budget_second", resource: "file:///second", operation: "write", outcome: "applied", timeCreated: 2 },
+      ]
+
+      yield* SessionReceipt.publish(database, {
+        id: "budget_op_first",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: first,
+        budget,
+      })
+      yield* SessionReceipt.publish(database, {
+        id: "budget_op_second",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: second,
+        budget,
+      })
+
+      const receiptOverflow = yield* Effect.exit(
+        SessionReceipt.publish(database, {
+          id: "budget_op_receipt_overflow",
+          sessionID: root.id,
+          origin: "agent",
+          receipts: [
+            { id: "budget_third", resource: "file:///third", operation: "write", outcome: "applied", timeCreated: 3 },
+          ],
+          budget,
+        }),
+      )
+      expect(receiptOverflow._tag).toBe("Failure")
+      expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(2)
+
+      const metadataOverflow = yield* Effect.exit(
+        SessionReceipt.reserve(database, {
+          id: "budget_op_metadata_overflow",
+          sessionID: root.id,
+          origin: "agent",
+          receipts: [
+            {
+              id: "budget_metadata",
+              resource: "file:///metadata",
+              operation: "write",
+              outcome: "applied",
+              timeCreated: 3,
+            },
+          ],
+          budget: { maxReceipts: 3, maxMetadataBytes: 1 },
+        }),
+      )
+      expect(metadataOverflow._tag).toBe("Failure")
+    }),
+  )
+
+  it.instance("keeps concurrent reservations within a root budget", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "reservation root" })
+      const budget = { maxReceipts: 1, maxMetadataBytes: 1_000 }
+      const reserve = (id: string) =>
+        SessionReceipt.reserve(database, {
+          id,
+          sessionID: root.id,
+          origin: "agent",
+          receipts: [
+            { id: `${id}_receipt`, resource: `file:///${id}`, operation: "write", outcome: "applied", timeCreated: 1 },
+          ],
+          budget,
+        })
+
+      const reservations = yield* Effect.all(
+        [Effect.exit(reserve("reservation_one")), Effect.exit(reserve("reservation_two"))],
+        {
+          concurrency: "unbounded",
+        },
+      )
+      expect(reservations.filter((result) => result._tag === "Success")).toHaveLength(1)
+    }),
+  )
+
+  it.instance("releases aborted reservations without consuming root capacity", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "aborted reservation root" })
+      const budget = { maxReceipts: 1, maxMetadataBytes: 1_000 }
+      const receipt = (id: string) => [
+        { id, resource: `file:///${id}`, operation: "write", outcome: "applied", timeCreated: 1 },
+      ]
+
+      yield* SessionReceipt.reserve(database, {
+        id: "reservation_aborted",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: receipt("reservation_aborted_receipt"),
+        budget,
+      })
+      yield* SessionReceipt.abort(database, "reservation_aborted")
+      yield* SessionReceipt.reserve(database, {
+        id: "reservation_after_abort",
+        sessionID: root.id,
+        origin: "agent",
+        receipts: receipt("reservation_after_abort_receipt"),
+        budget,
+      })
+      expect(yield* SessionReceipt.committed(database, root.id)).toEqual([])
+    }),
+  )
+
   it.instance("atomically publishes one committed receipt group for a lineage root", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const database = yield* Database.Service
       const root = yield* session.create({ title: "receipt root" })
+      const budget = { maxReceipts: 4, maxMetadataBytes: 100_000 }
 
       yield* SessionReceipt.publish(database, {
         id: "op_first",
         sessionID: root.id,
         origin: "agent",
+        budget,
         receipts: [
           { id: "receipt_first", resource: "file:///first", operation: "write", outcome: "applied", timeCreated: 1 },
           { id: "receipt_second", resource: "file:///second", operation: "write", outcome: "applied", timeCreated: 2 },
@@ -237,8 +358,22 @@ describe("Session", () => {
           origin: "agent",
           state: "committed",
           receipts: [
-            { id: "receipt_first", sequence: 1, resource: "file:///first", operation: "write", outcome: "applied", timeCreated: 1 },
-            { id: "receipt_second", sequence: 2, resource: "file:///second", operation: "write", outcome: "applied", timeCreated: 2 },
+            {
+              id: "receipt_first",
+              sequence: 1,
+              resource: "file:///first",
+              operation: "write",
+              outcome: "applied",
+              timeCreated: 1,
+            },
+            {
+              id: "receipt_second",
+              sequence: 2,
+              resource: "file:///second",
+              operation: "write",
+              outcome: "applied",
+              timeCreated: 2,
+            },
           ],
         },
       ])
@@ -247,10 +382,20 @@ describe("Session", () => {
         id: "op_followup",
         sessionID: root.id,
         origin: "agent",
-        receipts: [{ id: "receipt_third", resource: "file:///third", operation: "delete", outcome: "applied", timeCreated: 3 }],
+        budget,
+        receipts: [
+          { id: "receipt_third", resource: "file:///third", operation: "delete", outcome: "applied", timeCreated: 3 },
+        ],
       })
       expect((yield* SessionReceipt.committed(database, root.id))[1]?.receipts).toEqual([
-        { id: "receipt_third", sequence: 3, resource: "file:///third", operation: "delete", outcome: "applied", timeCreated: 3 },
+        {
+          id: "receipt_third",
+          sequence: 3,
+          resource: "file:///third",
+          operation: "delete",
+          outcome: "applied",
+          timeCreated: 3,
+        },
       ])
 
       const duplicate = yield* Effect.exit(
@@ -258,11 +403,31 @@ describe("Session", () => {
           id: "op_rolled_back",
           sessionID: root.id,
           origin: "agent",
-          receipts: [{ id: "receipt_first", resource: "file:///third", operation: "write", outcome: "applied", timeCreated: 3 }],
+          budget,
+          receipts: [
+            { id: "receipt_first", resource: "file:///third", operation: "write", outcome: "applied", timeCreated: 3 },
+          ],
         }),
       )
       expect(duplicate._tag).toBe("Failure")
       expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(2)
+
+      yield* SessionReceipt.publish(database, {
+        id: "op_after_failure",
+        sessionID: root.id,
+        origin: "agent",
+        budget,
+        receipts: [
+          {
+            id: "receipt_after_failure",
+            resource: "file:///fourth",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 4,
+          },
+        ],
+      })
+      expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(3)
 
       const rewrite = yield* Effect.exit(
         database.db
@@ -281,11 +446,21 @@ describe("Session", () => {
       const session = yield* SessionNs.Service
       const database = yield* Database.Service
       const root = yield* session.create({ title: "assessment root" })
+      const budget = { maxReceipts: 100, maxMetadataBytes: 100_000 }
       yield* SessionReceipt.publish(database, {
         id: "op_assessed",
         sessionID: root.id,
         origin: "agent",
-        receipts: [{ id: "receipt_assessed", resource: "file:///assessed", operation: "write", outcome: "applied", timeCreated: 1 }],
+        budget,
+        receipts: [
+          {
+            id: "receipt_assessed",
+            resource: "file:///assessed",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 1,
+          },
+        ],
       })
 
       yield* SessionReceipt.appendAssessment(database, {

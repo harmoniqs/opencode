@@ -120,6 +120,8 @@ export const SessionReceiptOperationTable = sqliteTable(
       .references(() => SessionTable.id, { onDelete: "cascade" }),
     session_id: text().$type<SessionSchema.ID>().notNull(),
     origin: text().notNull(),
+    reserved_receipts: integer().notNull().default(0),
+    reserved_metadata_bytes: integer().notNull().default(0),
     state: text().$type<"prepared" | "evidence_ready" | "committed">().notNull(),
   },
   (table) => [index("session_receipt_operation_root_idx").on(table.root_id)],

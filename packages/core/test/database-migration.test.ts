@@ -117,7 +117,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('root', 'project', 'root', '/project', 'Root', 'test', 1, 1)`,
         )
         yield* db.run(
-          sql`INSERT INTO session_receipt_operation (id, root_id, session_id, origin, state) VALUES ('operation', 'root', 'root', 'agent', 'committed')`,
+          sql`INSERT INTO session_receipt_operation (id, root_id, session_id, origin, reserved_receipts, reserved_metadata_bytes, state) VALUES ('operation', 'root', 'root', 'agent', 1, 64, 'committed')`,
         )
         yield* db.run(
           sql`INSERT INTO session_receipt (id, operation_id, root_id, creation_seq, resource, operation, outcome, time_created) VALUES ('receipt', 'operation', 'root', 1, 'file:///root', 'write', 'applied', 2)`,
@@ -134,12 +134,19 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         expect(
           yield* db.get(sql`
-            SELECT operation.state, receipt.creation_seq AS sequence, assessment.revision, assessment.expires_at AS expiresAt
+            SELECT operation.state, operation.reserved_receipts AS reservedReceipts, operation.reserved_metadata_bytes AS reservedMetadataBytes, receipt.creation_seq AS sequence, assessment.revision, assessment.expires_at AS expiresAt
             FROM session_receipt_operation operation
             JOIN session_receipt receipt ON receipt.operation_id = operation.id
             JOIN session_receipt_assessment assessment ON assessment.receipt_id = receipt.id
           `),
-        ).toEqual({ state: "committed", sequence: 1, revision: 1, expiresAt: 3 })
+        ).toEqual({
+          state: "committed",
+          reservedReceipts: 1,
+          reservedMetadataBytes: 64,
+          sequence: 1,
+          revision: 1,
+          expiresAt: 3,
+        })
       }),
     )
   })
