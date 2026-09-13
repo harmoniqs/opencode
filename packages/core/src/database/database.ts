@@ -59,6 +59,8 @@ const MERGE_TABLES = [
   "event",
   "permission",
   "session",
+  "session_lineage",
+  "session_lineage_origin",
   "session_message",
   "session_input",
   "session_context_epoch",

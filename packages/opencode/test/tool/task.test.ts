@@ -385,6 +385,10 @@ describe("tool.task", () => {
       expect(result.metadata.sessionId).not.toBe("ses_missing")
       expect(result.output).toContain(`<task id="${result.metadata.sessionId}" state="completed">`)
       expect(seen?.sessionID).toBe(result.metadata.sessionId)
+      expect(yield* sessions.lineage(result.metadata.sessionId)).toMatchObject({
+        rootID: chat.id,
+        descendants: [{ sessionID: result.metadata.sessionId, parentID: chat.id, edgeKind: "task_spawn" }],
+      })
     }),
   )
 

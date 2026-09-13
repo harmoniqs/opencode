@@ -66,6 +66,49 @@ export const SessionTable = sqliteTable(
   ],
 )
 
+/**
+ * Durable Files Changed lineage. A missing row is deliberately meaningful: it
+ * denotes a pre-rollout (legacy) session, never an inferred relationship.
+ */
+export const SessionLineageTable = sqliteTable(
+  "session_lineage",
+  {
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .primaryKey()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    root_id: text().$type<SessionSchema.ID>().notNull(),
+    mode: text().$type<"legacy" | "partial" | "full">().notNull(),
+    parent_id: text().$type<SessionSchema.ID>(),
+    edge_kind: text().$type<"task_spawn" | "session_spawn">(),
+    legacy_parent_id: text().$type<SessionSchema.ID>(),
+    epoch_started_at: integer(),
+  },
+  (table) => [
+    index("session_lineage_root_idx").on(table.root_id),
+    index("session_lineage_parent_idx").on(table.parent_id),
+  ],
+)
+
+/**
+ * The root-owned, deletion-safe minimum required to render historical Files
+ * Changed receipts. It intentionally excludes child context and evidence.
+ */
+export const SessionLineageOriginTable = sqliteTable(
+  "session_lineage_origin",
+  {
+    root_id: text().$type<SessionSchema.ID>().notNull(),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    title: text().notNull(),
+    edge_kind: text().$type<"task_spawn" | "session_spawn">().notNull(),
+    deleted_at: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.root_id, table.session_id] }),
+    index("session_lineage_origin_root_idx").on(table.root_id),
+  ],
+)
+
 export const MessageTable = sqliteTable(
   "message",
   {
