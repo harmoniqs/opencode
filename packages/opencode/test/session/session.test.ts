@@ -20,6 +20,7 @@ import { InstanceStore } from "@/project/instance-store"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { ExternalDiff } from "@/session/external-diff"
 import { SessionReceipt } from "@/session/receipt"
+import { SessionEvidence } from "@/session/evidence"
 import path from "path"
 import { eq } from "drizzle-orm"
 
@@ -213,6 +214,115 @@ describe("step-finish token propagation via event", () => {
 })
 
 describe("Session", () => {
+  it.instance("keeps receipts metadata-only when evidence exceeds its sidecar budget", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "evidence overflow root" })
+      const budget = { maxReceipts: 1, maxMetadataBytes: 1_000, maxEvidenceBytes: 3 }
+
+      yield* SessionReceipt.publish(database, {
+        id: "evidence_overflow_operation",
+        sessionID: root.id,
+        origin: "agent",
+        budget,
+        receipts: [
+          {
+            id: "evidence_overflow_receipt",
+            resource: "file:///overflow",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 1,
+          },
+        ],
+        evidence: [{ receiptID: "evidence_overflow_receipt", content: "too large" }],
+      })
+
+      expect(yield* SessionReceipt.committed(database, root.id)).toHaveLength(1)
+      expect(SessionEvidence.exists(root.id, "evidence_overflow_operation")).toBe(false)
+    }),
+  )
+
+  it.instance("removes interrupted evidence sidecars without committing an invalid reference", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "interrupted evidence root" })
+      const budget = { maxReceipts: 1, maxMetadataBytes: 1_000, maxEvidenceBytes: 1_000 }
+      const input = {
+        id: "interrupted_evidence_operation",
+        sessionID: root.id,
+        origin: "agent",
+        budget,
+        receipts: [
+          {
+            id: "interrupted_evidence_receipt",
+            resource: "file:///interrupted",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 1,
+          },
+        ],
+      }
+
+      yield* SessionReceipt.reserve(database, input)
+      SessionEvidence.write(
+        root.id,
+        input.id,
+        [{ receiptID: "interrupted_evidence_receipt", content: "baseline" }],
+        1_000,
+      )
+      expect(SessionEvidence.exists(root.id, input.id)).toBe(true)
+      expect(yield* SessionReceipt.committed(database, root.id)).toEqual([])
+
+      yield* SessionReceipt.cleanupEvidence(database, root.id)
+      yield* SessionReceipt.cleanupEvidence(database, root.id)
+      expect(SessionEvidence.exists(root.id, input.id)).toBe(false)
+      expect(yield* SessionReceipt.committed(database, root.id)).toEqual([])
+    }),
+  )
+
+  it.instance("expires and deletes root-owned evidence sidecars idempotently", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const root = yield* session.create({ title: "retained evidence root" })
+      const budget = { maxReceipts: 1, maxMetadataBytes: 1_000, maxEvidenceBytes: 1_000, retentionMs: 10 }
+
+      yield* SessionReceipt.publish(database, {
+        id: "retained_evidence_operation",
+        sessionID: root.id,
+        origin: "agent",
+        budget,
+        receipts: [
+          {
+            id: "retained_evidence_receipt",
+            resource: "file:///retained",
+            operation: "write",
+            outcome: "applied",
+            timeCreated: 10,
+          },
+        ],
+        evidence: [{ receiptID: "retained_evidence_receipt", content: "baseline" }],
+      })
+      expect(SessionEvidence.exists(root.id, "retained_evidence_operation")).toBe(true)
+
+      yield* SessionReceipt.expireEvidence(database, { rootID: root.id, now: 20, retentionMs: 10 })
+      yield* SessionReceipt.expireEvidence(database, { rootID: root.id, now: 20, retentionMs: 10 })
+      expect(SessionEvidence.exists(root.id, "retained_evidence_operation")).toBe(false)
+
+      SessionEvidence.write(
+        root.id,
+        "deleted_evidence_operation",
+        [{ receiptID: "retained_evidence_receipt", content: "baseline" }],
+        1_000,
+      )
+      yield* session.remove(root.id)
+      yield* SessionReceipt.removeRootEvidence(database, root.id)
+      expect(SessionEvidence.exists(root.id, "deleted_evidence_operation")).toBe(false)
+    }),
+  )
+
   it.instance("reserves root-wide receipt and metadata capacity before publishing", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service

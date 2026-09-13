@@ -7,13 +7,18 @@ import {
 } from "@opencode-ai/core/session/sql"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { Effect } from "effect"
+import { SessionEvidence } from "./evidence"
 import { SessionID } from "./schema"
 
 export namespace SessionReceipt {
   export type Budget = {
     maxReceipts: number
     maxMetadataBytes: number
+    maxEvidenceBytes?: number
+    retentionMs?: number
   }
+
+  export type Evidence = SessionEvidence.Entry
 
   export type Fact = {
     id: string
@@ -40,6 +45,7 @@ export namespace SessionReceipt {
     origin: string
     receipts: ReadonlyArray<Fact>
     budget: Budget
+    evidence?: ReadonlyArray<Evidence>
   }
 
   export function reserve(database: Database.Interface, input: ReservationInput) {
@@ -166,7 +172,56 @@ export namespace SessionReceipt {
   export function publish(database: Database.Interface, input: ReservationInput) {
     return Effect.gen(function* () {
       yield* reserve(database, input)
+      const lineage = yield* root(database, input.sessionID)
+      if (input.evidence?.length)
+        yield* Effect.try({
+          try: () => SessionEvidence.write(lineage, input.id, input.evidence!, input.budget.maxEvidenceBytes ?? 0),
+          catch: (cause) => new Error(`Failed to publish receipt evidence for ${input.id}`, { cause }),
+        })
       yield* commit(database, input)
+    })
+  }
+
+  /** Removes evidence that cannot belong to a committed receipt operation. Safe to repeat after interruption. */
+  export function cleanupEvidence(database: Database.Interface, rootID: SessionID) {
+    return Effect.gen(function* () {
+      const operations = yield* database.db
+        .select({ id: SessionReceiptOperationTable.id })
+        .from(SessionReceiptOperationTable)
+        .where(
+          and(eq(SessionReceiptOperationTable.root_id, rootID), eq(SessionReceiptOperationTable.state, "committed")),
+        )
+        .all()
+      yield* Effect.sync(() => SessionEvidence.sweep(rootID, new Set(operations.map((operation) => operation.id))))
+    })
+  }
+
+  /** Expire root-owned evidence after its terminal retention window without changing immutable receipt facts. */
+  export function expireEvidence(
+    database: Database.Interface,
+    input: { rootID: SessionID; now: number; retentionMs: number },
+  ) {
+    return Effect.gen(function* () {
+      const latest = yield* database.db
+        .select({ timeCreated: SessionReceiptTable.time_created })
+        .from(SessionReceiptTable)
+        .where(eq(SessionReceiptTable.root_id, input.rootID))
+        .orderBy(desc(SessionReceiptTable.time_created))
+        .get()
+      if (latest && latest.timeCreated + input.retentionMs <= input.now)
+        yield* Effect.sync(() => SessionEvidence.removeRoot(input.rootID))
+    })
+  }
+
+  /** Deleting a lineage root owns deletion of all of its host-local evidence. */
+  export function removeRootEvidence(database: Database.Interface, sessionID: SessionID) {
+    return Effect.gen(function* () {
+      const lineage = yield* database.db
+        .select({ rootID: SessionLineageTable.root_id })
+        .from(SessionLineageTable)
+        .where(eq(SessionLineageTable.session_id, sessionID))
+        .get()
+      if (lineage?.rootID === sessionID) yield* Effect.sync(() => SessionEvidence.removeRoot(sessionID))
     })
   }
 
@@ -272,6 +327,19 @@ export namespace SessionReceipt {
       }))
     })
   }
+}
+
+function root(database: Database.Interface, sessionID: SessionID) {
+  return database.db
+    .select({ rootID: SessionLineageTable.root_id })
+    .from(SessionLineageTable)
+    .where(eq(SessionLineageTable.session_id, sessionID))
+    .get()
+    .pipe(
+      Effect.flatMap((lineage) =>
+        lineage ? Effect.succeed(lineage.rootID) : Effect.fail(new Error(`Missing lineage root for ${sessionID}`)),
+      ),
+    )
 }
 
 function metadataSize(receipts: ReadonlyArray<SessionReceipt.Fact>) {
