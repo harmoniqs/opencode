@@ -109,6 +109,71 @@ export const SessionLineageOriginTable = sqliteTable(
   ],
 )
 
+/** Immutable root-owned facts for Files Changed operation publication. */
+export const SessionReceiptOperationTable = sqliteTable(
+  "session_receipt_operation",
+  {
+    id: text().primaryKey(),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    origin: text().notNull(),
+    state: text().$type<"prepared" | "evidence_ready" | "committed">().notNull(),
+  },
+  (table) => [index("session_receipt_operation_root_idx").on(table.root_id)],
+)
+
+/** Immutable resource facts. Creation sequence is scoped to the lineage root. */
+export const SessionReceiptTable = sqliteTable(
+  "session_receipt",
+  {
+    id: text().primaryKey(),
+    operation_id: text()
+      .notNull()
+      .references(() => SessionReceiptOperationTable.id, { onDelete: "cascade" }),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    creation_seq: integer().notNull(),
+    resource: text().notNull(),
+    operation: text().notNull(),
+    outcome: text().notNull(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("session_receipt_root_creation_seq_idx").on(table.root_id, table.creation_seq),
+    index("session_receipt_operation_idx").on(table.operation_id),
+  ],
+)
+
+/** Append-only observations deliberately separate from immutable receipt facts. */
+export const SessionReceiptAssessmentTable = sqliteTable(
+  "session_receipt_assessment",
+  {
+    id: text().primaryKey(),
+    receipt_id: text()
+      .notNull()
+      .references(() => SessionReceiptTable.id, { onDelete: "cascade" }),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    confidence: text().notNull(),
+    net_state: text().notNull(),
+    evidence_state: text().notNull(),
+    revision: integer().notNull(),
+    expires_at: integer(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("session_receipt_assessment_receipt_revision_idx").on(table.receipt_id, table.revision),
+    index("session_receipt_assessment_root_idx").on(table.root_id),
+  ],
+)
+
 export const MessageTable = sqliteTable(
   "message",
   {

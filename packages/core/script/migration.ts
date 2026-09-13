@@ -147,10 +147,21 @@ export default {
   up(tx) {
     return Effect.gen(function* () {
 ${renderStatements(sql)}
+${renderReceiptTriggers()}
     })
   },
 } satisfies Omit<DatabaseMigration.Migration, "id">
 `
+}
+
+function renderReceiptTriggers() {
+  return [
+    "CREATE TRIGGER session_receipt_immutable BEFORE UPDATE ON session_receipt BEGIN SELECT RAISE(ABORT, 'session receipt facts are immutable'); END;",
+    "CREATE TRIGGER session_receipt_assessment_append_only BEFORE UPDATE ON session_receipt_assessment BEGIN SELECT RAISE(ABORT, 'session receipt assessments are append-only'); END;",
+    "CREATE TRIGGER session_receipt_operation_state BEFORE UPDATE OF state ON session_receipt_operation WHEN NOT ((OLD.state = 'prepared' AND NEW.state = 'evidence_ready') OR (OLD.state = 'evidence_ready' AND NEW.state = 'committed')) BEGIN SELECT RAISE(ABORT, 'invalid session receipt operation state transition'); END;",
+  ]
+    .map((statement) => `      yield* tx.run(${JSON.stringify(statement)})`)
+    .join("\n")
 }
 
 function renderStatements(sql: string) {
