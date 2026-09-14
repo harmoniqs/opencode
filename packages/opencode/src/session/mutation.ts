@@ -15,6 +15,9 @@ export namespace SessionMutation {
           | "plugin-problem-record"
           | "runner-run-metadata"
           | "runner-artifact"
+          | "user-sidebar-op"
+          | "user-preview-edit"
+          | "user-review-edit"
         kind: "ledger"
       }
     | { id: "shell-action" | "mcp-action" | "custom-tool-action" | "cli-action"; kind: "opaque" }
@@ -42,6 +45,9 @@ export namespace SessionMutation {
     { id: "plugin-problem-record", kind: "ledger" },
     { id: "runner-run-metadata", kind: "ledger" },
     { id: "runner-artifact", kind: "ledger" },
+    { id: "user-sidebar-op", kind: "ledger" },
+    { id: "user-preview-edit", kind: "ledger" },
+    { id: "user-review-edit", kind: "ledger" },
     { id: "shell-action", kind: "opaque" },
     { id: "mcp-action", kind: "opaque" },
     { id: "custom-tool-action", kind: "opaque" },
@@ -56,7 +62,7 @@ export namespace SessionMutation {
   ] as const satisfies ReadonlyArray<Route>
 
   export namespace Registry {
-    export const version = 3
+    export const version = 4
 
     export function manifest() {
       return { version, routes: [...routes] }
