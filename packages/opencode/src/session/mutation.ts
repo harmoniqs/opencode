@@ -6,13 +6,32 @@ const contextHandle: unique symbol = Symbol("session-mutation-context")
 export namespace SessionMutation {
   export type Route =
     | {
-        id: "local-file-write" | "tool-write" | "tool-edit" | "tool-apply-patch" | "direct-file-write"
+        id:
+          | "local-file-write"
+          | "tool-write"
+          | "tool-edit"
+          | "tool-apply-patch"
+          | "direct-file-write"
+          | "plugin-problem-record"
+          | "runner-run-metadata"
+          | "runner-artifact"
         kind: "ledger"
       }
-    | { id: "shell-action" | "mcp-action" | "custom-tool-action"; kind: "opaque" }
-    | { id: "ledger-infrastructure"; kind: "out_of_scope" }
+    | { id: "shell-action" | "mcp-action" | "custom-tool-action" | "cli-action"; kind: "opaque" }
+    | {
+        id:
+          | "ledger-infrastructure"
+          | "credential-store"
+          | "cache-store"
+          | "queue-store"
+          | "updater-state"
+          | "telemetry-store"
+          | "retention-state"
+        kind: "out_of_scope"
+      }
 
   export type LedgerRouteID = Extract<Route, { kind: "ledger" }>["id"]
+  export type OpaqueRouteID = Extract<Route, { kind: "opaque" }>["id"]
 
   const routes = [
     { id: "local-file-write", kind: "ledger" },
@@ -20,14 +39,24 @@ export namespace SessionMutation {
     { id: "tool-edit", kind: "ledger" },
     { id: "tool-apply-patch", kind: "ledger" },
     { id: "direct-file-write", kind: "ledger" },
+    { id: "plugin-problem-record", kind: "ledger" },
+    { id: "runner-run-metadata", kind: "ledger" },
+    { id: "runner-artifact", kind: "ledger" },
     { id: "shell-action", kind: "opaque" },
     { id: "mcp-action", kind: "opaque" },
     { id: "custom-tool-action", kind: "opaque" },
+    { id: "cli-action", kind: "opaque" },
     { id: "ledger-infrastructure", kind: "out_of_scope" },
+    { id: "credential-store", kind: "out_of_scope" },
+    { id: "cache-store", kind: "out_of_scope" },
+    { id: "queue-store", kind: "out_of_scope" },
+    { id: "updater-state", kind: "out_of_scope" },
+    { id: "telemetry-store", kind: "out_of_scope" },
+    { id: "retention-state", kind: "out_of_scope" },
   ] as const satisfies ReadonlyArray<Route>
 
   export namespace Registry {
-    export const version = 2
+    export const version = 3
 
     export function manifest() {
       return { version, routes: [...routes] }
@@ -176,7 +205,7 @@ export namespace SessionMutation {
       }
     | {
         kind: "opaque"
-        routeID: "shell-action" | "mcp-action" | "custom-tool-action"
+        routeID: OpaqueRouteID
         panelID: string
         sessionID: string
         rootID: string
@@ -190,7 +219,7 @@ export namespace SessionMutation {
   type Issue = Omit<Request, "operationID"> & { kind: "local" | "opaque"; expiresAt: number }
   type GroupIssue = Omit<GroupRequest, "operationID"> & { expiresAt: number }
   type OpaqueRequest = Omit<Request, "source" | "destination"> & {
-    routeID: "shell-action" | "mcp-action" | "custom-tool-action"
+    routeID: OpaqueRouteID
     resources?: ReadonlyArray<DeclaredResource>
   }
   export function create(input: {
