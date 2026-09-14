@@ -23,9 +23,13 @@ const mutationGate = (input: {
 describe("session mutation registry", () => {
   test("classifies every registered route before storage is available", () => {
     expect(SessionMutation.Registry.manifest()).toEqual({
-      version: 1,
+      version: 2,
       routes: [
         { id: "local-file-write", kind: "ledger" },
+        { id: "tool-write", kind: "ledger" },
+        { id: "tool-edit", kind: "ledger" },
+        { id: "tool-apply-patch", kind: "ledger" },
+        { id: "direct-file-write", kind: "ledger" },
         { id: "shell-action", kind: "opaque" },
         { id: "mcp-action", kind: "opaque" },
         { id: "custom-tool-action", kind: "opaque" },
@@ -113,6 +117,349 @@ describe("session mutation registry", () => {
         provider: localProvider(() => ({ groupID: "operation", outcome: "applied" })),
       }),
     ).toEqual({ kind: "executed", result: { groupID: "operation", outcome: "applied" } })
+  })
+
+  test("commits one declared patch group for move, delete, implicit parents, and formatter effects", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const resources = [
+      {
+        id: "move-source",
+        endpoint: { value: "provider:source", kind: "file" },
+        operation: "move",
+        role: "source",
+      },
+      {
+        id: "move-destination",
+        endpoint: { value: "provider:destination", kind: "file" },
+        operation: "move",
+        role: "destination",
+      },
+      {
+        id: "delete",
+        endpoint: { value: "provider:delete", kind: "file" },
+        operation: "delete",
+        role: "target",
+      },
+      {
+        id: "implicit-parent",
+        endpoint: { value: "provider:parent", kind: "directory" },
+        operation: "create_parent",
+        role: "implicit_parent",
+      },
+      {
+        id: "format",
+        endpoint: { value: "provider:formatted", kind: "file" },
+        operation: "format",
+        role: "formatter",
+      },
+    ] as const
+    const request = {
+      routeID: "tool-apply-patch" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "patch",
+      operationID: "patch-operation",
+      resources,
+    }
+    const context = gate.issueGroup({ ...request, expiresAt: 20 })
+    const events: string[] = []
+
+    expect(
+      gate.executeGroup({
+        context,
+        request,
+        provider: {
+          capabilities: { safeResolve: true, noFollowWrite: true },
+          safeResolve: (endpoint) => {
+            events.push(`resolve:${endpoint.value}`)
+            return endpoint
+          },
+          execute: (resource) => {
+            events.push(`write:${resource.id}`)
+            return "applied"
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "executed",
+      result: {
+        groupID: "patch-operation",
+        outcome: "applied",
+        receipts: resources.map((resource) => ({ ...resource, outcome: "applied" })),
+      },
+    })
+    expect(events).toEqual([
+      "resolve:provider:source",
+      "resolve:provider:destination",
+      "resolve:provider:delete",
+      "resolve:provider:parent",
+      "resolve:provider:formatted",
+      "write:move-source",
+      "write:move-destination",
+      "write:delete",
+      "write:implicit-parent",
+      "write:format",
+    ])
+  })
+
+  test("requires a registered group context before every engine write route can invoke storage", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    for (const routeID of ["tool-write", "tool-edit", "tool-apply-patch", "direct-file-write"] as const) {
+      const request = {
+        routeID,
+        panelID: "panel",
+        sessionID: "session",
+        rootID: "root",
+        origin: "agent",
+        operation: "write",
+        operationID: `${routeID}-operation`,
+        resources: [
+          {
+            id: "target",
+            endpoint: { value: `${routeID}:target`, kind: "file" },
+            operation: "write",
+            role: "target",
+          },
+        ],
+      } as const
+      let writes = 0
+      const provider = {
+        capabilities: { safeResolve: true, noFollowWrite: true },
+        safeResolve: (endpoint: SessionMutation.Endpoint) => endpoint,
+        execute: () => {
+          writes++
+          return "applied" as const
+        },
+      }
+
+      expect(gate.executeGroup({ request, provider })).toEqual({ kind: "denied", reason: "missing_context" })
+      expect(writes).toBe(0)
+
+      const context = gate.issueGroup({ ...request, expiresAt: 20 })
+      expect(gate.executeGroup({ context, request, provider })).toMatchObject({ kind: "executed" })
+      expect(writes).toBe(1)
+      expect(gate.executeGroup({ context, request, provider })).toMatchObject({ kind: "replayed" })
+      expect(writes).toBe(1)
+    }
+  })
+
+  test("denies a recursive group whose preflight snapshot exceeds its resource budget before mutation", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const resources = [
+      {
+        id: "first",
+        endpoint: { value: "provider:first", kind: "file" },
+        operation: "delete",
+        role: "target",
+      },
+      {
+        id: "second",
+        endpoint: { value: "provider:second", kind: "file" },
+        operation: "delete",
+        role: "target",
+      },
+    ] as const
+    const request = {
+      routeID: "tool-apply-patch" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "delete-recursive",
+      operationID: "recursive-operation",
+      resources,
+      recursive: { maxResources: 1 },
+    }
+    const context = gate.issueGroup({ ...request, expiresAt: 20 })
+    let accesses = 0
+
+    expect(
+      gate.executeGroup({
+        context,
+        request,
+        provider: {
+          capabilities: { safeResolve: true, noFollowWrite: true },
+          safeResolve: (endpoint) => {
+            accesses++
+            return endpoint
+          },
+          execute: () => {
+            accesses++
+            return "applied"
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "denied",
+      reason: "resource_budget_exceeded",
+      result: { groupID: "recursive-operation", outcome: "denied", receipts: [] },
+    })
+    expect(accesses).toBe(0)
+  })
+
+  test("rejects a recursive execution whose enumerated resources differ from its preflight snapshot", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const planned = [
+      {
+        id: "first",
+        endpoint: { value: "provider:first", kind: "file" },
+        operation: "delete",
+        role: "target",
+      },
+    ] as const
+    const request = {
+      routeID: "tool-apply-patch" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "delete-recursive",
+      operationID: "changed-enumeration",
+      resources: planned,
+      recursive: { maxResources: 2 },
+    }
+    const context = gate.issueGroup({ ...request, expiresAt: 20 })
+    let writes = 0
+
+    expect(
+      gate.executeGroup({
+        context,
+        request: {
+          ...request,
+          resources: [
+            ...planned,
+            {
+              id: "second",
+              endpoint: { value: "provider:second", kind: "file" },
+              operation: "delete",
+              role: "target",
+            },
+          ],
+        },
+        provider: {
+          capabilities: { safeResolve: true, noFollowWrite: true },
+          safeResolve: (endpoint) => endpoint,
+          execute: () => {
+            writes++
+            return "applied"
+          },
+        },
+      }),
+    ).toEqual({ kind: "denied", reason: "invalid_context" })
+    expect(writes).toBe(0)
+  })
+
+  test("retains declared resource outcomes when non-atomic execution fails", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const resources = [
+      {
+        id: "written",
+        endpoint: { value: "provider:written", kind: "file" },
+        operation: "patch",
+        role: "target",
+      },
+      {
+        id: "failed",
+        endpoint: { value: "provider:failed", kind: "file" },
+        operation: "patch",
+        role: "target",
+      },
+      {
+        id: "not-started",
+        endpoint: { value: "provider:later", kind: "file" },
+        operation: "patch",
+        role: "target",
+      },
+    ] as const
+    const request = {
+      routeID: "tool-apply-patch" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "patch",
+      operationID: "partial-operation",
+      resources,
+    }
+    const context = gate.issueGroup({ ...request, expiresAt: 20 })
+
+    expect(
+      gate.executeGroup({
+        context,
+        request,
+        provider: {
+          capabilities: { safeResolve: true, noFollowWrite: true },
+          safeResolve: (endpoint) => endpoint,
+          execute: (resource) => (resource.id === "failed" ? "failed" : "applied"),
+        },
+      }),
+    ).toEqual({
+      kind: "executed",
+      result: {
+        groupID: "partial-operation",
+        outcome: "partial",
+        receipts: [
+          { ...resources[0], outcome: "applied" },
+          { ...resources[1], outcome: "failed" },
+          { ...resources[2], outcome: "not_started" },
+        ],
+      },
+    })
+  })
+
+  test("records only not-started declared resources when pre-write validation fails", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const resources = [
+      {
+        id: "first",
+        endpoint: { value: "provider:first", kind: "file" },
+        operation: "patch",
+        role: "target",
+      },
+      {
+        id: "second",
+        endpoint: { value: "provider:second", kind: "file" },
+        operation: "patch",
+        role: "target",
+      },
+    ] as const
+    const request = {
+      routeID: "tool-apply-patch" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "patch",
+      operationID: "pre-write-failure",
+      resources,
+    }
+    const context = gate.issueGroup({ ...request, expiresAt: 20 })
+    let writes = 0
+
+    expect(
+      gate.executeGroup({
+        context,
+        request,
+        provider: {
+          capabilities: { safeResolve: true, noFollowWrite: true },
+          safeResolve: (endpoint) => (endpoint.value === "provider:second" ? undefined : endpoint),
+          execute: () => {
+            writes++
+            return "applied"
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "executed",
+      result: {
+        groupID: "pre-write-failure",
+        outcome: "failed",
+        receipts: resources.map((resource) => ({ ...resource, outcome: "not_started" })),
+      },
+    })
+    expect(writes).toBe(0)
   })
 
   test("denies expired, revoked, wrong-owner, and wrong-endpoint contexts before storage", () => {
@@ -356,8 +703,71 @@ describe("session mutation registry", () => {
         },
       },
     })
-    expect(result.kind === "executed" && result.result.receipt).not.toHaveProperty("resource")
-    expect(result.kind === "executed" && result.result.receipt).not.toHaveProperty("patch")
+    expect(result.kind === "executed" && "receipt" in result.result && result.result.receipt).not.toHaveProperty(
+      "resource",
+    )
+    expect(result.kind === "executed" && "receipt" in result.result && result.result.receipt).not.toHaveProperty(
+      "patch",
+    )
+  })
+
+  test("uses ordinary receipts only for complete declared opaque resources", () => {
+    const gate = mutationGate({ rootForSession: () => "root", now: () => 10 })
+    const opaque = gate.issue({
+      kind: "opaque",
+      routeID: "mcp-action",
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "mcp",
+      expiresAt: 20,
+    })!
+    const resources = [
+      {
+        id: "declared",
+        endpoint: { value: "remote:declared", kind: "file" },
+        operation: "write",
+        role: "target",
+      },
+    ] as const
+    const request = {
+      routeID: "mcp-action" as const,
+      panelID: "panel",
+      sessionID: "session",
+      rootID: "root",
+      origin: "agent",
+      operation: "mcp",
+      operationID: "declared-opaque",
+      resources,
+    }
+
+    expect(gate.executeOpaque({ context: opaque, request })).toEqual({
+      kind: "executed",
+      result: {
+        groupID: "declared-opaque",
+        outcome: "applied",
+        receipts: resources.map((resource) => ({ ...resource, outcome: "applied" })),
+      },
+    })
+    expect(
+      gate.executeOpaque({
+        context: opaque,
+        request: { ...request, operationID: "unknown-opaque", resources: [] },
+      }),
+    ).toEqual({
+      kind: "executed",
+      result: {
+        groupID: "unknown-opaque",
+        outcome: "unknown",
+        receipt: {
+          kind: "unknown_mutation",
+          operationID: "unknown-opaque",
+          origin: "agent",
+          operation: "mcp",
+        },
+      },
+    })
   })
 
   test("denies known local mutation when a provider cannot guarantee safe resolution and no-follow writes", () => {
