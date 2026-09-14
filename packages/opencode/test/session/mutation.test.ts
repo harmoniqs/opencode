@@ -23,17 +23,27 @@ const mutationGate = (input: {
 describe("session mutation registry", () => {
   test("classifies every registered route before storage is available", () => {
     expect(SessionMutation.Registry.manifest()).toEqual({
-      version: 2,
+      version: 3,
       routes: [
         { id: "local-file-write", kind: "ledger" },
         { id: "tool-write", kind: "ledger" },
         { id: "tool-edit", kind: "ledger" },
         { id: "tool-apply-patch", kind: "ledger" },
         { id: "direct-file-write", kind: "ledger" },
+        { id: "plugin-problem-record", kind: "ledger" },
+        { id: "runner-run-metadata", kind: "ledger" },
+        { id: "runner-artifact", kind: "ledger" },
         { id: "shell-action", kind: "opaque" },
         { id: "mcp-action", kind: "opaque" },
         { id: "custom-tool-action", kind: "opaque" },
+        { id: "cli-action", kind: "opaque" },
         { id: "ledger-infrastructure", kind: "out_of_scope" },
+        { id: "credential-store", kind: "out_of_scope" },
+        { id: "cache-store", kind: "out_of_scope" },
+        { id: "queue-store", kind: "out_of_scope" },
+        { id: "updater-state", kind: "out_of_scope" },
+        { id: "telemetry-store", kind: "out_of_scope" },
+        { id: "retention-state", kind: "out_of_scope" },
       ],
     })
     expect(SessionMutation.Registry.require("unregistered-storage-route")).toBeUndefined()
