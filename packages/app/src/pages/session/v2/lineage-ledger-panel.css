@@ -1,0 +1,125 @@
+/* Unified lineage-ledger panel (amicode#1082). Geometry + color come only from
+ * design-system tokens, so both themes are equal citizens and the status color
+ * is redundant to the icon + text label (color is never the only signal). */
+
+[data-component="lineage-ledger"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-capability"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--v2-background-bg-layer-01);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-capability"][data-mode="legacy"],
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-capability"][data-mode="partial"] {
+  border-color: var(--v2-border-border-warning);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-filter"] {
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md, 8px);
+  background: var(--v2-background-bg-layer-02);
+  color: var(--v2-text-text-base);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-filter"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: 1px;
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-resources"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-resource-row"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-resource-row"]:hover {
+  background: var(--v2-overlay-simple-overlay-hover);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-resource-row"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: -1px;
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-path"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-status"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-status"][data-tone="success"] {
+  color: var(--v2-state-fg-success);
+}
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-status"][data-tone="danger"] {
+  color: var(--v2-state-fg-danger);
+}
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-status"][data-tone="warning"] {
+  color: var(--v2-state-fg-warning);
+}
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-status"][data-tone="neutral"] {
+  color: var(--v2-text-text-muted);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-history"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  padding: var(--space-1, 4px) var(--space-2, 8px) var(--space-2, 8px) var(--space-5, 20px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-unknown"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  padding: var(--space-2, 8px);
+  border: 1px solid var(--v2-border-border-warning);
+  border-radius: var(--radius-lg, 12px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-unknown-item"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-more"] {
+  align-self: flex-start;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: var(--radius-md, 8px);
+  background: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-base);
+  cursor: pointer;
+}
+
+[data-component="lineage-ledger"] [data-slot="lineage-ledger-more"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus);
+  outline-offset: 1px;
+}
