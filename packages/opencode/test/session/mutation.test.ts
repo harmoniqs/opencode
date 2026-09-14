@@ -23,7 +23,7 @@ const mutationGate = (input: {
 describe("session mutation registry", () => {
   test("classifies every registered route before storage is available", () => {
     expect(SessionMutation.Registry.manifest()).toEqual({
-      version: 3,
+      version: 4,
       routes: [
         { id: "local-file-write", kind: "ledger" },
         { id: "tool-write", kind: "ledger" },
@@ -33,6 +33,9 @@ describe("session mutation registry", () => {
         { id: "plugin-problem-record", kind: "ledger" },
         { id: "runner-run-metadata", kind: "ledger" },
         { id: "runner-artifact", kind: "ledger" },
+        { id: "user-sidebar-op", kind: "ledger" },
+        { id: "user-preview-edit", kind: "ledger" },
+        { id: "user-review-edit", kind: "ledger" },
         { id: "shell-action", kind: "opaque" },
         { id: "mcp-action", kind: "opaque" },
         { id: "custom-tool-action", kind: "opaque" },
