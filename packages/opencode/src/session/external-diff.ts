@@ -21,6 +21,8 @@ export namespace ExternalDiff {
         deletions: number
       }
     | { reference: string; file: string; state: "unchanged" | "unavailable" }
+  /** Read-only adapter for v1 external-diff persistence; it never claims ledger ownership. */
+  export type CompatibilityRecord = { kind: "legacy_external"; assessment: Assessment }
 
   type Endpoint = { present: true; content: string } | { present: false }
   type Expected = { present: boolean; digest?: string }
@@ -445,6 +447,10 @@ export namespace ExternalDiff {
         })
       : []
     return { version: 1, revision: revisions.get(sessionID) ?? 0, assessments }
+  }
+  /** Projects persisted v1 records without attaching an operation or lineage claim. */
+  export function compatibility(sessionID: string): CompatibilityRecord[] {
+    return assessed(sessionID).assessments.map((assessment) => ({ kind: "legacy_external", assessment }))
   }
   /** Test-only restart seam; production restart rehydrates lazily from the manifest. */
   export function resetMemoryForTest() {

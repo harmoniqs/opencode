@@ -35,6 +35,9 @@ const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
     effect.pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:", disableWAL: true })), Effect.scoped),
   )
 
+const runAtPath = <A, E>(filename: string, effect: Effect.Effect<A, E, SqlClientService>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(SqliteClient.layer({ filename, disableWAL: true })), Effect.scoped))
+
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
 
 describe("DatabaseMigration", () => {
@@ -95,6 +98,55 @@ describe("DatabaseMigration", () => {
           { name: "session_message_session_time_created_id_idx" },
           { name: "session_message_session_type_seq_idx" },
         ])
+      }),
+    )
+  })
+
+  test("preserves committed receipt groups, immutable receipts, and assessment history across restart", async () => {
+    await using tmp = await tmpdir()
+    const filename = path.join(tmp.path, "receipts.sqlite")
+    await runAtPath(
+      filename,
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(
+          sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('project', '/project', 1, 1, '[]')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('root', 'project', 'root', '/project', 'Root', 'test', 1, 1)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session_receipt_operation (id, root_id, session_id, origin, reserved_receipts, reserved_metadata_bytes, state) VALUES ('operation', 'root', 'root', 'agent', 1, 64, 'committed')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session_receipt (id, operation_id, root_id, creation_seq, resource, operation, outcome, time_created) VALUES ('receipt', 'operation', 'root', 1, 'file:///root', 'write', 'applied', 2)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session_receipt_assessment (id, receipt_id, root_id, confidence, net_state, evidence_state, revision, expires_at, time_created) VALUES ('assessment', 'receipt', 'root', 'verified', 'changed', 'available', 1, 3, 3)`,
+        )
+      }),
+    )
+    await runAtPath(
+      filename,
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        expect(
+          yield* db.get(sql`
+            SELECT operation.state, operation.reserved_receipts AS reservedReceipts, operation.reserved_metadata_bytes AS reservedMetadataBytes, receipt.creation_seq AS sequence, assessment.revision, assessment.expires_at AS expiresAt
+            FROM session_receipt_operation operation
+            JOIN session_receipt receipt ON receipt.operation_id = operation.id
+            JOIN session_receipt_assessment assessment ON assessment.receipt_id = receipt.id
+          `),
+        ).toEqual({
+          state: "committed",
+          reservedReceipts: 1,
+          reservedMetadataBytes: 64,
+          sequence: 1,
+          revision: 1,
+          expiresAt: 3,
+        })
       }),
     )
   })

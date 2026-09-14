@@ -179,6 +179,28 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`session_lineage_origin\` (
+          \`root_id\` text NOT NULL,
+          \`session_id\` text NOT NULL,
+          \`title\` text NOT NULL,
+          \`edge_kind\` text NOT NULL,
+          \`deleted_at\` integer NOT NULL,
+          CONSTRAINT \`session_lineage_origin_pk\` PRIMARY KEY(\`root_id\`, \`session_id\`)
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_lineage\` (
+          \`session_id\` text PRIMARY KEY,
+          \`root_id\` text NOT NULL,
+          \`mode\` text NOT NULL,
+          \`parent_id\` text,
+          \`edge_kind\` text,
+          \`legacy_parent_id\` text,
+          \`epoch_started_at\` integer,
+          CONSTRAINT \`fk_session_lineage_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`session_message\` (
           \`id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -188,6 +210,47 @@ export default {
           \`time_updated\` integer NOT NULL,
           \`data\` text NOT NULL,
           CONSTRAINT \`fk_session_message_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_receipt_assessment\` (
+          \`id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL,
+          \`root_id\` text NOT NULL,
+          \`confidence\` text NOT NULL,
+          \`net_state\` text NOT NULL,
+          \`evidence_state\` text NOT NULL,
+          \`revision\` integer NOT NULL,
+          \`expires_at\` integer,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`fk_session_receipt_assessment_receipt_id_session_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`session_receipt\`(\`id\`) ON DELETE CASCADE,
+          CONSTRAINT \`fk_session_receipt_assessment_root_id_session_id_fk\` FOREIGN KEY (\`root_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_receipt_operation\` (
+          \`id\` text PRIMARY KEY,
+          \`root_id\` text NOT NULL,
+          \`session_id\` text NOT NULL,
+          \`origin\` text NOT NULL,
+          \`reserved_receipts\` integer DEFAULT 0 NOT NULL,
+          \`reserved_metadata_bytes\` integer DEFAULT 0 NOT NULL,
+          \`state\` text NOT NULL,
+          CONSTRAINT \`fk_session_receipt_operation_root_id_session_id_fk\` FOREIGN KEY (\`root_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_receipt\` (
+          \`id\` text PRIMARY KEY,
+          \`operation_id\` text NOT NULL,
+          \`root_id\` text NOT NULL,
+          \`creation_seq\` integer NOT NULL,
+          \`resource\` text NOT NULL,
+          \`operation\` text NOT NULL,
+          \`outcome\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`fk_session_receipt_operation_id_session_receipt_operation_id_fk\` FOREIGN KEY (\`operation_id\`) REFERENCES \`session_receipt_operation\`(\`id\`) ON DELETE CASCADE,
+          CONSTRAINT \`fk_session_receipt_root_id_session_id_fk\` FOREIGN KEY (\`root_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -271,6 +334,9 @@ export default {
       yield* tx.run(
         `CREATE UNIQUE INDEX \`session_input_session_promoted_seq_idx\` ON \`session_input\` (\`session_id\`,\`promoted_seq\`);`,
       )
+      yield* tx.run(`CREATE INDEX \`session_lineage_origin_root_idx\` ON \`session_lineage_origin\` (\`root_id\`);`)
+      yield* tx.run(`CREATE INDEX \`session_lineage_root_idx\` ON \`session_lineage\` (\`root_id\`);`)
+      yield* tx.run(`CREATE INDEX \`session_lineage_parent_idx\` ON \`session_lineage\` (\`parent_id\`);`)
       yield* tx.run(
         `CREATE UNIQUE INDEX \`session_message_session_seq_idx\` ON \`session_message\` (\`session_id\`,\`seq\`);`,
       )
@@ -281,10 +347,32 @@ export default {
         `CREATE INDEX \`session_message_session_time_created_id_idx\` ON \`session_message\` (\`session_id\`,\`time_created\`,\`id\`);`,
       )
       yield* tx.run(`CREATE INDEX \`session_message_time_created_idx\` ON \`session_message\` (\`time_created\`);`)
+      yield* tx.run(
+        `CREATE UNIQUE INDEX \`session_receipt_assessment_receipt_revision_idx\` ON \`session_receipt_assessment\` (\`receipt_id\`,\`revision\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`session_receipt_assessment_root_idx\` ON \`session_receipt_assessment\` (\`root_id\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`session_receipt_operation_root_idx\` ON \`session_receipt_operation\` (\`root_id\`);`,
+      )
+      yield* tx.run(
+        `CREATE UNIQUE INDEX \`session_receipt_root_creation_seq_idx\` ON \`session_receipt\` (\`root_id\`,\`creation_seq\`);`,
+      )
+      yield* tx.run(`CREATE INDEX \`session_receipt_operation_idx\` ON \`session_receipt\` (\`operation_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_project_idx\` ON \`session\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_workspace_idx\` ON \`session\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_parent_idx\` ON \`session\` (\`parent_id\`);`)
       yield* tx.run(`CREATE INDEX \`todo_session_idx\` ON \`todo\` (\`session_id\`);`)
+      yield* tx.run(
+        "CREATE TRIGGER session_receipt_immutable BEFORE UPDATE ON session_receipt BEGIN SELECT RAISE(ABORT, 'session receipt facts are immutable'); END;",
+      )
+      yield* tx.run(
+        "CREATE TRIGGER session_receipt_assessment_append_only BEFORE UPDATE ON session_receipt_assessment BEGIN SELECT RAISE(ABORT, 'session receipt assessments are append-only'); END;",
+      )
+      yield* tx.run(
+        "CREATE TRIGGER session_receipt_operation_state BEFORE UPDATE OF state ON session_receipt_operation WHEN NOT ((OLD.state = 'prepared' AND NEW.state = 'evidence_ready') OR (OLD.state = 'evidence_ready' AND NEW.state = 'committed')) BEGIN SELECT RAISE(ABORT, 'invalid session receipt operation state transition'); END;",
+      )
     })
   },
 } satisfies Omit<DatabaseMigration.Migration, "id">

@@ -43,5 +43,8 @@ export const migrations = (
     import("./migration/20260813162312_shocking_karnak"),
     import("./migration/20260820000001_add_session_directories"),
     import("./migration/20260828201050_normal_stryfe"),
+    import("./migration/20260913205004_session-lineage"),
+    import("./migration/20260913212936_session-receipt-storage"),
+    import("./migration/20260913221452_session-receipt-budget-reservation"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

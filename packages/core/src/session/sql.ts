@@ -66,6 +66,116 @@ export const SessionTable = sqliteTable(
   ],
 )
 
+/**
+ * Durable Files Changed lineage. A missing row is deliberately meaningful: it
+ * denotes a pre-rollout (legacy) session, never an inferred relationship.
+ */
+export const SessionLineageTable = sqliteTable(
+  "session_lineage",
+  {
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .primaryKey()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    root_id: text().$type<SessionSchema.ID>().notNull(),
+    mode: text().$type<"legacy" | "partial" | "full">().notNull(),
+    parent_id: text().$type<SessionSchema.ID>(),
+    edge_kind: text().$type<"task_spawn" | "session_spawn">(),
+    legacy_parent_id: text().$type<SessionSchema.ID>(),
+    epoch_started_at: integer(),
+  },
+  (table) => [
+    index("session_lineage_root_idx").on(table.root_id),
+    index("session_lineage_parent_idx").on(table.parent_id),
+  ],
+)
+
+/**
+ * The root-owned, deletion-safe minimum required to render historical Files
+ * Changed receipts. It intentionally excludes child context and evidence.
+ */
+export const SessionLineageOriginTable = sqliteTable(
+  "session_lineage_origin",
+  {
+    root_id: text().$type<SessionSchema.ID>().notNull(),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    title: text().notNull(),
+    edge_kind: text().$type<"task_spawn" | "session_spawn">().notNull(),
+    deleted_at: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.root_id, table.session_id] }),
+    index("session_lineage_origin_root_idx").on(table.root_id),
+  ],
+)
+
+/** Immutable root-owned facts for Files Changed operation publication. */
+export const SessionReceiptOperationTable = sqliteTable(
+  "session_receipt_operation",
+  {
+    id: text().primaryKey(),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    origin: text().notNull(),
+    reserved_receipts: integer().notNull().default(0),
+    reserved_metadata_bytes: integer().notNull().default(0),
+    state: text().$type<"prepared" | "evidence_ready" | "committed">().notNull(),
+  },
+  (table) => [index("session_receipt_operation_root_idx").on(table.root_id)],
+)
+
+/** Immutable resource facts. Creation sequence is scoped to the lineage root. */
+export const SessionReceiptTable = sqliteTable(
+  "session_receipt",
+  {
+    id: text().primaryKey(),
+    operation_id: text()
+      .notNull()
+      .references(() => SessionReceiptOperationTable.id, { onDelete: "cascade" }),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    creation_seq: integer().notNull(),
+    resource: text().notNull(),
+    operation: text().notNull(),
+    outcome: text().notNull(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("session_receipt_root_creation_seq_idx").on(table.root_id, table.creation_seq),
+    index("session_receipt_operation_idx").on(table.operation_id),
+  ],
+)
+
+/** Append-only observations deliberately separate from immutable receipt facts. */
+export const SessionReceiptAssessmentTable = sqliteTable(
+  "session_receipt_assessment",
+  {
+    id: text().primaryKey(),
+    receipt_id: text()
+      .notNull()
+      .references(() => SessionReceiptTable.id, { onDelete: "cascade" }),
+    root_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    confidence: text().notNull(),
+    net_state: text().notNull(),
+    evidence_state: text().notNull(),
+    revision: integer().notNull(),
+    expires_at: integer(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("session_receipt_assessment_receipt_revision_idx").on(table.receipt_id, table.revision),
+    index("session_receipt_assessment_root_idx").on(table.root_id),
+  ],
+)
+
 export const MessageTable = sqliteTable(
   "message",
   {
