@@ -63,6 +63,26 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
+      # Guard against a split effect install. effect + @effect/* are lockstep
+      # versioned; a second, unpinned effect (e.g. pulled transitively via
+      # hono-openapi -> @standard-community/*) silently coexists in bun.lock and
+      # crashes at runtime in Schema.toJsonSchemaDocument with
+      # "undefined is not an object (evaluating 'a.name')" — nondeterministically
+      # by build. See the effect override in package.json. This asserts the lock
+      # resolves exactly one effect version.
+      - name: Guard single effect version in lockfile
+        if: runner.os == 'Linux'
+        run: |
+          versions=$(grep -oE '"effect@[^"]+"' bun.lock | sort -u)
+          count=$(printf '%s\n' "$versions" | grep -c . || true)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::bun.lock resolves $count effect versions; expected exactly 1. A split effect install causes runtime tool-schema crashes."
+            printf '%s\n' "$versions"
+            echo "Fix: ensure the \"effect\" override in package.json pins the single supported version, then re-run bun install."
+            exit 1
+          fi
+          echo "OK: single effect version -> $versions"
+
       - name: Configure git identity
         run: |
           git config --global user.email "bot@opencode.ai"
