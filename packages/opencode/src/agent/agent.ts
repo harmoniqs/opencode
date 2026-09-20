@@ -309,6 +309,23 @@ const layer = Layer.effect(
           )
         }
 
+        // Allow the question tool for visible non-subagent agents unless explicitly configured.
+        // The shared defaults carry a question deny rule, so "explicit" means a question rule
+        // from config (user or agent), which is a distinct object from the defaults' rule.
+        const defaultQuestion = defaults.find((r) => r.permission === "question")
+        for (const name in agents) {
+          const agent = agents[name]
+          if (agent.mode === "subagent") continue
+          if (agent.hidden) continue
+          const explicit = agent.permission.some((r) => r.permission === "question" && r !== defaultQuestion)
+          if (explicit) continue
+
+          agents[name].permission = Permission.merge(
+            agents[name].permission,
+            Permission.fromConfig({ question: "allow" }),
+          )
+        }
+
         const get = Effect.fnUntraced(function* (agent: string) {
           return agents[agent]
         })

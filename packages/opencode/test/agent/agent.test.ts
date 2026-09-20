@@ -742,6 +742,96 @@ it.instance(
 )
 
 it.instance(
+  "config-defined primary agent allows question by default",
+  () =>
+    Effect.gen(function* () {
+      const director = yield* load((svc) => svc.get("director"))
+      expect(director).toBeDefined()
+      expect(director?.mode).toBe("primary")
+      expect(evalPerm(director, "question")).toBe("allow")
+    }),
+  {
+    config: {
+      agent: {
+        director: {
+          description: "Director",
+          mode: "primary",
+        },
+      },
+    },
+  },
+)
+
+it.instance(
+  "config-defined subagent still denies question",
+  () =>
+    Effect.gen(function* () {
+      const worker = yield* load((svc) => svc.get("worker"))
+      expect(worker).toBeDefined()
+      expect(worker?.mode).toBe("subagent")
+      expect(evalPerm(worker, "question")).toBe("deny")
+    }),
+  {
+    config: {
+      agent: {
+        worker: {
+          description: "Worker",
+          mode: "subagent",
+        },
+      },
+    },
+  },
+)
+
+it.instance(
+  "explicit question deny in config is respected for a primary agent",
+  () =>
+    Effect.gen(function* () {
+      const director = yield* load((svc) => svc.get("director"))
+      expect(director).toBeDefined()
+      expect(director?.mode).toBe("primary")
+      expect(evalPerm(director, "question")).toBe("deny")
+    }),
+  {
+    config: {
+      agent: {
+        director: {
+          description: "Director",
+          mode: "primary",
+          permission: {
+            question: "deny",
+          },
+        },
+      },
+    },
+  },
+)
+
+it.instance("hidden native agents keep question denied", () =>
+  Effect.gen(function* () {
+    for (const name of ["compaction", "title", "summary"]) {
+      const agent = yield* load((svc) => svc.get(name))
+      expect(agent).toBeDefined()
+      expect(agent?.hidden).toBe(true)
+      expect(evalPerm(agent, "question")).toBe("deny")
+    }
+  }),
+)
+
+it.instance("native build and plan keep question allowed, native subagents keep it denied", () =>
+  Effect.gen(function* () {
+    const build = yield* load((svc) => svc.get("build"))
+    const plan = yield* load((svc) => svc.get("plan"))
+    const general = yield* load((svc) => svc.get("general"))
+    const explore = yield* load((svc) => svc.get("explore"))
+    expect(evalPerm(build, "question")).toBe("allow")
+    expect(evalPerm(plan, "question")).toBe("allow")
+    expect(evalPerm(general, "question")).toBe("deny")
+    expect(evalPerm(explore, "question")).toBe("deny")
+  }),
+)
+
+it.instance(
   "defaultAgent throws when all primary agents are disabled",
   () => expectDefaultAgentError("no primary visible agent found"),
   {
