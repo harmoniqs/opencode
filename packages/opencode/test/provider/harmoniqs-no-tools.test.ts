@@ -1,27 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { jsonSchema } from "ai"
-import { LLMRequestPrep, isNoToolsProvider } from "@/session/llm/request"
+import { LLMRequestPrep } from "@/session/llm/request"
 
-// Harmoniqs AI is an OpenAI-compatible custom provider whose backend
-// (app-harmoniqs-ai) hard-rejects any request carrying a `tools` field with a
-// 400 unsupported_feature error. opencode agents default to tool calling, so
-// LLMRequestPrep.prepare must strip resolved tools for this provider — see
-// packages/opencode/src/session/llm/request.ts.
+// The Harmoniqs AI gateway (app.harmoniqs.ai) requires an Idempotency-Key
+// header on every tool-capable request for deduplication and billing. The
+// engine injects it at the transport level so it works in the TUI, extension,
+// and embedded hosts alike — no plugin dependency.
 
-describe("isNoToolsProvider", () => {
-  test("flags the harmoniqs provider", () => {
-    expect(isNoToolsProvider("harmoniqs")).toBe(true)
-  })
-
-  test("leaves other providers untouched", () => {
-    expect(isNoToolsProvider("anthropic")).toBe(false)
-    expect(isNoToolsProvider("openai")).toBe(false)
-    expect(isNoToolsProvider("")).toBe(false)
-  })
-})
-
-describe("LLMRequestPrep.prepare - harmoniqs no-tools gate", () => {
+describe("LLMRequestPrep.prepare - harmoniqs idempotency", () => {
   const sessionID = "test-session-harmoniqs"
 
   const harmoniqsModel = {
@@ -37,7 +24,7 @@ describe("LLMRequestPrep.prepare - harmoniqs no-tools gate", () => {
       temperature: true,
       reasoning: false,
       attachment: false,
-      toolcall: false,
+      toolcall: true,
       input: { text: true, audio: false, image: false, video: false, pdf: false },
       output: { text: true, audio: false, image: false, video: false, pdf: false },
       interleaved: false,
@@ -112,13 +99,25 @@ describe("LLMRequestPrep.prepare - harmoniqs no-tools gate", () => {
     }
   }
 
-  test("strips resolved tools for the harmoniqs provider", async () => {
+  test("sends Idempotency-Key header for harmoniqs provider", async () => {
     const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
-    expect(Object.keys(result.tools)).toHaveLength(0)
+    expect(result.headers["Idempotency-Key"]).toBeDefined()
+    expect(result.headers["Idempotency-Key"]).toMatch(/^amicode:/)
   })
 
-  test("leaves tools intact for other providers", async () => {
+  test("sends X-Session-Id header for harmoniqs provider", async () => {
+    const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
+    expect(result.headers["X-Session-Id"]).toBe(sessionID)
+  })
+
+  test("does not send Idempotency-Key for non-harmoniqs providers", async () => {
     const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(anthropicModel)))
-    expect(Object.keys(result.tools)).toContain("lookup")
+    expect(result.headers["Idempotency-Key"]).toBeUndefined()
+  })
+
+  test("generates unique Idempotency-Key per request", async () => {
+    const a = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
+    const b = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
+    expect(a.headers["Idempotency-Key"]).not.toBe(b.headers["Idempotency-Key"])
   })
 })
