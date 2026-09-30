@@ -23,6 +23,7 @@ export const dict = {
 
   "command.sidebar.toggle": "Prikaži/sakrij bočnu traku",
   "command.project.open": "Otvori projekat",
+  "command.panel.reset": "Resetuj stanje panela",
   "command.project.previous": "Prethodni projekat",
   "command.project.next": "Sljedeći projekat",
   "command.project.index": "Prebaci na projekat {{index}}",
