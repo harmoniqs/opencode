@@ -3,6 +3,7 @@ import { UI } from "@/cli/ui"
 import { errorMessage } from "@opencode-ai/tui/util/error"
 import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
+import { Parity } from "../../installation/parity"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -60,6 +61,9 @@ export const AttachCommand = cmd({
         describe: "cap visible mini replay to the newest N messages",
       }),
   handler: async (args) => {
+    // D3: a client boot asserts its build against the release channel —
+    // fail-open, bounded; the outcome lands in the log, never blocks attach.
+    await Parity.assertBoot({ timeout: "2 seconds" }).catch(() => {})
     if (args.replay === true) {
       UI.error("--replay is not supported; replay is enabled by default")
       process.exitCode = 1
