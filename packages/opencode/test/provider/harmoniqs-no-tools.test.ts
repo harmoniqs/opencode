@@ -99,25 +99,33 @@ describe("LLMRequestPrep.prepare - harmoniqs idempotency", () => {
     }
   }
 
+  // The per-provider header union carries the static shape only — harmoniqs
+  // injects Idempotency-Key at runtime (#374) — so tests index through a
+  // widened record rather than the narrowed type.
+  async function prepareHeaders(model: any) {
+    const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(model)))
+    return result.headers as Record<string, string | undefined>
+  }
+
   test("sends Idempotency-Key header for harmoniqs provider", async () => {
-    const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
-    expect(result.headers["Idempotency-Key"]).toBeDefined()
-    expect(result.headers["Idempotency-Key"]).toMatch(/^amicode:/)
+    const headers = await prepareHeaders(harmoniqsModel)
+    expect(headers["Idempotency-Key"]).toBeDefined()
+    expect(headers["Idempotency-Key"]).toMatch(/^amicode:/)
   })
 
   test("sends X-Session-Id header for harmoniqs provider", async () => {
-    const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
-    expect(result.headers["X-Session-Id"]).toBe(sessionID)
+    const headers = await prepareHeaders(harmoniqsModel)
+    expect(headers["X-Session-Id"]).toBe(sessionID)
   })
 
   test("does not send Idempotency-Key for non-harmoniqs providers", async () => {
-    const result = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(anthropicModel)))
-    expect(result.headers["Idempotency-Key"]).toBeUndefined()
+    const headers = await prepareHeaders(anthropicModel)
+    expect(headers["Idempotency-Key"]).toBeUndefined()
   })
 
   test("generates unique Idempotency-Key per request", async () => {
-    const a = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
-    const b = await Effect.runPromise(LLMRequestPrep.prepare(baseInput(harmoniqsModel)))
-    expect(a.headers["Idempotency-Key"]).not.toBe(b.headers["Idempotency-Key"])
+    const a = await prepareHeaders(harmoniqsModel)
+    const b = await prepareHeaders(harmoniqsModel)
+    expect(a["Idempotency-Key"]).not.toBe(b["Idempotency-Key"])
   })
 })
