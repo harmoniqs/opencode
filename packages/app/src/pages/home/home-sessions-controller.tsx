@@ -17,6 +17,7 @@ import { useLanguage } from "@/context/language"
 import { ServerConnection } from "@/context/server"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { displayName, errorMessage, projectForSession } from "@/pages/layout/helpers"
+import { sessionListState } from "@/utils/session-list-state"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { pathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
@@ -173,6 +174,15 @@ export function createHomeSessionsController(home: HomeController) {
       records,
       groups,
       loading: () => sessionLoad.isLoading,
+      // D2 honest states: the home list distinguishes "not yet fetched" (no
+      // index fetch has ever resolved) from "genuinely empty" (it has, and
+      // the projection is empty) — never render the empty state during the
+      // boot fetch (#293's invisible failure shape).
+      listState: () =>
+        sessionListState({
+          fetched: sessionLoad.isSuccess,
+          count: records().length,
+        }),
       searchRecords: allRecords,
     },
     session: {

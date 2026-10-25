@@ -139,12 +139,14 @@ describe("Project.fromDirectory", () => {
     }),
   )
 
-  it.live("returns global for non-git directory", () =>
+  it.live("resolves a non-git directory to a first-class project keyed on the path", () =>
     Effect.gen(function* () {
       const project = yield* Project.Service
       const tmp = yield* tmpdirScoped()
       const result = yield* project.fromDirectory(tmp)
-      expect(result.project.id).toBe(ProjectV2.ID.global)
+      expect(result.project.id).not.toBe(ProjectV2.ID.global)
+      expect(result.project.worktree).toBe(tmp)
+      expect(result.project.vcs).toBeUndefined()
     }),
   )
 

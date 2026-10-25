@@ -39,7 +39,7 @@ async function rootCommit(dir: string) {
 }
 
 describe("ProjectV2.resolve", () => {
-  it.live("returns global for non-git directory", () =>
+  it.live("resolves a non-git directory to a first-class project keyed on the path", () =>
     Effect.gen(function* () {
       const tmp = yield* Effect.acquireRelease(
         Effect.promise(() => tmpdir()),
@@ -49,10 +49,32 @@ describe("ProjectV2.resolve", () => {
 
       const result = yield* project.resolve(abs(tmp.path))
 
-      expect(result.id).toBe(ProjectV2.ID.make("global"))
-      expect(path.resolve(result.directory)).toBe(path.parse(tmp.path).root)
+      expect(result.id).toBe(ProjectV2.dirKey(AbsolutePath.make(yield* Effect.promise(() => fs.realpath(tmp.path)))))
+      expect(result.id).not.toBe(ProjectV2.ID.global)
+      expect(result.directory).toBe(yield* real(tmp.path))
       expect(result.previous).toBeUndefined()
       expect(result.vcs).toBeUndefined()
+    }),
+  )
+
+  it.live("non-git projects are path-keyed: same path resolves identically, distinct paths differ", () =>
+    Effect.gen(function* () {
+      const a = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+      )
+      const b = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+      )
+      const project = yield* ProjectV2.Service
+
+      const first = yield* project.resolve(abs(a.path))
+      const second = yield* project.resolve(abs(a.path))
+      const other = yield* project.resolve(abs(b.path))
+
+      expect(second.id).toBe(first.id)
+      expect(other.id).not.toBe(first.id)
     }),
   )
 

@@ -267,6 +267,7 @@ export type SessionsListOutput = {
       }>
     }
   }>
+  readonly currency?: string | null
   readonly cursor: { readonly previous?: string | null; readonly next?: string | null }
 }
 
