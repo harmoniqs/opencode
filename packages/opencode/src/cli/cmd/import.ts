@@ -2,7 +2,8 @@ import type { Session as SDKSession, Message, Part } from "@opencode-ai/sdk/v2"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Session } from "@/session/session"
 import { MessageV2 } from "../../session/message-v2"
-import { CliError, effectCmd } from "../effect-cmd"
+import { SessionBundle } from "../../session/bundle"
+import { CliError, effectCmd, fail } from "../effect-cmd"
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionTable, MessageTable, PartTable } from "@opencode-ai/core/session/sql"
 import { InstanceRef } from "@/effect/instance-ref"
@@ -92,19 +93,96 @@ export function transformShareData(shareData: ShareData[]): {
 type ExportData = { info: SDKSession; messages: Array<{ info: Message; parts: Part[] }> }
 
 export const ImportCommand = effectCmd({
-  command: "import <file>",
+  command: "import [file]",
   describe: "import session data from JSON file or URL",
   builder: (yargs) =>
-    yargs.positional("file", {
-      describe: "path to JSON file or share URL",
-      type: "string",
-      demandOption: true,
-    }),
+    yargs
+      .positional("file", {
+        describe: "path to JSON file or share URL",
+        type: "string",
+      })
+      .command(ImportSessionBundleCommand),
   handler: Effect.fn("Cli.import")(function* (args) {
+    if (!args.file) {
+      return yield* fail("Specify a file or share URL, or run `opencode import session <bundle>`")
+    }
     const ctx = yield* InstanceRef
     if (!ctx) return yield* Effect.die("InstanceRef not provided")
     return yield* runImport(args.file, ctx)
   }),
+})
+
+/**
+ * `opencode import session <bundle> [--remap-dir <from>=<to> ...]` — imports a
+ * portable JSONL bundle produced by `opencode export session`. Idempotent by
+ * session ID: an existing ID is skipped (exit 0). Each session is written in a
+ * single transaction. Single-writer: do not run concurrent imports against the
+ * same store — SQLite WAL protects concurrent readers, but writers are the
+ * caller's responsibility to serialize.
+ */
+export const ImportSessionBundleCommand = effectCmd({
+  command: "session <bundle>",
+  describe:
+    "import sessions from a portable JSONL bundle (idempotent by session id; single-writer — do not run concurrent imports against one store)",
+  builder: (yargs) =>
+    yargs
+      .positional("bundle", {
+        describe: "path to the JSONL bundle file",
+        type: "string",
+        demandOption: true,
+      })
+      .option("remap-dir", {
+        describe: "rewrite matching session directories at import: --remap-dir <from>=<to> (repeatable)",
+        type: "array",
+        default: [] as string[],
+      }),
+  handler: Effect.fn("Cli.import.session")(function* (args: { bundle: string; remapDir?: string[] }) {
+    const ctx = yield* InstanceRef
+    if (!ctx) return yield* Effect.die("InstanceRef not provided")
+    return yield* runBundleImport(args.bundle, (args.remapDir ?? []).map(String), ctx)
+  }),
+})
+
+const runBundleImport = Effect.fn("Cli.import.session.body")(function* (
+  file: string,
+  remapSpecs: string[],
+  ctx: InstanceContext,
+) {
+  const fs = yield* FSUtil.Service
+  const db = (yield* Database.Service).db
+
+  let remaps: [string, string][]
+  try {
+    remaps = remapSpecs.map(SessionBundle.parseRemap)
+  } catch (error) {
+    return yield* fail(error instanceof SessionBundle.BundleError ? error.message : `Invalid --remap-dir value`)
+  }
+
+  const text = yield* fs.readFileString(file).pipe(
+    Effect.mapError((error) => new CliError({ message: formatImportFileError(file, error) })),
+  )
+  const blocks = yield* SessionBundle.parse(text).pipe(
+    Effect.mapError((error) => new CliError({ message: error.message })),
+  )
+  if (blocks.length === 0) {
+    return yield* fail(`No sessions found in bundle: ${file}`)
+  }
+
+  const result = yield* SessionBundle.importBlocks(db, blocks, {
+    fallbackProjectID: ctx.project.id,
+    remaps,
+  }).pipe(
+    Effect.mapError((error) => new CliError({ message: `Failed to import bundle: ${error.message}` })),
+  )
+
+  for (const id of result.imported) {
+    process.stdout.write(`Imported session: ${id}`)
+    process.stdout.write(EOL)
+  }
+  for (const id of result.skipped) {
+    process.stdout.write(`Session ${id} already exists, skipped`)
+    process.stdout.write(EOL)
+  }
 })
 
 const runImport = Effect.fn("Cli.import.body")(function* (file: string, ctx: InstanceContext) {

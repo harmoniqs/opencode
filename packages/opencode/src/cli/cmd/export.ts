@@ -2,7 +2,11 @@ import { Session } from "@/session/session"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionID } from "../../session/schema"
-import { effectCmd, fail } from "../effect-cmd"
+import { SessionBundle } from "../../session/bundle"
+import { Database } from "@opencode-ai/core/database/database"
+import { FSUtil } from "@opencode-ai/core/fs-util"
+import { InstanceRef } from "@/effect/instance-ref"
+import { effectCmd, fail, CliError } from "../effect-cmd"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
@@ -231,7 +235,8 @@ export const ExportCommand = effectCmd({
       .option("sanitize", {
         describe: "redact sensitive transcript and file data",
         type: "boolean",
-      }),
+      })
+      .command(ExportSessionBundleCommand),
   handler: Effect.fn("Cli.export")(function* (args) {
     return yield* run(args)
   }),
@@ -289,4 +294,69 @@ const run = Effect.fn("Cli.export.body")(function* (args: { sessionID?: string; 
     process.stdout.write(JSON.stringify(args.sanitize ? sanitize(exportData) : exportData, null, 2))
     process.stdout.write(EOL)
   }).pipe(Effect.catchCause(() => fail(`Session not found: ${sessionID!}`)))
+})
+
+/**
+ * `opencode export session <id[,id2,...] | --all>` — portable JSONL bundle
+ * (first line per session = session row, then message rows and part rows in
+ * storage order; IDs and timestamps preserved verbatim). Byte-faithful to the
+ * storage layer: import into another store reproduces the rows exactly.
+ */
+export const ExportSessionBundleCommand = effectCmd({
+  command: "session [sessions..]",
+  describe:
+    "export sessions as a portable JSONL bundle (session metadata first, then messages and parts in order, IDs and timestamps preserved)",
+  builder: (yargs) =>
+    yargs
+      .positional("sessions", {
+        describe: "session ids to export (comma-separated lists allowed)",
+        type: "string",
+        array: true,
+      })
+      .option("all", {
+        describe: "export every session in the current project scope",
+        type: "boolean",
+        default: false,
+      })
+      .option("out", {
+        alias: "o",
+        describe: "write the bundle to a file instead of stdout",
+        type: "string",
+      }),
+  handler: Effect.fn("Cli.export.session")(function* (args: { sessions?: string[]; all?: boolean; out?: string }) {
+    const ctx = yield* InstanceRef
+    if (!ctx) return yield* Effect.die("InstanceRef not provided")
+    const db = (yield* Database.Service).db
+
+    let ids: string[]
+    if (args.all) {
+      ids = yield* SessionBundle.allSessionIDs(db, ctx.project.id)
+      if (ids.length === 0) {
+        process.stderr.write("No sessions found in project scope" + EOL)
+      }
+    } else {
+      ids = (args.sessions ?? [])
+        .flatMap((value) => value.split(","))
+        .map((value) => value.trim())
+        .filter(Boolean)
+      if (ids.length === 0) {
+        return yield* fail("Specify a session id (or comma-separated ids), or pass --all")
+      }
+    }
+
+    const blocks = yield* SessionBundle.exportBlocks(db, ids).pipe(
+      Effect.mapError((error) => new CliError({ message: error.message })),
+    )
+    const text = SessionBundle.serialize(blocks) + EOL
+
+    if (args.out) {
+      const fs = yield* FSUtil.Service
+      yield* fs.writeWithDirs(args.out, text).pipe(
+        Effect.mapError(() => new CliError({ message: `Failed to write bundle to ${args.out}` })),
+      )
+      process.stdout.write(`Exported ${blocks.length} session(s) to ${args.out}` + EOL)
+      return
+    }
+    process.stdout.write(text)
+  }),
 })
