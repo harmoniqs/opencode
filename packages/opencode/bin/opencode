@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-const childProcess = require("child_process")
-const fs = require("fs")
-const path = require("path")
-const os = require("os")
+import childProcess from "node:child_process"
+import fs from "node:fs"
+import path from "node:path"
+import os from "node:os"
 
 const forwardedSignals = ["SIGINT", "SIGTERM", "SIGHUP"]
 
@@ -45,7 +45,9 @@ function run(target) {
 
 const envPath = process.env.OPENCODE_BIN_PATH
 
-const scriptPath = fs.realpathSync(__filename)
+import { fileURLToPath } from "node:url"
+
+const scriptPath = fs.realpathSync(fileURLToPath(import.meta.url))
 const scriptDir = path.dirname(scriptPath)
 
 //
