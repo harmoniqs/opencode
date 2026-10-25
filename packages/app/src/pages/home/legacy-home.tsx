@@ -12,6 +12,8 @@ import { Logo } from "@opencode-ai/ui/logo"
 import { useNavigate } from "@solidjs/router"
 import { DateTime } from "luxon"
 import { createMemo, For, Match, Switch } from "solid-js"
+import { ActivityDot } from "@opencode-ai/ui/amicode-activity"
+import { SERVER_HEALTH_LABEL, serverHealthActivity } from "@/components/server/server-row"
 
 export function LegacyHome() {
   const sync = useServerSync()
@@ -30,12 +32,7 @@ export function LegacyHome() {
       .slice(0, 5)
   })
 
-  const serverDotClass = createMemo(() => {
-    const healthy = global.servers.health[server.key]?.healthy
-    if (healthy === true) return "bg-icon-success-base"
-    if (healthy === false) return "bg-icon-critical-base"
-    return "bg-border-weak-base"
-  })
+  const serverActivity = createMemo(() => serverHealthActivity(global.servers.health[server.key]?.healthy))
 
   function openProject(conn: ServerConnection.Any, directory: string) {
     const serverCtx = global.ensureServerCtx(conn)
@@ -74,12 +71,7 @@ export function LegacyHome() {
         class="mt-4 mx-auto text-14-regular text-text-weak"
         onClick={() => dialog.show(() => <DialogSelectServer />)}
       >
-        <div
-          classList={{
-            "size-2 rounded-full": true,
-            [serverDotClass()]: true,
-          }}
-        />
+        <ActivityDot activity={serverActivity()} label={SERVER_HEALTH_LABEL[serverActivity()]} class="size-2" />
         {server.name}
       </Button>
       <Switch>

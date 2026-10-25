@@ -40,10 +40,13 @@ export function Card(props: CardProps) {
   const variant = () => split.variant ?? "normal"
   const accent = () => {
     const v = variant()
-    if (v === "error") return "var(--v2-state-fg-danger)"
-    if (v === "warning") return "var(--icon-warning-active)"
-    if (v === "success") return "var(--icon-success-active)"
-    if (v === "info") return "var(--icon-info-active)"
+    // The app's activity vocabulary (design-polish.css --activity-*): warning is
+    // amber attention, info is the running blue. Falls back to the theme's v2
+    // state tokens where design-polish isn't loaded (share pages, storybook).
+    if (v === "error") return "var(--activity-error, var(--v2-state-fg-danger))"
+    if (v === "warning") return "var(--activity-attention, var(--v2-state-fg-warning))"
+    if (v === "success") return "var(--activity-success, var(--v2-state-fg-success))"
+    if (v === "info") return "var(--activity-running, var(--v2-state-fg-info))"
     return
   }
   return (

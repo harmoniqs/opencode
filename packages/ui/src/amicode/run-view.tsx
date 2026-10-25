@@ -1,5 +1,6 @@
 import { Show } from "solid-js"
 import type { RunVerdict } from "./problem"
+import { runActivity } from "./activity"
 
 // AMICODE Run hero (ring-2 verdict-first redesign): the fidelity + status
 // verdict that replaces the raw field dump. The data (fidelity/status/
@@ -18,17 +19,6 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "failed",
   recorded: "recorded",
 }
-// tone → status-badge color, mapped to theme semantics in css (ok/warn/critical).
-const STATUS_TONE: Record<string, string> = {
-  finished: "ok",
-  solving: "active",
-  stalled: "warn",
-  stopped: "muted",
-  aborted: "muted",
-  failed: "critical",
-  recorded: "muted",
-}
-
 export function RunVerdictView(props: { verdict: RunVerdict }) {
   const v = () => props.verdict
   return (
@@ -40,7 +30,7 @@ export function RunVerdictView(props: { verdict: RunVerdict }) {
             <span class="amc-run-fk">F</span> = {v().fidelity}
           </span>
         </Show>
-        <span class="amc-run-status" data-slot="amicode-run-status" data-tone={STATUS_TONE[v().status] ?? "muted"}>
+        <span class="amc-run-status" data-slot="amicode-run-status" data-activity={runActivity(v().status)}>
           {STATUS_LABEL[v().status] ?? v().status}
         </span>
       </div>

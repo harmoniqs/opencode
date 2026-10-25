@@ -32,14 +32,14 @@ export function DeviceView(props: { verdict: DeviceVerdict }) {
               <span
                 class="amc-vpill"
                 data-slot="amicode-device-connection"
-                data-tone={c() === "online" ? "ok" : c() === "offline" ? "critical" : "warn"}
+                data-activity={c() === "online" ? "success" : c() === "offline" ? "error" : "attention"}
               >
                 {c()}
               </span>
             )}
           </Show>
           <Show when={v().ready !== null}>
-            <span class="amc-vpill" data-slot="amicode-device-ready" data-tone={v().ready ? "ok" : "warn"}>
+            <span class="amc-vpill" data-slot="amicode-device-ready" data-activity={v().ready ? "success" : "attention"}>
               {v().ready ? "ready to run" : "not ready"}
             </span>
           </Show>

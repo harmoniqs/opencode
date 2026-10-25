@@ -19,7 +19,7 @@ export function CalibrationView(props: { verdict: CalibrationVerdict }) {
               <span
                 class="amc-vpill"
                 data-slot="amicode-calibration-freshness"
-                data-tone={f() === "fresh" ? "ok" : "warn"}
+                data-activity={f() === "fresh" ? "success" : "attention"}
               >
                 {f()}
               </span>

@@ -13,6 +13,7 @@ import {
 import { useLanguage } from "@/context/language"
 import { type ServerConnection, serverName } from "@/context/server"
 import type { ServerHealth } from "@/utils/server-health"
+import { ActivityDot, type Activity } from "@opencode-ai/ui/amicode-activity"
 
 interface ServerRowProps extends ParentProps {
   conn: ServerConnection.Any
@@ -114,14 +115,21 @@ export function ServerRow(props: ServerRowProps) {
 }
 
 export function ServerHealthIndicator(props: { health?: ServerHealth }) {
-  return (
-    <div
-      classList={{
-        "size-1.5 rounded-full shrink-0 my-[3.5px]": true,
-        "bg-icon-success-base": props.health?.healthy === true,
-        "bg-icon-critical-base": props.health?.healthy === false,
-        "bg-border-weak-base": props.health === undefined,
-      }}
-    />
-  )
+  const activity = () => serverHealthActivity(props.health?.healthy)
+  return <ActivityDot activity={activity()} label={SERVER_HEALTH_LABEL[activity()]} class="size-1.5 my-[3.5px]" />
+}
+
+/** healthy → success, unreachable → error, not yet probed → running (pending). */
+export function serverHealthActivity(healthy: boolean | undefined): Activity {
+  if (healthy === true) return "success"
+  if (healthy === false) return "error"
+  return "running"
+}
+
+export const SERVER_HEALTH_LABEL: Record<Activity, string> = {
+  idle: "Server status unknown",
+  running: "Checking server",
+  attention: "Server needs attention",
+  success: "Server healthy",
+  error: "Server unreachable",
 }

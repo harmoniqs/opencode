@@ -49,6 +49,7 @@ import { authTokenFromCredentials } from "@/utils/server"
 import { GLOBAL_STATUS_DEFAULT_TAB } from "./status-popover-model"
 import { useServerProtocol } from "@/context/server-sdk"
 import { beginSolverSwitch } from "@/components/solver-switch-banner"
+import { ActivityDot, lspActivity, mcpActivity } from "@opencode-ai/ui/amicode-activity"
 
 const pluginEmptyMessage = (value: string, file: string): JSXElement => {
   const parts = value.split(file)
@@ -465,16 +466,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
                         }}
                         disabled={toggleMcp.isPending && toggleMcp.variables === name}
                       >
-                        <div
-                          classList={{
-                            "size-1.5 rounded-full shrink-0": true,
-                            "bg-icon-success-base": status() === "connected",
-                            "bg-icon-critical-base": status() === "failed",
-                            "bg-border-weak-base": status() === "disabled",
-                            "bg-icon-warning-base":
-                              status() === "needs_auth" || status() === "needs_client_registration",
-                          }}
-                        />
+                        <ActivityDot activity={mcpActivity(status() ?? "")} label={`MCP ${status() ?? "unknown"}`} />
                         <span class="flex flex-col min-w-0 flex-1">
                           <span class="flex items-center gap-2 min-w-0">
                             <span class="text-14-regular text-text-base truncate">{name}</span>
@@ -516,13 +508,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
                 <For each={lspItems()}>
                   {(item) => (
                     <div class="flex items-center gap-2 w-full px-2 py-1">
-                      <div
-                        classList={{
-                          "size-1.5 rounded-full shrink-0": true,
-                          "bg-icon-success-base": item.status === "connected",
-                          "bg-icon-critical-base": item.status === "error",
-                        }}
-                      />
+                      <ActivityDot activity={lspActivity(item.status)} label={`LSP ${item.status}`} />
                       <span class="text-14-regular text-text-base truncate">{item.name || item.id}</span>
                     </div>
                   )}
@@ -543,7 +529,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean>; onClose?: (
                   <For each={plugins()}>
                     {(plugin) => (
                       <div class="flex items-center gap-2 w-full px-2 py-1">
-                        <div class="size-1.5 rounded-full shrink-0 bg-icon-success-base" />
+                        <ActivityDot activity="success" label="Plugin loaded" />
                         <span class="text-14-regular text-text-base truncate">{plugin}</span>
                       </div>
                     )}
